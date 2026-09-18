@@ -5,6 +5,42 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>sep490-sportnexus-fe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              obsidian: { DEFAULT: '#0a0e16', surface: '#0f1420', border: 'rgba(255,255,255,0.08)' },
+              cyan: { DEFAULT: '#00e5ff', hover: '#33ebff' },
+              neon: { green: '#22c55e' },
+              surface: '#0f131c',
+              'surface-container': '#1c2028',
+              'surface-container-low': '#181c24',
+              'surface-container-lowest': '#0a0e16',
+              'surface-container-high': '#262a33',
+              'surface-container-highest': '#31353e',
+              'primary-container': '#00e5ff',
+              'secondary-container': '#34ff8c',
+              'secondary-fixed': '#60ff98',
+              'on-surface': '#dfe2ee',
+              'on-surface-variant': '#bac9cc',
+              'on-primary': '#00363d',
+              'on-primary-container': '#00626e',
+              'on-secondary-container': '#007239',
+              'surface-tint': '#00daf3',
+              primary: '#c3f5ff',
+              secondary: '#f5fff3',
+              outline: '#849396',
+              error: '#ffb4ab',
+              'error-container': '#93000a',
+            },
+            fontFamily: { sans: ['Inter', 'sans-serif'], outfit: ['Outfit', 'sans-serif'] },
+          },
+        },
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
