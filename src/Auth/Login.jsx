@@ -149,7 +149,7 @@ const loginPage = String.raw`<!DOCTYPE html>
 <div class="space-y-1.5">
 <label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center justify-between" for="athlete-pass">
 <span>Key Passcode</span>
-<a class="text-primary-container hover:text-primary transition-colors font-label-sm text-label-sm normal-case" href="#">Forgot passcode?</a>
+<a class="text-primary-container hover:text-primary transition-colors font-label-sm text-label-sm normal-case" href="/forgot-password">Forgot passcode?</a>
 </label>
 <div class="relative group">
 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary-container transition-colors">
@@ -212,7 +212,7 @@ const loginPage = String.raw`<!DOCTYPE html>
 <div class="mt-space-md pt-space-sm text-center">
 <p class="font-body-sm text-body-sm text-on-surface-variant">
           New to the competitive circuit?
-          <a class="text-primary-container font-label-md text-label-md hover:underline ml-1" href="#">Claim Athlete Passport</a>
+          <a class="text-primary-container font-label-md text-label-md hover:underline ml-1" href="/register">Claim Athlete Passport</a>
 </p>
 </div>
 </div>
@@ -264,7 +264,8 @@ const loginPage = String.raw`<!DOCTYPE html>
       btn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">progress_activity</span><span>Connecting To Vault Mesh...</span>';
       btn.disabled = true;
       setTimeout(() => {
-        btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Portal Connected</span>';
+          btn.innerHTML = '<span class="material-symbols-outlined text-[20px]">check_circle</span><span>Portal Connected</span>';
+          setTimeout(() => { window.top.location.href = '/player-dashboard'; }, 300);
         setTimeout(() => {
           btn.innerHTML = original;
           btn.disabled = false;

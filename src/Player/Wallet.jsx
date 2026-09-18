@@ -1,7 +1,7 @@
 const walletPage = String.raw`<!DOCTYPE html>
 
 <html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Outfit:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-secondary-container":"#007239","on-error-container":"#ffdad6","tertiary":"#e9ecff","secondary-fixed":"#60ff98","on-surface":"#dfe2ee","surface-tint":"#00daf3","on-surface-variant":"#bac9cc","tertiary-container":"#c2cfff","on-secondary-fixed-variant":"#005227","background":"#0f131c","tertiary-fixed":"#dbe1ff","surface-variant":"#31353e","on-secondary-fixed":"#00210c","outline":"#849396","error":"#ffb4ab","on-primary-container":"#00626e","error-container":"#93000a","surface-container":"#1c2028","on-primary-fixed":"#001f24","secondary":"#f5fff3","surface-container-high":"#262a33","on-background":"#dfe2ee","primary-fixed":"#9cf0ff","on-primary-fixed-variant":"#004f58","primary-fixed-dim":"#00daf3","primary-container":"#00e5ff","surface-container-low":"#181c24","surface-container-lowest":"#0a0e16","secondary-container":"#34ff8c","on-tertiary-fixed":"#00174b","inverse-on-surface":"#2c3039","inverse-surface":"#dfe2ee","on-tertiary":"#002a78","tertiary-fixed-dim":"#b4c5ff","primary":"#c3f5ff","surface-bright":"#353942","surface":"#0f131c","secondary-fixed-dim":"#00e478","on-tertiary-container":"#004ecf","outline-variant":"#3b494c","on-error":"#690005","on-tertiary-fixed-variant":"#003ea8","on-secondary":"#003919","on-primary":"#00363d","surface-container-highest":"#31353e","surface-dim":"#0f131c","inverse-primary":"#006875"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-md":"1rem","space-sm":"0.5rem","margin-sm":"1rem","margin":"1.25rem","gutter-sm":"0.75rem","space-lg":"1.5rem","margin-lg":"2rem","space-xl":"2rem","space-xs":"0.25rem","gutter":"1rem"},"fontFamily":{"body-lg":["Inter"],"label-md":["Outfit"],"headline-md":["Outfit"],"body-sm":["Inter"],"label-lg":["Outfit"],"label-sm":["Outfit"],"body-md":["Inter"],"display-lg":["Outfit"],"headline-sm":["Outfit"],"headline-lg":["Outfit"],"display-lg-mobile":["Outfit"]},"fontSize":{"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.06em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-lg":["14px",{"lineHeight":"18px","letterSpacing":"0.04em","fontWeight":"600"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.08em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}],"display-lg":["44px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"800"}],"headline-sm":["18px",{"lineHeight":"24px","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"34px","letterSpacing":"-0.02em","fontWeight":"700"}],"display-lg-mobile":["32px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"800"}]}}}};</script></head><body class="bg-background font-body-md text-body-md text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 max-w-7xl mx-auto px-margin flex items-center justify-between gap-space-lg"><div class="flex items-center gap-space-lg"><a class="flex items-center gap-space-sm group" data-path="dashboard" href="#"><img alt="SportNexus logo mark, glowing dynamic neon electric blue and cyber lime geometric nexus monogram, dark background. Brand logo. - Primary color: #00e5ff
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"on-secondary-container":"#007239","on-error-container":"#ffdad6","tertiary":"#e9ecff","secondary-fixed":"#60ff98","on-surface":"#dfe2ee","surface-tint":"#00daf3","on-surface-variant":"#bac9cc","tertiary-container":"#c2cfff","on-secondary-fixed-variant":"#005227","background":"#0f131c","tertiary-fixed":"#dbe1ff","surface-variant":"#31353e","on-secondary-fixed":"#00210c","outline":"#849396","error":"#ffb4ab","on-primary-container":"#00626e","error-container":"#93000a","surface-container":"#1c2028","on-primary-fixed":"#001f24","secondary":"#f5fff3","surface-container-high":"#262a33","on-background":"#dfe2ee","primary-fixed":"#9cf0ff","on-primary-fixed-variant":"#004f58","primary-fixed-dim":"#00daf3","primary-container":"#00e5ff","surface-container-low":"#181c24","surface-container-lowest":"#0a0e16","secondary-container":"#34ff8c","on-tertiary-fixed":"#00174b","inverse-on-surface":"#2c3039","inverse-surface":"#dfe2ee","on-tertiary":"#002a78","tertiary-fixed-dim":"#b4c5ff","primary":"#c3f5ff","surface-bright":"#353942","surface":"#0f131c","secondary-fixed-dim":"#00e478","on-tertiary-container":"#004ecf","outline-variant":"#3b494c","on-error":"#690005","on-tertiary-fixed-variant":"#003ea8","on-secondary":"#003919","on-primary":"#00363d","surface-container-highest":"#31353e","surface-dim":"#0f131c","inverse-primary":"#006875"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-md":"1rem","space-sm":"0.5rem","margin-sm":"1rem","margin":"1.25rem","gutter-sm":"0.75rem","space-lg":"1.5rem","margin-lg":"2rem","space-xl":"2rem","space-xs":"0.25rem","gutter":"1rem"},"fontFamily":{"body-lg":["Inter"],"label-md":["Outfit"],"headline-md":["Outfit"],"body-sm":["Inter"],"label-lg":["Outfit"],"label-sm":["Outfit"],"body-md":["Inter"],"display-lg":["Outfit"],"headline-sm":["Outfit"],"headline-lg":["Outfit"],"display-lg-mobile":["Outfit"]},"fontSize":{"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.06em","fontWeight":"600"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"600"}],"body-sm":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-lg":["14px",{"lineHeight":"18px","letterSpacing":"0.04em","fontWeight":"600"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.08em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}],"display-lg":["44px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"800"}],"headline-sm":["18px",{"lineHeight":"24px","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"34px","letterSpacing":"-0.02em","fontWeight":"700"}],"display-lg-mobile":["32px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"800"}]}}}};</script><style>img[alt^="SportNexus logo mark"]{display:none!important}</style></head><body class="bg-background font-body-md text-body-md text-on-surface antialiased min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 max-w-7xl mx-auto px-margin flex items-center justify-between gap-space-lg"><div class="flex items-center gap-space-lg"><a class="flex items-center gap-space-sm group" data-path="dashboard" href="#"><img alt="SportNexus logo mark, glowing dynamic neon electric blue and cyber lime geometric nexus monogram, dark background. Brand logo. - Primary color: #00e5ff
 - Font: outfit
 - Mode: dark
 - Roundness: rounded-md
@@ -11,7 +11,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <div class="space-y-space-xs">
 <div class="flex items-center gap-space-xs">
 <span class="font-label-sm text-label-sm uppercase tracking-widest text-primary-container">Fintech Subsystem</span>
-<span class="text-on-surface-variant font-label-sm text-label-sm">•</span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">â€¢</span>
 <span class="font-label-sm text-label-sm text-secondary-container tracking-wider uppercase font-semibold">Ledger Synchronized</span>
 </div>
 <h1 class="font-display-lg text-display-lg text-on-surface font-extrabold tracking-tight">Player Digital Wallet &amp; Escrow</h1>
@@ -30,7 +30,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="material-symbols-outlined text-[14px] text-secondary-container">verified_user</span>
           256-Bit Escrow Vault Active
         </span>
-<span class="font-body-sm text-body-sm text-on-surface-variant text-[11px] leading-none">Protocol v8.4 • 0 Arbitrum Slippage</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-[11px] leading-none">Protocol v8.4 â€¢ 0 Arbitrum Slippage</span>
 </div>
 </div>
 </section>
@@ -89,7 +89,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <!-- Card Bottom Metadata -->
 <div class="relative z-10 pt-space-lg flex flex-wrap items-end justify-between gap-space-sm">
 <div class="space-y-0.5">
-<p class="font-headline-sm text-headline-sm tracking-widest text-on-surface font-mono font-medium">•••• � •••• � •••• � 8842</p>
+<p class="font-headline-sm text-headline-sm tracking-widest text-on-surface font-mono font-medium">â€¢â€¢â€¢â€¢ Â â€¢â€¢â€¢â€¢ Â â€¢â€¢â€¢â€¢ Â 8842</p>
 <p class="font-label-sm text-label-sm uppercase text-on-surface-variant tracking-wider font-mono">HOANG AN // ATHLETE ID: NX-9021</p>
 </div>
 <div class="text-right">
@@ -103,7 +103,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <!-- Main Glowing Primary CTA -->
 <button class="flex-1 min-w-[160px] flex items-center justify-center gap-space-xs bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container font-label-lg text-label-lg px-space-lg py-3.5 rounded-xl transition-all shadow-[0_0_24px_rgba(0,229,255,0.4)] active:scale-[0.98]" type="button">
 <span class="material-symbols-outlined text-[20px] font-bold">bolt</span>
-<span>⚡ Top-Up Wallet</span>
+<span>âš¡ Top-Up Wallet</span>
 </button>
 <!-- Secondary Glass Buttons -->
 <div class="flex items-center gap-space-xs flex-wrap">
@@ -244,7 +244,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="h-1.5 w-1.5 rounded-full bg-secondary-container"></span> Success
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Today, 18:42 • Court #3 Peak Claim • Instant Escrow Debit</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Today, 18:42 â€¢ Court #3 Peak Claim â€¢ Instant Escrow Debit</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -266,7 +266,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="h-1.5 w-1.5 rounded-full bg-secondary-container"></span> Success
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Yesterday, 14:15 • Trans ID #NX-88291 • Direct Gateway</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Yesterday, 14:15 â€¢ Trans ID #NX-88291 â€¢ Direct Gateway</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -287,7 +287,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="h-1.5 w-1.5 rounded-full bg-secondary-container"></span> Success
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 24, 2025 • 4-Way Match Split with @alex @sarah • Split Match Settlement</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 24, 2025 â€¢ 4-Way Match Split with @alex @sarah â€¢ Split Match Settlement</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -303,12 +303,12 @@ const walletPage = String.raw`<!DOCTYPE html>
 </div>
 <div class="min-w-0">
 <div class="flex items-center gap-space-xs flex-wrap">
-<h4 class="font-label-lg text-label-lg text-on-surface font-bold truncate">Wallet Top-Up - Visa Debit (•••• 4012)</h4>
+<h4 class="font-label-lg text-label-lg text-on-surface font-bold truncate">Wallet Top-Up - Visa Debit (â€¢â€¢â€¢â€¢ 4012)</h4>
 <span class="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-secondary-container/15 text-secondary-container flex items-center gap-1">
 <span class="h-1.5 w-1.5 rounded-full bg-secondary-container"></span> Success
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 22, 2025 • Trans ID #NX-87110 • Bank Card</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 22, 2025 â€¢ Trans ID #NX-87110 â€¢ Bank Card</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -329,7 +329,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="h-1.5 w-1.5 rounded-full bg-secondary-container"></span> Success
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 20, 2025 • Singles Division A • Tournament Escrow</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 20, 2025 â€¢ Singles Division A â€¢ Tournament Escrow</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -350,7 +350,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 <span class="h-1.5 w-1.5 rounded-full bg-surface-tint"></span> Processing Node
                 </span>
 </div>
-<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 18, 2025 • Automated Weather Clause • Smart Escrow Reversal</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Oct 18, 2025 â€¢ Automated Weather Clause â€¢ Smart Escrow Reversal</p>
 </div>
 </div>
 <div class="text-right flex-shrink-0">
@@ -465,7 +465,7 @@ const walletPage = String.raw`<!DOCTYPE html>
 </div>
 </div>
 </div>
-</div></main><footer class="w-full bg-surface-container-lowest py-space-xl shadow-[0_-1px_8px_rgba(0,0,0,0.04)]"><div class="max-w-7xl mx-auto px-margin"><div class="grid grid-cols-1 md:grid-cols-4 gap-space-xl pb-space-lg"><div class="space-y-space-sm md:col-span-1"><div class="flex items-center gap-space-xs"><span class="font-headline-sm text-headline-sm text-on-surface font-bold">The SportNexus</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">Next-generation athletic liquidity, automated tournament staking, and precision court infrastructure protocol.</p></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Protocol</h4><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-on-surface transition-colors" data-path="court-finder" href="#">Court Liquidity</a></li><li><a class="hover:text-on-surface transition-colors" data-path="tournaments" href="#">Dynamic Brackets</a></li><li><a class="hover:text-on-surface transition-colors" data-path="wallet" href="#">Vault &amp; Staking</a></li></ul></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Ecosystem</h4><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-on-surface transition-colors" data-path="community" href="#">Matchmaking Hub</a></li><li><a class="hover:text-on-surface transition-colors" href="#">Player Rankings</a></li><li><a class="hover:text-on-surface transition-colors" href="#">API Integration</a></li></ul></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Network Status</h4><div class="flex items-center gap-space-xs mb-space-xs"><span class="h-2 w-2 rounded-full bg-secondary-container animate-pulse"></span><span class="font-label-sm text-label-sm text-on-surface">Arbitrum Nova • Operational</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">Block Latency: 42ms • Daily Staked: $4.2M</p></div></div><div class="pt-space-md flex flex-col md:flex-row items-center justify-between gap-space-sm font-body-sm text-body-sm text-on-surface-variant"><p>© 2025 The SportNexus Financial Protocol. All athletic rights reserved.</p><div class="flex items-center gap-space-lg"><a class="hover:text-on-surface transition-colors" href="#">Smart Contract Audit</a><a class="hover:text-on-surface transition-colors" href="#">Terms of Liquidity</a><a class="hover:text-on-surface transition-colors" href="#">Privacy Shield</a></div></div></div></footer></body></html>`
+</div></main><footer class="w-full bg-surface-container-lowest py-space-xl shadow-[0_-1px_8px_rgba(0,0,0,0.04)]"><div class="max-w-7xl mx-auto px-margin"><div class="grid grid-cols-1 md:grid-cols-4 gap-space-xl pb-space-lg"><div class="space-y-space-sm md:col-span-1"><div class="flex items-center gap-space-xs"><span class="font-headline-sm text-headline-sm text-on-surface font-bold">The SportNexus</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">Next-generation athletic liquidity, automated tournament staking, and precision court infrastructure protocol.</p></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Protocol</h4><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-on-surface transition-colors" data-path="court-finder" href="#">Court Liquidity</a></li><li><a class="hover:text-on-surface transition-colors" data-path="tournaments" href="#">Dynamic Brackets</a></li><li><a class="hover:text-on-surface transition-colors" data-path="wallet" href="#">Vault &amp; Staking</a></li></ul></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Ecosystem</h4><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li><a class="hover:text-on-surface transition-colors" data-path="community" href="#">Matchmaking Hub</a></li><li><a class="hover:text-on-surface transition-colors" href="#">Player Rankings</a></li><li><a class="hover:text-on-surface transition-colors" href="#">API Integration</a></li></ul></div><div><h4 class="font-label-md text-label-md text-primary uppercase mb-space-sm">Network Status</h4><div class="flex items-center gap-space-xs mb-space-xs"><span class="h-2 w-2 rounded-full bg-secondary-container animate-pulse"></span><span class="font-label-sm text-label-sm text-on-surface">Arbitrum Nova â€¢ Operational</span></div><p class="font-body-sm text-body-sm text-on-surface-variant">Block Latency: 42ms â€¢ Daily Staked: $4.2M</p></div></div><div class="pt-space-md flex flex-col md:flex-row items-center justify-between gap-space-sm font-body-sm text-body-sm text-on-surface-variant"><p>Â© 2025 The SportNexus Financial Protocol. All athletic rights reserved.</p><div class="flex items-center gap-space-lg"><a class="hover:text-on-surface transition-colors" href="#">Smart Contract Audit</a><a class="hover:text-on-surface transition-colors" href="#">Terms of Liquidity</a><a class="hover:text-on-surface transition-colors" href="#">Privacy Shield</a></div></div></div></footer></body></html>`
 
 function Wallet() {
   return <iframe title="SportNexus Wallet" srcDoc={walletPage} style={{ border: 0, display: 'block', height: '100vh', width: '100%' }} />

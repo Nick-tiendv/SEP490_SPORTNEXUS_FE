@@ -213,7 +213,7 @@ const registerPage = String.raw`<!DOCTYPE html>
 </div>
 </div>
 <!-- BEGIN: FormFields -->
-<form class="space-y-4" id="registration-form" onsubmit="event.preventDefault();">
+<form class="space-y-4" id="registration-form" onsubmit="event.preventDefault(); window.top.location.href='/onboarding';">
 <!-- Full Name Field -->
 <div data-purpose="field-fullname">
 <label class="block text-xs font-mono uppercase tracking-wider text-slate-300 mb-1.5" for="full-name">
