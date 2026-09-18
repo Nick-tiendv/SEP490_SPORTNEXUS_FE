@@ -1,10 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sep490-sportnexus-fe</title>
+    <title>SportNexus — Athletic OS</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -12,37 +21,105 @@
         theme: {
           extend: {
             colors: {
-              obsidian: { DEFAULT: '#0a0e16', surface: '#0f1420', border: 'rgba(255,255,255,0.08)' },
-              cyan: { DEFAULT: '#00e5ff', hover: '#33ebff' },
-              neon: { green: '#22c55e' },
-              surface: '#0f131c',
+              'surface': '#0f131c',
+              'surface-dim': '#0f131c',
+              'surface-bright': '#353942',
+              'surface-variant': '#31353e',
               'surface-container': '#1c2028',
               'surface-container-low': '#181c24',
               'surface-container-lowest': '#0a0e16',
               'surface-container-high': '#262a33',
               'surface-container-highest': '#31353e',
-              'primary-container': '#00e5ff',
-              'secondary-container': '#34ff8c',
-              'secondary-fixed': '#60ff98',
+              'background': '#0f131c',
+              'on-background': '#dfe2ee',
               'on-surface': '#dfe2ee',
               'on-surface-variant': '#bac9cc',
+              'primary': '#c3f5ff',
+              'primary-fixed': '#9cf0ff',
+              'primary-fixed-dim': '#00daf3',
+              'primary-container': '#00e5ff',
               'on-primary': '#00363d',
+              'on-primary-fixed': '#001f24',
+              'on-primary-fixed-variant': '#004f58',
               'on-primary-container': '#00626e',
+              'inverse-primary': '#006875',
+              'secondary': '#f5fff3',
+              'secondary-fixed': '#60ff98',
+              'secondary-fixed-dim': '#00e478',
+              'secondary-container': '#34ff8c',
+              'on-secondary': '#003919',
+              'on-secondary-fixed': '#00210c',
+              'on-secondary-fixed-variant': '#005227',
               'on-secondary-container': '#007239',
+              'tertiary': '#e9ecff',
+              'tertiary-fixed': '#dbe1ff',
+              'tertiary-fixed-dim': '#b4c5ff',
+              'tertiary-container': '#c2cfff',
+              'on-tertiary': '#002a78',
+              'on-tertiary-fixed': '#00174b',
+              'on-tertiary-fixed-variant': '#003ea8',
+              'on-tertiary-container': '#004ecf',
+              'outline': '#849396',
+              'outline-variant': '#3b494c',
               'surface-tint': '#00daf3',
-              primary: '#c3f5ff',
-              secondary: '#f5fff3',
-              outline: '#849396',
-              error: '#ffb4ab',
+              'inverse-surface': '#dfe2ee',
+              'inverse-on-surface': '#2c3039',
+              'error': '#ffb4ab',
+              'on-error': '#690005',
               'error-container': '#93000a',
+              'on-error-container': '#ffdad6',
             },
-            fontFamily: { sans: ['Inter', 'sans-serif'], outfit: ['Outfit', 'sans-serif'] },
+            borderRadius: {
+              DEFAULT: '0.25rem',
+              lg: '0.5rem',
+              xl: '0.75rem',
+              '2xl': '1rem',
+              full: '9999px',
+            },
+            spacing: {
+              'space-xs': '0.25rem',
+              'space-sm': '0.5rem',
+              'space-md': '1rem',
+              'space-lg': '1.5rem',
+              'space-xl': '2rem',
+              'gutter': '1rem',
+              'gutter-sm': '0.75rem',
+              'margin': '1.25rem',
+              'margin-sm': '1rem',
+              'margin-lg': '2rem',
+            },
+            fontFamily: {
+              'display-lg': ['Outfit', 'sans-serif'],
+              'display-lg-mobile': ['Outfit', 'sans-serif'],
+              'headline-lg': ['Outfit', 'sans-serif'],
+              'headline-md': ['Outfit', 'sans-serif'],
+              'headline-sm': ['Outfit', 'sans-serif'],
+              'label-lg': ['Outfit', 'sans-serif'],
+              'label-md': ['Outfit', 'sans-serif'],
+              'label-sm': ['Outfit', 'sans-serif'],
+              'body-lg': ['Inter', 'sans-serif'],
+              'body-md': ['Inter', 'sans-serif'],
+              'body-sm': ['Inter', 'sans-serif'],
+            },
+            fontSize: {
+              'display-lg': ['44px', { lineHeight: '48px', letterSpacing: '-0.03em', fontWeight: '800' }],
+              'display-lg-mobile': ['32px', { lineHeight: '36px', letterSpacing: '-0.02em', fontWeight: '800' }],
+              'headline-lg': ['28px', { lineHeight: '34px', letterSpacing: '-0.02em', fontWeight: '700' }],
+              'headline-md': ['22px', { lineHeight: '28px', letterSpacing: '-0.01em', fontWeight: '600' }],
+              'headline-sm': ['18px', { lineHeight: '24px', fontWeight: '600' }],
+              'label-lg': ['14px', { lineHeight: '18px', letterSpacing: '0.04em', fontWeight: '600' }],
+              'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.06em', fontWeight: '600' }],
+              'label-sm': ['10px', { lineHeight: '12px', letterSpacing: '0.08em', fontWeight: '700' }],
+              'body-lg': ['16px', { lineHeight: '24px', fontWeight: '400' }],
+              'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }],
+              'body-sm': ['12px', { lineHeight: '16px', fontWeight: '400' }],
+            },
           },
         },
       }
     </script>
   </head>
-  <body>
+  <body class="bg-surface text-on-surface antialiased selection:bg-primary/30">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
