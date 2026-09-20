@@ -41,7 +41,7 @@ function Login() {
                 Authenticate to sync court telemetry, unlock active smart escrow matches, and resume ranking matches.
               </p>
             </div>
-            <form className="space-y-space-md" id="auth-form"  onSubmit={(event) => { event.preventDefault(); navigate('/player-dashboard') }}>
+            <form className="space-y-space-md" id="auth-form"  onSubmit={(event) => { event.preventDefault(); navigate('/dashboard') }}>
               <div className="space-y-1.5">
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider flex items-center justify-between" htmlFor="athlete-id">
                   <span>Athlete ID / Secure Email</span>
