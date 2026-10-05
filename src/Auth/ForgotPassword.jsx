@@ -14,7 +14,7 @@ function ForgotPassword() {
     <div className="min-h-screen pastel-animated-bg flex flex-col">
       {/* Header */}
       <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3 px-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="w-full flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-[#4A7C3E] rounded-lg flex items-center justify-center">
@@ -28,28 +28,13 @@ function ForgotPassword() {
             </div>
           </div>
 
-          {/* Navigation */}
-          <div className="flex items-center gap-6">
-            <button className="flex items-center gap-1 text-gray-700 hover:text-gray-900 text-sm font-medium">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              TRANG CHỦ
-            </button>
-            
-            <button className="flex items-center gap-1 text-gray-700 hover:text-gray-900 text-sm font-medium">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-              VI / EN
-            </button>
-
-            <button className="w-9 h-9 bg-[#4A7C3E] rounded-full flex items-center justify-center text-white hover:bg-[#3d6634] transition-colors">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-            </button>
-          </div>
+          {/* Navigation - Button Trang chủ */}
+          <button className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 text-sm font-medium hover:bg-gray-100 rounded-lg transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            TRANG CHỦ
+          </button>
         </div>
       </header>
 
@@ -128,7 +113,7 @@ function ForgotPassword() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Nhập email hoặc tên đăng nhập của bạn"
-                    className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#4A7C3E] focus:ring-2 focus:ring-[#A8E6CF]/20 transition-all"
+                    className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#4A7C3E] focus:ring-2 focus:ring-[#A8E6CF]/20 transition-all"
                     required
                   />
                 </div>
@@ -173,9 +158,9 @@ function ForgotPassword() {
 
       {/* Footer */}
       <footer className="w-full bg-white/60 backdrop-blur-sm py-4">
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between text-xs">
+        <div className="w-full px-6 flex items-center justify-between text-xs">
           <div className="text-gray-600">
-            © 2024 SPORTNEXUS VIETNAM. ALL RIGHTS RESERVED.
+            © 2026 SPORTNEXUS VIETNAM. ALL RIGHTS RESERVED.
           </div>
           <div className="flex items-center gap-6">
             <a href="#" className="text-gray-700 hover:text-gray-900 font-medium uppercase tracking-wide">
