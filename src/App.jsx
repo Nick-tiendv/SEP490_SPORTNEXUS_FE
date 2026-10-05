@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ForgotPassword from './Auth/ForgotPassword.jsx'
 import Login from './Auth/Login.jsx'
 import Register from './Auth/Register.jsx'
+import VerifyAccount from './Auth/VerifyAccount.jsx'
 import AIChatBooking from './Player/Book a court/AIChatBooking.jsx'
 import CommunityFeed from './Player/Looking for group/CommunityFeed.jsx'
 import CourtDetails from './Player/Book a court/CourtDetails.jsx'
@@ -26,6 +27,7 @@ function App() {
         <Route path="/" element={<Navigate replace to="/login" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/register" element={<Register />} />
         <Route path="/onboarding" element={<OnBoarding />} />
 

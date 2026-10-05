@@ -1,101 +1,291 @@
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import './auth-pages.css'
 
-function Unauthorized() {
+function VerifyAccount() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const userEmail = location.state?.email || 'user@email.com'
+  const [code, setCode] = useState(['', '', '', '', '', ''])
+  const [timer, setTimer] = useState(60)
+  const [canResend, setCanResend] = useState(false)
+  const [isResending, setIsResending] = useState(false)
+  const [codeVersion, setCodeVersion] = useState(1) // Track code version
+  const inputRefs = useRef([])
+
+  // Timer countdown with auto-reset every minute
+  useEffect(() => {
+    if (timer > 0) {
+      const countdown = setInterval(() => {
+        setTimer((prev) => prev - 1)
+      }, 1000)
+      return () => clearInterval(countdown)
+    } else {
+      // When timer hits 0, reset for next cycle
+      setCanResend(true)
+      // Auto reset after showing "can resend" for a moment
+      const resetTimeout = setTimeout(() => {
+        setTimer(60)
+        setCodeVersion(prev => prev + 1)
+      }, 100)
+      return () => clearTimeout(resetTimeout)
+    }
+  }, [timer])
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handleInputChange = (index, value) => {
+    // Only allow numbers
+    if (!/^\d*$/.test(value)) return
+
+    const newCode = [...code]
+    newCode[index] = value.slice(-1) // Only take last character
+    setCode(newCode)
+
+    // Auto focus next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handlePaste = (e) => {
+    e.preventDefault()
+    const pastedData = e.clipboardData.getData('text').slice(0, 6)
+    if (!/^\d+$/.test(pastedData)) return
+
+    const newCode = pastedData.split('')
+    setCode([...newCode, ...Array(6 - newCode.length).fill('')])
+    
+    // Focus last filled input or next empty
+    const nextIndex = Math.min(newCode.length, 5)
+    inputRefs.current[nextIndex]?.focus()
+  }
+
+  const handleResend = async () => {
+    if (!canResend || isResending) return
+    
+    setIsResending(true)
+    // TODO: Call API to resend code
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Reset timer and state
+    setTimer(60)
+    setCanResend(false)
+    setIsResending(false)
+    setCodeVersion(prev => prev + 1)
+    setCode(['', '', '', '', '', '']) // Clear entered code
+    inputRefs.current[0]?.focus() // Focus first input
+  }
+
+  const handleSubmit = async () => {
+    const verificationCode = code.join('')
+    if (verificationCode.length !== 6) return
+
+    // TODO: Call API to verify code
+    console.log('Verifying code:', verificationCode)
+  }
+
+  const handleBack = () => {
+    navigate(-1)
+  }
+
   return (
-    <>
-      <div>
-  <header className="w-full bg-surface-dim/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div className="h-16 w-full px-margin md:px-margin-lg flex items-center justify-between"><div className="flex items-center gap-space-sm"><div className="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.2)]"><span className="material-symbols-outlined text-primary-container text-[20px]">bolt</span></div><div className="flex flex-col"><span className="font-headline-sm text-headline-sm text-on-surface tracking-tight uppercase">SportNexus</span><span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Secure Gateway</span></div></div><div className="flex items-center gap-space-md"><div className="flex items-center gap-space-xs bg-surface-container-low px-space-md py-space-xs rounded-full"><span className="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse" /><span className="font-label-sm text-label-sm text-secondary-fixed uppercase tracking-wider">Node: Isolated</span></div><div className="flex items-center gap-space-xs bg-surface-container-high px-space-md py-space-xs rounded-full"><span className="material-symbols-outlined text-primary-container text-[16px]">shield_lock</span><span className="font-label-sm text-label-sm text-on-surface uppercase">Encrypted Session</span></div></div></div></header><main className="w-full flex-1 flex items-center justify-center bg-background relative px-margin py-margin-lg"><div className="flex flex-col w-full relative items-center justify-center py-space-xl overflow-hidden">
-      <div aria-hidden="true" className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none">
-        <div className="absolute w-[680px] h-[680px] rounded-full bg-error/5 blur-[120px] -translate-y-12" />
-        <div className="absolute w-[500px] h-[500px] rounded-full bg-primary-container/5 blur-[100px] translate-y-24 translate-x-24" />
-        <span className="font-display-lg text-[160px] md:text-[280px] lg:text-[340px] leading-none text-surface-container-highest/20 tracking-tighter mix-blend-screen select-none translate-y-4">
-          403
-        </span>
-      </div>
-      <div className="relative z-10 w-full max-w-2xl mx-auto flex flex-col items-center text-center">
-        <div className="relative mb-space-lg">
-          <div className="absolute -inset-3 rounded-full bg-error/20 blur-xl animate-pulse" />
-          <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-surface-container-high flex items-center justify-center shadow-xl">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-error-container/40 flex items-center justify-center">
-              <span className="material-symbols-outlined text-error text-[36px] md:text-[44px]" style={{fontVariationSettings: '"FILL" 1'}}>gpp_bad</span>
+    <div className="min-h-screen flex flex-col pastel-animated-bg">
+      {/* Header */}
+      <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3 px-6">
+        <div className="w-full flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-[#4A7C3E] rounded-lg flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
+              </svg>
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-lg font-bold text-gray-900">SportNexus</span>
+              <span className="text-[10px] text-gray-600 uppercase tracking-wide">Tournament Engine</span>
             </div>
           </div>
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center shadow-md">
-            <span className="material-symbols-outlined text-primary-container text-[16px]">lock</span>
-          </div>
-        </div>
-        <div className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container-high shadow-md mb-space-md">
-          <span className="w-2 h-2 rounded-full bg-error animate-ping" />
-          <span className="font-label-sm text-label-sm text-primary-container tracking-wider font-mono uppercase">
-            ERR_HTTP_403 // FORBIDDEN_RESOURCE_ACCESS
-          </span>
-        </div>
-        <h1 className="font-headline-lg text-headline-lg md:text-[36px] md:leading-[42px] text-on-surface uppercase tracking-tight mb-space-sm">
-          Access Denied
-        </h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant max-w-xl mx-auto mb-space-xl">
-          Oops! You don't have permission to view this page. This area is restricted to Court Owners and System Admins.
-        </p>
-        <div className="w-full bg-surface-container-low rounded-xl p-space-lg shadow-xl mb-space-xl text-left">
-          <div className="flex items-center justify-between pb-space-sm mb-space-md bg-surface-container-high px-space-md py-space-xs rounded-lg">
-            <div className="flex items-center gap-space-xs">
-              <span className="material-symbols-outlined text-primary-container text-[18px]">terminal</span>
-              <span className="font-label-sm text-label-sm text-on-surface tracking-wider uppercase">Security Diagnostic Telemetry</span>
-            </div>
-            <div className="flex items-center gap-space-xs">
-              <span className="w-2 h-2 rounded-full bg-error" />
-              <span className="font-label-sm text-label-sm text-error uppercase">Gate Enforced</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-            <div className="bg-surface-container-high/60 p-space-md rounded-lg">
-              <span className="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider mb-space-xs">Identified Role</span>
-              <div className="flex items-center gap-space-xs">
-                <span className="material-symbols-outlined text-primary text-[18px]">sports_tennis</span>
-                <span className="font-headline-sm text-headline-sm text-on-surface">Athlete / Player (Tier 1)</span>
-              </div>
-            </div>
-            <div className="bg-surface-container-high/60 p-space-md rounded-lg">
-              <span className="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider mb-space-xs">Required Clearance</span>
-              <div className="flex items-center gap-space-xs">
-                <span className="material-symbols-outlined text-error text-[18px]">verified_user</span>
-                <span className="font-headline-sm text-headline-sm text-error">Court Owner / SysAdmin (Level 4+)</span>
-              </div>
-            </div>
-            <div className="bg-surface-container-high/60 p-space-md rounded-lg">
-              <span className="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider mb-space-xs">Session Node Token</span>
-              <span className="font-label-md text-label-md font-mono text-primary-container block truncate">#NX-SEC-9921-ESCROW</span>
-            </div>
-            <div className="bg-surface-container-high/60 p-space-md rounded-lg">
-              <span className="font-label-sm text-label-sm text-on-surface-variant block uppercase tracking-wider mb-space-xs">Timestamp / Relay</span>
-              <span className="font-label-md text-label-md font-mono text-on-surface block" id="telemetry-timestamp">2025-02-23T14:48:02.812Z</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-space-md w-full sm:w-auto">
-          <a className="w-full sm:w-auto inline-flex items-center justify-center gap-space-xs px-space-xl py-space-md rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-lg text-label-lg uppercase tracking-wider shadow-lg hover:shadow-[0_0_24px_rgba(96,255,152,0.4)] transition-all" href="#dashboard">
-            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-            Return to Dashboard
-          </a>
-          <a className="w-full sm:w-auto inline-flex items-center justify-center gap-space-xs px-space-lg py-space-md rounded-full bg-surface-container-high text-on-surface font-label-lg text-label-lg uppercase tracking-wider shadow-md hover:bg-surface-bright transition-all" href="#switch-account">
-            <span className="material-symbols-outlined text-[20px]">switch_account</span>
-            Switch Account
-          </a>
-          <button className="w-full sm:w-auto inline-flex items-center justify-center gap-space-xs px-space-lg py-space-md rounded-full bg-surface-container-low text-primary-container font-label-lg text-label-lg uppercase tracking-wider shadow-sm hover:bg-surface-container transition-all" id="dispatch-secops" type="button">
-            <span className="material-symbols-outlined text-[20px]">support_agent</span>
-            Contact Protocol
+
+          {/* Navigation - Button Trang chủ */}
+          <button 
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 text-sm font-medium hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            TRANG CHỦ
           </button>
         </div>
-        <div className="hidden mt-space-md px-space-md py-space-xs rounded-full bg-surface-container text-primary text-body-sm font-body-sm items-center gap-space-xs" id="dispatch-notice">
-          <span className="material-symbols-outlined text-[16px] text-primary-container">check_circle</span>
-          SecOps ticket initiated. Escalation code: <span className="font-mono text-on-surface">#TK-403-AUTO</span>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 relative">
+          {/* Back Button */}
+          <button 
+            onClick={handleBack}
+            className="absolute top-6 left-6 w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+          >
+            <span className="material-symbols-outlined text-gray-600">arrow_back</span>
+          </button>
+
+          {/* Help Button */}
+          <button className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">
+            <span className="material-symbols-outlined text-gray-600">help_outline</span>
+          </button>
+
+          {/* Icon */}
+          <div className="flex justify-center mb-6 mt-8">
+            <div className="relative">
+              {/* Outer glow circle */}
+              <div className="absolute inset-0 bg-[#A8E6CF]/30 rounded-full blur-xl"></div>
+              {/* Main circle */}
+              <div className="relative w-24 h-24 bg-gradient-to-br from-[#B8F0D8] to-[#A8E6CF] rounded-full flex items-center justify-center">
+                <div className="w-20 h-20 bg-white/50 rounded-full flex items-center justify-center">
+                  <svg className="w-10 h-10 text-[#4A7C3E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                {/* Small accent circle */}
+                <div className="absolute bottom-2 right-2 w-7 h-7 bg-[#4A7C3E] rounded-full flex items-center justify-center shadow-lg">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Title */}
+          <h1 className="text-2xl font-bold text-gray-800 text-center mb-3">
+            Xác thực tài khoản
+          </h1>
+
+          {/* Description */}
+          <p className="text-sm text-gray-600 text-center mb-2">
+            Mã xác thực gồm 6 chữ số đã được gửi đến email:
+          </p>
+          <p className="text-sm font-semibold text-gray-800 text-center mb-6">
+            {userEmail}
+          </p>
+
+          {/* OTP Input */}
+          <div className="flex justify-center gap-3 mb-6">
+            {code.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => (inputRefs.current[index] = el)}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleInputChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={index === 0 ? handlePaste : undefined}
+                className={`w-14 h-16 text-center text-2xl font-bold rounded-xl transition-all
+                  ${digit 
+                    ? 'border-2 border-[#4A7C3E] bg-[#E8F5E9] text-[#4A7C3E] shadow-md' 
+                    : 'border-2 border-gray-300 bg-white text-gray-900'}
+                  focus:outline-none focus:border-[#4A7C3E] focus:ring-2 focus:ring-[#A8E6CF]/30 focus:shadow-lg`}
+              />
+            ))}
+          </div>
+
+          {/* Ready Indicator */}
+          <div className="flex items-center justify-center gap-2 text-[#4A7C3E] text-sm mb-6">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <span className="font-medium">Hệ thống sẵn sàng đợi soát mã tức thì</span>
+          </div>
+
+          {/* Timer & Resend */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-4">
+            <div className="flex items-center justify-center gap-2 text-gray-700 mb-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm">Gửi lại mã sau <span className="font-bold">{formatTime(timer)}</span></span>
+            </div>
+            <div className="text-center">
+              <span className="text-sm text-gray-600">Chưa nhận được mã? </span>
+              <button 
+                onClick={handleResend}
+                disabled={!canResend || isResending}
+                className={`text-sm font-semibold ${canResend && !isResending ? 'text-[#4A7C3E] hover:underline' : 'text-gray-400 cursor-not-allowed'}`}
+              >
+                {isResending ? 'Đang gửi...' : 'Gửi lại mã'}
+              </button>
+            </div>
+          </div>
+
+          {/* Privacy Notice - Highlighted */}
+          <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-4 mb-6 shadow-md">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-red-800 mb-1 flex items-center gap-1">
+                  <span>⚠️</span>
+                  <span>LƯU Ý QUAN TRỌNG</span>
+                </p>
+                <p className="text-xs text-gray-800 leading-relaxed">
+                  <strong>Không chia sẻ</strong> mã xác thực này với bất kỳ ai, kể cả nhân viên SportNexus dưới mọi hình thức hỗ trợ. Đây là thông tin bảo mật tài khoản của bạn.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={code.some(digit => !digit)}
+            className={`w-full py-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]
+              ${code.every(digit => digit) 
+                ? 'bg-[#4A7C3E] hover:bg-[#3d6634]' 
+                : 'bg-gray-300 cursor-not-allowed'}`}
+          >
+            Xác nhận & Tiếp tục
+          </button>
         </div>
-      </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full bg-white/60 backdrop-blur-sm py-4">
+        <div className="w-full px-6 flex items-center justify-between text-xs">
+          <div className="text-gray-600">
+            © 2026 SPORTNEXUS VIETNAM. ALL RIGHTS RESERVED.
+          </div>
+          <div className="flex items-center gap-6">
+            <button className="text-gray-700 hover:text-gray-900 font-medium uppercase tracking-wide">
+              Cam kết bảo mật
+            </button>
+            <button className="text-gray-700 hover:text-gray-900 font-medium uppercase tracking-wide">
+              Chính sách Fairplay
+            </button>
+            <button className="text-gray-700 hover:text-gray-900 font-medium uppercase tracking-wide">
+              Điều khoản dịch vụ
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
-  </main><footer className="w-full bg-surface-container-lowest/90 backdrop-blur-md"><div className="w-full px-margin md:px-margin-lg py-space-md flex flex-col sm:flex-row items-center justify-between gap-space-sm"><span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">End-to-End Quantum Grid Vault</span><span className="font-body-sm text-body-sm text-on-surface-variant">SecOps Dispatch: active-duty 24/7/365</span></div></footer>
-</div>
-    </>
   )
 }
 
-export default Unauthorized
+export default VerifyAccount

@@ -1,13 +1,17 @@
 import './auth-pages.css'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function ForgotPassword() {
   const [email, setEmail] = useState('')
+  const navigate = useNavigate()
 
   const handleSubmit = (e) => {
     e.preventDefault()
     // Handle password reset logic here
     console.log('Reset email sent to:', email)
+    // Navigate to verify account page with email
+    navigate('/verify-account', { state: { email } })
   }
 
   return (
