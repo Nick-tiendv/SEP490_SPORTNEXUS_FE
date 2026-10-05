@@ -7,9 +7,9 @@ function Login() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-[#E8F5F0] flex flex-col">
+    <div className="min-h-screen pastel-animated-bg flex flex-col">
       {/* Header */}
-      <header className="w-full px-8 py-4 flex items-center justify-between">
+      <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm">
         {/* Logo */}
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20">
@@ -178,7 +178,7 @@ function Login() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600 border-t border-gray-200">
+      <footer className="w-full px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600 border-t border-gray-200 bg-white/80 backdrop-blur-sm">
         <p>© 2026 SportNexus Vietnam. All rights reserved.</p>
         <div className="flex items-center gap-4">
           <span className="opacity-60">•</span>
