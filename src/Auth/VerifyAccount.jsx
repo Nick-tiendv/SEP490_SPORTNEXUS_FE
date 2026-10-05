@@ -93,6 +93,9 @@ function VerifyAccount() {
 
     // TODO: Call API to verify code
     console.log('Verifying code:', verificationCode)
+    
+    // Navigate to reset password page after successful verification
+    navigate('/reset-password')
   }
 
   const handleBack = () => {
