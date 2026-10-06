@@ -95,7 +95,7 @@ function TopSideBar() {
               opacity: 0.9,
             }}
           >
-            Nền Tảng Thể Thao Đa Môn
+            {location.pathname === '/tournament' ? 'TOURNAMENT ENGINE' : 'Nền Tảng Thể Thao Đa Môn'}
           </span>
         </div>
       </div>
@@ -442,7 +442,7 @@ function TopSideBar() {
               Bảo chứng Escrow 24/7
             </p>
             <p style={{ fontSize: '10.5px', color: '#2D5F3F', margin: 0, fontWeight: 500 }}>
-              Giao dịch an toàn & minh bạch
+              Giao dịch tức thì minh bạch
             </p>
           </div>
           <span

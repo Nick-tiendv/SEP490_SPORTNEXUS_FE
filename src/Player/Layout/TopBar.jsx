@@ -7,6 +7,7 @@ function TopBar() {
   const isCommunity = location.pathname === '/community'
   const isCreateMatch = location.pathname === '/create-match'
   const isQRPass = ['/qr-pass', '/checkin', '/check-in'].includes(location.pathname)
+  const isTournament = location.pathname === '/tournament'
   const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
@@ -44,7 +45,20 @@ function TopBar() {
     >
       {/* Breadcrumb & Sport Filter Status or Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-        {isQRPass ? (
+        {isTournament ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
+              emoji_events
+            </span>
+            <span style={{ fontSize: '15px', fontWeight: 800, color: '#1C3524', letterSpacing: '-0.3px' }}>
+              Giải Đấu Thể Thao 2026
+            </span>
+            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
+            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
+              Vòng Chung Kết Toàn Quốc
+            </span>
+          </div>
+        ) : isQRPass ? (
           <div
             style={{
               display: 'inline-flex',
