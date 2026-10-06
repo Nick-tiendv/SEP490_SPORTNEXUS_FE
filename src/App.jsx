@@ -19,7 +19,7 @@ import PostMatchRating from './Player/In-stadium experience/PostMatchRating.jsx'
 import Profile from './Player/Initialization & Profile/Profile.jsx'
 import SplitPayment from './Player/Book a court/SplitPayment.jsx'
 import TournamentList from './Player/Finance & Events/TournamentList.jsx'
-import Wallet from './Player/Finance & Events/Wallet.jsx'
+import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
 
 function App() {
   return (
@@ -38,7 +38,7 @@ function App() {
         <Route element={<PlayerLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/wallet" element={<Wallet />} />
+          <Route path="/wallet" element={<WalletEscrow />} />
           <Route path="/community" element={<CommunityFeed />} />
           <Route path="/tournament" element={<TournamentList />} />
           <Route path="/court-finder" element={<MapBooking />} />

@@ -22,7 +22,7 @@ function PlayerLayout() {
       <TopSideBar />
 
       {/* Main area: offset by sidebar width */}
-      <div style={{ paddingLeft: '240px' }}>
+      <div style={{ paddingLeft: '260px' }}>
         {/* Fixed Topbar */}
         <TopBar />
 

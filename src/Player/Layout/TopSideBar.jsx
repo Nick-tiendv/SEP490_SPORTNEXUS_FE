@@ -8,7 +8,7 @@ const navItems = [
   { label: 'Ghép Trận LFG', path: '/community', icon: 'group' },
   { label: 'Check-in QR', path: '/qr-pass', icon: 'qr_code_scanner' },
   { label: 'Giải Đấu', path: '/tournament', icon: 'emoji_events' },
-  { label: 'Ví Escrow', path: '/wallet', icon: 'account_balance_wallet' },
+  { label: 'Nạp Ví Escrow', path: '/wallet', icon: 'account_balance_wallet' },
 ]
 
 function TopSideBar() {
@@ -28,7 +28,7 @@ function TopSideBar() {
     <aside
       className="fixed left-0 top-0 h-full z-50 flex flex-col select-none"
       style={{
-        width: '240px',
+        width: '260px',
         background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(244, 252, 246, 0.90) 100%)',
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
@@ -93,6 +93,7 @@ function TopSideBar() {
               letterSpacing: '0.6px',
               fontWeight: 700,
               opacity: 0.9,
+              whiteSpace: 'nowrap',
             }}
           >
             {location.pathname === '/tournament' ? 'TOURNAMENT ENGINE' : 'Nền Tảng Thể Thao Đa Môn'}
@@ -441,8 +442,8 @@ function TopSideBar() {
             <p style={{ fontSize: '11.5px', fontWeight: 800, color: '#1C3524', margin: 0 }}>
               Bảo chứng Escrow 24/7
             </p>
-            <p style={{ fontSize: '10.5px', color: '#2D5F3F', margin: 0, fontWeight: 500 }}>
-              Giao dịch tức thì minh bạch
+            <p style={{ fontSize: '10px', color: '#2D5F3F', margin: 0, fontWeight: 500, lineHeight: 1.35, marginTop: '2px' }}>
+              Giao dịch tức thì minh bạch với cơ chế giữ quỹ thông minh
             </p>
           </div>
           <span
