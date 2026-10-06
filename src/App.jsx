@@ -11,6 +11,7 @@ import CreateMatch from './Player/Looking for group/CreateMatch.jsx'
 import Dashboard from './Player/Layout/Dashboard.jsx'
 import FlashClaim from './Player/Looking for group/FlashClaim.jsx'
 import LiveQRPass from './Player/In-stadium experience/LiveQRPass.jsx'
+import CheckInQR from './Player/Check-in/Check-in QR.jsx'
 import MapBooking from './Player/Book a court/MapBooking.jsx'
 import OnBoarding from './Player/Initialization & Profile/OnBoarding.jsx'
 import PlayerLayout from './Player/Layout/PlayerLayout.jsx'
@@ -43,7 +44,9 @@ function App() {
           <Route path="/court-finder" element={<MapBooking />} />
           <Route path="/court" element={<CourtDetails />} />
           <Route path="/ai-chat" element={<AIChatBooking />} />
-          <Route path="/qr-pass" element={<LiveQRPass />} />
+          <Route path="/qr-pass" element={<CheckInQR />} />
+          <Route path="/check-in" element={<CheckInQR />} />
+          <Route path="/live-qr" element={<LiveQRPass />} />
           <Route path="/flash-claim" element={<FlashClaim />} />
           <Route path="/create-match" element={<CreateMatch />} />
           <Route path="/split-payment" element={<SplitPayment />} />

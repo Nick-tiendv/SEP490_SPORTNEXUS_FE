@@ -319,6 +319,7 @@ function TopSideBar() {
         {navItems.map(({ label, path, icon }) => {
           const isCourtBookingActive = path === '/court-finder' && ['/court-finder', '/split-payment', '/court'].includes(location.pathname)
           const isCommunityActive = path === '/community' && ['/community', '/create-match', '/flash-claim'].includes(location.pathname)
+          const isQRActive = path === '/qr-pass' && ['/qr-pass', '/check-in', '/checkin'].includes(location.pathname)
 
           return (
             <NavLink
@@ -327,7 +328,7 @@ function TopSideBar() {
               onMouseEnter={() => setHoveredNav(path)}
               onMouseLeave={() => setHoveredNav(null)}
               style={({ isActive }) => {
-                const active = isActive || isCourtBookingActive || isCommunityActive
+                const active = isActive || isCourtBookingActive || isCommunityActive || isQRActive
                 const isHovered = hoveredNav === path
                 return {
                   display: 'flex',
@@ -355,7 +356,7 @@ function TopSideBar() {
               }}
             >
               {({ isActive }) => {
-                const active = isActive || isCourtBookingActive || isCommunityActive
+                const active = isActive || isCourtBookingActive || isCommunityActive || isQRActive
                 const isHovered = hoveredNav === path
                 return (
                   <>

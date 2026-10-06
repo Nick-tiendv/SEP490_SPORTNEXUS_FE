@@ -6,6 +6,7 @@ function TopBar() {
   const location = useLocation()
   const isCommunity = location.pathname === '/community'
   const isCreateMatch = location.pathname === '/create-match'
+  const isQRPass = ['/qr-pass', '/checkin', '/check-in'].includes(location.pathname)
   const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
@@ -43,7 +44,31 @@ function TopBar() {
     >
       {/* Breadcrumb & Sport Filter Status or Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-        {isCreateMatch ? (
+        {isQRPass ? (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#DCFCE7',
+              border: '1px solid #86EFAC',
+              borderRadius: '24px',
+              padding: '5px 14px',
+              fontSize: '11px',
+              fontWeight: 800,
+              color: '#15803D',
+              letterSpacing: '0.4px',
+              boxShadow: '0 1px 4px rgba(21, 128, 61, 0.08)',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#16A34A' }}>
+              verified_user
+            </span>
+            <span style={{ textTransform: 'uppercase' }}>
+              HỆ THỐNG BẢO VỆ GIAO DỊCH ĐỘC LẬP • CHECK-IN QR BẢO CHỨNG
+            </span>
+          </div>
+        ) : isCreateMatch ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
               bolt
