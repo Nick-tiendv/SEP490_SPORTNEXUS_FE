@@ -9,6 +9,7 @@ function TopBar() {
   const isQRPass = ['/qr-pass', '/checkin', '/check-in'].includes(location.pathname)
   const isTournament = location.pathname === '/tournament'
   const isWallet = location.pathname === '/wallet'
+  const isProfile = location.pathname === '/profile'
   const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
@@ -57,6 +58,19 @@ function TopBar() {
             <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
             <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
               Nạp Tiền Trực Tuyến
+            </span>
+          </div>
+        ) : isProfile ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
+              badge
+            </span>
+            <span style={{ fontSize: '15px', fontWeight: 800, color: '#1C3524', letterSpacing: '-0.3px' }}>
+              Hồ Sơ Người Chơi
+            </span>
+            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
+            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
+              Vận Động Viên SportNexus
             </span>
           </div>
         ) : isTournament ? (
@@ -264,27 +278,27 @@ function TopBar() {
               Minh Minh Minh
             </p>
             <p style={{ margin: 0, fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>
-              DUPR 3.8 • Elo 1650
+              @minhminhminh
             </p>
           </div>
           {/* Rating badge */}
-            <div
-              style={{
-                background: '#FFF3E0',
-                border: '1px solid #FFE0B2',
-                borderRadius: '10px',
-                padding: '4px 10px',
-                fontWeight: 800,
-                fontSize: '13px',
-                color: '#E65100',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>⭐</span>
-              <span>99.4</span>
-            </div>
+          <div
+            style={{
+              background: '#FFF3E0',
+              border: '1px solid #FFE0B2',
+              borderRadius: '10px',
+              padding: '4px 10px',
+              fontWeight: 800,
+              fontSize: '13px',
+              color: '#E65100',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>⭐</span>
+            <span>4.9</span>
+          </div>
         </Link>
       </div>
     </header>
