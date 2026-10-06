@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 
 function TopBar() {
+  const location = useLocation()
+  const isCommunity = location.pathname === '/community'
+  const isCreateMatch = location.pathname === '/create-match'
   const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
@@ -38,55 +41,93 @@ function TopBar() {
         gap: '16px',
       }}
     >
-      {/* Breadcrumb & Sport Filter Status */}
+      {/* Breadcrumb & Sport Filter Status or Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-        <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
-          home
-        </span>
-        <Link
-          to="/dashboard"
-          style={{
-            fontSize: '13px',
-            color: '#4B5563',
-            textDecoration: 'none',
-            fontWeight: 600,
-          }}
-        >
-          Trang Chủ SportNexus
-        </Link>
-        <span style={{ color: '#9CA3AF', fontSize: '13px' }}>›</span>
-        <span style={{ fontSize: '13px', color: '#1C3524', fontWeight: 700 }}>
-          Khu Vực Thi Đấu &amp; Đặt Sân
-        </span>
+        {isCreateMatch ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+              bolt
+            </span>
+            <Link
+              to="/community"
+              style={{
+                fontSize: '15px',
+                fontWeight: 800,
+                color: '#1C3524',
+                textDecoration: 'none',
+                letterSpacing: '-0.3px',
+              }}
+            >
+              Sàn Ghép Trận &amp; Tranh Slot
+            </Link>
+            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
+            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
+              Đăng Kèo Mới
+            </span>
+          </div>
+        ) : isCommunity ? (
+          <h1
+            style={{
+              fontSize: '16px',
+              fontWeight: 800,
+              color: '#1C3524',
+              margin: 0,
+              letterSpacing: '-0.3px',
+            }}
+          >
+            Sàn Ghép Trận &amp; Tranh Slot
+          </h1>
+        ) : (
+          <>
+            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
+              home
+            </span>
+            <Link
+              to="/dashboard"
+              style={{
+                fontSize: '13px',
+                color: '#4B5563',
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Trang Chủ SportNexus
+            </Link>
+            <span style={{ color: '#9CA3AF', fontSize: '13px' }}>›</span>
+            <span style={{ fontSize: '13px', color: '#1C3524', fontWeight: 700 }}>
+              Khu Vực Thi Đấu &amp; Đặt Sân
+            </span>
 
-        {/* Current Active Sport Pill */}
-        <div
-          style={{
-            marginLeft: '12px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: isAllActive ? '#DCFCE7' : '#F0FDF4',
-            border: '1px solid rgba(45, 95, 63, 0.2)',
-            borderRadius: '20px',
-            padding: '4px 10px',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            color: '#15803D',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
-          }}
-        >
-          <span style={{ fontSize: '12px' }}>
-            {isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}
-          </span>
-          <span>
-            {isAllActive
-              ? 'Tất cả: Cầu Lông & Pickleball'
-              : isSportActive('badminton')
-              ? 'Chỉ Cầu Lông'
-              : 'Chỉ Pickleball'}
-          </span>
-        </div>
+            {/* Current Active Sport Pill */}
+            <div
+              style={{
+                marginLeft: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: isAllActive ? '#DCFCE7' : '#F0FDF4',
+                border: '1px solid rgba(45, 95, 63, 0.2)',
+                borderRadius: '20px',
+                padding: '4px 10px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                color: '#15803D',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
+              }}
+            >
+              <span style={{ fontSize: '12px' }}>
+                {isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}
+              </span>
+              <span>
+                {isAllActive
+                  ? 'Tất cả: Cầu Lông & Pickleball'
+                  : isSportActive('badminton')
+                  ? 'Chỉ Cầu Lông'
+                  : 'Chỉ Pickleball'}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Right: Wallet + User */}
