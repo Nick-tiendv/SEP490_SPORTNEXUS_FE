@@ -175,7 +175,7 @@ function PlayerLayout() {
             </div>
             {/* Quick chips */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-              {['Đặt sân nhanh', 'Tìm kèo LFG', 'Kiểm tra ví Escrow'].map((chip) => (
+              {['Đặt sân', 'Tìm kèo LFG', 'Kiểm tra ví Escrow'].map((chip) => (
                 <button
                   key={chip}
                   style={{

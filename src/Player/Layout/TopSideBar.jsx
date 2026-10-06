@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 
 const navItems = [
   { label: 'Trang Chủ', path: '/dashboard', icon: 'home' },
-  { label: 'Đặt Sân Nhanh', path: '/court-finder', icon: 'calendar_month' },
+  { label: 'Đặt Sân', path: '/court-finder', icon: 'calendar_month' },
   { label: 'Ghép Trận LFG', path: '/community', icon: 'group' },
   { label: 'Check-in QR', path: '/qr-pass', icon: 'qr_code_scanner' },
   { label: 'Giải Đấu', path: '/tournament', icon: 'emoji_events' },
@@ -12,6 +12,7 @@ const navItems = [
 ]
 
 function TopSideBar() {
+  const location = useLocation()
   const {
     selectedSports,
     toggleSport,
@@ -315,74 +316,92 @@ function TopSideBar() {
           Menu Điều Hướng
         </p>
 
-        {navItems.map(({ label, path, icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            onMouseEnter={() => setHoveredNav(path)}
-            onMouseLeave={() => setHoveredNav(null)}
-            style={({ isActive }) => {
-              const isHovered = hoveredNav === path
-              return {
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '11px 14px',
-                borderRadius: '13px',
-                marginBottom: '5px',
-                textDecoration: 'none',
-                fontSize: '13.5px',
-                fontWeight: isActive ? 700 : 600,
-                color: isActive ? '#ffffff' : isHovered ? '#15803D' : '#374151',
-                background: isActive
-                  ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
-                  : isHovered
-                  ? '#EAF7EE'
-                  : 'transparent',
-                boxShadow: isActive
-                  ? '0 4px 14px rgba(45, 95, 63, 0.28)'
-                  : 'none',
-                transform: isHovered && !isActive ? 'translateX(3px)' : 'none',
-                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                position: 'relative',
-              }
-            }}
-          >
-            {({ isActive }) => {
-              const isHovered = hoveredNav === path
-              return (
-                <>
-                  {/* Left glowing neon accent indicator for active item */}
-                  {isActive && (
+        {navItems.map(({ label, path, icon }) => {
+          const isCourtBookingActive = path === '/court-finder' && ['/court-finder', '/split-payment', '/court'].includes(location.pathname)
+
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              onMouseEnter={() => setHoveredNav(path)}
+              onMouseLeave={() => setHoveredNav(null)}
+              style={({ isActive }) => {
+                const active = isActive || isCourtBookingActive
+                const isHovered = hoveredNav === path
+                return {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '11px 14px',
+                  borderRadius: '13px',
+                  marginBottom: '5px',
+                  textDecoration: 'none',
+                  fontSize: '13.5px',
+                  fontWeight: active ? 700 : 600,
+                  color: active ? '#ffffff' : isHovered ? '#15803D' : '#374151',
+                  background: active
+                    ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
+                    : isHovered
+                    ? '#EAF7EE'
+                    : 'transparent',
+                  boxShadow: active
+                    ? '0 4px 14px rgba(45, 95, 63, 0.28)'
+                    : 'none',
+                  transform: isHovered && !active ? 'translateX(3px)' : 'none',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  position: 'relative',
+                }
+              }}
+            >
+              {({ isActive }) => {
+                const active = isActive || isCourtBookingActive
+                const isHovered = hoveredNav === path
+                return (
+                  <>
+                    {/* Left glowing neon accent indicator for active item */}
+                    {active && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: '0',
+                          top: '25%',
+                          height: '50%',
+                          width: '3.5px',
+                          background: '#86EFAC',
+                          borderRadius: '0 4px 4px 0',
+                          boxShadow: '0 0 8px #86EFAC',
+                        }}
+                      />
+                    )}
                     <span
+                      className="material-symbols-outlined"
                       style={{
-                        position: 'absolute',
-                        left: '0',
-                        top: '25%',
-                        height: '50%',
-                        width: '3.5px',
-                        background: '#86EFAC',
-                        borderRadius: '0 4px 4px 0',
-                        boxShadow: '0 0 8px #86EFAC',
+                        fontSize: '21px',
+                        color: active ? '#ffffff' : isHovered ? '#15803D' : '#6B7280',
+                        transition: 'color 0.2s',
                       }}
-                    />
-                  )}
-                  <span
-                    className="material-symbols-outlined"
-                    style={{
-                      fontSize: '21px',
-                      color: isActive ? '#ffffff' : isHovered ? '#15803D' : '#6B7280',
-                      transition: 'color 0.2s',
-                    }}
-                  >
-                    {icon}
-                  </span>
-                  <span>{label}</span>
-                </>
-              )
-            }}
-          </NavLink>
-        ))}
+                    >
+                      {icon}
+                    </span>
+                    <span>{label}</span>
+                    {active && (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          background: '#86EFAC',
+                          boxShadow: '0 0 6px #86EFAC',
+                        }}
+                      />
+                    )}
+                  </>
+                )
+              }}
+            </NavLink>
+          )
+        })}
       </nav>
 
       {/* Footer: Escrow Status Card */}

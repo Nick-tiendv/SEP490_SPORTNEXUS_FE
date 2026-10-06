@@ -10,7 +10,7 @@ const actionCards = [
     icon: 'calendar_month',
     iconColor: '#15803D',
     iconBg: '#EAF7EE',
-    title: 'Đặt Sân Nhanh',
+    title: 'Đặt Sân',
     desc: 'Tìm sân trống gần nhất, chia bill cọc tự động 1-chạm.',
     link: '/court-finder',
   },
@@ -269,7 +269,7 @@ function Dashboard() {
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
-                ? 'Đang xem toàn bộ sân & kèo cho cả Cầu Lông và Pickleball. Đặt sân nhanh & bảo chứng Escrow minh bạch.'
+                ? 'Đang xem toàn bộ sân & kèo cho cả Cầu Lông và Pickleball. Đặt sân & bảo chứng Escrow minh bạch.'
                 : isSportActive('badminton')
                 ? 'Đang hiển thị chuyên biệt cho Cầu Lông (Thảm BWF, Kèo Elo). Nhấn thêm Pickleball để xem cả 2 môn.'
                 : 'Đang hiển thị chuyên biệt cho Pickleball (Chuẩn USAPA, Kèo DUPR). Nhấn thêm Cầu Lông để xem cả 2 môn.'}

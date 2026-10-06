@@ -182,9 +182,16 @@ function MapBooking() {
     navigate('/split-payment', {
       state: {
         court: selectedCourt.name,
+        address: selectedCourt.address,
+        district: selectedCourt.district,
         subCourt: selectedCourt.subCourt,
+        subCourtDesc: selectedCourt.subCourtDesc,
+        image: selectedCourt.image,
+        sport: selectedCourt.sport,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
+        hours: selectedSlot.hours || 1.5,
         total: selectedSlot.price,
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1.5)),
       },
     })
   }

@@ -1,8 +1,22 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 
 function TopBar() {
   const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
+  const [walletBalance, setWalletBalance] = useState(() => {
+    const saved = localStorage.getItem('escrow_balance')
+    return saved !== null ? Number(saved) : 2450000
+  })
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      const saved = localStorage.getItem('escrow_balance')
+      if (saved !== null) setWalletBalance(Number(saved))
+    }
+    window.addEventListener('escrow_balance_updated', handleUpdate)
+    return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
+  }, [])
 
   return (
     <header
@@ -108,7 +122,7 @@ function TopBar() {
             Ví Escrow:
           </span>
           <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
-            2.450.000 đ
+            {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
           </span>
         </Link>
 
