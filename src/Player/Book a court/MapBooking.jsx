@@ -1,7 +1,7 @@
-// MapBooking.jsx — Đặt Sân Trực Tuyến & Giữ Chỗ Thời Gian Thực
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import AIChatModal from './AIChatModal.jsx'
 import './MapBooking.css'
 
 const PRICE_MIN = 50000
@@ -124,7 +124,33 @@ function MapBooking() {
   const [selectedSlotId, setSelectedSlotId] = useState('s5')
   const [holdLeft, setHoldLeft] = useState(8 * 60 + 42)
   const [mapType, setMapType] = useState('m')
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const summaryRef = useRef(null)
+
+  // Lắng nghe sự kiện từ Trợ lý AI SportNexus
+  useEffect(() => {
+    const handleSelectFromAI = (e) => {
+      const { courtId, slotId } = e.detail || {}
+      if (courtId) {
+        setSelectedCourtId(courtId)
+        if (slotId) {
+          setSelectedSlotId(slotId)
+          setHoldLeft(HOLD_SECONDS)
+        }
+        setTimeout(() => {
+          summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 250)
+      }
+    }
+    const handleOpenAi = () => setIsAiModalOpen(true)
+
+    window.addEventListener('sportnexus-select-court-slot', handleSelectFromAI)
+    window.addEventListener('open-sportnexus-ai-chat', handleOpenAi)
+    return () => {
+      window.removeEventListener('sportnexus-select-court-slot', handleSelectFromAI)
+      window.removeEventListener('open-sportnexus-ai-chat', handleOpenAi)
+    }
+  }, [])
 
   // Lọc cụm sân theo môn, khu vực, khoảng giá
   const filteredCourts = useMemo(
@@ -217,6 +243,21 @@ function MapBooking() {
           </p>
         </div>
         <div className="mb-header-chips">
+          {/* Nút Hỏi Trợ Lý AI */}
+          <button
+            id="mb-ask-ai-btn"
+            type="button"
+            className="mb-chip mb-chip--ai"
+            onClick={() => setIsAiModalOpen(true)}
+            title="Mở trợ lý AI tư vấn và gợi ý lựa chọn sân ưu tiên"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10B981' }}>
+              smart_toy
+            </span>
+            <strong>Hỏi Trợ Lý AI</strong>
+            <span className="mb-ai-sub-pill">Gợi ý ưu tiên</span>
+          </button>
+
           <span className="mb-chip">
             <span className="mb-dot" /> GPS Độ Chính Xác: 1.5M
           </span>
@@ -230,6 +271,23 @@ function MapBooking() {
       <div className="mb-grid">
         {/* ===================== LEFT COLUMN ===================== */}
         <div className="mb-col">
+          {/* AI Assistant Banner */}
+          <div
+            className="mb-ai-helper-banner"
+            onClick={() => setIsAiModalOpen(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="mb-ai-helper-ic">🤖</div>
+            <div className="mb-ai-helper-content">
+              <strong>Hỏi Trợ Lý AI Tìm Sân &amp; Giờ Vàng</strong>
+              <span>Tự động phân tích giá, khoảng cách &amp; gợi ý slot tối ưu nhất</span>
+            </div>
+            <button type="button" className="mb-ai-helper-btn">
+              Tư Vấn Ngay <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
+
           {/* Filter card */}
           <section className="mb-card" aria-label="Bộ lọc sân">
             <div className="mb-filter-head">
@@ -615,6 +673,23 @@ function MapBooking() {
           </span>
         </div>
       </footer>
+
+      {/* ===================== AI CHAT ASSISTANT MODAL ===================== */}
+      <AIChatModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        currentCourtId={selectedCourtId}
+        onSelectCourtSlot={({ courtId, slotId }) => {
+          if (courtId) setSelectedCourtId(courtId)
+          if (slotId) {
+            setSelectedSlotId(slotId)
+            setHoldLeft(HOLD_SECONDS)
+          }
+          setTimeout(() => {
+            summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 250)
+        }}
+      />
     </div>
   )
 }
