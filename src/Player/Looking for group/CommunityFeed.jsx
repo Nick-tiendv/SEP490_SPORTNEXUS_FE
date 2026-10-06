@@ -84,7 +84,7 @@ function CommunityFeed() {
         priceLabel: 'Tiền cọc chia đều:',
         price: 55000,
         priceDisplay: '55.000 đ',
-        buttonText: 'Chốt Slot Ngay (Flash Claim)',
+        buttonText: 'Chốt Slot Ngay',
         isFlashClaim: true,
         image: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
       },
@@ -150,7 +150,7 @@ function CommunityFeed() {
     if (!bookingModal) return
 
     if (walletBalance < bookingModal.price) {
-      alert('Số dư Ví Escrow không đủ để ký quỹ. Vui lòng nạp thêm tiền!')
+      alert('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
       return
     }
 
@@ -183,11 +183,15 @@ function CommunityFeed() {
     )
 
     setToastMessage({
-      title: 'Chốt Slot Thành Công!',
-      desc: `Đã ký quỹ ${bookingModal.priceDisplay} vào Escrow cho trận đấu.`,
+      title: 'Giữ Slot Thành Công!',
+      desc: `Đã xác nhận giữ slot cho trận "${bookingModal.title}". Phí cọc ${bookingModal.priceDisplay} đã được tạm giữ an toàn.`,
       type: 'success',
     })
     setBookingModal(null)
+
+    // Quay về trang chủ chính của trang Ghép trận
+    navigate('/community')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   // Create match submit handler
@@ -921,57 +925,146 @@ function CommunityFeed() {
         </footer>
       </div>
 
-      {/* ================= MODAL: CHỐT SLOT ESCROW ================= */}
+      {/* ================= MODAL: XÁC NHẬN CHỌN SLOT NHANH ================= */}
       {bookingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal */}
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-2xl text-[#3B6817]">
-                  verified_user
-                </span>
-                <h3 className="font-extrabold text-lg text-[#111827]">
-                  Xác Nhận Ký Quỹ Slot
-                </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#EAF7EE] flex items-center justify-center text-[#15803D]">
+                  <span className="material-symbols-outlined text-[22px]">bolt</span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-[#111827] leading-tight">
+                    Xác nhận chọn Slot nhanh
+                  </h3>
+                  <p className="text-[11px] text-gray-500 font-medium">Bảo chứng giữ chỗ an toàn qua Hợp đồng Escrow</p>
+                </div>
               </div>
               <button
                 onClick={() => setBookingModal(null)}
-                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500"
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
               >
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                Thông tin trận đấu:
-              </p>
-              <h4 className="font-bold text-[#111827] text-sm mt-1">{bookingModal.title}</h4>
-              <p className="text-xs text-gray-600 mt-1 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">location_on</span>
-                {bookingModal.location}
-              </p>
-              <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                {bookingModal.time}
-              </p>
+            {/* Chi Tiết Thông Tin Trận Đấu */}
+            <div className="bg-[#F8FAF9] rounded-2xl p-4 border border-gray-200/80 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                      bookingModal.sport === 'badminton'
+                        ? 'bg-[#EFF6FF] text-[#1E40AF]'
+                        : 'bg-[#EEF2FF] text-[#4338CA]'
+                    }`}
+                  >
+                    {bookingModal.sportBadge || (bookingModal.sport === 'badminton' ? 'CẦU LÔNG ĐÔI' : 'PICKLEBALL ĐÔI')}
+                  </span>
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {bookingModal.levelTag}
+                  </span>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-md">
+                  {bookingModal.slotTag || `Đã ghép: ${bookingModal.currentSlots}/${bookingModal.totalSlots} chỗ`}
+                </span>
+              </div>
+
+              <div>
+                <h4 className="font-extrabold text-[#111827] text-sm sm:text-base leading-snug">
+                  {bookingModal.title}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-gray-600 pt-2 border-t border-gray-200/60">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-[17px] text-[#2D5F3F] shrink-0 mt-0.5">
+                    location_on
+                  </span>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-semibold uppercase">Địa điểm sân</span>
+                    <span className="text-gray-800 font-medium leading-tight">{bookingModal.location}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-[17px] text-[#2D5F3F] shrink-0 mt-0.5">
+                    schedule
+                  </span>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block font-semibold uppercase">Thời gian thi đấu</span>
+                    <span className="text-gray-800 font-semibold">{bookingModal.time}</span>
+                  </div>
+                </div>
+
+                {bookingModal.groupDesc && (
+                  <div className="flex items-start gap-2 sm:col-span-2">
+                    <span className="material-symbols-outlined text-[17px] text-gray-400 shrink-0 mt-0.5">
+                      group
+                    </span>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block font-semibold uppercase">Thông tin nhóm / Host</span>
+                      <span className="text-gray-700">{bookingModal.groupDesc}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Roster & Slot Status */}
+              {bookingModal.roster && (
+                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-medium text-gray-500">Đội hình ({bookingModal.currentSlots}/{bookingModal.totalSlots}):</span>
+                    <div className="flex items-center -space-x-1.5">
+                      {bookingModal.roster.map((player, idx) => (
+                        <div
+                          key={idx}
+                          title={player.name}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[9.5px] font-bold border-2 border-white shadow-xs ${
+                            player.bg === 'empty'
+                              ? 'bg-amber-100 text-amber-600 border-dashed border-amber-300'
+                              : 'text-white'
+                          }`}
+                          style={{
+                            backgroundColor: player.bg !== 'empty' ? player.bg : undefined,
+                          }}
+                        >
+                          {player.bg === 'empty' ? '?' : player.initials}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-[#2D5F3F] font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-ping"></span>
+                    Slot còn lại mở khoá cho bạn
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Financial Summary */}
-            <div className="bg-[#F8FAF9] p-4 rounded-2xl border border-gray-100 flex flex-col gap-2">
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>Số dư Ví Escrow hiện tại:</span>
+            {/* Financial Summary: Khung tiền */}
+            <div className="bg-[#F8FAF9] p-4 rounded-2xl border border-gray-200/80 flex flex-col gap-2.5">
+              <div className="flex justify-between items-center text-xs text-gray-600">
+                <span className="font-medium">Số dư ví hiện tại:</span>
                 <span className="font-bold text-[#111827]">
                   {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
                 </span>
               </div>
-              <div className="flex justify-between text-sm font-extrabold text-[#111827]">
-                <span>Tiền cọc giữ slot:</span>
-                <span className="text-[#3B6817]">{bookingModal.priceDisplay}</span>
+              <div className="flex justify-between items-center text-sm font-bold text-[#111827] pt-1.5 border-t border-gray-200/60">
+                <span>Phí cọc giữ slot:</span>
+                <span className="text-[#15803D] font-extrabold text-base">
+                  {bookingModal.priceDisplay}
+                </span>
               </div>
-              <div className="flex justify-between text-xs text-gray-500 pt-1 border-t border-gray-200">
-                <span>Số dư sau khi khoá Escrow:</span>
-                <span className="font-semibold text-gray-700">
+              <div className="flex justify-between items-center text-xs text-gray-600 pt-1.5 border-t border-gray-200/60">
+                <span className="font-medium">Số dư còn lại:</span>
+                <span
+                  className={`font-bold ${
+                    walletBalance - bookingModal.price < 0 ? 'text-red-600' : 'text-[#111827]'
+                  }`}
+                >
                   {new Intl.NumberFormat('vi-VN').format(walletBalance - bookingModal.price)} đ
                 </span>
               </div>
@@ -989,19 +1082,19 @@ function CommunityFeed() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-1">
               <button
                 onClick={() => setBookingModal(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50"
+                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-colors"
               >
                 Huỷ bỏ
               </button>
               <button
                 onClick={handleConfirmClaim}
-                className="flex-1 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-[16px]">bolt</span>
-                <span>Xác nhận Ký Quỹ</span>
+                <span className="material-symbols-outlined text-[17px]">check_circle</span>
+                <span>Xác nhận giữ slot</span>
               </button>
             </div>
           </div>
