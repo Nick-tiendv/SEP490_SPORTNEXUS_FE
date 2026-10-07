@@ -1,231 +1,695 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSport } from '../Context/SportContext.jsx'
+import AIChatModal from './AIChatModal.jsx'
+import './MapBooking.css'
+
+const PRICE_MIN = 50000
+const PRICE_MAX = 500000
+const HOLD_SECONDS = 15 * 60
+
+const DISTRICTS = [
+  { key: 'all', label: 'Tất cả khu vực' },
+  { key: 'q7', label: 'Quận 7 (Gần bạn: 0.8 km)' },
+  { key: 'binhthanh', label: 'Bình Thạnh (5.2 km)' },
+  { key: 'thuduc', label: 'TP. Thủ Đức (6.4 km)' },
+]
+
+const COURTS = [
+  {
+    id: 'snx-q7',
+    sport: 'badminton',
+    name: 'SportNexus Arena Q.7',
+    address: '35 Huỳnh Tấn Phát, P. Tân Thuận Đông',
+    mapQuery: '35 Huỳnh Tấn Phát, Tân Thuận Đông, Quận 7, Hồ Chí Minh',
+    district: 'q7',
+    distance: 0.8,
+    rating: 4.9,
+    price: 220000,
+    courtCount: 5,
+    image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=200&h=200&fit=crop',
+    subCourt: 'Sân Cầu Lông YONEX BWF 01',
+    subCourtDesc: 'Thảm Yonex Tiêu Chuẩn Quốc Tế',
+    route: { eta: '3 phút di chuyển qua Huỳnh Tấn Phát', note: 'Tuyến đường thông thoáng • Đỗ xe máy & ô tô miễn phí' },
+    overrides: {},
+  },
+  {
+    id: 'yonex-bt',
+    sport: 'badminton',
+    name: 'CLB Cầu Lông YONEX',
+    address: '128 Điện Biên Phủ, Bình Thạnh',
+    mapQuery: '128 Điện Biên Phủ, Bình Thạnh, Hồ Chí Minh',
+    district: 'binhthanh',
+    distance: 5.2,
+    rating: 4.8,
+    price: 160000,
+    courtCount: 8,
+    image: 'https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=200&h=200&fit=crop',
+    subCourt: 'Sân Cầu Lông YONEX 03',
+    subCourtDesc: 'Sàn gỗ phủ thảm PU chống trơn',
+    route: { eta: '14 phút di chuyển qua Nguyễn Hữu Cảnh', note: 'Giờ cao điểm hơi đông • Có bãi giữ xe máy' },
+    overrides: { s3: 'available', s6: 'booked' },
+  },
+  {
+    id: 'ddink-td',
+    sport: 'pickleball',
+    name: 'D-Dink Pickleball Hub',
+    address: '28 Thảo Điền, TP. Thủ Đức',
+    mapQuery: '28 Thảo Điền, Thủ Đức, Hồ Chí Minh',
+    district: 'thuduc',
+    distance: 6.4,
+    rating: 4.9,
+    price: 250000,
+    courtCount: 6,
+    image: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=200&h=200&fit=crop',
+    subCourt: 'Sân Pickleball Pro USAPA 02',
+    subCourtDesc: 'Mặt sân acrylic chuẩn USAPA',
+    route: { eta: '18 phút di chuyển qua Cầu Thủ Thiêm 2', note: 'Tuyến đường thông thoáng • Bãi đỗ ô tô rộng' },
+    overrides: { s1: 'available', s4: 'held' },
+  },
+  {
+    id: 'pmh-pb',
+    sport: 'pickleball',
+    name: 'Phú Mỹ Hưng Pickleball Club',
+    address: '12 Nguyễn Lương Bằng, Quận 7',
+    mapQuery: '12 Nguyễn Lương Bằng, Tân Phú, Quận 7, Hồ Chí Minh',
+    district: 'q7',
+    distance: 1.2,
+    rating: 4.7,
+    price: 180000,
+    courtCount: 4,
+    image: 'https://images.unsplash.com/photo-1693142518820-78d7a05f1546?w=200&h=200&fit=crop',
+    subCourt: 'Sân Pickleball PMH 01',
+    subCourtDesc: 'Sân ngoài trời có mái che',
+    route: { eta: '5 phút di chuyển qua Nguyễn Văn Linh', note: 'Tuyến đường thông thoáng • Đỗ xe miễn phí' },
+    overrides: { s2: 'available', s7: 'booked' },
+  },
+]
+
+// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân
+const SLOT_TEMPLATE = [
+  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã kín lịch' },
+  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'FC Sài Gòn Đặt' },
+  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'held' },
+  { id: 's4', start: '19:00', end: '19:30', hours: 0.5, factor: 1, status: 'available' },
+  { id: 's5', start: '19:30', end: '21:00', hours: 1.5, factor: 1, status: 'available' },
+  { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
+  { id: 's7', start: '22:00', end: '23:00', hours: 1, factor: 0.82, status: 'available' },
+]
+
+const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
+const roundTo10k = (n) => Math.round(n / 10000) * 10000
+const formatHours = (h) => `${String(h).replace('.', ',')} giờ`
+const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+function buildSlots(court) {
+  return SLOT_TEMPLATE.map((t) => {
+    const status = court.overrides[t.id] || t.status
+    return {
+      ...t,
+      status,
+      note: status === 'booked' ? t.note || 'Đã kín lịch' : null,
+      price: roundTo10k(court.price * t.hours * t.factor),
+    }
+  })
+}
 
 function MapBooking() {
   const navigate = useNavigate()
+  const { isSportActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
 
-  const courts = [
-    {
-      id: 1,
-      name: 'Kinetic Arena',
-      rating: 4.8,
-      reviews: 342,
-      location: 'Courts 3 & 4 • Sector 4, Metro Downtown',
-      distance: '2.5 km away',
-      price: 15,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBC8UZexi28kOzki75_NsHQQKSceyQwyJlX7nIZrZ-xjvJ-NUl_eA4NKqqhGYviTDACEhk4TSNRRRQOtc5qDglqUcUdpjQ4wic81EBy7JhtBySugbJP0u124e6rnbPFic_vw4bOFefd5_J0B5wBzoMGXg6_H2qYF28LnjWSdxvH1f6nKCXfxchSuphBgbEKwXqQEV8zC3sQHeDVUtf_15VZjnPNwlcG7F9rmoWewp1gd2Ykc81LnGeh',
-      tag: 'BWF Gr.1',
-      amenities: [
-        { icon: 'ac_unit', text: 'Climate Control A/C' },
-        { icon: 'lock', text: 'Locker #L-42' },
-        { icon: 'sensors', text: 'Smart Line Sensor' },
-      ],
-      nextSlot: '19:00 - 20:00',
-      active: true,
-      surge: false,
-    },
-    {
-      id: 2,
-      name: 'Metro Smash Hub',
-      rating: 4.9,
-      reviews: 189,
-      location: 'Olympic Hall • Olympic Sports Park',
-      distance: '3.4 km away',
-      price: 18,
-      oldPrice: 15,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDeIuCDQG6J-x2xKF2n05NBQY00pbcVkPlihkySe38d44Qe0qWkNeyNvZoWnoo0fsfS97PN0csyYI0YMp7vB2l038WkqLZyrZdW23ionGMN3Qy2C2bTGzm02yxI53Mn6Y6fJJRB-rwV42LkK225O1S5KyiJ2IBbhvBZ8rBac7pwM_KzMgOWe2V_MsL8jorFEruO2MRv0kid-pMknm1xS6H7BoIqLZrLrAVVDMQEESvQYAMlckQK1JJp',
-      tag: '+20% Peak',
-      surge: true,
-      nextSlot: '2 courts left for 20:00',
-    },
-    {
-      id: 3,
-      name: 'Apex Racquet Club',
-      rating: 4.7,
-      reviews: 95,
-      location: 'Hall B • Central District',
-      distance: '1.8 km away',
-      price: 14,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCV7FkfhLzwVdJF3JGN79vB6iD7rTZePkyWWqdhMHhTWnTUyBbFLNYNX2jIxg7mzADm-Qspltny2wWT3nX-IgIBzoNCgsiPwvhsWfmNhYzNKt6DMCw0BhNKidDYt0wJmfc0uCAxUo-DFgLSdGxhrJ5gQoH_siXU6MODpgYR76rXW8-hrz40coq74EVtiUhUyudXHK8ragHqq4tTKgs8FpqEejruolWRIQSjHSzRpoyp8VetU6qbtAf1',
-      tag: '1 Slot Left',
-      urgency: true,
-      nextSlot: 'Slot: 18:30 - 19:30',
-    },
-  ]
+  const [district, setDistrict] = useState('all')
+  const [priceRange, setPriceRange] = useState([PRICE_MIN, PRICE_MAX])
+  const [selectedCourtId, setSelectedCourtId] = useState('snx-q7')
+  const [selectedSlotId, setSelectedSlotId] = useState('s5')
+  const [holdLeft, setHoldLeft] = useState(8 * 60 + 42)
+  const [mapType, setMapType] = useState('m')
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const summaryRef = useRef(null)
+
+  // Lắng nghe sự kiện từ Trợ lý AI SportNexus
+  useEffect(() => {
+    const handleSelectFromAI = (e) => {
+      const { courtId, slotId } = e.detail || {}
+      if (courtId) {
+        setSelectedCourtId(courtId)
+        if (slotId) {
+          setSelectedSlotId(slotId)
+          setHoldLeft(HOLD_SECONDS)
+        }
+        setTimeout(() => {
+          summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 250)
+      }
+    }
+    const handleOpenAi = () => setIsAiModalOpen(true)
+
+    window.addEventListener('sportnexus-select-court-slot', handleSelectFromAI)
+    window.addEventListener('open-sportnexus-ai-chat', handleOpenAi)
+    return () => {
+      window.removeEventListener('sportnexus-select-court-slot', handleSelectFromAI)
+      window.removeEventListener('open-sportnexus-ai-chat', handleOpenAi)
+    }
+  }, [])
+
+  // Lọc cụm sân theo môn, khu vực, khoảng giá
+  const filteredCourts = useMemo(
+    () =>
+      COURTS.filter(
+        (c) =>
+          isSportActive(c.sport) &&
+          (district === 'all' || c.district === district) &&
+          c.price >= priceRange[0] &&
+          c.price <= priceRange[1]
+      ).sort((a, b) => a.distance - b.distance),
+    [isSportActive, district, priceRange]
+  )
+
+  const selectedCourt =
+    filteredCourts.find((c) => c.id === selectedCourtId) || filteredCourts[0] || null
+  const slots = useMemo(() => (selectedCourt ? buildSlots(selectedCourt) : []), [selectedCourt])
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
+
+  // Đếm ngược thời gian khóa giữ chỗ
+  useEffect(() => {
+    if (!selectedSlot) return undefined
+    const timer = setInterval(() => setHoldLeft((t) => Math.max(t - 1, 0)), 1000)
+    return () => clearInterval(timer)
+  }, [selectedSlot])
+
+  // Hết thời gian giữ chỗ → tự động nhả khung giờ
+  useEffect(() => {
+    if (holdLeft === 0 && selectedSlotId) setSelectedSlotId(null)
+  }, [holdLeft, selectedSlotId])
+
+  const handleSelectCourt = (court) => {
+    if (court.id === selectedCourt?.id) return
+    setSelectedCourtId(court.id)
+    setSelectedSlotId(null)
+  }
+
+  const handleSelectSlot = (slot) => {
+    if (slot.status === 'booked') return
+    setSelectedSlotId(slot.id)
+    setHoldLeft(HOLD_SECONDS)
+  }
+
+  const handleClearFilters = () => {
+    setDistrict('all')
+    setPriceRange([PRICE_MIN, PRICE_MAX])
+    selectAllSports()
+  }
+
+  const handleMinPrice = (v) => setPriceRange(([, max]) => [Math.min(Number(v), max - 10000), max])
+  const handleMaxPrice = (v) => setPriceRange(([min]) => [min, Math.max(Number(v), min + 10000)])
+
+  const handleConfirm = () => {
+    if (!selectedCourt || !selectedSlot) return
+    navigate('/split-payment', {
+      state: {
+        court: selectedCourt.name,
+        address: selectedCourt.address,
+        district: selectedCourt.district,
+        subCourt: selectedCourt.subCourt,
+        subCourtDesc: selectedCourt.subCourtDesc,
+        image: selectedCourt.image,
+        sport: selectedCourt.sport,
+        slot: `${selectedSlot.start} - ${selectedSlot.end}`,
+        hours: selectedSlot.hours || 1.5,
+        total: selectedSlot.price,
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1.5)),
+      },
+    })
+  }
+
+  const scrollToSummary = () => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  const pct = (v) => ((v - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100
+  const sportOf = (key) => SPORTS_LIST.find((s) => s.key === key)
+  const todayStr = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const mapSrc = selectedCourt
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(selectedCourt.mapQuery)}&t=${mapType}&z=14&ie=UTF8&iwloc=&output=embed`
+    : `https://maps.google.com/maps?q=${encodeURIComponent('Hồ Chí Minh')}&t=${mapType}&z=12&output=embed`
 
   return (
-    <div className="flex flex-col lg:flex-row w-full h-[calc(100vh-4rem)] overflow-hidden bg-surface relative">
-      {/* LEFT PANEL: Court Directory */}
-      <aside className="w-full lg:w-[44%] xl:w-[42%] h-full flex flex-col bg-surface-container-lowest border-r border-outline-variant/20 shadow-2xl relative z-10 shrink-0">
-        <div className="p-margin-sm md:p-margin pb-space-sm bg-surface-container-low/95 backdrop-blur-xl border-b border-outline-variant/15 flex flex-col gap-space-sm shrink-0">
-          <div className="relative flex items-center group">
-            <span className="material-symbols-outlined absolute left-space-md text-on-surface-variant group-focus-within:text-primary-container transition-colors text-[20px]">search</span>
-            <input className="w-full pl-11 pr-20 py-space-sm bg-surface-container-highest/60 rounded-xl font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:bg-surface-container-high transition-all shadow-inner" placeholder="Search courts, arenas (e.g. Kinetic Arena)..." type="text" defaultValue="Kinetic Arena, Downtown" />
-            <div className="absolute right-space-sm flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm border border-outline-variant/30">
-              <span>⌘</span><span>K</span>
+    <div className="mb-page">
+      {/* ===================== HEADER ===================== */}
+      <header className="mb-header">
+        <div>
+          <h1 className="mb-title">Đặt Sân Trực Tuyến &amp; Giữ Chỗ Thời Gian Thực</h1>
+          <p className="mb-subtitle">
+            Tìm sân trống gần bạn qua định vị GPS, chủ động dùng lịch 100% bằng khóa bí quan dữ liệu và xác nhận
+            đặt chỗ lập tức.
+          </p>
+        </div>
+        <div className="mb-header-chips">
+          {/* Nút Hỏi Trợ Lý AI */}
+          <button
+            id="mb-ask-ai-btn"
+            type="button"
+            className="mb-chip mb-chip--ai"
+            onClick={() => setIsAiModalOpen(true)}
+            title="Mở trợ lý AI tư vấn và gợi ý lựa chọn sân ưu tiên"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10B981' }}>
+              smart_toy
+            </span>
+            <strong>Hỏi Trợ Lý AI</strong>
+            <span className="mb-ai-sub-pill">Gợi ý ưu tiên</span>
+          </button>
+
+          <span className="mb-chip">
+            <span className="mb-dot" /> GPS Độ Chính Xác: 1.5M
+          </span>
+          <span className={`mb-chip mb-chip--timer ${selectedSlot && holdLeft < 120 ? 'is-urgent' : ''}`}>
+            <span className="material-symbols-outlined">lock</span>
+            {selectedSlot ? `Khóa giữ chỗ: ${formatTimer(holdLeft)}` : 'Chưa giữ chỗ'}
+          </span>
+        </div>
+      </header>
+
+      <div className="mb-grid">
+        {/* ===================== LEFT COLUMN ===================== */}
+        <div className="mb-col">
+          {/* AI Assistant Banner */}
+          <div
+            className="mb-ai-helper-banner"
+            onClick={() => setIsAiModalOpen(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="mb-ai-helper-ic">🤖</div>
+            <div className="mb-ai-helper-content">
+              <strong>Hỏi Trợ Lý AI Tìm Sân &amp; Giờ Vàng</strong>
+              <span>Tự động phân tích giá, khoảng cách &amp; gợi ý slot tối ưu nhất</span>
             </div>
-          </div>
-          <div className="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-1 text-on-surface">
-            <button className="flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-md text-label-md transition-all shrink-0">
-              <span className="material-symbols-outlined text-primary-container text-[16px]">calendar_today</span>
-              <span>Today, Oct 22</span>
-            </button>
-            <button className="flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-secondary-container/15 text-secondary-fixed font-label-md text-label-md shadow-[0_0_12px_rgba(52,255,140,0.25)] shrink-0">
-              <span className="material-symbols-outlined text-[16px]">sports_tennis</span>
-              <span>Badminton</span>
-            </button>
-            <button className="flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface shrink-0 font-label-md text-label-md">
-              <span className="material-symbols-outlined text-[16px]">near_me</span>
-              <span>Within 5 km</span>
+            <button type="button" className="mb-ai-helper-btn">
+              Tư Vấn Ngay <span className="material-symbols-outlined">chevron_right</span>
             </button>
           </div>
+
+          {/* Filter card */}
+          <section className="mb-card" aria-label="Bộ lọc sân">
+            <div className="mb-filter-head">
+              <h2>{filteredCourts.length} Địa điểm sẵn sàng</h2>
+              <button id="mb-clear-filter" type="button" className="mb-link-btn" onClick={handleClearFilters}>
+                Xóa Lọc
+              </button>
+            </div>
+
+            <span className="mb-label">Môn thể thao</span>
+            <div className="mb-sport-toggle">
+              {SPORTS_LIST.map((s) => (
+                <button
+                  key={s.key}
+                  id={`mb-sport-${s.key}`}
+                  type="button"
+                  className={`mb-sport-btn ${isSportActive(s.key) ? 'is-active' : ''}`}
+                  onClick={() => toggleSport(s.key)}
+                >
+                  <span>{s.emoji}</span> {s.label}
+                </button>
+              ))}
+            </div>
+
+            <span className="mb-label">Khu vực TP.HCM</span>
+            <div className="mb-select-wrap">
+              <span className="material-symbols-outlined mb-ic-left">location_on</span>
+              <select
+                id="mb-district"
+                className="mb-select"
+                value={district}
+                onChange={(e) => setDistrict(e.target.value)}
+              >
+                {DISTRICTS.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined mb-ic-right">expand_more</span>
+            </div>
+
+            <span className="mb-label">Tầm giá / giờ</span>
+            <div className="mb-range">
+              <div className="mb-range-track" />
+              <div
+                className="mb-range-fill"
+                style={{ left: `${pct(priceRange[0])}%`, right: `${100 - pct(priceRange[1])}%` }}
+              />
+              <input
+                id="mb-price-min"
+                type="range"
+                min={PRICE_MIN}
+                max={PRICE_MAX}
+                step={10000}
+                value={priceRange[0]}
+                onChange={(e) => handleMinPrice(e.target.value)}
+                aria-label="Giá tối thiểu"
+              />
+              <input
+                id="mb-price-max"
+                type="range"
+                min={PRICE_MIN}
+                max={PRICE_MAX}
+                step={10000}
+                value={priceRange[1]}
+                onChange={(e) => handleMaxPrice(e.target.value)}
+                aria-label="Giá tối đa"
+              />
+            </div>
+            <div className="mb-range-values">
+              <span>{formatVnd(priceRange[0])}</span>
+              <span>{formatVnd(priceRange[1])}</span>
+            </div>
+          </section>
+
+          {/* Court list */}
+          <div className="mb-section-head">
+            <h2>Cụm Sân Gần Bạn</h2>
+            <small>{filteredCourts.length} địa điểm sẵn sàng</small>
+          </div>
+
+          {filteredCourts.length === 0 && (
+            <div className="mb-card mb-empty">
+              <span className="material-symbols-outlined">search_off</span>
+              Không tìm thấy sân phù hợp. Hãy thử mở rộng khu vực hoặc tầm giá.
+            </div>
+          )}
+
+          {filteredCourts.map((court, i) => {
+            const active = court.id === selectedCourt?.id
+            const sport = sportOf(court.sport)
+            return (
+              <article
+                key={court.id}
+                id={`mb-court-${court.id}`}
+                className={`mb-card mb-court ${active ? 'is-active' : ''}`}
+                style={{ animationDelay: `${i * 60}ms` }}
+                onClick={() => handleSelectCourt(court)}
+              >
+                <div className="mb-court-top">
+                  <img className="mb-court-img" src={court.image} alt={court.name} loading="lazy" />
+                  <div className="mb-court-info">
+                    <div className="mb-court-name-row">
+                      <h3 className="mb-court-name">{court.name}</h3>
+                      <span className="mb-rating">
+                        <span className="material-symbols-outlined">star</span>
+                        {court.rating}
+                      </span>
+                    </div>
+                    <p className="mb-court-addr">
+                      <span className="material-symbols-outlined">location_on</span>
+                      {court.address}
+                    </p>
+                    <div className="mb-court-meta">
+                      <span className="mb-tag">
+                        {sport?.emoji} {sport?.label}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <span className="material-symbols-outlined">directions_car</span>
+                        {court.distance} km
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mb-court-bottom">
+                  <span className="mb-price">
+                    {court.price.toLocaleString('vi-VN')} đ<small>/h</small>
+                  </span>
+                  {active ? (
+                    <button type="button" className="mb-btn mb-btn--primary">
+                      Đang Chọn <span className="material-symbols-outlined">arrow_circle_right</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mb-btn mb-btn--ghost"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSelectCourt(court)
+                      }}
+                    >
+                      Chọn Sân Nhanh
+                    </button>
+                  )}
+                </div>
+              </article>
+            )
+          })}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-margin-sm md:px-margin py-space-md space-y-space-md">
-          {courts.map((court) => (
-            <article key={court.id} className={`group relative rounded-xl transition-all duration-300 overflow-hidden shadow-lg cursor-pointer ${court.active ? 'bg-surface-container-high/90 hover:bg-surface-container-highest shadow-[0_8px_30px_rgba(0,0,0,0.5)]' : 'bg-surface-container-low hover:bg-surface-container-high'}`} onClick={() => navigate('/court')}>
-              {court.active && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-primary-container via-secondary-fixed to-primary-container shadow-[0_0_12px_#00e5ff]"></div>}
-              <div className={`p-space-md flex flex-col gap-space-sm ${court.active ? 'pl-space-lg' : ''}`}>
-                <div className="flex gap-space-md items-start">
-                  <div className="relative w-24 h-24 rounded-lg overflow-hidden shrink-0 bg-surface-container-lowest">
-                    <img className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src={court.image} alt={court.name} />
-                    {court.surge ? (
-                      <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-error-container/90 backdrop-blur-md font-label-sm text-label-sm text-on-error flex items-center gap-0.5">
-                        <span className="material-symbols-outlined text-[12px]">bolt</span> {court.tag}
-                      </div>
-                    ) : (
-                      <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md font-label-sm text-label-sm text-secondary-fixed">
-                        {court.tag}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h2 className="font-headline-sm text-headline-sm text-on-surface truncate group-hover:text-primary-container transition-colors">{court.name}</h2>
-                      <div className="flex items-center gap-1 text-secondary-fixed font-label-md text-label-md bg-secondary-container/10 px-1.5 py-0.5 rounded shrink-0">
-                        <span className="material-symbols-outlined text-[14px]">star</span>
-                        <span>{court.rating}</span>
-                      </div>
-                    </div>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5 truncate">{court.location}</p>
-                    <div className="flex items-center gap-2 mt-1.5 font-label-sm text-label-sm text-outline-variant">
-                      <span className="flex items-center gap-1 text-on-surface">
-                        <span className="material-symbols-outlined text-[14px] text-primary-container">location_on</span>
-                        {court.distance}
-                      </span>
-                      {court.urgency && <span className="px-1.5 py-0.2 rounded bg-error-container/20 text-error font-label-sm text-label-sm">⚡ 1 Slot Left</span>}
-                    </div>
-                  </div>
-                </div>
-                {court.surge && (
-                  <div className="flex items-center justify-between px-space-sm py-1 rounded-lg bg-surface-variant/40 text-on-surface-variant">
-                    <div className="flex items-center gap-1.5 text-on-error font-label-sm text-label-sm">
-                      <span className="material-symbols-outlined text-[14px]">trending_up</span>
-                      <span>Peak Hour Surge (18:00 - 21:00)</span>
-                    </div>
-                  </div>
-                )}
-                {court.amenities && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    {court.amenities.map(a => (
-                      <span key={a.text} className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[12px] text-primary-container">{a.icon}</span> {a.text}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="pt-space-xs flex items-center justify-between border-t border-outline-variant/15 mt-1">
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-headline-md text-headline-md text-primary-container">${court.price}</span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">/ hour</span>
-                      {court.oldPrice && <span className="font-label-sm text-label-sm text-outline-variant line-through">${court.oldPrice}</span>}
-                    </div>
-                    <div className="font-label-sm text-label-sm text-secondary-fixed flex items-center gap-1">
-                      {court.active && <span className="w-1.5 h-1.5 rounded-full bg-secondary-fixed"></span>} {court.nextSlot}
-                    </div>
-                  </div>
-                  <button className="px-space-md py-space-sm rounded-lg bg-primary-container hover:bg-primary text-on-primary-container font-label-lg text-label-lg shadow-[0_0_18px_rgba(0,229,255,0.4)] transition-all flex items-center gap-1" onClick={(e) => { e.stopPropagation(); navigate('/court') }}>
-                    <span>Book Now</span>
-                    <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                  </button>
-                </div>
+        {/* ===================== RIGHT COLUMN ===================== */}
+        <div className="mb-col">
+          {/* Map */}
+          <section className="mb-card mb-map" aria-label="Bản đồ sân">
+            <iframe
+              key={mapSrc}
+              title="Bản đồ vị trí sân"
+              src={mapSrc}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <div className="mb-map-overlay mb-map-overlay--tl">
+              <span className="mb-map-pill">
+                <span className="material-symbols-outlined">near_me</span>
+                Vị trí của bạn: Nguyễn Thị Thập, Q.7
+              </span>
+            </div>
+            <div className="mb-map-overlay mb-map-overlay--tr">
+              <div className="mb-map-tabs">
+                <button
+                  type="button"
+                  className={`mb-map-tab ${mapType === 'm' ? 'is-active' : ''}`}
+                  onClick={() => setMapType('m')}
+                >
+                  Bản Đồ
+                </button>
+                <button
+                  type="button"
+                  className={`mb-map-tab ${mapType === 'k' ? 'is-active' : ''}`}
+                  onClick={() => setMapType('k')}
+                >
+                  Vệ Tinh
+                </button>
               </div>
-            </article>
-          ))}
-        </div>
-      </aside>
-
-      {/* RIGHT PANEL: Urban Map */}
-      <main className="w-full lg:w-[58%] h-full relative overflow-hidden bg-surface-container-lowest flex flex-col justify-between select-none">
-        <div className="absolute inset-0 bg-surface-container-lowest">
-          <svg className="w-full h-full object-cover opacity-85" fill="none" viewBox="0 0 1000 800" xmlns="http://www.w3.org/2000/svg">
-            <g fill="#141822" opacity="0.6">
-              <rect height="90" rx="4" width="120" x="50" y="40"></rect>
-              <rect height="110" rx="6" width="160" x="200" y="30"></rect>
-              <rect height="150" rx="8" width="140" x="40" y="160"></rect>
-              <rect height="130" rx="6" width="150" x="210" y="170"></rect>
-              <rect height="180" rx="6" width="120" x="60" y="340"></rect>
-              <rect height="190" rx="8" width="180" x="210" y="330"></rect>
-            </g>
-            <path d="M 0,220 C 120,240 280,180 340,110 C 370,70 410,20 460,0" stroke="#00e5ff" strokeDasharray="4 4" strokeOpacity="0.15" strokeWidth="2"></path>
-            <path d="M 20,720 L 250,530 L 480,420 L 720,240 L 980,120" fill="none" stroke="#c3f5ff" strokeWidth="1.2"></path>
-            <circle cx="480" cy="420" fill="none" r="280" stroke="#00e5ff" strokeDasharray="6 8" strokeOpacity="0.15" strokeWidth="1.5"></circle>
-          </svg>
-        </div>
-
-        {/* User GPS */}
-        <div className="absolute left-[48%] top-[52.5%] -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
-          <div className="relative flex items-center justify-center">
-            <div className="absolute w-10 h-10 rounded-full bg-primary-container/30 animate-ping"></div>
-            <div className="w-4 h-4 rounded-full bg-primary-container border-2 border-surface shadow-[0_0_12px_#00e5ff] relative z-10"></div>
-          </div>
-          <div className="mt-1 px-2 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-primary font-label-sm text-label-sm border border-primary-container/30 flex items-center gap-1 shadow-lg">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
-            <span>You Are Here</span>
-          </div>
-        </div>
-
-        {/* PIN 1: Kinetic Arena */}
-        <div className="absolute left-[36%] top-[34%] -translate-x-1/2 -translate-y-full z-30 flex flex-col items-center cursor-pointer group" onClick={() => navigate('/court')}>
-          <div className="relative flex items-center justify-center">
-            <div className="absolute -inset-2 rounded-full bg-secondary-fixed/30 animate-ping"></div>
-            <div className="px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary font-label-lg text-label-lg shadow-[0_0_24px_#34ff8c] flex items-center gap-1 border-2 border-surface">
-              <span className="material-symbols-outlined text-[14px]">sports_tennis</span>
-              <span>$15/hr</span>
             </div>
-          </div>
-          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-secondary-fixed -mt-[1px]"></div>
-        </div>
+            {selectedCourt && (
+              <>
+                <div className="mb-map-pin">
+                  <span className="mb-map-pin-label">
+                    <span className="material-symbols-outlined">location_on</span>
+                    {selectedCourt.name.replace('SportNexus ', '')} ({selectedCourt.distance} km) •{' '}
+                    {selectedCourt.courtCount} sân đề
+                  </span>
+                </div>
+                <div className="mb-map-route">
+                  <div className="mb-map-route-ic">
+                    <span className="material-symbols-outlined">directions_car</span>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <strong>{selectedCourt.route.eta}</strong>
+                    <span className="mb-sub">{selectedCourt.route.note}</span>
+                  </div>
+                  <a
+                    id="mb-directions"
+                    className="mb-btn mb-btn--primary"
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                      selectedCourt.mapQuery
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    Chỉ Đường <span className="material-symbols-outlined">north_east</span>
+                  </a>
+                </div>
+              </>
+            )}
+          </section>
 
-        {/* PIN 2: Metro Smash Hub */}
-        <div className="absolute left-[68%] top-[27%] -translate-x-1/2 -translate-y-full z-20 flex flex-col items-center cursor-pointer">
-          <div className="relative flex items-center justify-center">
-            <div className="px-2.5 py-1 rounded-full bg-surface-container-high/90 hover:bg-surface-bright backdrop-blur-md text-on-surface font-label-md text-label-md border border-error/50 shadow-[0_0_16px_rgba(255,180,171,0.25)] flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-error animate-pulse"></span>
-              <span className="text-primary-container font-label-md text-label-md">$18/hr</span>
+          {/* Slot grid */}
+          <section className="mb-card" aria-label="Lịch sân">
+            <div className="mb-slots-head">
+              <div>
+                <h2>Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.subCourt : '—'}</h2>
+                <p>Khóa bí quan (Pessimistic Lock) chống trùng giờ tuyệt đối.</p>
+              </div>
+              <div className="mb-legend">
+                <span>
+                  <i style={{ background: 'var(--mb-red-bg)', border: '1px solid var(--mb-red-line)' }} /> Đã Đặt
+                </span>
+                <span>
+                  <i style={{ background: '#f5c542' }} /> Giữ Chỗ
+                </span>
+                <span>
+                  <i style={{ background: '#86d97f' }} /> Sẵn Sàng
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] border-t-surface-container-high -mt-[1px]"></div>
-          <span className="mt-1 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 text-[10px] text-on-surface-variant font-label-sm">Metro Smash</span>
-        </div>
 
-        {/* HUD Map Controls */}
-        <div className="relative z-30 p-margin-sm md:p-margin flex items-center justify-between pointer-events-none mt-auto">
-          <div className="pointer-events-auto px-space-md py-space-sm rounded-xl bg-surface-container-lowest/85 backdrop-blur-xl border border-outline-variant/30 shadow-xl flex items-center gap-space-md font-label-sm text-label-sm">
-            <div className="flex items-center gap-1.5 text-on-surface">
-              <span className="w-2.5 h-2.5 rounded-full bg-secondary-fixed"></span> Available Now
+            {!selectedCourt ? (
+              <div className="mb-empty">
+                <span className="material-symbols-outlined">event_busy</span>
+                Chọn một cụm sân để xem lịch trống.
+              </div>
+            ) : (
+              <div className="mb-slots">
+                {slots.map((slot, i) => {
+                  const delay = { animationDelay: `${i * 40}ms` }
+                  if (slot.id === selectedSlot?.id) {
+                    return (
+                      <div key={slot.id} className="mb-slot mb-slot--selected">
+                        <div className="mb-slot-time">
+                          <span className="material-symbols-outlined">schedule</span>
+                          {slot.start} - {slot.end} ({String(slot.hours).replace('.', ',')} giờ)
+                          <span className="mb-slot-badge">Đang khóa giữ chỗ</span>
+                        </div>
+                        <div className="mb-slot-desc">
+                          {selectedCourt.subCourt} ({selectedCourt.subCourtDesc})
+                        </div>
+                        <div className="mb-slot-row">
+                          <span className="mb-slot-price">{formatVnd(slot.price)}</span>
+                          <button type="button" className="mb-btn mb-btn--white" onClick={scrollToSummary}>
+                            Chốt Sân
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (slot.status === 'booked') {
+                    return (
+                      <div key={slot.id} className="mb-slot mb-slot--booked" style={delay} aria-disabled="true">
+                        <span className="material-symbols-outlined mb-slot-lock">lock</span>
+                        <span className="mb-slot-time">
+                          {slot.start} - {slot.end}
+                        </span>
+                        <span className="mb-slot-note">{slot.note}</span>
+                      </div>
+                    )
+                  }
+                  return (
+                    <button
+                      key={slot.id}
+                      id={`mb-slot-${slot.id}`}
+                      type="button"
+                      className={`mb-slot mb-slot--${slot.status}`}
+                      style={delay}
+                      onClick={() => handleSelectSlot(slot)}
+                    >
+                      <span className="mb-slot-time">
+                        {slot.start} - {slot.end}
+                      </span>
+                      <div className="mb-slot-row">
+                        <span className="mb-slot-price">{formatVnd(slot.price)}</span>
+                        {slot.status === 'held' && <span className="mb-slot-mini">Chọn</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Summary */}
+          <section className="mb-card" ref={summaryRef} aria-label="Xác nhận chọn sân">
+            <div className="mb-summary-box">
+              <div className="mb-summary-ic">
+                <span style={{ fontSize: 22 }}>{sportOf(selectedCourt?.sport)?.emoji || '🏸'}</span>
+              </div>
+              <div className="mb-summary-info">
+                <h3>
+                  {selectedCourt ? selectedCourt.subCourt : 'Chưa chọn sân'}
+                  {selectedSlot && <span className="mb-pill-green">Đã khóa Giữ</span>}
+                </h3>
+                <p>
+                  <span className="material-symbols-outlined">schedule</span>
+                  {selectedSlot
+                    ? `${selectedSlot.start} - ${selectedSlot.end} (Hôm nay, ${todayStr}) • ${formatHours(
+                        selectedSlot.hours
+                      )}`
+                    : 'Vui lòng chọn một khung giờ còn trống trên lưới lịch'}
+                </p>
+              </div>
+              <div className="mb-summary-total">
+                <small>Tổng tiền sân:</small>
+                <strong>{selectedSlot ? formatVnd(selectedSlot.price) : '0 đ'}</strong>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 text-on-surface">
-              <span className="w-2.5 h-2.5 rounded-full bg-primary-container"></span> Your GPS
-            </div>
-          </div>
-          <div className="pointer-events-auto flex flex-col gap-1.5">
-            <button className="p-2.5 rounded-xl bg-surface-container-lowest/85 hover:bg-primary-container hover:text-on-primary-container backdrop-blur-xl border border-outline-variant/30 text-on-surface-variant shadow-xl transition-all">
-              <span className="material-symbols-outlined text-[18px]">my_location</span>
+
+            <button
+              id="mb-confirm-booking"
+              type="button"
+              className="mb-btn mb-btn--primary mb-confirm"
+              disabled={!selectedSlot}
+              onClick={handleConfirm}
+            >
+              <span className="material-symbols-outlined">check_circle</span>
+              Xác Nhận Chọn Sân
+              <span className="material-symbols-outlined">arrow_forward</span>
             </button>
+            <p className="mb-secure-note">
+              <span className="material-symbols-outlined">verified_user</span>
+              Hệ thống giữ chỗ độc quyền trong 15:00 phút để bạn tiến hành thanh toán an toàn.
+            </p>
+          </section>
+        </div>
+      </div>
+
+      {/* ===================== FOOTER ===================== */}
+      <footer className="mb-footer">
+        <div className="mb-footer-top">
+          <div>
+            <div className="mb-footer-brand">
+              <span className="mb-footer-logo">
+                <span className="material-symbols-outlined">bolt</span>
+              </span>
+              <strong>SPORTNEXUS VIETNAM</strong>
+            </div>
+            <p>Nền tảng vận hành thể thao thông minh &amp; bảo chứng giao dịch Escrow minh bạch toàn diện.</p>
+          </div>
+          <div className="mb-footer-links">
+            <div>
+              <span>
+                <span className="material-symbols-outlined">support_agent</span> Hotline 24/7: 0968950913
+              </span>
+              <span>
+                <span className="material-symbols-outlined">verified_user</span> Bảo vệ Ký Quỹ Escrow
+              </span>
+            </div>
+            <div>
+              <a href="#">Điều khoản dịch vụ</a>
+              <a href="#">Chính sách Fairplay</a>
+            </div>
           </div>
         </div>
-      </main>
+        <div className="mb-footer-bottom">
+          <span>
+            © 2026 SportNexus Vietnam Joint Stock Company • Nền tảng chuyên biệt Pickleball &amp; Cầu Lông. Bảo lưu
+            mọi quyền.
+          </span>
+          <span className="mb-live">
+            <i /> Hệ thống bảo chứng Escrow thời gian thực
+          </span>
+        </div>
+      </footer>
+
+      {/* ===================== AI CHAT ASSISTANT MODAL ===================== */}
+      <AIChatModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        currentCourtId={selectedCourtId}
+        onSelectCourtSlot={({ courtId, slotId }) => {
+          if (courtId) setSelectedCourtId(courtId)
+          if (slotId) {
+            setSelectedSlotId(slotId)
+            setHoldLeft(HOLD_SECONDS)
+          }
+          setTimeout(() => {
+            summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }, 250)
+        }}
+      />
     </div>
   )
 }
