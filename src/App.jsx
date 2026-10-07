@@ -21,6 +21,9 @@ import SplitPayment from './Player/Book a court/SplitPayment.jsx'
 import TournamentList from './Player/Finance & Events/TournamentList.jsx'
 import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
 
+import AdminLayout from './Admin/Layout/AdminLayout.jsx'
+import AdminDashboard from './Admin/Dashboard/AdminDashboard.jsx'
+
 function App() {
   return (
     <BrowserRouter>
@@ -51,6 +54,11 @@ function App() {
           <Route path="/create-match" element={<CreateMatch />} />
           <Route path="/split-payment" element={<SplitPayment />} />
           <Route path="/post-match-rating" element={<PostMatchRating />} />
+        </Route>
+
+        {/* Admin module */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route path="dashboard" element={<AdminDashboard />} />
         </Route>
 
         {/* Fallback */}
