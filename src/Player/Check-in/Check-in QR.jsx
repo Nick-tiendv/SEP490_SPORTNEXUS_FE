@@ -164,7 +164,7 @@ function CheckInQR() {
     <div
       style={{
         minHeight: 'calc(100vh - 60px)',
-        background: '#FAF8F5',
+        background: 'transparent',
         padding: '28px 36px 60px 36px',
         color: '#111827',
       }}

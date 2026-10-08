@@ -27,7 +27,7 @@ function FlashClaim() {
   }
 
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-4rem)] relative overflow-hidden bg-[#F9FBFA]">
+    <div className="flex flex-col w-full h-[calc(100vh-4rem)] relative overflow-hidden">
       {/* Background Simulation */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] bg-gradient-to-tr from-[#EAF7EE] via-[#DCFCE7]/60 to-transparent rounded-full blur-[110px]"></div>

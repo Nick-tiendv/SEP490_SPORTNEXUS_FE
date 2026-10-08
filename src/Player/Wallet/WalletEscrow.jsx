@@ -105,7 +105,7 @@ export default function WalletEscrow() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#F6FAF6] text-[#1E293B] pb-16">
+    <div className="w-full min-h-screen text-[#1E293B] pb-16">
       {/* Toast thông báo thành công */}
       {successToast && (
         <div className="fixed top-20 right-8 z-50 bg-[#15803D] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-bounce">

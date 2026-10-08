@@ -2,7 +2,7 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f6faf6;
+  background-color: #eef9f1;
   color: #1f2937;
   font-family: 'Inter', sans-serif;
 }
@@ -20,33 +20,66 @@ body {
   display: none;
 }
 
-/* Pastel Background Animation - 30s cycle matching auth and player pages */
-@keyframes pastelGradient {
-  0% {
-    background: linear-gradient(135deg, #E8F5E3 0%, #D4EBD0 100%);
-  }
-  16.66% {
-    background: linear-gradient(135deg, #FFE5E5 0%, #FFD1D1 100%);
-  }
-  33.33% {
-    background: linear-gradient(135deg, #E5F3FF 0%, #D1E7FF 100%);
-  }
-  50% {
-    background: linear-gradient(135deg, #FFF5E5 0%, #FFE8D1 100%);
-  }
-  66.66% {
-    background: linear-gradient(135deg, #F5E5FF 0%, #E8D1FF 100%);
-  }
-  83.33% {
-    background: linear-gradient(135deg, #E5FFF5 0%, #D1FFE8 100%);
-  }
-  100% {
-    background: linear-gradient(135deg, #E8F5E3 0%, #D4EBD0 100%);
-  }
+/* =====================================================================
+   SPORT BACKGROUND - dùng chung cho trang Auth & Player
+   Lớp 1 (element):  nền cỏ sáng + quầng sáng năng lượng (lime / cam / xanh trời)
+   Lớp 2 (::before): sọc cắt cỏ sân bóng + đường kẻ sân, "thở" nhẹ
+   Lớp 3 (::after):  họa tiết bóng (bóng đá, tennis, cầu lông, bóng rổ) trôi chậm
+   ===================================================================== */
+.sport-animated-bg {
+  position: relative;
+  isolation: isolate;
+  background-color: #eef9f1;
+  background-image:
+    radial-gradient(ellipse 55% 45% at 8% 10%, rgba(190, 242, 100, 0.45) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 40% at 95% 12%, rgba(125, 211, 252, 0.40) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 45% at 90% 95%, rgba(253, 186, 116, 0.35) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 5% 95%, rgba(74, 222, 128, 0.30) 0%, transparent 70%),
+    linear-gradient(160deg, #f3fcf5 0%, #e3f6e8 45%, #e6f4fb 100%);
+  background-attachment: fixed;
 }
 
-.pastel-animated-bg {
-  background: linear-gradient(135deg, #E8F5E3 0%, #D4EBD0 100%);
-  animation: pastelGradient 30s ease-in-out infinite;
-  background-attachment: fixed;
+/* Sọc cỏ + đường kẻ sân */
+.sport-animated-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800' fill='none' stroke='%2316a34a' stroke-opacity='0.16' stroke-width='3'%3E%3Crect x='60' y='60' width='1080' height='680' rx='10'/%3E%3Cline x1='600' y1='60' x2='600' y2='740'/%3E%3Ccircle cx='600' cy='400' r='100'/%3E%3Ccircle cx='600' cy='400' r='6' fill='%2316a34a' fill-opacity='0.16'/%3E%3Crect x='60' y='220' width='170' height='360'/%3E%3Crect x='60' y='310' width='60' height='180'/%3E%3Cpath d='M230 330 A90 90 0 0 1 230 470'/%3E%3Crect x='970' y='220' width='170' height='360'/%3E%3Crect x='1080' y='310' width='60' height='180'/%3E%3Cpath d='M970 330 A90 90 0 0 0 970 470'/%3E%3Cpath d='M60 80 A20 20 0 0 0 80 60 M1120 60 A20 20 0 0 0 1140 80 M60 720 A20 20 0 0 1 80 740 M1120 740 A20 20 0 0 1 1140 720'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.35) 0 90px, rgba(255, 255, 255, 0) 90px 180px);
+  background-repeat: no-repeat, repeat;
+  background-position: center, 0 0;
+  background-size: min(1500px, 115vw) auto, auto;
+  animation: sportCourtBreath 14s ease-in-out infinite;
+}
+
+/* Họa tiết bóng trôi */
+.sport-animated-bg::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260' fill='none' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='%2316a34a' stroke-opacity='0.16'%3E%3Ccircle cx='52' cy='52' r='22'/%3E%3Cpolygon points='52,42 61,49 58,60 46,60 43,49' fill='%2316a34a' fill-opacity='0.16'/%3E%3Cpath d='M52 42 V30 M61 49 L72 45 M58 60 L65 70 M46 60 L39 70 M43 49 L32 45'/%3E%3C/g%3E%3Cg stroke='%2365a30d' stroke-opacity='0.18'%3E%3Ccircle cx='196' cy='70' r='19'/%3E%3Cpath d='M180 59 Q193 70 180 81 M212 59 Q199 70 212 81'/%3E%3C/g%3E%3Cg stroke='%230284c7' stroke-opacity='0.14'%3E%3Cpath d='M62 214 L50 172 L92 172 L80 214 Z M64 172 L68 214 M78 172 L74 214 M53 186 H89 M56 200 H86'/%3E%3Ccircle cx='71' cy='221' r='7'/%3E%3C/g%3E%3Cg stroke='%23ea580c' stroke-opacity='0.15'%3E%3Ccircle cx='196' cy='196' r='22'/%3E%3Cpath d='M174 196 H218 M196 174 V218 M181 180 Q190 196 181 212 M211 180 Q202 196 211 212'/%3E%3C/g%3E%3Cg fill='%2316a34a' fill-opacity='0.14' stroke='none'%3E%3Ccircle cx='130' cy='130' r='3'/%3E%3Ccircle cx='130' cy='20' r='2'/%3E%3Ccircle cx='20' cy='130' r='2'/%3E%3C/g%3E%3Cpath d='M118 112 l8 -8 M136 150 l8 -8' stroke='%2316a34a' stroke-opacity='0.12'/%3E%3C/svg%3E");
+  background-size: 260px 260px;
+  animation: sportBallsDrift 60s linear infinite;
+}
+
+@keyframes sportBallsDrift {
+  from { background-position: 0 0; }
+  to   { background-position: 520px -260px; }
+}
+
+@keyframes sportCourtBreath {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sport-animated-bg::before,
+  .sport-animated-bg::after {
+    animation: none;
+  }
 }

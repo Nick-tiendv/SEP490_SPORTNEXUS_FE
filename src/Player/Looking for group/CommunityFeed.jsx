@@ -275,7 +275,7 @@ function CommunityFeed() {
   })
 
   return (
-    <div className="w-full min-h-screen bg-[#F6F9F6] text-[#1E293B] pb-16">
+    <div className="w-full min-h-screen text-[#1E293B] pb-16">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 right-8 z-50 flex items-center gap-3 bg-[#1C3524] text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-[#34D399]/40 animate-bounce">

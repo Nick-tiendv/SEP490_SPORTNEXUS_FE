@@ -17,7 +17,7 @@ function PlayerLayout() {
 
   return (
     <SportProvider>
-      <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif" }} className="pastel-animated-bg">
+      <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif" }} className="sport-animated-bg">
       {/* Fixed Sidebar */}
       <TopSideBar />
 
@@ -130,18 +130,6 @@ function PlayerLayout() {
 
       {/* Keyframe styles */}
       <style>{`
-        @keyframes pastelGradient {
-          0%   { background: linear-gradient(135deg, #E8F5E3 0%, #D4EBD0 100%); }
-          16%  { background: linear-gradient(135deg, #FFE5E5 0%, #FFD1D1 100%); }
-          33%  { background: linear-gradient(135deg, #E5F3FF 0%, #D1E7FF 100%); }
-          50%  { background: linear-gradient(135deg, #FFF5E5 0%, #FFE8D1 100%); }
-          66%  { background: linear-gradient(135deg, #F5E5FF 0%, #E8D1FF 100%); }
-          83%  { background: linear-gradient(135deg, #E5FFF5 0%, #D1FFE8 100%); }
-          100% { background: linear-gradient(135deg, #E8F5E3 0%, #D4EBD0 100%); }
-        }
-        .pastel-animated-bg {
-          animation: pastelGradient 30s ease-in-out infinite;
-        }
         @keyframes pulseFAB {
           0%, 100% { box-shadow: 0 4px 20px rgba(45,95,63,0.5); }
           50% { box-shadow: 0 4px 28px rgba(45,95,63,0.75), 0 0 0 8px rgba(45,95,63,0.12); }

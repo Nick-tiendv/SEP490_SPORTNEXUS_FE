@@ -460,7 +460,7 @@ function CreateMatch() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#F6F9F6] text-[#1E293B] pb-16">
+    <div className="w-full min-h-screen text-[#1E293B] pb-16">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {/* Main Large White Card Container */}
         <div className="bg-white rounded-3xl border border-gray-200/90 p-6 sm:p-8 md:p-10 shadow-sm">
