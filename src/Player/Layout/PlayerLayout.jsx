@@ -32,43 +32,6 @@ function PlayerLayout() {
         </main>
       </div>
 
-      {/* ===================== FLOATING AI BUTTON ===================== */}
-      {/* Tooltip label */}
-      {!aiOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: '88px',
-            right: '28px',
-            background: '#1b5e20',
-            color: '#fff',
-            fontSize: '12px',
-            fontWeight: 600,
-            padding: '5px 10px',
-            borderRadius: '20px',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
-            opacity: 0,
-            animation: 'fadeInTooltip 0.4s ease 1.2s forwards',
-          }}
-        >
-          🤖 Hỏi trợ lý AI
-          <span
-            style={{
-              position: 'absolute',
-              bottom: '-5px',
-              right: '18px',
-              width: 0,
-              height: 0,
-              borderLeft: '5px solid transparent',
-              borderRight: '5px solid transparent',
-              borderTop: '5px solid #1b5e20',
-            }}
-          />
-        </div>
-      )}
-
       {/* Full-featured SportNexus AI Concierge Modal */}
       <AIChatModal
         isOpen={aiOpen}
@@ -78,7 +41,7 @@ function PlayerLayout() {
       {/* FAB button */}
       <button
         onClick={() => setAiOpen((v) => !v)}
-        title="Hỏi trợ lý AI"
+        title="Trợ lý AI SportNexus"
         style={{
           position: 'fixed',
           bottom: '28px',

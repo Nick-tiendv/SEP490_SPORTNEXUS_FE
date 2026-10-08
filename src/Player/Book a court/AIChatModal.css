@@ -635,17 +635,58 @@
   border: none;
   color: #6B7280;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
+  padding: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s;
+  transition: all 0.2s ease;
 }
 
 .snx-ai-voice-btn:hover {
   color: #2D5F3F;
+  background: rgba(45, 95, 63, 0.08);
 }
+
+.snx-ai-voice-btn.is-listening {
+  color: #DC2626 !important;
+  background: #FEE2E2 !important;
+  animation: snxAiPulseMic 1.2s infinite ease-in-out;
+}
+
+@keyframes snxAiPulseMic {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.15); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.snx-ai-listening-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #DC2626;
+  font-weight: 600;
+  animation: snxAiFadeIn 0.25s ease;
+}
+
+.snx-ai-listening-dots {
+  display: flex;
+  gap: 3px;
+}
+.snx-ai-listening-dots span {
+  width: 4px;
+  height: 4px;
+  background: #DC2626;
+  border-radius: 50%;
+  animation: snxAiDot 1s infinite ease-in-out both;
+}
+.snx-ai-listening-dots span:nth-child(1) { animation-delay: -0.3s; }
+.snx-ai-listening-dots span:nth-child(2) { animation-delay: -0.15s; }
 
 /* Success toast inside widget */
 .snx-ai-toast {
