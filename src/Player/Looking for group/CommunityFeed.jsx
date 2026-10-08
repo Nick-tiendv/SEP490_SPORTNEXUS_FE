@@ -115,6 +115,33 @@ function CommunityFeed() {
         isFlashClaim: false,
         image: 'https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=800&h=600&fit=crop',
       },
+      {
+        id: 4,
+        sport: 'pickleball',
+        sportBadge: 'PICKLEBALL ĐÔI',
+        subBadge: '✓ Sân Acrylic USAPA',
+        levelTag: 'DUPR 3.0 - 4.0',
+        slotTag: 'Còn Trống 2 Chỗ',
+        time: '19:00 Tối mai',
+        timeSlot: 'evening',
+        title: '[Pickleball Giao Lưu] D-Pickleball Hub Thảo Điền - Đánh vui vẻ, chia tiền sòng phẳng',
+        location: 'D-Pickleball Hub, 28 Thảo Điền, TP. Thủ Đức',
+        groupDesc: 'Nhóm thân thiện, có nước & bóng thi đấu sẵn',
+        roster: [
+          { initials: 'NV', bg: '#0D9488', name: 'Nguyễn Việt' },
+          { initials: 'KL', bg: '#7C3AED', name: 'Khánh Linh' },
+          { initials: '?', bg: 'empty', name: 'Slot trống 1' },
+          { initials: '?', bg: 'empty', name: 'Slot trống 2' },
+        ],
+        currentSlots: 2,
+        totalSlots: 4,
+        priceLabel: 'Tiền cọc chia đều:',
+        price: 50000,
+        priceDisplay: '50.000 đ',
+        buttonText: 'Chốt Slot Ngay',
+        isFlashClaim: false,
+        image: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+      },
     ]
 
     try {
@@ -125,6 +152,60 @@ function CommunityFeed() {
       return defaultList
     }
   })
+
+  // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
+  const [userProfileLocation, setUserProfileLocation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.location) return parsed.location
+      }
+    } catch {}
+    return 'Thủ Đức'
+  })
+
+  // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
+  useEffect(() => {
+    const handleProfileUpdate = (e) => {
+      const loc = e.detail?.location
+      if (loc) setUserProfileLocation(loc)
+      else {
+        try {
+          const saved = localStorage.getItem('player_profile_data')
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.location) setUserProfileLocation(parsed.location)
+          }
+        } catch {}
+      }
+    }
+    const handleStorage = (e) => {
+      if (e.key === 'player_profile_data' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue)
+          if (parsed.location) setUserProfileLocation(parsed.location)
+        } catch {}
+      }
+    }
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  const isMatchNearUser = (matchLoc, userLoc) => {
+    if (!matchLoc || !userLoc) return false
+    const normM = matchLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const normU = userLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    if (normM.includes(normU) || normU.includes(normM)) return true
+    if ((normU.includes('thu duc') || normU.includes('quan 2')) && (normM.includes('thu duc') || normM.includes('thao dien'))) return true
+    if (normU.includes('binh thanh') && (normM.includes('binh thanh') || normM.includes('dinh bo linh'))) return true
+    if (normU.includes('quan 7') && (normM.includes('quan 7') || normM.includes('huynh tan phat'))) return true
+    return false
+  }
 
   // New match form state
   const [newMatch, setNewMatch] = useState({
@@ -266,13 +347,19 @@ function CommunityFeed() {
     setFilterStandardCourt(false)
   }
 
-  // Filtered matches
-  const filteredMatches = matches.filter((m) => {
-    if (activeSportFilter !== 'all' && m.sport !== activeSportFilter) return false
-    if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
-    if (filterFlashOnly && !m.isFlashClaim) return false
-    return true
-  })
+  // Filtered matches (ưu tiên hiển thị các kèo gần vị trí hồ sơ người chơi lên đầu)
+  const filteredMatches = matches
+    .filter((m) => {
+      if (activeSportFilter !== 'all' && m.sport !== activeSportFilter) return false
+      if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
+      if (filterFlashOnly && !m.isFlashClaim) return false
+      return true
+    })
+    .sort((a, b) => {
+      const aNear = isMatchNearUser(a.location, userProfileLocation) ? 1 : 0
+      const bNear = isMatchNearUser(b.location, userProfileLocation) ? 1 : 0
+      return bNear - aNear
+    })
 
   return (
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
@@ -294,6 +381,10 @@ function CommunityFeed() {
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF7EE] text-[#15803D] font-bold text-[11px] tracking-wider uppercase border border-[#DCFCE7]">
             <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse shadow-[0_0_8px_#16A34A]"></span>
             REALTIME WEBSOCKET SIGNALR
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] font-bold text-[11px] border border-[#FDE68A] shadow-2xs">
+            <span className="material-symbols-outlined text-[13px] text-[#D97706]">location_on</span>
+            <span>Vị trí ghép: {userProfileLocation} (Đồng bộ hồ sơ)</span>
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E0F2FE] text-[#0369A1] font-semibold text-[11px]">
             <span className="material-symbols-outlined text-[13px]">bolt</span>
@@ -522,6 +613,12 @@ function CommunityFeed() {
                           >
                             {match.slotTag}
                           </span>
+                          {isMatchNearUser(match.location, userProfileLocation) && (
+                            <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs">
+                              <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
+                              Gần bạn ({userProfileLocation})
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 text-gray-600 text-xs font-semibold">
                           <span className="material-symbols-outlined text-[14px] text-gray-500">
@@ -668,6 +765,12 @@ function CommunityFeed() {
                   <p className="text-[11px] text-gray-500 mt-1">
                     Thành viên từ T10/2025 • Niên khoá 2026
                   </p>
+
+                  <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold">
+                    <span className="material-symbols-outlined text-[15px] text-[#15803D]">location_on</span>
+                    <span>Vị trí thi đấu: <strong className="text-[#15803D]">{userProfileLocation}</strong></span>
+                    <span className="text-[9.5px] text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.5 rounded font-extrabold border border-[#86EFAC]/70">Đã đồng bộ</span>
+                  </div>
 
                   <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-[#EAF7EE] border border-[#86EFAC] text-[#15803D] text-[11px] font-bold self-start shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-ping"></span>

@@ -286,10 +286,37 @@ function CreateMatch() {
   // State management
   const [sport, setSport] = useState('badminton') // 'badminton' | 'pickleball'
   const [radius, setRadius] = useState(8.5)
-  const [selectedDistrict, setSelectedDistrict] = useState('q7')
+  // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
+  const [userProfileLocation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.location) return parsed.location
+      }
+    } catch {}
+    return 'Thủ Đức'
+  })
+
+  const detectDistrictKey = (loc = '') => {
+    const norm = loc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    if (norm.includes('thu duc') || norm.includes('thao dien') || norm.includes('quan 2') || norm.includes('q2')) return 'thuduc'
+    if (norm.includes('binh thanh')) return 'binhthanh'
+    if (norm.includes('quan 7') || norm.includes('q7') || norm.includes('phu my hung')) return 'q7'
+    if (norm.includes('quan 1') || norm.includes('q1')) return 'q1'
+    if (norm.includes('phu nhuan')) return 'phunhuan'
+    if (norm.includes('quan 10') || norm.includes('q10')) return 'q10'
+    return 'thuduc'
+  }
+
+  // Khởi tạo quận và sân mặc định đồng bộ từ Hồ sơ cá nhân
+  const userDistrictKey = detectDistrictKey(userProfileLocation)
+  const [selectedDistrict, setSelectedDistrict] = useState(userDistrictKey)
   const [districtSearchQuery, setDistrictSearchQuery] = useState('')
   const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false)
-  const [selectedCourtId, setSelectedCourtId] = useState('c-q7-1')
+  const [selectedCourtId, setSelectedCourtId] = useState(() => {
+    return DISTRICT_DATA[userDistrictKey]?.courts[0]?.id || 'c-td-1'
+  })
   const [selectedDate, setSelectedDate] = useState('today') // 'today' | 'tomorrow'
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('17:30 - 19:30')
   const [preferredTimeRange, setPreferredTimeRange] = useState('18:00 - 20:30')
@@ -687,10 +714,16 @@ function CreateMatch() {
                       Tìm kiếm khu vực sân (quận, địa bàn):
                     </span>
                     {/* Active Selected Area Pill */}
-                    <span className="inline-flex items-center gap-1 text-[11px] text-[#15803D] font-extrabold bg-[#EAF7EE] border border-[#C6E7BE] px-2.5 py-0.5 rounded-lg">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
-                      Đang chọn: {currentDistrictData.name} ({currentDistrictData.courts.length} sân)
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-[#15803D] font-extrabold bg-[#EAF7EE] border border-[#C6E7BE] px-2.5 py-0.5 rounded-lg">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
+                        Đang chọn: {currentDistrictData.name} ({currentDistrictData.courts.length} sân)
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] text-[#15803D] font-extrabold bg-[#DCFCE7] border border-[#86EFAC] px-2 py-0.5 rounded-lg">
+                        <span className="material-symbols-outlined text-[13px] text-[#16A34A]">person_pin_circle</span>
+                        Đồng bộ hồ sơ: {userProfileLocation}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Search Bar Input Container */}
