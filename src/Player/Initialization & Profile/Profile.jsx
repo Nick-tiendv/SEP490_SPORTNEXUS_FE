@@ -43,12 +43,16 @@ export default function Profile() {
     }
   })
 
-  // State các môn thể thao & Elo
+  // State các môn thể thao
   const [sportsData, setSportsData] = useState(() => {
-    const saved = localStorage.getItem('player_sports_elo')
+    const saved = localStorage.getItem('player_sports_data') || localStorage.getItem('player_sports_elo')
     if (saved) {
       try {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        return parsed.map((s) => {
+          const { elo, ...rest } = s
+          return rest
+        })
       } catch (e) {
         console.error(e)
       }
@@ -58,7 +62,6 @@ export default function Profile() {
         id: 'badminton',
         name: 'Cầu lông',
         icon: '🏸',
-        elo: 1250,
         level: 'Trung bình - Khá',
         field: 'Trình độ',
         ranked: true,
@@ -71,7 +74,6 @@ export default function Profile() {
         id: 'pickleball',
         name: 'Pickleball',
         icon: '🏓',
-        elo: 980,
         level: 'Mới chơi - Đang tiến bộ',
         field: 'Trình độ',
         ranked: true,
@@ -84,7 +86,6 @@ export default function Profile() {
         id: 'football',
         name: 'Bóng đá',
         icon: '⚽',
-        elo: 1150,
         level: 'Tiền vệ cánh',
         field: 'Sở trường',
         ranked: true,
@@ -97,7 +98,6 @@ export default function Profile() {
         id: 'tennis',
         name: 'Quần vợt (Tennis)',
         icon: '🎾',
-        elo: null,
         level: 'Chưa có dữ liệu thi đấu',
         field: 'Trạng thái',
         ranked: false,
@@ -116,7 +116,8 @@ export default function Profile() {
 
   // Lưu sportsData khi thay đổi
   useEffect(() => {
-    localStorage.setItem('player_sports_elo', JSON.stringify(sportsData))
+    localStorage.setItem('player_sports_data', JSON.stringify(sportsData))
+    localStorage.removeItem('player_sports_elo')
   }, [sportsData])
 
   // Trạng thái các Modal
@@ -124,6 +125,7 @@ export default function Profile() {
   const [showEloModal, setShowEloModal] = useState(false)
   const [selectedSportToEdit, setSelectedSportToEdit] = useState(null)
   const [showAllReviewsModal, setShowAllReviewsModal] = useState(false)
+  const [showWriteReviewModal, setShowWriteReviewModal] = useState(false)
   const [showMatchesModal, setShowMatchesModal] = useState(false)
   const [showFavoriteCourtsModal, setShowFavoriteCourtsModal] = useState(false)
   const [showNotificationModal, setShowNotificationModal] = useState(false)
@@ -134,11 +136,18 @@ export default function Profile() {
   // Form edit profile tạm thời
   const [editForm, setEditForm] = useState({ ...profile })
 
-  // Form cập nhật Elo
-  const [eloForm, setEloForm] = useState({
-    elo: 1200,
+  // Form cập nhật trình độ
+  const [skillForm, setSkillForm] = useState({
     level: 'Trung bình - Khá',
   })
+
+  // Form viết đánh giá sau trận cho người chơi cùng sân
+  const [writeReviewForm, setWriteReviewForm] = useState({
+    targetPlayer: 'Hoàng Nam',
+    rating: 5,
+    content: '',
+  })
+  const [hoveredStar, setHoveredStar] = useState(0)
 
   // Toast helper
   const triggerToast = (msg) => {
@@ -148,61 +157,228 @@ export default function Profile() {
     }, 3500)
   }
 
-  // Danh sách đánh giá
-  const reviewsList = [
+  // Danh sách đánh giá mẫu ban đầu
+  const initialReviews = [
     {
       id: 1,
       author: 'Lê Nam',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ đánh đôi',
       avatarInitial: 'LN',
       avatarBg: '#DCFCE7',
       avatarColor: '#15803D',
       matchType: 'Kèo Cầu lông',
-      court: 'Sân Q7',
+      court: 'Sân Q7 (Sân số 3)',
       time: '2 ngày trước',
       rating: 5,
       content:
-        'Đánh cầu rất chuẩn và vui tính! Lên lưới chắc tay, giao lưu cực kỳ thoải mái.',
+        'Đánh cầu rất chuẩn và vui tính! Lên lưới chắc tay, giao lưu cực kỳ thoải mái, phối hợp nhịp nhàng.',
+      verifiedCheckout: true,
+      checkoutTime: '20:15',
     },
     {
       id: 2,
       author: 'Trần Hùng',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đồng đội đánh cặp',
       avatarInitial: 'TH',
       avatarBg: '#E0F2FE',
       avatarColor: '#0284C7',
       matchType: 'Kèo Pickleball',
-      court: 'Sân Nam Sài Gòn',
+      court: 'Sân Nam Sài Gòn (Sân 2)',
       time: '5 ngày trước',
       rating: 5,
       content:
-        'Đúng giờ, tinh thần thể thao tuyệt vời. Luôn chủ động chia tiền sân sòng phẳng.',
+        'Đúng giờ, tinh thần thể thao tuyệt vời. Luôn chủ động chia tiền sân sòng phẳng và hỗ trợ bọc lót đồng đội.',
+      verifiedCheckout: true,
+      checkoutTime: '19:40',
     },
     {
       id: 3,
       author: 'Hoàng Anh Tuấn',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Bạn chơi cùng sân',
       avatarInitial: 'AT',
       avatarBg: '#FEF3C7',
       avatarColor: '#B45309',
       matchType: 'Kèo Cầu lông',
-      court: 'Sân Hoàng Vy Q8',
+      court: 'Sân Hoàng Vy Q8 (Sân 1)',
       time: '1 tuần trước',
       rating: 5,
       content:
-        'Kỹ thuật phong cầu và đập cầu rất chuẩn mực. Rất mong được tiếp tục giao lưu ở các giải phong trào tới!',
+        'Kỹ thuật phong cầu và đập cầu rất chuẩn mực. Thái độ thi đấu văn minh, rất mong tiếp tục giao lưu ở các giải phong trào tới!',
+      verifiedCheckout: true,
+      checkoutTime: '21:00',
     },
     {
       id: 4,
       author: 'Võ Minh Đạt',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ cùng sân',
       avatarInitial: 'MĐ',
       avatarBg: '#F3E8FF',
       avatarColor: '#7E22CE',
       matchType: 'Kèo Bóng đá',
       court: 'Sân Cỏ Nhân Tạo Kênh Tẻ',
       time: '2 tuần trước',
-      rating: 4.8,
+      rating: 5,
       content:
-        'Đá bóng nhiệt huyết, tôn trọng đối thủ và đồng đội. Chuyền bóng sắc bén, rất kỷ luật!',
+        'Đá bóng nhiệt huyết, tôn trọng đối thủ và đồng đội. Chuyền bóng sắc bén, rất kỷ luật và hòa nhã!',
+      verifiedCheckout: true,
+      checkoutTime: '18:30',
+    },
+    {
+      id: 5,
+      author: 'Nguyễn Quốc Huy',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đồng đội đánh cặp',
+      avatarInitial: 'QH',
+      avatarBg: '#FCE7F3',
+      avatarColor: '#BE185D',
+      matchType: 'Kèo Cầu lông',
+      court: 'CLB Viettel Q.10 (Sân 4)',
+      time: '3 tuần trước',
+      rating: 5,
+      content:
+        'Bảo bọc lưới cực tốt, phản xạ nhanh và luôn động viên đồng đội lúc bị dẫn điểm. Rất uy tín!',
+      verifiedCheckout: true,
+      checkoutTime: '20:30',
+    },
+    {
+      id: 6,
+      author: 'Đặng Tuấn',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ cùng sân',
+      avatarInitial: 'ĐT',
+      avatarBg: '#E0E7FF',
+      avatarColor: '#4338CA',
+      matchType: 'Kèo Cầu lông',
+      court: 'Sân Tân Phong Q7',
+      time: '28/09/2026',
+      rating: 4,
+      content:
+        'Trận đấu kịch tính đến set 3, chơi sòng phẳng, chấp hành nghiêm quy định giờ giấc và check-out trả sân đúng giờ.',
+      verifiedCheckout: true,
+      checkoutTime: '21:30',
     },
   ]
+
+  // State danh sách đánh giá sau trận (lưu localStorage)
+  const [reviewsList, setReviewsList] = useState(() => {
+    const saved = localStorage.getItem('player_match_reviews')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    return initialReviews
+  })
+
+  // Lưu reviewsList khi có thay đổi
+  useEffect(() => {
+    localStorage.setItem('player_match_reviews', JSON.stringify(reviewsList))
+  }, [reviewsList])
+
+  // Lấy phiên thi đấu check-out gần nhất
+  const getCheckoutSession = () => {
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.checkOutDone) {
+          return parsed
+        }
+      }
+    } catch (e) {}
+    return null
+  }
+
+  // Danh sách bạn chơi cùng sân từ phiên check-out hoặc mặc định
+  const getAvailableCoPlayers = () => {
+    const session = getCheckoutSession()
+    if (session && session.coPlayers && session.coPlayers.length > 0) {
+      return session.coPlayers
+    }
+    return [
+      { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
+      { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
+      { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
+    ]
+  }
+
+  // Mô phỏng check-out thành công nhanh để thử nghiệm
+  const handleSimulateCheckout = () => {
+    const session = {
+      courtId: 'Court 3',
+      courtName: 'Sân Cầu Lông BWF Pro 01',
+      sport: 'Cầu lông',
+      checkInDone: true,
+      checkInTime: '18:00',
+      checkOutDone: true,
+      checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      coPlayers: [
+        { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
+        { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
+        { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
+      ],
+    }
+    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
+    triggerToast('✅ Đã kích hoạt phiên chơi check-out thành công tại Sân Cầu Lông BWF Pro 01!')
+  }
+
+  // Gửi đánh giá sau trận (chỉ cho phép sau khi check-out thành công)
+  const handleSubmitReview = (e) => {
+    e.preventDefault()
+    const session = getCheckoutSession()
+    if (!session || !session.checkOutDone) {
+      triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-out thành công!')
+      return
+    }
+
+    if (!writeReviewForm.content || writeReviewForm.content.trim().length < 10) {
+      triggerToast('⚠️ Vui lòng viết nhận xét chi tiết bằng chữ (tối thiểu 10 ký tự)!')
+      return
+    }
+
+    if (!writeReviewForm.rating || writeReviewForm.rating < 1 || writeReviewForm.rating > 5) {
+      triggerToast('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
+      return
+    }
+
+    const newReview = {
+      id: Date.now(),
+      author: 'Bạn (Minh Minh Minh)',
+      targetPlayer: writeReviewForm.targetPlayer,
+      coPlayerRole: 'Bạn chơi cùng sân',
+      avatarInitial: writeReviewForm.targetPlayer.slice(0, 2).toUpperCase(),
+      avatarBg: '#DCFCE7',
+      avatarColor: '#15803D',
+      matchType: `Kèo ${session.sport || 'Cầu lông'}`,
+      court: `${session.courtName || 'Sân Cầu Lông BWF Pro 01'} (${session.courtId || 'Court 3'})`,
+      time: 'Vừa xong',
+      rating: Number(writeReviewForm.rating),
+      content: writeReviewForm.content.trim(),
+      verifiedCheckout: true,
+      checkoutTime: session.checkOutTime || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    const updated = [newReview, ...reviewsList]
+    setReviewsList(updated)
+    setProfile((prev) => ({
+      ...prev,
+      totalReviews: (prev.totalReviews || 0) + 1,
+    }))
+    setShowWriteReviewModal(false)
+    setWriteReviewForm({
+      targetPlayer: 'Hoàng Nam',
+      rating: 5,
+      content: '',
+    })
+    triggerToast(`🎉 Đã gửi đánh giá thành công cho ${newReview.targetPlayer}!`)
+  }
 
   // Danh sách sân yêu thích
   const favoriteCourts = [
@@ -243,17 +419,16 @@ export default function Profile() {
     },
   ]
 
-  // Mở modal cập nhật Elo
+  // Mở modal cập nhật trình độ
   const handleOpenEloModal = (sport) => {
     setSelectedSportToEdit(sport)
-    setEloForm({
-      elo: sport.elo || 1000,
+    setSkillForm({
       level: sport.level.includes('Chưa có') ? 'Mới tập chơi' : sport.level,
     })
     setShowEloModal(true)
   }
 
-  // Lưu Elo
+  // Lưu trình độ
   const handleSaveElo = () => {
     if (!selectedSportToEdit) return
     setSportsData((prev) =>
@@ -261,8 +436,7 @@ export default function Profile() {
         if (s.id === selectedSportToEdit.id) {
           return {
             ...s,
-            elo: Number(eloForm.elo),
-            level: eloForm.level,
+            level: skillForm.level,
             field: 'Trình độ',
             ranked: true,
           }
@@ -272,7 +446,7 @@ export default function Profile() {
     )
     setShowEloModal(false)
     triggerToast(
-      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (Elo: ${eloForm.elo})!`
+      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (${skillForm.level})!`
     )
   }
 
@@ -389,7 +563,7 @@ export default function Profile() {
                 fontWeight: 500,
               }}
             >
-              Định danh vận động viên &amp; Hệ thống Elo chuẩn SportNexus
+              Định danh vận động viên &amp; Hệ thống hồ sơ thể thao SportNexus
             </p>
           </div>
         </div>
@@ -1233,7 +1407,7 @@ export default function Profile() {
 
         {/* ===================== CỘT BÊN PHẢI ===================== */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* PHẦN 1: TRÌNH ĐỘ & ĐIỂM ELO */}
+          {/* PHẦN 1: TRÌNH ĐỘ KỸ NĂNG */}
           <div
             style={{
               background: '#FFFFFF',
@@ -1243,7 +1417,7 @@ export default function Profile() {
               boxShadow: '0 8px 24px rgba(45, 95, 63, 0.05)',
             }}
           >
-            {/* Header: Icon + Trình độ & Điểm Elo + Badge HỆ THỐNG RANK */}
+            {/* Header: Icon + Trình độ & Badge HỆ THỐNG RANK */}
             <div
               style={{
                 display: 'flex',
@@ -1266,7 +1440,7 @@ export default function Profile() {
                       letterSpacing: '-0.3px',
                     }}
                   >
-                    Trình độ &amp; Điểm Elo
+                    Trình độ kỹ năng
                   </h2>
                 </div>
               </div>
@@ -1315,7 +1489,7 @@ export default function Profile() {
                   fontWeight: 500,
                 }}
               >
-                Điểm Elo và tự đánh giá giúp SportNexus đề xuất đối thủ &amp; kèo ghép trận cân bằng nhất.
+                Tự đánh giá trình độ giúp SportNexus đề xuất đối thủ &amp; kèo ghép trận cân bằng nhất.
               </p>
             </div>
 
@@ -1372,7 +1546,7 @@ export default function Profile() {
                       </div>
 
                       <div>
-                        {/* Tên môn + Badge Elo */}
+                        {/* Tên môn + Badge Trạng thái */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                           <span
                             style={{
@@ -1383,7 +1557,7 @@ export default function Profile() {
                           >
                             {sport.name}
                           </span>
-                          {sport.ranked && sport.elo ? (
+                          {sport.ranked ? (
                             <span
                               style={{
                                 background: '#DCFCE7',
@@ -1395,7 +1569,7 @@ export default function Profile() {
                                 fontWeight: 800,
                               }}
                             >
-                              Elo {sport.elo}
+                              Đã xác nhận
                             </span>
                           ) : (
                             <span
@@ -1498,50 +1672,129 @@ export default function Profile() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '18px',
+                marginBottom: '14px',
+                flexWrap: 'wrap',
+                gap: '12px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#15803D' }}>
                   forum
                 </span>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    color: '#1C3524',
-                    letterSpacing: '-0.3px',
-                  }}
-                >
-                  Đánh giá sau trận
-                </h3>
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '18px',
+                      fontWeight: 800,
+                      color: '#1C3524',
+                      letterSpacing: '-0.3px',
+                    }}
+                  >
+                    Đánh giá sau trận
+                  </h3>
+                </div>
               </div>
 
-              <button
-                onClick={() => setShowAllReviewsModal(true)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#15803D',
-                  fontSize: '13.5px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <span>Xem tất cả ({profile.totalReviews})</span>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                  arrow_forward
-                </span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowWriteReviewModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '8px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 3px 10px rgba(21, 128, 61, 0.25)',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
+                    rate_review
+                  </span>
+                  <span>Viết đánh giá sau trận</span>
+                </button>
+
+                <button
+                  onClick={() => setShowAllReviewsModal(true)}
+                  style={{
+                    background: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    color: '#15803D',
+                    borderRadius: '12px',
+                    padding: '7px 12px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span>Tất cả ({reviewsList.length})</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                    arrow_forward
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Danh sách 2 đánh giá nổi bật */}
+            {/* Banner quy định đánh giá sau trận */}
+            <div
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '14px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: '#475569',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+                  verified_user
+                </span>
+                <span>
+                  <strong>Quy chuẩn đánh giá:</strong> Người chơi chỉ được phép <u>viết nhận xét</u> &amp; <u>chấm điểm sao</u> cho bạn chơi cùng sân <strong>sau khi check-out thành công</strong>.
+                </span>
+              </div>
+              <span
+                style={{
+                  background: '#DCFCE7',
+                  color: '#15803D',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  fontWeight: 800,
+                  fontSize: '11px',
+                  border: '1px solid #86EFAC',
+                }}
+              >
+                ✓ Xác thực sau Check-out
+              </span>
+            </div>
+
+            {/* Danh sách các đánh giá nổi bật */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {reviewsList.slice(0, 2).map((item) => (
+              {reviewsList.slice(0, 3).map((item) => (
                 <div
                   key={item.id}
                   style={{
@@ -1557,6 +1810,8 @@ export default function Profile() {
                       alignItems: 'flex-start',
                       justifyContent: 'space-between',
                       marginBottom: '10px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1584,9 +1839,26 @@ export default function Profile() {
                             fontSize: '14.5px',
                             fontWeight: 800,
                             color: '#1F2937',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
                           }}
                         >
-                          {item.author}
+                          <span>{item.author}</span>
+                          {item.coPlayerRole && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#6B7280',
+                                background: '#F3F4F6',
+                                padding: '1px 6px',
+                                borderRadius: '6px',
+                              }}
+                            >
+                              {item.coPlayerRole}
+                            </span>
+                          )}
                         </div>
                         <div
                           style={{
@@ -1600,10 +1872,39 @@ export default function Profile() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', color: '#EAB308', fontSize: '14px', gap: '2px' }}>
-                      {[...Array(5)].map((_, i) => (
-                        <span key={i}>★</span>
-                      ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: '8px',
+                          border: '1px solid #86EFAC',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                          check_circle
+                        </span>
+                        Đã check-out cùng sân
+                      </span>
+
+                      <div style={{ display: 'flex', color: '#EAB308', fontSize: '14px', gap: '1px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                            }}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -1613,6 +1914,8 @@ export default function Profile() {
                       color: '#374151',
                       lineHeight: 1.5,
                       fontStyle: 'italic',
+                      paddingLeft: '4px',
+                      borderLeft: '3px solid #15803D',
                     }}
                   >
                     “{item.content}”
@@ -1812,7 +2115,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* 2. MODAL CẬP NHẬT ELO & TRÌNH ĐỘ */}
+      {/* 2. MODAL CẬP NHẬT TRÌNH ĐỘ */}
       {showEloModal && selectedSportToEdit && (
         <div
           style={{
@@ -1870,51 +2173,11 @@ export default function Profile() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                  Điểm Elo tự đánh giá / Đạt được
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="number"
-                    min="500"
-                    max="3000"
-                    value={eloForm.elo}
-                    onChange={(e) => setEloForm({ ...eloForm, elo: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      fontSize: '15px',
-                      fontWeight: 700,
-                      color: '#15803D',
-                      outline: 'none',
-                    }}
-                  />
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '10px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      color: '#6B7280',
-                    }}
-                  >
-                    pts
-                  </span>
-                </div>
-                <p style={{ margin: '4px 0 0 0', fontSize: '11.5px', color: '#6B7280' }}>
-                  Thang điểm chuẩn SportNexus: 800-1100 (Mới chơi), 1100-1400 (Khá), 1400+ (Chuyên/Bán chuyên).
-                </p>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
                   Mức độ kỹ năng / Sở trường
                 </label>
                 <select
-                  value={eloForm.level}
-                  onChange={(e) => setEloForm({ ...eloForm, level: e.target.value })}
+                  value={skillForm.level}
+                  onChange={(e) => setSkillForm({ ...skillForm, level: e.target.value })}
                   style={{
                     width: '100%',
                     padding: '10px 14px',
@@ -1933,6 +2196,9 @@ export default function Profile() {
                   <option value="Tiền vệ cánh">Tiền vệ cánh (Bóng đá)</option>
                   <option value="Tiền đạo cắm">Tiền đạo cắm (Bóng đá)</option>
                 </select>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Trình độ được dùng để ghép đối thủ và xếp lịch thi đấu phù hợp nhất với bạn.
+                </p>
               </div>
             </div>
 
@@ -1989,7 +2255,7 @@ export default function Profile() {
             style={{
               background: '#FFFFFF',
               borderRadius: '24px',
-              maxWidth: '650px',
+              maxWidth: '680px',
               width: '100%',
               padding: '24px',
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
@@ -2006,27 +2272,58 @@ export default function Profile() {
                 marginBottom: '16px',
                 borderBottom: '1px solid #E5E7EB',
                 paddingBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '10px',
               }}
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Tất cả đánh giá từ người chơi ({profile.totalReviews})
+                  Tất cả đánh giá từ người chơi ({reviewsList.length})
                 </h3>
                 <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  Đánh giá sau khi kết thúc trận qua hệ thống Smart Check-in SportNexus
+                  100% đánh giá xác thực bằng chữ &amp; sao sau khi check-out sân SportNexus
                 </p>
               </div>
-              <button
-                onClick={() => setShowAllReviewsModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#6B7280',
-                }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAllReviewsModal(false)
+                    setShowWriteReviewModal(true)
+                  }}
+                  style={{
+                    background: '#15803D',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                    rate_review
+                  </span>
+                  Viết đánh giá
+                </button>
+
+                <button
+                  onClick={() => setShowAllReviewsModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6B7280',
+                  }}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
             </div>
 
             {/* Danh sách các review */}
@@ -2047,6 +2344,8 @@ export default function Profile() {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       marginBottom: '8px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2067,21 +2366,56 @@ export default function Profile() {
                         {item.avatarInitial}
                       </div>
                       <div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
-                          {item.author}
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{item.author}</span>
+                          {item.coPlayerRole && (
+                            <span style={{ fontSize: '10.5px', background: '#F3F4F6', color: '#6B7280', padding: '1px 5px', borderRadius: '4px' }}>
+                              {item.coPlayerRole}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: '11px', color: '#6B7280' }}>
                           {item.matchType} • {item.court} • {item.time}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
-                      {[...Array(5)].map((_, i) => (
-                        <span key={i}>★</span>
-                      ))}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '6px',
+                          border: '1px solid #86EFAC',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                          check_circle
+                        </span>
+                        Đã check-out cùng sân
+                      </span>
+
+                      <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                            }}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ fontSize: '13px', color: '#374151', fontStyle: 'italic' }}>
+                  <div style={{ fontSize: '13px', color: '#374151', fontStyle: 'italic', paddingLeft: '4px', borderLeft: '3px solid #15803D' }}>
                     “{item.content}”
                   </div>
                 </div>
@@ -2108,6 +2442,461 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      {/* 3B. MODAL VIẾT ĐÁNH GIÁ SAU TRẬN (CHỈ DÀNH CHO BẠN CHƠI CÙNG SÂN SAU KHI CHECK-OUT THÀNH CÔNG) */}
+      {showWriteReviewModal && (() => {
+        const session = getCheckoutSession()
+        const isEligible = session && session.checkOutDone
+        const coPlayers = getAvailableCoPlayers()
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000,
+              background: 'rgba(0, 0, 0, 0.5)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+            }}
+          >
+            <div
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '24px',
+                maxWidth: '560px',
+                width: '100%',
+                padding: '26px',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+                border: '1px solid rgba(45, 95, 63, 0.15)',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '16px',
+                  borderBottom: '1px solid #E5E7EB',
+                  paddingBottom: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                      rate_review
+                    </span>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                      Đánh giá sau trận đấu
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                      Chỉ mở sau khi hoàn tất check-out tại sân thi đấu
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowWriteReviewModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6B7280',
+                  }}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {!isEligible ? (
+                /* TH1: CHƯA CHECK-OUT THÀNH CÔNG -> KHÓA ĐÁNH GIÁ */
+                <div style={{ textAlign: 'center', padding: '16px 8px' }}>
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: '#FEF3C7',
+                      color: '#D97706',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px auto',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>
+                      lock
+                    </span>
+                  </div>
+
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 800, color: '#1F2937' }}>
+                    Chưa đủ điều kiện đánh giá sau trận
+                  </h4>
+
+                  <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#4B5563', lineHeight: 1.6 }}>
+                    Theo quy chuẩn minh bạch của SportNexus: Người chơi <strong>chỉ được phép đánh giá bằng hình thức viết nhận xét và chấm điểm sao cho người chơi cùng sân sau khi đã check-out thành công</strong>.
+                  </p>
+
+                  <div
+                    style={{
+                      background: '#F8FAFC',
+                      border: '1px dashed #CBD5E1',
+                      borderRadius: '16px',
+                      padding: '14px',
+                      marginBottom: '20px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      color: '#475569',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '4px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
+                        verified
+                      </span>
+                      Lợi ích của cơ chế xác thực check-out:
+                    </div>
+                    <div>• Ngăn chặn 100% đánh giá ảo, spam điểm danh dự</div>
+                    <div>• Đảm bảo 2 bên thực sự đã chơi cùng nhau trên sân</div>
+                    <div>• Bảo vệ quỹ ký quỹ Escrow và xếp hạng công bằng</div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowWriteReviewModal(false)
+                        navigate('/check-in')
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        borderRadius: '12px',
+                        background: '#15803D',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '13.5px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                        qr_code_scanner
+                      </span>
+                      Đi đến trang Check-in / Check-out sân
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSimulateCheckout()
+                        // Re-trigger re-render
+                        setShowWriteReviewModal(false)
+                        setTimeout(() => setShowWriteReviewModal(true), 200)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '12px',
+                        background: '#F0FDF4',
+                        color: '#15803D',
+                        fontWeight: 700,
+                        fontSize: '12.5px',
+                        border: '1px dashed #16A34A',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        bolt
+                      </span>
+                      Mô phỏng Check-out thành công ngay (Dùng thử)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* TH2: ĐÃ CHECK-OUT THÀNH CÔNG -> MỞ FORM ĐÁNH GIÁ CHI TIẾT */
+                <form onSubmit={handleSubmitReview} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Verified Session Info */}
+                  <div
+                    style={{
+                      background: '#F0FDF4',
+                      border: '1px solid #BBF7D0',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
+                          task_alt
+                        </span>
+                        Đã Check-out thành công • {session.courtId || 'Court 3'}
+                      </div>
+                      <div style={{ color: '#15803D', fontSize: '11.5px', marginTop: '2px' }}>
+                        {session.courtName || 'Sân Cầu Lông BWF Pro 01'} (Lúc {session.checkOutTime || '19:35'})
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        background: '#DCFCE7',
+                        color: '#15803D',
+                        border: '1px solid #86EFAC',
+                        borderRadius: '8px',
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                      }}
+                    >
+                      Đủ điều kiện
+                    </span>
+                  </div>
+
+                  {/* 1. CHỌN NGƯỜI CHƠI CÙNG SÂN */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                      1. Chọn người chơi cùng sân cần đánh giá:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
+                      {coPlayers.map((cp) => {
+                        const isSelected = writeReviewForm.targetPlayer === cp.name
+                        return (
+                          <div
+                            key={cp.id}
+                            onClick={() => setWriteReviewForm({ ...writeReviewForm, targetPlayer: cp.name })}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: '12px',
+                              border: isSelected ? '2px solid #15803D' : '1px solid #E5E7EB',
+                              background: isSelected ? '#F0FDF4' : '#FFFFFF',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                background: isSelected ? '#15803D' : '#E0F2FE',
+                                color: isSelected ? '#FFFFFF' : '#0369A1',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 800,
+                                fontSize: '12px',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {cp.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {cp.name}
+                              </div>
+                              <div style={{ fontSize: '10.5px', color: '#6B7280' }}>
+                                {cp.role || 'Cùng sân'}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. CHẤM ĐIỂM SAO (1 - 5 SAO) */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                        2. Chấm điểm sao (Bắt buộc):
+                      </label>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#15803D' }}>
+                        {writeReviewForm.rating === 5 && '⭐⭐⭐⭐⭐ Xuất sắc • Tinh thần Fairplay cao'}
+                        {writeReviewForm.rating === 4 && '⭐⭐⭐⭐ Rất tốt • Phối hợp ăn ý, hòa nhã'}
+                        {writeReviewForm.rating === 3 && '⭐⭐⭐ Hài lòng • Trình độ ngang tài'}
+                        {writeReviewForm.rating === 2 && '⭐⭐ Cần cải thiện • Trễ giờ hoặc va chạm'}
+                        {writeReviewForm.rating === 1 && '⭐ Kém • Tinh thần phi thể thao'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', padding: '10px 14px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const isFilled = (hoveredStar || writeReviewForm.rating) >= star
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setWriteReviewForm({ ...writeReviewForm, rating: star })}
+                            onMouseEnter={() => setHoveredStar(star)}
+                            onMouseLeave={() => setHoveredStar(0)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              fontSize: '28px',
+                              cursor: 'pointer',
+                              color: isFilled ? '#EAB308' : '#D1D5DB',
+                              transition: 'transform 0.15s, color 0.15s',
+                              transform: isFilled ? 'scale(1.15)' : 'scale(1)',
+                              padding: '2px',
+                            }}
+                          >
+                            ★
+                          </button>
+                        )
+                      })}
+                      <span style={{ marginLeft: '10px', fontSize: '13px', fontWeight: 800, color: '#1F2937' }}>
+                        {writeReviewForm.rating} / 5 sao
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3. VIẾT NHẬN XÉT BẰNG CHỮ (BẮT BUỘC) */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                        3. Viết nhận xét chi tiết (Bắt buộc bằng chữ):
+                      </label>
+                      <span style={{ fontSize: '11px', color: writeReviewForm.content.trim().length >= 10 ? '#15803D' : '#DC2626' }}>
+                        {writeReviewForm.content.trim().length}/10 ký tự tối thiểu
+                      </span>
+                    </div>
+
+                    <textarea
+                      rows={4}
+                      value={writeReviewForm.content}
+                      onChange={(e) => setWriteReviewForm({ ...writeReviewForm, content: e.target.value })}
+                      placeholder="Viết nhận xét chi tiết về bạn chơi: tinh thần thi đấu, sự đúng giờ, khả năng phối hợp cầu/bóng và văn hóa trên sân..."
+                      style={{
+                        width: '100%',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        padding: '12px 14px',
+                        fontSize: '13.5px',
+                        lineHeight: 1.5,
+                        outline: 'none',
+                        resize: 'vertical',
+                        background: '#FFFFFF',
+                      }}
+                    />
+
+                    {/* Quick suggestion tags */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                      <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 600 }}>Gợi ý nhanh:</span>
+                      {[
+                        'Đúng giờ ⏱️',
+                        'Fairplay tuyệt đối ⭐',
+                        'Kỹ thuật phong cầu tốt 🏸',
+                        'Phối hợp ăn ý 🤝',
+                        'Vui vẻ, nhiệt tình 😊',
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            const cur = writeReviewForm.content
+                            const updated = cur ? `${cur}. ${tag}` : tag
+                            setWriteReviewForm({ ...writeReviewForm, content: updated })
+                          }}
+                          style={{
+                            background: '#F1F5F9',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px',
+                            padding: '3px 8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#334155',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +{tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #E5E7EB', paddingTop: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowWriteReviewModal(false)}
+                      style={{
+                        padding: '9px 18px',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        background: '#FFFFFF',
+                        color: '#4B5563',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={writeReviewForm.content.trim().length < 10}
+                      style={{
+                        padding: '9px 22px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        background: writeReviewForm.content.trim().length >= 10
+                          ? 'linear-gradient(135deg, #15803D 0%, #166534 100%)'
+                          : '#D1D5DB',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: writeReviewForm.content.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: writeReviewForm.content.trim().length >= 10 ? '0 3px 10px rgba(21, 128, 61, 0.3)' : 'none',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        send
+                      </span>
+                      Gửi đánh giá xác thực
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 4. MODAL LỊCH SỬ TRẬN ĐẤU */}
       {showMatchesModal && (
@@ -2177,7 +2966,6 @@ export default function Profile() {
                   court: 'Sân Q7 (Sân số 3)',
                   score: '21 - 18, 21 - 15',
                   result: 'Thắng',
-                  eloChange: '+18 Elo',
                   date: 'Hôm qua, 18:30',
                 },
                 {
@@ -2187,7 +2975,6 @@ export default function Profile() {
                   court: 'Sân Nam Sài Gòn (Sân 2)',
                   score: '11 - 8, 11 - 9',
                   result: 'Thắng',
-                  eloChange: '+14 Elo',
                   date: '03/10/2026, 19:00',
                 },
                 {
@@ -2197,7 +2984,6 @@ export default function Profile() {
                   court: 'Sân Tân Phong Q7',
                   score: '19 - 21, 20 - 22',
                   result: 'Thua',
-                  eloChange: '-8 Elo',
                   date: '28/09/2026, 20:00',
                 },
               ].map((m) => (
@@ -2239,15 +3025,6 @@ export default function Profile() {
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1C3524' }}>
                       {m.score}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        color: m.result === 'Thắng' ? '#15803D' : '#DC2626',
-                      }}
-                    >
-                      {m.eloChange}
                     </div>
                   </div>
                 </div>
@@ -2457,7 +3234,7 @@ export default function Profile() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {[
-                { title: 'Kèo ghép trận LFG phù hợp Elo', desc: 'Nhận thông báo khi có kèo cùng quận & rank ngang bằng' },
+                { title: 'Kèo ghép trận LFG phù hợp trình độ', desc: 'Nhận thông báo khi có kèo cùng quận & rank ngang bằng' },
                 { title: 'Nhắc lịch đặt sân & Check-in QR', desc: 'Báo trước 60 phút và 15 phút trước giờ bóng lăn' },
                 { title: 'Biến động số dư ví Escrow', desc: 'Thông báo khi nạp tiền, hoàn tiền cọc, giải ngân cọc sân' },
                 { title: 'Đánh giá & Xếp hạng sau trận', desc: 'Nhận thông báo khi đối thủ hoặc đồng đội chấm điểm' },

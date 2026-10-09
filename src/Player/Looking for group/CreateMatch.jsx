@@ -430,10 +430,10 @@ function CreateMatch() {
 
     const levelText =
       skillLevel === 'intermediate'
-        ? 'Elo 1400 - 1600'
+        ? 'Trung bình - Khá (DUPR 3.0 - 4.0)'
         : skillLevel === 'beginner'
-        ? 'Elo < 1300'
-        : 'Elo > 1700'
+        ? 'Mới tập chơi (DUPR < 2.5)'
+        : 'Bán chuyên / Pro (DUPR > 4.5)'
 
     const createdMatch = {
       id: Date.now(),
@@ -539,7 +539,7 @@ function CreateMatch() {
                     01. CHỌN BỘ MÔN THỂ THAO
                   </label>
                   <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    ELO / DUPR SYNCED
+                    DUPR SYNCED
                   </span>
                 </div>
 
@@ -1038,9 +1038,9 @@ function CreateMatch() {
                   </div>
                 </div>
 
-                {/* Yêu cầu Trình độ Elo / DUPR */}
+                {/* Yêu cầu Trình độ DUPR */}
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ Elo / DUPR:</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ (DUPR):</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Trung bình Khá */}
                     <div
@@ -1058,7 +1058,7 @@ function CreateMatch() {
                         <span>Trung bình Khá</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo 1400 - 1600 (DUPR 3.0 - 4.0)
+                        DUPR 3.0 - 4.0
                       </p>
                     </div>
 
@@ -1078,7 +1078,7 @@ function CreateMatch() {
                         <span>Mới tập chơi</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &lt; 1300 (DUPR &lt; 2.5)
+                        DUPR &lt; 2.5
                       </p>
                     </div>
 
@@ -1098,7 +1098,7 @@ function CreateMatch() {
                         <span>Bán chuyên / Pro</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &gt; 1700+ (DUPR &gt; 4.5)
+                        DUPR &gt; 4.5
                       </p>
                     </div>
                   </div>
@@ -1299,7 +1299,7 @@ function CreateMatch() {
                       Minh Minh Minh (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      DUPR 3.8 • Elo 1650 • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
+                      DUPR 3.8 • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
                     </p>
                   </div>
                 </div>
@@ -1319,7 +1319,7 @@ function CreateMatch() {
                   </span>
                   <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
                   <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng Elo trực tuyến
+                    Đang có 18 vận động viên cùng trình độ trực tuyến
                   </p>
                 </div>
 

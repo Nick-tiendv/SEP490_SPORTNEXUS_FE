@@ -454,7 +454,7 @@ function SplitPayment() {
               <div className="sp-user-stats-grid">
                 <div className="sp-user-stat-card">
                   <small>HẠNG / TRÌNH ĐỘ</small>
-                  <strong>DUPR 3.8 • Elo 1650</strong>
+                  <strong>DUPR 3.8</strong>
                 </div>
                 <div className="sp-user-stat-card">
                   <small>ĐIỂM FAIRPLAY</small>
@@ -796,7 +796,7 @@ function SplitPayment() {
               <div className="sp-pass-user-stats">
                 <div className="sp-pass-stat-pill">
                   <small>HẠNG / TRÌNH ĐỘ</small>
-                  <strong>DUPR 3.8 • Elo 1650</strong>
+                  <strong>DUPR 3.8</strong>
                 </div>
                 <div className="sp-pass-stat-pill">
                   <small>ĐIỂM FAIRPLAY</small>

@@ -5,13 +5,53 @@ function CheckInQR() {
   const [seconds, setSeconds] = useState(29)
   const [copied, setCopied] = useState(false)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
-  const [checkInDone, setCheckInDone] = useState(false)
+  
+  // Trạng thái Check-in & Check-out đọc từ localStorage
+  const [checkOutDone, setCheckOutDone] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return Boolean(parsed?.checkOutDone)
+      }
+    } catch (e) {}
+    return false
+  })
+
+  const [checkInDone, setCheckInDone] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return Boolean(parsed?.checkInDone || parsed?.checkOutDone)
+      }
+    } catch (e) {}
+    return false
+  })
+
+  // Modal Check-out và Đánh giá sau trận
+  const [showCheckOutModal, setShowCheckOutModal] = useState(false)
+  const [showRateModal, setShowRateModal] = useState(false)
+  const [selectedCoPlayer, setSelectedCoPlayer] = useState(null)
+  const [rateStars, setRateStars] = useState(5)
+  const [rateHoverStars, setRateHoverStars] = useState(0)
+  const [writtenReview, setWrittenReview] = useState('')
+
+  // Danh sách ID người chơi đã được đánh giá
+  const [reviewedPlayerIds, setReviewedPlayerIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_match_reviewed_ids')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return []
+  })
 
   // Share QR modal states with participant deletion support
   const [showShareModal, setShowShareModal] = useState(false)
   const [matchParticipants, setMatchParticipants] = useState([
-    { id: '1', email: 'hoang.nam.badminton@gmail.com', isSelected: true },
-    { id: '2', email: 'duc_tran92@outlook.com', isSelected: false },
+    { id: '1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', isSelected: true },
+    { id: '2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', isSelected: false },
+    { id: '3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', isSelected: false },
   ])
   const [emailInput, setEmailInput] = useState('')
   const [toastMessage, setToastMessage] = useState(null)
@@ -55,7 +95,7 @@ function CheckInQR() {
     } else {
       setMatchParticipants((prev) => [
         ...prev,
-        { id: Date.now().toString(), email: trimmed, isSelected: true },
+        { id: Date.now().toString(), name: trimmed.split('@')[0], email: trimmed, role: 'Bạn chơi cùng sân', isSelected: true },
       ])
       setToastMessage(`Đã thêm người tham gia: ${trimmed}`)
     }
@@ -90,12 +130,124 @@ function CheckInQR() {
   // Restore default participants
   const handleRestoreDefaultParticipants = () => {
     setMatchParticipants([
-      { id: '1', email: 'hoang.nam.badminton@gmail.com', isSelected: true },
-      { id: '2', email: 'duc_tran92@outlook.com', isSelected: false },
+      { id: '1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', isSelected: true },
+      { id: '2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', isSelected: false },
+      { id: '3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', isSelected: false },
     ])
     setToastMessage('Đã khôi phục danh sách gợi ý ban đầu')
     setTimeout(() => setToastMessage(null), 3000)
   }
+
+  // Xử lý xác nhận Check-out trả sân
+  const handleConfirmCheckOut = () => {
+    setShowCheckOutModal(false)
+    setCheckOutDone(true)
+    const checkOutTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    const sessionData = {
+      courtId: 'Court 3',
+      courtName: 'Sân Cầu Lông BWF Pro 01',
+      sport: 'Cầu Lông',
+      checkInDone: true,
+      checkInTime: '18:00',
+      checkOutDone: true,
+      checkOutTime: checkOutTime,
+      coPlayers: matchParticipants.map((p) => ({
+        id: p.id,
+        name: p.name || p.email.split('@')[0],
+        email: p.email,
+        role: p.role || 'Bạn chơi cùng sân',
+      })),
+    }
+    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(sessionData))
+    setToastMessage(`🎉 Check-out trả sân thành công lúc ${checkOutTime}! Mời bạn đánh giá bạn chơi cùng sân.`)
+    setTimeout(() => setToastMessage(null), 3500)
+
+    // Tự động mở modal đánh giá bạn chơi đầu tiên nếu chưa đánh giá
+    if (matchParticipants.length > 0) {
+      setSelectedCoPlayer(matchParticipants[0])
+      setShowRateModal(true)
+    }
+  }
+
+  // Mở modal đánh giá người chơi cụ thể
+  const handleOpenRateModal = (player) => {
+    if (!checkOutDone) {
+      setToastMessage('⚠️ Bạn chỉ được phép đánh giá sau khi check-out thành công!')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+    setSelectedCoPlayer(player)
+    setWrittenReview('')
+    setRateStars(5)
+    setShowRateModal(true)
+  }
+
+  // Xử lý gửi đánh giá sau trận (chỉ cho phép sau khi check-out thành công)
+  const handleSubmitRateCoPlayer = (e) => {
+    e.preventDefault()
+    if (!checkOutDone) {
+      setToastMessage('⚠️ Người chơi chỉ được phép đánh giá sau khi check-out thành công!')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+    if (!rateStars || rateStars < 1 || rateStars > 5) {
+      setToastMessage('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+    if (!writtenReview || writtenReview.trim().length < 10) {
+      setToastMessage('⚠️ Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự)!')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+
+    const targetName = selectedCoPlayer?.name || selectedCoPlayer?.email?.split('@')[0] || 'Bạn chơi'
+    const newReview = {
+      id: Date.now(),
+      author: 'Bạn (Người chơi cùng sân)',
+      targetPlayer: targetName,
+      coPlayerRole: selectedCoPlayer?.role || 'Bạn chơi cùng sân',
+      avatarInitial: targetName.slice(0, 2).toUpperCase(),
+      avatarBg: '#DCFCE7',
+      avatarColor: '#15803D',
+      matchType: 'Kèo Cầu Lông',
+      court: 'Sân Cầu Lông BWF Pro 01 (Court 3)',
+      time: 'Vừa xong',
+      rating: rateStars,
+      content: writtenReview.trim(),
+      verifiedCheckout: true,
+      checkoutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    // Lưu vào danh sách đánh giá hệ thống
+    try {
+      const saved = localStorage.getItem('player_match_reviews')
+      const currentList = saved ? JSON.parse(saved) : []
+      const updatedList = [newReview, ...currentList]
+      localStorage.setItem('player_match_reviews', JSON.stringify(updatedList))
+    } catch (e) {}
+
+    // Đánh dấu người chơi đã được đánh giá
+    if (selectedCoPlayer) {
+      const updated = [...new Set([...reviewedPlayerIds, selectedCoPlayer.id])]
+      setReviewedPlayerIds(updated)
+      localStorage.setItem('player_match_reviewed_ids', JSON.stringify(updated))
+    }
+
+    setWrittenReview('')
+    setRateStars(5)
+    setShowRateModal(false)
+    setToastMessage(`🎉 Đã gửi đánh giá thành công cho ${targetName}!`)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  // Quick tag suggestions
+  const quickTags = [
+    'Thái độ rất fairplay 🤝',
+    'Kỹ thuật tốt, bọc lót xuất sắc 🏸',
+    'Đúng giờ và chia bill nhanh gọn ⏱️',
+    'Phối hợp ăn ý, tinh thần vui vẻ ✨',
+  ]
 
   // Confirm send QR code
   const handleConfirmSend = () => {
@@ -301,7 +453,11 @@ function CheckInQR() {
                 color: '#111827',
               }}
             >
-              {checkInDone ? (
+              {checkOutDone ? (
+                <>
+                  <span style={{ color: '#15803D' }}>Đã Check-out Trả Sân</span> • Court 3
+                </>
+              ) : checkInDone ? (
                 <>
                   <span style={{ color: '#0284C7' }}>Đang Hoạt Động</span> • Court 3
                 </>
@@ -797,37 +953,122 @@ function CheckInQR() {
               <span>Gửi mã cho bạn chơi</span>
             </button>
 
-            {/* Quick Demo Scan Button */}
-            <button
-              type="button"
-              onClick={() => setShowCheckInModal(true)}
-              style={{
-                marginTop: '10px',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                border: '1px dashed #10B981',
-                background: '#F0FDF4',
-                color: '#15803D',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#DCFCE7'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#F0FDF4'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                qr_code_scanner
-              </span>
-              Mô phỏng quét mã vào cổng
-            </button>
+            {/* Buttons: Check-in / Check-out / Đánh giá bạn chơi */}
+            {!checkInDone && (
+              <button
+                type="button"
+                onClick={() => setShowCheckInModal(true)}
+                style={{
+                  marginTop: '10px',
+                  padding: '7px 16px',
+                  borderRadius: '20px',
+                  border: '1px dashed #10B981',
+                  background: '#F0FDF4',
+                  color: '#15803D',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#DCFCE7'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  qr_code_scanner
+                </span>
+                Mô phỏng quét mã vào cổng (Check-in)
+              </button>
+            )}
+
+            {checkInDone && !checkOutDone && (
+              <button
+                type="button"
+                onClick={() => setShowCheckOutModal(true)}
+                style={{
+                  marginTop: '12px',
+                  width: '100%',
+                  maxWidth: '280px',
+                  padding: '11px 18px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(234, 88, 12, 0.3)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = '0 6px 18px rgba(234, 88, 12, 0.4)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none'
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(234, 88, 12, 0.3)'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                  logout
+                </span>
+                <span>Check-out Trả Sân &amp; Kết Thúc Trận</span>
+              </button>
+            )}
+
+            {checkOutDone && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (matchParticipants.length > 0) {
+                    setSelectedCoPlayer(matchParticipants[0])
+                    setShowRateModal(true)
+                  }
+                }}
+                style={{
+                  marginTop: '12px',
+                  width: '100%',
+                  maxWidth: '280px',
+                  padding: '11px 18px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(22, 163, 74, 0.3)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = '0 6px 18px rgba(22, 163, 74, 0.4)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none'
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(22, 163, 74, 0.3)'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                  rate_review
+                </span>
+                <span>Đánh Giá Bạn Chơi Cùng Sân</span>
+              </button>
+            )}
           </div>
 
           {/* Card 3: Backup OTP Code Card */}
@@ -1192,7 +1433,249 @@ function CheckInQR() {
             </table>
           </div>
 
-          {/* Additional Escrow Security Details Box */}
+          {/* ===================== KHU VỰC ĐÁNH GIÁ BẠN CHƠI CÙNG SÂN SAU CHECK-OUT ===================== */}
+          <div
+            style={{
+              marginTop: '28px',
+              padding: '20px 22px',
+              borderRadius: '18px',
+              background: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '15.5px',
+                    fontWeight: 800,
+                    color: '#111827',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
+                    stars
+                  </span>
+                  Đánh Giá Bạn Chơi Cùng Sân Sau Trận
+                </h3>
+                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                  Quy định: Chỉ được phép viết nhận xét và chấm sao cho bạn cùng sân sau khi <strong>check-out thành công</strong>.
+                </div>
+              </div>
+
+              <Link
+                to="/post-match-rating"
+                style={{
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#15803D',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: '#DCFCE7',
+                  padding: '6px 12px',
+                  borderRadius: '10px',
+                }}
+              >
+                <span>Trang Đánh Giá Chi Tiết</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  open_in_new
+                </span>
+              </Link>
+            </div>
+
+            {/* Trạng thái chưa check-out: Khóa đánh giá */}
+            {!checkOutDone ? (
+              <div
+                style={{
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#DC2626' }}>
+                    lock_clock
+                  </span>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#991B1B' }}>
+                      Đánh giá sau trận đang tạm khóa
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#B91C1C' }}>
+                      Bạn cần hoàn tất <strong>Check-out trả sân</strong> để mở quyền viết nhận xét và chấm điểm sao cho bạn chơi.
+                    </div>
+                  </div>
+                </div>
+
+                {checkInDone ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckOutModal(true)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '10px',
+                      background: '#DC2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Check-out trả sân ngay
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckInModal(true)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '10px',
+                      background: '#15803D',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Check-in vào sân trước
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* Trạng thái đã check-out: Danh sách bạn chơi cùng sân kèm nút đánh giá */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                <div
+                  style={{
+                    background: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    borderRadius: '10px',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    color: '#166534',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
+                    check_circle
+                  </span>
+                  Đã xác thực check-out thành công • Chọn bạn chơi bên dưới để viết nhận xét và chấm sao:
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginTop: '6px' }}>
+                  {matchParticipants.map((p) => {
+                    const isReviewed = reviewedPlayerIds.includes(p.id)
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          background: '#ffffff',
+                          borderRadius: '12px',
+                          border: '1px solid #E2E8F0',
+                          padding: '12px 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              background: '#DCFCE7',
+                              color: '#15803D',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                            }}
+                          >
+                            {(p.name || p.email).slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1E293B' }}>
+                              {p.name || p.email.split('@')[0]}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748B' }}>
+                              {p.role || 'Bạn cùng sân'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isReviewed ? (
+                          <span
+                            style={{
+                              background: '#DCFCE7',
+                              color: '#15803D',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '4px 8px',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span>✓ Đã đánh giá</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRateModal(p)}
+                            style={{
+                              background: '#15803D',
+                              color: '#ffffff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                              star
+                            </span>
+                            <span>Đánh giá</span>
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           <div
             style={{
               marginTop: '28px',
@@ -1350,6 +1833,22 @@ function CheckInQR() {
               onClick={() => {
                 setShowCheckInModal(false)
                 setCheckInDone(true)
+                const session = {
+                  courtId: 'Court 3',
+                  courtName: 'Sân Cầu Lông BWF Pro 01',
+                  sport: 'Cầu Lông',
+                  checkInDone: true,
+                  checkInTime: '18:00',
+                  checkOutDone: false,
+                  checkOutTime: null,
+                  coPlayers: matchParticipants.map((p) => ({
+                    id: p.id,
+                    name: p.name || p.email.split('@')[0],
+                    email: p.email,
+                    role: p.role || 'Bạn chơi cùng sân',
+                  })),
+                }
+                localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
                 setToastMessage('Đã check-in thành công • Trạng thái sân: Đang Hoạt Động')
                 setTimeout(() => setToastMessage(null), 3500)
               }}
@@ -1837,6 +2336,472 @@ function CheckInQR() {
                 <span>Xác nhận gửi mã</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: XÁC NHẬN CHECK-OUT TRẢ SÂN ===================== */}
+      {showCheckOutModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setShowCheckOutModal(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              background: '#ffffff',
+              borderRadius: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              padding: '28px',
+              textAlign: 'center',
+              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: '#FFEDD5',
+                color: '#EA580C',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px auto',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '34px', fontWeight: 700 }}>
+                logout
+              </span>
+            </div>
+
+            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#111827', margin: '0 0 6px 0' }}>
+              Xác Nhận Check-out Trả Sân
+            </h3>
+            <p style={{ fontSize: '13.5px', color: '#4B5563', margin: '0 0 18px 0', lineHeight: 1.5 }}>
+              Bạn đang trả sân <strong>Sân Cầu Lông BWF Pro 01 (Court 3)</strong>. Sau khi check-out thành công, hệ thống sẽ mở quyền viết nhận xét và chấm sao cho bạn chơi cùng sân.
+            </p>
+
+            <div
+              style={{
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                textAlign: 'left',
+                fontSize: '12.5px',
+                color: '#166534',
+                marginBottom: '20px',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+                verified
+              </span>
+              <span>Ký quỹ Escrow hoàn tất đối soát • Khóa mở đánh giá bạn chơi sau trận</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setShowCheckOutModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '11px 0',
+                  borderRadius: '12px',
+                  background: '#F1F5F9',
+                  border: 'none',
+                  color: '#475569',
+                  fontWeight: 700,
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCheckOut}
+                style={{
+                  flex: 1.5,
+                  padding: '11px 0',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
+                }}
+              >
+                Xác Nhận Check-out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: ĐÁNH GIÁ NGƯỜI CHƠI CÙNG SÂN (CHẤM SAO + VIẾT) ===================== */}
+      {showRateModal && selectedCoPlayer && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setShowRateModal(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              background: '#ffffff',
+              borderRadius: '24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px 16px 24px',
+                borderBottom: '1px solid #F1F5F9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: '#DCFCE7',
+                    color: '#15803D',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
+                    rate_review
+                  </span>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                    Đánh Giá Người Chơi Cùng Sân
+                  </h3>
+                  <div style={{ fontSize: '11px', color: '#15803D', fontWeight: 700, marginTop: '2px' }}>
+                    ✓ Đã Check-out Thành Công • Court 3
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRateModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                  close
+                </span>
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handleSubmitRateCoPlayer} style={{ padding: '20px 24px' }}>
+              {/* Thông tin người chơi cùng sân */}
+              <div
+                style={{
+                  background: '#F8FAFC',
+                  borderRadius: '14px',
+                  padding: '12px 14px',
+                  marginBottom: '18px',
+                  border: '1px solid #E2E8F0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '50%',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {(selectedCoPlayer.name || selectedCoPlayer.email).slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#1E293B' }}>
+                      {selectedCoPlayer.name || selectedCoPlayer.email.split('@')[0]}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#64748B' }}>
+                      {selectedCoPlayer.role || 'Bạn cùng sân'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chọn bạn khác nếu có */}
+                {matchParticipants.length > 1 && (
+                  <select
+                    value={selectedCoPlayer.id}
+                    onChange={(e) => {
+                      const target = matchParticipants.find((p) => p.id === e.target.value)
+                      if (target) setSelectedCoPlayer(target)
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      color: '#334155',
+                      background: '#ffffff',
+                    }}
+                  >
+                    {matchParticipants.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name || p.email.split('@')[0]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* 1. Chấm điểm sao */}
+              <div style={{ marginBottom: '18px', textAlign: 'center' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#475569',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    marginBottom: '8px',
+                  }}
+                >
+                  1. Chấm Điểm Sao (1 Đến 5 Sao) *
+                </label>
+
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                  {[1, 2, 3, 4, 5].map((s) => {
+                    const isFilled = s <= (rateHoverStars || rateStars)
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setRateStars(s)}
+                        onMouseEnter={() => setRateHoverStars(s)}
+                        onMouseLeave={() => setRateHoverStars(0)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '2px',
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: '36px',
+                            color: isFilled ? '#EAB308' : '#CBD5E1',
+                            fontVariationSettings: isFilled ? "'FILL' 1" : "'FILL' 0",
+                            transition: 'color 0.15s',
+                          }}
+                        >
+                          star
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '4px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: rateStars >= 4 ? '#15803D' : '#D97706',
+                  }}
+                >
+                  {rateStars === 5
+                    ? '5 sao: Xuất sắc & Fairplay'
+                    : rateStars === 4
+                    ? '4 sao: Rất tốt & Nhiệt tình'
+                    : rateStars === 3
+                    ? '3 sao: Khá tốt'
+                    : rateStars === 2
+                    ? '2 sao: Tạm được'
+                    : '1 sao: Cần cải thiện'}
+                </div>
+              </div>
+
+              {/* 2. Viết nhận xét bằng chữ (bắt buộc) */}
+              <div style={{ marginBottom: '18px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '6px',
+                  }}
+                >
+                  <label style={{ fontSize: '12.5px', fontWeight: 800, color: '#1E293B' }}>
+                    2. Viết Nhận Xét Bằng Chữ (Bắt buộc) *
+                  </label>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      color: writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {writtenReview.trim().length}/10 ký tự
+                  </span>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={writtenReview}
+                  onChange={(e) => setWrittenReview(e.target.value)}
+                  placeholder={`Viết nhận xét chi tiết về ${selectedCoPlayer.name || 'bạn chơi'} (kỹ thuật, tinh thần thể thao, sự đúng giờ)...`}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border:
+                      writtenReview.trim().length > 0 && writtenReview.trim().length < 10
+                        ? '1.5px solid #F87171'
+                        : '1.5px solid #CBD5E1',
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    resize: 'vertical',
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = '#16A34A')}
+                  onBlur={(e) => (e.target.style.borderColor = '#CBD5E1')}
+                />
+
+                {/* Quick tags */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
+                  {quickTags.map((tag, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() =>
+                        setWrittenReview((prev) => (prev.trim() ? `${prev}. ${tag}` : tag))
+                      }
+                      style={{
+                        background: '#F1F5F9',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '6px',
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: '#334155',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div style={{ display: 'flex', gap: '10px', paddingTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowRateModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 0',
+                    borderRadius: '12px',
+                    background: '#F1F5F9',
+                    border: 'none',
+                    color: '#475569',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={writtenReview.trim().length < 10}
+                  style={{
+                    flex: 2,
+                    padding: '10px 0',
+                    borderRadius: '12px',
+                    background:
+                      writtenReview.trim().length >= 10
+                        ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
+                        : '#CBD5E1',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    cursor: writtenReview.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow:
+                      writtenReview.trim().length >= 10
+                        ? '0 4px 12px rgba(22, 163, 74, 0.25)'
+                        : 'none',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
+                    send
+                  </span>
+                  Gửi Đánh Giá Sau Trận
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

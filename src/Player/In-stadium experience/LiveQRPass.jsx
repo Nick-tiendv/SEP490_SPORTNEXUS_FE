@@ -117,7 +117,7 @@ function LiveQRPass() {
                 <img className="w-12 h-12 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VTDSuxPicidjFrzzsYgv3tNKxjzEQjIMahLArl7fHdsfN8tXQFyPlRlKyVAxoPut8hCqp30D12sikwxMQYQNEEUQ-BTKat7n6asbZ-KaLdW-jSTpEcngbx4hLO1a1pLRcXMgPSaEHceJBfMCeIVJ5FDim_pJ78-6UMaRE20XIuZ6He8dyMIir-FoAYBlk2IH3jYTt7oxzlFO_ZcpSwMWem7g7BI1R--zd0DSQNgI69xvw8wsELCkwSyuI" alt="Profile" />
                 <div className="flex flex-col">
                   <span className="font-label-lg text-label-lg text-on-surface flex items-center gap-1">Hoang An <span className="material-symbols-outlined text-primary-container text-[16px]">verified</span></span>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant">Tier 1 Verified Athlete • ELO 1840</span>
+                  <span className="font-label-sm text-label-sm text-on-surface-variant">Tier 1 Verified Athlete</span>
                 </div>
               </div>
             </div>

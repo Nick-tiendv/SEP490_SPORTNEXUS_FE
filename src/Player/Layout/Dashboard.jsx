@@ -19,7 +19,7 @@ const actionCards = [
     iconColor: '#0284C7',
     iconBg: '#E0F2FE',
     title: 'Ghép Trận LFG',
-    desc: 'Ghép đội đúng trình DUPR/Elo, cam kết không bùng hẹn.',
+    desc: 'Ghép đội đúng trình độ, cam kết không bùng hẹn.',
     link: '/community',
   },
   {
@@ -98,7 +98,7 @@ const allLfgMatches = [
     missingColor: '#DC2626',
     time: '18:00 Ngày mai • Sân Tre Xanh Bình Thạnh (2.8 km)',
     price: '45.000 đ / người',
-    host: 'Host Linh (Elo 1600)',
+    host: 'Host Linh (Khá - Nâng cao)',
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
     badge: 'Thảm Yonex',
   },
@@ -124,7 +124,7 @@ const allLfgMatches = [
     missingColor: '#DC2626',
     time: '19:30 Tối nay • CLB Viettel Q.10 (3.2 km)',
     price: '50.000 đ / người',
-    host: 'Host Hoàng Nam (Elo 1750)',
+    host: 'Host Hoàng Nam (Bán chuyên)',
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
     badge: 'Cạnh Tranh Cao',
   },
@@ -264,14 +264,14 @@ function Dashboard() {
                   border: '1px solid #86EFAC',
                 }}
               >
-                DUPR 3.8 • Elo 1650
+                DUPR 3.8
               </span>
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
                 ? 'Đang xem toàn bộ sân & kèo cho cả Cầu Lông và Pickleball. Đặt sân & bảo chứng Escrow minh bạch.'
                 : isSportActive('badminton')
-                ? 'Đang hiển thị chuyên biệt cho Cầu Lông (Thảm BWF, Kèo Elo). Nhấn thêm Pickleball để xem cả 2 môn.'
+                ? 'Đang hiển thị chuyên biệt cho Cầu Lông (Thảm BWF, Kèo giao lưu). Nhấn thêm Pickleball để xem cả 2 môn.'
                 : 'Đang hiển thị chuyên biệt cho Pickleball (Chuẩn USAPA, Kèo DUPR). Nhấn thêm Cầu Lông để xem cả 2 môn.'}
             </p>
           </div>

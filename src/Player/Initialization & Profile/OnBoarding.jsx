@@ -4,7 +4,7 @@ import { useState } from 'react'
 function OnBoarding() {
   const navigate = useNavigate()
   const [selectedSports, setSelectedSports] = useState(['badminton'])
-  const [elo, setElo] = useState(1450)
+  const [skillRating, setSkillRating] = useState(1450)
 
   const toggleSport = (sport) => {
     if (selectedSports.includes(sport)) {
@@ -74,10 +74,10 @@ function OnBoarding() {
             </h2>
             <div className="flex flex-col gap-4">
               <div className="flex justify-between items-center">
-                <span className="font-headline-sm text-primary-container">{getTier(elo)}</span>
-                <span className="font-bold text-primary-container bg-primary-container/10 px-3 py-1 rounded-full">{elo} Elo</span>
+                <span className="font-headline-sm text-primary-container">{getTier(skillRating)}</span>
+                <span className="font-bold text-primary-container bg-primary-container/10 px-3 py-1 rounded-full">{getTier(skillRating)}</span>
               </div>
-              <input type="range" min="800" max="2200" step="25" value={elo} onChange={(e) => setElo(Number(e.target.value))} className="w-full accent-primary-container" />
+              <input type="range" min="800" max="2200" step="25" value={skillRating} onChange={(e) => setSkillRating(Number(e.target.value))} className="w-full accent-primary-container" />
               <div className="flex justify-between text-xs text-on-surface-variant">
                 <span>Beginner</span>
                 <span>Pro Circuit</span>

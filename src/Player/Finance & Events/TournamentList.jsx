@@ -292,7 +292,7 @@ function TournamentList() {
               </span>
             </div>
             <span className="text-xs text-slate-400 font-medium">
-              Đã cập nhật điểm Elo và trả thưởng Escrow
+              Đã cập nhật kết quả và trả thưởng Escrow
             </span>
           </div>
 
@@ -634,7 +634,7 @@ function TournamentList() {
                 <input
                   type="text"
                   disabled
-                  value="Minh Minh Minh (DUPR 3.8 • Elo 1650)"
+                  value="Minh Minh Minh (DUPR 3.8)"
                   className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 font-semibold text-slate-800"
                 />
               </div>
