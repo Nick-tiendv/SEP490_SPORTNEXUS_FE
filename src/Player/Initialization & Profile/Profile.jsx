@@ -10,11 +10,20 @@ export default function Profile() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        parsed.name = 'Minh Minh Minh'
-        parsed.username = '@minhminhminh'
-        parsed.location = 'Thủ Đức'
-        parsed.bio = 'Bị cầu lông chơi'
-        return parsed
+        return {
+          name: parsed.name || 'Minh Minh Minh',
+          username: parsed.username || '@minhminhminh',
+          location: parsed.location || 'Thủ Đức',
+          bio: parsed.bio || 'Bị cầu lông chơi',
+          joinDate: parsed.joinDate || 'Tháng 03/2024',
+          phone: parsed.phone || '0908 123 456',
+          reputationScore: parsed.reputationScore || 4.9,
+          totalReviews: parsed.totalReviews || 58,
+          matchesPlayed: parsed.matchesPlayed || 48,
+          winRate: parsed.winRate || 86,
+          punctualityRate: parsed.punctualityRate || 99,
+          ...parsed,
+        }
       } catch (e) {
         console.error(e)
       }
@@ -270,6 +279,8 @@ export default function Profile() {
   // Lưu Form Edit Profile
   const handleSaveProfile = () => {
     setProfile({ ...editForm })
+    localStorage.setItem('player_profile_data', JSON.stringify(editForm))
+    window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
     setShowEditModal(false)
     triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
   }

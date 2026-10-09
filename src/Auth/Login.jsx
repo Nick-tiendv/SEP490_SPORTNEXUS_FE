@@ -7,7 +7,7 @@ function Login() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen pastel-animated-bg flex flex-col">
+    <div className="min-h-screen sport-animated-bg flex flex-col">
       {/* Header */}
       <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm">
         {/* Logo */}

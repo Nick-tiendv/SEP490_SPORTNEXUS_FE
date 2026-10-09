@@ -7,7 +7,7 @@ function PostMatchRating() {
   const [calibrated, setCalibrated] = useState(true)
 
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-4rem)] relative overflow-hidden bg-surface">
+    <div className="flex flex-col w-full h-[calc(100vh-4rem)] relative overflow-hidden">
       {/* Background Simulation */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-40 blur-sm">
         <div className="p-margin-lg">

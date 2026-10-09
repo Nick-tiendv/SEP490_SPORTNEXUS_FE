@@ -81,7 +81,7 @@ function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pastel-animated-bg">
+    <div className="min-h-screen flex flex-col sport-animated-bg">
       {/* Header */}
       <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3 px-6">
         <div className="w-full flex items-center justify-between">

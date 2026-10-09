@@ -72,7 +72,7 @@ function TournamentList() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans">
+    <div className="w-full min-h-screen text-[#1e293b] flex flex-col font-sans">
       {/* Toast Notification */}
       {toastMsg && (
         <div className="fixed top-20 right-8 z-50 flex items-center gap-3 bg-[#0f172a] text-white px-5 py-3.5 rounded-xl shadow-2xl border border-emerald-500/40 animate-bounce duration-300">

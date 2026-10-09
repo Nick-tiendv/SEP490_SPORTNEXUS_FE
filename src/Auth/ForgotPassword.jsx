@@ -15,7 +15,7 @@ function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen pastel-animated-bg flex flex-col">
+    <div className="min-h-screen sport-animated-bg flex flex-col">
       {/* Header */}
       <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3 px-6">
         <div className="w-full flex items-center justify-between">

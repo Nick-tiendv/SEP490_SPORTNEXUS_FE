@@ -3,50 +3,81 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   COURTS,
+  DISTRICT_CENTERS,
   buildSlotsForCourt,
+  buildWelcomeMessage,
+  detectClosestDistrict,
   formatVnd,
   processAIChatQuery,
 } from './aiBookingData.js'
 import './AIChatModal.css'
 
-const INITIAL_WELCOME = {
-  id: 'welcome-page',
-  sender: 'bot',
-  time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-  text:
-    'Xin chào bạn! 👋 Tôi là **SportNexus AI Concierge** — trợ lý đặt sân thể thao thông minh thời gian thực.\n\n' +
-    'Tôi đã đồng bộ toàn bộ dữ liệu sân bãi và trạng thái các khung giờ trống tại TP.HCM. Dựa trên vị trí của bạn tại **Nguyễn Thị Thập, Quận 7**, tôi có thể giúp bạn:\n\n' +
-    '• **Gợi ý sân gần nhất** (SportNexus Arena Q.7 cách 0.8 km)\n' +
-    '• **Tìm kiếm & so sánh** sân Cầu lông / Pickleball theo giá và chuẩn thi đấu\n' +
-    '• **Chọn nhanh khung giờ vàng tối nay** và hỗ trợ chuyển sang đặt chỗ\n' +
-    '• **Giải đáp cơ chế Khóa giữ chỗ 15p** & Bảo chứng giao dịch Escrow 24/7\n\n' +
-    'Bạn muốn tìm kiếm sân theo tiêu chí nào hôm nay?',
-  quickReplies: [
-    '📍 Tìm sân gần tôi nhất (Quận 7)',
-    '💰 Sân cầu lông giá rẻ nhất',
-    '🏓 Sân Pickleball tốt nhất',
-    '⏰ Giờ trống tối nay từ 19:30',
-    '🛡️ Cơ chế giữ chỗ và bảo chứng Escrow',
-  ],
-}
-
 function AIChatBooking() {
   const navigate = useNavigate()
-  const [messages, setMessages] = useState([INITIAL_WELCOME])
+
+  // Vị trí người chơi thời gian thực
+  const [userLocation, setUserLocation] = useState(() => ({
+    ...DISTRICT_CENTERS.q7,
+    updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+  }))
+
+  const [messages, setMessages] = useState(() => [buildWelcomeMessage(DISTRICT_CENTERS.q7)])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [toastMessage, setToastMessage] = useState(null)
+  const [isListening, setIsListening] = useState(false)
+
   const bodyRef = useRef(null)
   const inputRef = useRef(null)
+  const recognitionRef = useRef(null)
 
+  // Tự động cuộn xuống cuối khi có tin nhắn mới
   useEffect(() => {
     if (bodyRef.current) {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
   }, [messages, isTyping])
 
+  // Lấy vị trí GPS khi vào trang lần đầu
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          const closest = detectClosestDistrict(latitude, longitude)
+          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const newLoc = {
+            lat: latitude,
+            lng: longitude,
+            name: closest.name,
+            address: closest.address,
+            updatedAt: nowStr,
+          }
+          setUserLocation(newLoc)
+          setMessages([buildWelcomeMessage(newLoc)])
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+  }, [])
+
+  const showToast = (text) => {
+    setToastMessage(text)
+    setTimeout(() => setToastMessage(null), 3200)
+  }
+
+  const [activeCourtId, setActiveCourtId] = useState('snx-q7')
+
+  // Gửi tin nhắn và nhận phản hồi đúng, đủ, không dư thừa từ AI
   const handleSendMessage = (textToSend) => {
     const text = (textToSend || inputValue).trim()
     if (!text || isTyping) return
+
+    if (isListening) {
+      recognitionRef.current?.stop()
+      setIsListening(false)
+    }
 
     const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     const userMsg = {
@@ -61,7 +92,10 @@ function AIChatBooking() {
     setIsTyping(true)
 
     setTimeout(() => {
-      const response = processAIChatQuery(text, 'snx-q7')
+      const response = processAIChatQuery(text, activeCourtId, userLocation)
+      if (response.recommendedCourt?.id) {
+        setActiveCourtId(response.recommendedCourt.id)
+      }
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'bot',
@@ -70,12 +104,121 @@ function AIChatBooking() {
       }
       setMessages((prev) => [...prev, botMsg])
       setIsTyping(false)
-    }, 650)
+    }, 500)
+  }
+
+  // Làm mới đoạn chat & Cập nhật vị trí mới với người chơi ở thời điểm hiện tại
+  const handleResetChat = () => {
+    showToast('📍 Đang định vị vị trí hiện tại của bạn...')
+
+    const applyNewLoc = (newLoc) => {
+      setUserLocation(newLoc)
+      const welcome = buildWelcomeMessage(newLoc)
+      setMessages([welcome])
+      setInputValue('')
+      showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
+    }
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          const closest = detectClosestDistrict(latitude, longitude)
+          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          applyNewLoc({
+            lat: latitude,
+            lng: longitude,
+            name: closest.name,
+            address: closest.address,
+            updatedAt: nowStr,
+          })
+        },
+        () => {
+          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const fallback = DISTRICT_CENTERS.q7
+          applyNewLoc({
+            lat: fallback.lat,
+            lng: fallback.lng,
+            name: fallback.name,
+            address: fallback.address,
+            updatedAt: nowStr,
+          })
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    } else {
+      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      const fallback = DISTRICT_CENTERS.q7
+      applyNewLoc({
+        lat: fallback.lat,
+        lng: fallback.lng,
+        name: fallback.name,
+        address: fallback.address,
+        updatedAt: nowStr,
+      })
+    }
+  }
+
+  // Microchat: Sử dụng micro để nhận diện giọng nói tiếng Việt
+  const handleToggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+    if (!SpeechRecognition) {
+      showToast('⚠️ Trình duyệt chưa hỗ trợ Web Speech API. Vui lòng sử dụng Google Chrome/Edge!')
+      return
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop()
+      setIsListening(false)
+      return
+    }
+
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.lang = 'vi-VN'
+      recognition.continuous = false
+      recognition.interimResults = true
+
+      recognition.onstart = () => {
+        setIsListening(true)
+        showToast('🎙️ Đang nghe... Hãy nói câu hỏi hoặc tiêu chí đặt sân của bạn!')
+      }
+
+      recognition.onresult = (event) => {
+        let transcript = ''
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript
+        }
+        setInputValue(transcript)
+      }
+
+      recognition.onerror = (event) => {
+        setIsListening(false)
+        if (event.error === 'not-allowed') {
+          showToast('⚠️ Vui lòng cấp quyền truy cập Micro trên trình duyệt.')
+        } else if (event.error === 'no-speech') {
+          showToast('Chưa nghe thấy âm thanh. Bạn vui lòng bấm micro và nói lại nhé!')
+        } else {
+          showToast(`Không nhận diện được giọng nói (${event.error})`)
+        }
+      }
+
+      recognition.onend = () => {
+        setIsListening(false)
+        inputRef.current?.focus()
+      }
+
+      recognitionRef.current = recognition
+      recognition.start()
+    } catch (err) {
+      setIsListening(false)
+      showToast('⚠️ Không thể khởi động Micro. Vui lòng thử lại!')
+    }
   }
 
   const handleSelectCourtOnMap = (court, slot) => {
     navigate('/court-finder')
-    // Dispatch event to select that court in MapBooking
     setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent('sportnexus-select-court-slot', {
@@ -148,7 +291,22 @@ function AIChatBooking() {
   }
 
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-4rem)] max-w-5xl mx-auto px-4 py-4">
+    <div className="flex flex-col w-full h-[calc(100vh-4rem)] max-w-5xl mx-auto px-4 py-4 relative">
+      {/* Toast thông báo */}
+      {toastMessage && (
+        <div className="snx-ai-toast">
+          <span>{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+              close
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-white rounded-t-2xl border border-b-0 border-emerald-900/10 shadow-sm">
         <div className="flex items-center gap-3">
@@ -163,18 +321,30 @@ function AIChatBooking() {
               </span>
             </div>
             <p className="text-xs text-gray-500">
-              Trợ lý Đặt Sân Thông Minh • Tự động gợi ý lựa chọn tối ưu theo vị trí và ngân sách
+              Vị trí hiện tại: <strong>{userLocation.name}</strong> • Cập nhật lúc {userLocation.updatedAt || 'Hôm nay'}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => navigate('/court-finder')}
-          className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-all"
-        >
-          <span className="material-symbols-outlined text-[16px]">map</span>
-          Về Bản Đồ Đặt Sân
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetChat}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-all"
+            title="Làm mới đoạn chat & cập nhật vị trí hiện tại"
+          >
+            <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+            Làm mới vị trí &amp; chat
+          </button>
+
+          <button
+            onClick={() => navigate('/court-finder')}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-900 flex items-center gap-1 transition-all"
+          >
+            <span className="material-symbols-outlined text-[16px]">map</span>
+            Về Bản Đồ Đặt Sân
+          </button>
+        </div>
       </div>
 
       {/* Chat Body */}
@@ -258,9 +428,9 @@ function AIChatBooking() {
                         onClick={() => handleSelectCourtOnMap(msg.recommendedCourt, msg.recommendedSlot)}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                          map
+                          check_circle
                         </span>
-                        Xem &amp; Chọn Trên Bản Đồ
+                        Chọn Sân Này Trên Bản Đồ
                       </button>
 
                       <button
@@ -316,7 +486,20 @@ function AIChatBooking() {
       </div>
 
       {/* Input Area */}
-      <div className="p-3 bg-white rounded-b-2xl border border-t-0 border-emerald-900/10 shadow-sm">
+      <div className="p-3 bg-white rounded-b-2xl border border-t-0 border-emerald-900/10 shadow-sm flex flex-col gap-2">
+        {isListening && (
+          <div className="snx-ai-listening-indicator">
+            <div className="snx-ai-listening-dots">
+              <span />
+              <span />
+            </div>
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+              mic
+            </span>
+            <span>Đang nghe bạn nói... Hãy nói câu hỏi, yêu cầu hoặc tiêu chí đặt sân</span>
+          </div>
+        )}
+
         <form
           className="snx-ai-input-row"
           onSubmit={(e) => {
@@ -324,25 +507,27 @@ function AIChatBooking() {
             handleSendMessage()
           }}
         >
+          {/* Đã xóa dòng chữ mờ placeholder */}
           <input
             ref={inputRef}
             type="text"
             className="snx-ai-input"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Hỏi AI bất kỳ: 'sân nào gần nhất?', 'giá dưới 200k', 'tối nay có sân pickleball nào trống?'..."
             disabled={isTyping}
           />
+
           <button
             type="button"
-            className="snx-ai-voice-btn"
-            title="Gợi ý câu hỏi mẫu"
-            onClick={() => handleSendMessage('Tìm cho tôi sân pickleball chất lượng nhất')}
+            className={`snx-ai-voice-btn ${isListening ? 'is-listening' : ''}`}
+            title={isListening ? 'Đang nghe... Bấm để dừng' : 'Bấm để nói câu hỏi qua micro'}
+            onClick={handleToggleVoiceInput}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
-              mic
+            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+              {isListening ? 'graphic_eq' : 'mic'}
             </span>
           </button>
+
           <button
             type="submit"
             className="snx-ai-send-btn"

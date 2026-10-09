@@ -23,7 +23,7 @@ function OnBoarding() {
   }
 
   return (
-    <div className="flex flex-col w-full h-[calc(100vh-4rem)] relative overflow-y-auto bg-surface pt-space-xl px-margin">
+    <div className="sport-animated-bg flex flex-col w-full h-screen overflow-y-auto pt-space-xl px-margin">
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary-container/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary-fixed/10 rounded-full blur-[140px]"></div>
