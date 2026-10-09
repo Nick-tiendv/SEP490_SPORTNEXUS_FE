@@ -1616,9 +1616,295 @@
 }
 @keyframes mbBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
+/* =====================================================================
+   BẢNG CHỌN SÂN TRONG CỤM (CHO PHÉP CHỌN VÀ ĐẶT NHIỀU SÂN CÙNG KHUNG GIỜ)
+   ===================================================================== */
+.mb-subcourts-container {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: mbFadeUp 0.25s ease both;
+}
+
+.mb-subcourts-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mb-subcourts-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mb-subcourts-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #e0f2fe;
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px !important;
+  flex-shrink: 0;
+}
+
+.mb-subcourts-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.mb-subcourts-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mb-subcourts-highlight {
+  color: #15803d;
+  font-weight: 800;
+}
+
+.mb-subcourts-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mb-subcourt-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mb-subcourt-action-btn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  transform: translateY(-1px);
+}
+
+.mb-subcourt-action-btn .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.mb-subcourt-action-btn--ghost {
+  border-color: #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+}
+
+.mb-subcourt-action-btn--ghost:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.mb-subcourts-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mb-subcourts-tip .material-symbols-outlined {
+  font-size: 18px;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.mb-subcourts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mb-subcourt-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.mb-subcourt-card.is-available:hover {
+  border-color: #22c55e;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.15);
+}
+
+.mb-subcourt-card.is-selected {
+  border-color: #22c55e;
+  background: #f0fdf4;
+  box-shadow: 0 6px 18px rgba(34, 197, 94, 0.18);
+  outline: 2px solid #86efac;
+}
+
+.mb-subcourt-card.is-booked {
+  background: #fef2f2;
+  border-color: #fecaca;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.mb-subcourt-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mb-subcourt-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.mb-subcourt-card.is-selected .mb-subcourt-checkbox {
+  color: #16a34a;
+}
+
+.mb-subcourt-card.is-booked .mb-subcourt-checkbox {
+  color: #dc2626;
+}
+
+.mb-subcourt-card.is-available .mb-subcourt-checkbox {
+  color: #94a3b8;
+}
+
+.mb-subcourt-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  flex: 1;
+}
+
+.mb-subcourt-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.mb-subcourt-status.status-selected {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.mb-subcourt-status.status-avail {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.mb-subcourt-status.status-booked {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mb-subcourt-card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.mb-subcourt-type {
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-subcourt-rate {
+  font-weight: 700;
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.mb-subcourt-card-foot {
+  padding-top: 4px;
+  border-top: 1px dashed #f1f5f9;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.mb-subcourt-card.is-selected .mb-subcourt-card-foot {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.mb-subcourt-card.is-booked .mb-subcourt-card-foot {
+  color: #dc2626;
+}
+
+.mb-summary-multicourt-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+
+.mb-summary-multicourt-note .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.mb-summary-unit-calc {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
   .mb-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .mb-subcourts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 720px) {
   .mb-page { padding: 16px 14px 0; }
@@ -1626,4 +1912,9 @@
   .mb-summary-box { flex-wrap: wrap; }
   .mb-summary-total { text-align: left; }
   .mb-footer { margin: 40px -14px 0; padding: 22px 14px 16px; }
+}
+@media (max-width: 580px) {
+  .mb-subcourts-grid {
+    grid-template-columns: 1fr;
+  }
 }
