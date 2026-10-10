@@ -8,16 +8,32 @@
 .sn-admin button:focus-visible,.sn-admin a:focus-visible,.sn-admin input:focus-visible,.sn-admin select:focus-visible{outline:2px solid var(--admin-green);outline-offset:3px}
 .sn-admin a{text-decoration:none;color:inherit}
 .sn-admin button{border:0}
-.admin-sidebar{position:fixed;inset:0 auto 0 0;width:248px;background:#fff;border-right:1px solid var(--admin-border);padding:24px 20px;display:flex;flex-direction:column;z-index:60}
-.admin-brand{display:flex;align-items:center;gap:12px;padding:2px 4px 25px}
-.admin-brand-mark{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:#267548;background:#c5eed7}
-.admin-brand strong{display:block;font-size:21px;font-weight:700;letter-spacing:-.6px;color:#236442}
-.admin-brand small{display:block;font-size:10px;color:#7c8a85}
-.admin-navigation{display:flex;flex-direction:column;gap:5px}
-.admin-nav-item{display:flex;align-items:center;gap:13px;min-height:40px;padding:10px 13px;border-radius:8px;background:none;text-align:left;color:#647280;font-size:12px;width:100%}
-.admin-nav-item.active{background:#beeacf;color:#256742;font-weight:600}
-.admin-nav-count{margin-left:auto;background:#dff4e6;color:#327652;border-radius:50%;width:18px;text-align:center;font-size:10px}
-.admin-sidebar-profile{display:flex;align-items:center;gap:10px;margin-top:auto;background:#f0f4fc;border:1px solid #e5ebf4;padding:12px 8px;border-radius:9px}
+.admin-sidebar{position:fixed;inset:0 auto 0 0;width:248px;background:linear-gradient(180deg,rgba(255,255,255,.94) 0%,rgba(244,252,246,.90) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-right:1px solid rgba(45,95,63,.12);box-shadow:4px 0 28px rgba(45,95,63,.06);padding:0;display:flex;flex-direction:column;z-index:60}
+.admin-brand{display:flex;align-items:center;gap:12px;padding:20px 18px 16px;border-bottom:1px solid rgba(45,95,63,.08);flex-shrink:0;line-height:1.25}
+.admin-brand-mark{width:40px;height:40px;display:grid;place-items:center;flex-shrink:0;border-radius:12px;color:#fff;background:linear-gradient(135deg,#2D5F3F 0%,#15803D 100%);box-shadow:0 4px 14px rgba(45,95,63,.28)}
+.admin-brand-mark .material-symbols-outlined{font-size:22px;color:#fff}
+.admin-brand strong{display:flex;align-items:center;gap:6px;font-size:17px;font-weight:800;letter-spacing:-.4px;color:#1C3524}
+.admin-brand-dot{width:6px;height:6px;border-radius:50%;background:#10B981;box-shadow:0 0 8px #10B981;flex-shrink:0}
+.admin-brand small{display:block;font-size:10.5px;color:#2D5F3F;text-transform:uppercase;letter-spacing:.6px;font-weight:700;opacity:.9;white-space:nowrap}
+.admin-navigation{display:flex;flex-direction:column;gap:5px;padding:16px 12px 6px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.admin-navigation-title{font-size:10.5px;font-weight:800;color:#4B5563;text-transform:uppercase;letter-spacing:.8px;padding-left:6px;margin-bottom:8px!important}
+.admin-nav-item{display:flex;align-items:center;gap:12px;min-height:43px;padding:11px 14px;border-radius:13px;background:transparent;text-align:left;color:#374151;font-size:13.5px;font-weight:600;width:100%;position:relative;transition:all .2s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.admin-nav-item.active{background:linear-gradient(135deg,#2D5F3F 0%,#15803D 100%);color:#fff;font-weight:700;box-shadow:0 4px 14px rgba(45,95,63,.28);padding-right:26px}
+.admin-nav-item.active::before{content:'';position:absolute;left:0;top:25%;height:50%;width:3.5px;background:#86EFAC;border-radius:0 4px 4px 0;box-shadow:0 0 8px #86EFAC}
+.admin-nav-item.active::after{content:'';position:absolute;right:14px;top:calc(50% - 3px);width:6px;height:6px;border-radius:50%;background:#86EFAC;box-shadow:0 0 6px #86EFAC}
+.admin-nav-item:not(.active):not(:disabled):hover{background:#EAF7EE;color:#15803D;transform:translateX(3px)}
+.admin-nav-item>svg{flex-shrink:0;width:21px;height:21px;color:#6B7280;transition:color .2s}
+.admin-nav-item.active>svg{color:#fff}
+.admin-nav-item:not(:disabled):hover>svg{color:inherit}
+.admin-nav-unavailable{gap:8px}
+.admin-coming-soon{margin-left:auto;flex-shrink:0;width:44px;padding:3px 4px;border-radius:12px;border:1px solid #86EFAC;background:#DCFCE7;color:#15803D;font-size:8px;line-height:1.3;text-align:center}
+.admin-nav-count{margin-left:auto;background:#DCFCE7;color:#15803D;border:1px solid #86EFAC;border-radius:12px;min-width:18px;text-align:center;font-size:10px}
+.admin-sidebar-profile{display:flex;align-items:center;gap:10px;margin:12px 14px;background:linear-gradient(135deg,#EAF7EE 0%,#E0F5E6 100%);border:1px solid rgba(45,95,63,.16);padding:12px 14px;border-radius:14px;box-shadow:0 2px 10px rgba(45,95,63,.05);flex-shrink:0}
+.admin-sidebar-profile .admin-avatar{width:34px;height:34px;border-radius:10px;background:#2D5F3F;border:0;box-shadow:0 2px 6px rgba(45,95,63,.25)}
+.admin-sidebar-profile .admin-profile-copy strong{font-size:11.5px;font-weight:800;color:#1C3524}
+.admin-sidebar-profile .admin-profile-copy small{font-size:10px;font-weight:500;color:#2D5F3F}
+.admin-sidebar-profile .admin-online-dot{background:#10B981;box-shadow:0 0 8px #10B981}
+.admin-sidebar-profile .admin-icon-button,.admin-sidebar-close{border-radius:10px;color:#2D5F3F;background:#F0FDF4;border:1px solid rgba(45,95,63,.16)}
 .admin-avatar{display:grid;place-items:center;flex-shrink:0;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d7e4ca,#4c7660);border:2px solid #fff;color:#fff;font-size:10px;font-weight:700;box-shadow:0 0 0 1px #e4ebe5}
 .admin-avatar-small{width:28px;height:28px;font-size:8px}
 .admin-profile-copy{flex:1}
@@ -41,7 +57,16 @@
 .admin-header-profile{display:flex;align-items:center;gap:7px;font-size:9px}
 .admin-header-profile strong,.admin-header-profile small{display:block}
 .admin-header-profile small{font-size:8px;color:#8795a3}
-.admin-main{padding:28px 30px 24px}
+.admin-main{
+  padding:28px 30px 24px;
+  min-height:calc(100vh - 70px);
+  /* Reuse the Player asset; keep the image visible throughout page scrolling. */
+  background-image:url('/sports-bg.jpg');
+  background-size:cover;
+  background-position:center center;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
 .admin-dashboard{max-width:1500px;margin:0 auto}
 .admin-dashboard-heading{display:flex;justify-content:space-between;gap:20px;margin-bottom:25px;min-height:78px}
 .admin-title-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
@@ -168,6 +193,6 @@
 .admin-dashboard-footer>span:first-child{display:flex;align-items:center;gap:6px;margin-right:auto}
 .admin-mobile-menu,.admin-sidebar-close,.admin-menu-overlay{display:none}
 @media(min-width:1500px){.admin-main{padding:32px 40px}.admin-stat-value{font-size:28px}.admin-stat-card:nth-child(5) .admin-stat-value{font-size:17px}}
-@media(max-width:1150px){.admin-sidebar{width:210px;padding:24px 14px}.admin-workspace{margin-left:210px}.admin-main{padding:24px 20px}.admin-header{gap:12px;padding:0 18px}.admin-platform{display:none}.admin-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-stat-card{min-height:140px}.admin-analytics-grid,.admin-bottom-grid{grid-template-columns:minmax(0,2fr) minmax(220px,1fr);gap:16px}.admin-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-bookings .admin-panel-heading{flex-wrap:wrap}.admin-panel-heading{padding:20px 16px}.admin-chart-summary{flex-wrap:wrap}.admin-chart-growth{display:none}.admin-range-tabs button{padding:5px 6px}.admin-panel h2{font-size:15px}}
+@media(max-width:1150px){.admin-sidebar{width:210px;padding:0}.admin-workspace{margin-left:210px}.admin-main{padding:24px 20px}.admin-header{gap:12px;padding:0 18px}.admin-platform{display:none}.admin-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-stat-card{min-height:140px}.admin-analytics-grid,.admin-bottom-grid{grid-template-columns:minmax(0,2fr) minmax(220px,1fr);gap:16px}.admin-attention-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-bookings .admin-panel-heading{flex-wrap:wrap}.admin-panel-heading{padding:20px 16px}.admin-chart-summary{flex-wrap:wrap}.admin-chart-growth{display:none}.admin-range-tabs button{padding:5px 6px}.admin-panel h2{font-size:15px}}
 @media(max-width:850px){.admin-analytics-grid,.admin-bottom-grid{grid-template-columns:1fr}.admin-popular-sports ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}.admin-header-profile>span:not(.admin-avatar){display:none}.admin-header-context,.admin-breadcrumb{display:none}.admin-dashboard-heading{flex-wrap:wrap}.admin-activity{min-height:500px}.admin-bookings td{height:100px}}
 @media(max-width:640px){.admin-workspace{margin-left:0}.admin-sidebar{transform:translateX(-100%);width:248px;transition:transform .2s}.admin-sidebar.is-open{transform:translateX(0)}.admin-sidebar-close{display:grid;position:absolute;right:12px;top:10px}.admin-menu-overlay{display:block;position:fixed;inset:0;background:#10291c55;z-index:55}.admin-mobile-menu{display:grid}.admin-header{height:60px;padding:0 12px;gap:9px}.admin-main{padding:22px 14px}.admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.admin-attention-grid{grid-template-columns:1fr}.admin-attention-heading{align-items:flex-start}.admin-attention-heading h2{flex-wrap:wrap;font-size:13px}.admin-attention-heading>button{display:none}.admin-panel-heading{flex-wrap:wrap}.admin-trends{min-height:380px}.admin-chart-wrap svg{min-height:180px}.admin-chart-summary{gap:15px}.admin-popular-sports ol{grid-template-columns:1fr}.admin-title-row h1{font-size:24px}.admin-header-profile{display:none}.admin-attention-card{min-height:160px}.admin-attention{padding:16px}.admin-dashboard-controls{width:100%}.admin-period-tabs{width:100%;justify-content:space-between}.admin-table-filters{flex-wrap:wrap}}

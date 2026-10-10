@@ -1,31 +1,24 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, UserRoundCheck, Building2, CalendarDays, Network, Trophy, CreditCard, ShieldAlert, Bell, Bot, Settings, Leaf, LogOut, X } from 'lucide-react'
-
-const navigation = [
-  ['Dashboard', LayoutDashboard], ['User Management', Users],
-  ['Court Owners', UserRoundCheck], ['Facilities', Building2],
-  ['Bookings', CalendarDays], ['LFG Management', Network],
-  ['Tournaments', Trophy], ['Payments', CreditCard],
-  ['Reviews & Reports', ShieldAlert], ['Notifications', Bell],
-  ['AI Management', Bot], ['System Settings', Settings],
-]
+import { LogOut, X } from 'lucide-react'
+import { adminMenu } from '../adminMenu.js'
 
 export default function AdminSidebar({ open, onClose }) {
   return (
     <aside className={`admin-sidebar ${open ? 'is-open' : ''}`} aria-label="Admin navigation">
       <NavLink className="admin-brand" to="/admin/dashboard" onClick={onClose}>
-        <span className="admin-brand-mark"><Leaf size={22} fill="currentColor" /></span>
-        <span><strong>SportNexus</strong><small>Management System</small></span>
+        <span className="admin-brand-mark"><span className="material-symbols-outlined" aria-hidden="true">bolt</span></span>
+        <span><strong>SportNexus <i className="admin-brand-dot" aria-hidden="true" /></strong><small>Admin Management</small></span>
       </NavLink>
       <button className="admin-sidebar-close admin-icon-button" aria-label="Close navigation" onClick={onClose}><X size={20} /></button>
       <nav className="admin-navigation">
-        {navigation.map(([label, Icon], index) => index === 0 ? (
-          <NavLink key={label} to="/admin/dashboard" end onClick={onClose} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
-            <Icon size={17} /><span>{label}</span>
+        <p className="admin-navigation-title">Admin Navigation</p>
+        {adminMenu.map(({ label, path, icon: Icon, enabled, end, count }) => enabled ? (
+          <NavLink key={path} to={path} end={end} onClick={onClose} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+            <Icon size={17} /><span>{label}</span>{count && <span className="admin-nav-count">{count}</span>}
           </NavLink>
         ) : (
-          <button key={label} className="admin-nav-item" disabled title="Not implemented yet">
-            <Icon size={17} /><span>{label}</span>{label === 'Notifications' && <span className="admin-nav-count">3</span>}
+          <button key={path} type="button" className="admin-nav-item admin-nav-unavailable" disabled title={`${label} — Coming soon`}>
+            <Icon size={17} /><span>{label}</span><span className="admin-coming-soon">Coming soon</span>
           </button>
         ))}
       </nav>

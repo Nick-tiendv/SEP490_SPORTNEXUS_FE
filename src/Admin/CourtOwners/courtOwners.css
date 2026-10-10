@@ -1,0 +1,111 @@
+/* Court Owner Management only; shared sports background and branding are untouched. */
+.owners-page{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;max-width:1600px;margin:0 auto;align-items:start}
+.owners-page.with-details{grid-template-columns:minmax(0,2fr) minmax(330px,1fr)}
+.owners-main-content{min-width:0}
+.owners-page-heading{background:#fff;border-radius:10px;padding:18px;display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.owners-page-heading h1{font-size:24px;font-weight:700;line-height:1.25;letter-spacing:-.5px}
+.owners-page-heading h1 span{display:inline-block;vertical-align:middle;background:#c0efd4;color:#36835a;border-radius:20px;padding:5px 9px;font-size:10px;letter-spacing:0;margin-left:8px}
+.owners-page-heading p{max-width:340px;font-size:12px;color:#7e8c98;margin-top:9px;line-height:1.6}
+.owners-heading-actions{display:flex;gap:8px;flex-shrink:0;align-items:center}
+.owners-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.owners-kpis article{background:#fff;border:1px solid #e3e9e8;border-radius:9px;padding:17px 12px;min-height:153px;display:flex;flex-direction:column;justify-content:center}
+.owners-kpis article>div{display:flex;align-items:center;justify-content:space-between;gap:6px;color:#7d8b99;margin-bottom:10px}
+.owners-kpis small{max-width:70px;font-size:10px;line-height:1.4}
+.owners-kpis svg{color:#449566;flex-shrink:0;background:#eaf6ee;border-radius:5px}
+.owners-kpis strong{font-size:24px;font-weight:700;letter-spacing:-.6px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.owners-kpis strong span{font-size:8px;color:#3e9a64;letter-spacing:0;max-width:60px}
+.owners-kpis p{font-size:9px;color:#8996a3;line-height:1.6;margin-top:6px}
+.owners-kpis article.pending svg{color:#e1a328;background:#fff7df}
+.owners-kpis article.pending strong{color:#e48a16}
+.owners-kpis article.pending strong span{border-radius:12px;background:#fff0b6;color:#b87b19;padding:3px 5px;line-height:1.2}
+.owners-demo-label{display:inline-block;margin:10px 0;background:#fff;color:#6c8774;padding:4px 8px;border-radius:5px;font-size:9px}
+.owners-pending-banner{display:flex;align-items:center;gap:12px;background:#fffbef;border:1px solid #f1dd9a;border-radius:10px;padding:18px 15px;margin-bottom:20px}
+.owners-pending-banner>svg{color:#e6a012;flex-shrink:0}
+.owners-pending-banner h2{font-size:15px;font-weight:600;line-height:1.4}
+.owners-pending-banner p{font-size:10px;color:#9a8c69;margin-top:5px}
+.owners-pending-banner>span{background:#ffedb2;padding:5px 7px;border-radius:12px;font-size:9px;color:#ae7918;max-width:60px;text-align:center;margin-left:auto;flex-shrink:0}
+.owners-pending-banner button{display:flex;align-items:center;gap:5px;background:#df8709;color:#fff;border-radius:7px;padding:9px 12px;font-size:10px;font-weight:600;flex-shrink:0}
+.owners-toolbar{padding:15px;border:1px solid #e0e8e5;border-radius:9px;background:#fff;margin-bottom:20px}
+.owners-filter-row{display:flex;gap:8px;flex-wrap:wrap}
+.owners-filter-row .users-search{flex:1;min-width:120px}
+.owners-filter-row select{background:#f7f9fc;border:1px solid #e2e8ec;border-radius:5px;padding:7px;font-size:10px;color:#546778;max-width:160px;min-width:0}
+.owners-filter-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:15px;font-size:10px}
+.owners-filter-actions>button{background:none;color:#36885a;padding:0;font-size:9px}
+.owners-filter-actions>div{display:flex;gap:7px;margin-left:auto}
+.owners-table-panel{background:#fff;border:1px solid #dce6e3;border-radius:10px;overflow:hidden}
+.owners-table-scroll{overflow-x:auto;scrollbar-width:thin}
+.sn-admin .owners-table-scroll::-webkit-scrollbar{display:block;height:6px}
+.sn-admin .owners-table-scroll::-webkit-scrollbar-thumb{background:#b9d1c3;border-radius:4px}
+.owners-table-panel table{width:100%;min-width:740px;border-collapse:collapse;text-align:left}
+.owners-table-panel th{background:#edf3ff;color:#8899ad;font-size:9px;font-weight:500;padding:16px 12px}
+.owners-table-panel td{padding:16px 12px;border-bottom:1px solid #e7eeea;vertical-align:middle;height:88px;font-size:10px}
+.owners-table-panel tbody tr{cursor:pointer}
+.owners-table-panel tbody tr.is-selected{background:#f0faf3}
+.owners-table-panel tbody tr:hover{background:#f7fcf8}
+.owners-table-panel input[type=checkbox]{accent-color:#287e4d;width:14px;height:14px;vertical-align:middle;cursor:pointer}
+.owners-table-profile{display:flex;align-items:center;gap:10px;background:none;color:#2e4350;text-align:left;padding:0;min-width:174px}
+.owners-table-profile strong{display:block;font-size:11px;font-weight:600}
+.owners-table-profile strong i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#42a475;margin-left:4px}
+.owners-table-profile small,.owners-table-panel td>small{font-size:9px;color:#8b9aa7;display:block;margin-top:3px}
+.owners-contact-email{font-size:9px;font-weight:500;overflow-wrap:anywhere;min-width:145px;display:block}
+.owners-facility-count{display:inline-flex;align-items:center;gap:4px;font-size:10px;background:#e8f2fc;color:#52846f;padding:4px 6px;border-radius:5px}
+.owners-verification{display:inline-flex;align-items:center;gap:3px;border-radius:10px;padding:3px 6px;font-size:8px;font-weight:600;white-space:nowrap;background:#e4f5e9;color:#338457}
+.owners-verification.pending{background:#fff1c7;color:#bc831d}
+.owners-verification.rejected{background:#ffe8eb;color:#cd6975}
+.owners-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px;font-size:10px;color:#80929f}
+.owners-pagination>span{max-width:145px}
+.owners-pagination label{display:flex;align-items:center;gap:7px;font-size:9px}
+.owners-pagination select{padding:6px;border:1px solid #dbe6e1;border-radius:5px;color:#5b7083;background:#fff;font-size:10px}
+.owners-pagination nav{display:flex;gap:5px}
+.owners-pagination button{background:#fff;border:1px solid #dce7e1;color:#718699;padding:5px 8px;border-radius:5px;font-size:10px}
+.owners-pagination button.current{background:#5ca97b;color:#fff;border-color:#5ca97b}
+.owners-pagination button:disabled{opacity:.45}
+.owners-details{background:#fff;border:1px solid #dde7e2;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px #2946340a}
+.owners-details-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #dfe8e1;background:#f7faff;padding:18px 16px}
+.owners-details-heading h2{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:600;flex-wrap:wrap}
+.owners-details-heading h2>svg{color:#37885a}
+.owners-details-heading small{font-size:9px;color:#8798a5;font-weight:400}
+.owners-details-heading button{background:none;color:#82939f;flex-shrink:0}
+.owners-details-body{padding:18px 16px;display:flex;flex-direction:column;gap:20px}
+.owners-profile{display:flex;gap:10px;align-items:flex-start}
+.owners-profile .users-avatar{border-radius:12px;width:48px;height:48px;background:#c8efd6;border:1px solid #b3ddc5;color:#287a4c;font-size:17px}
+.owners-profile>div{min-width:0}
+.owners-profile h3{font-size:15px;font-weight:700;line-height:1.5}
+.owners-pro-badge{display:inline-block;padding:2px 5px;border-radius:5px;background:#d8f0e2;color:#34875c;font-size:8px;vertical-align:middle;font-weight:600}
+.owners-profile p,.owners-profile small{font-size:9px;color:#8c9aa6;margin:3px 0;display:block;overflow-wrap:anywhere}
+.owners-profile-status{display:flex;gap:5px;align-items:center;margin:6px 0}
+.owners-kyc{background:#f5f9fc;border:1px solid #e5ebef;border-radius:8px;padding:12px}
+.owners-kyc dl{margin:0;display:flex;flex-direction:column;gap:8px}
+.owners-kyc dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px}
+.owners-kyc dt{color:#8295a4;flex-shrink:0}
+.owners-kyc dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}
+.owners-kyc .owners-trust{color:#2c8b55}
+.owners-kyc>small{display:block;margin-top:9px;font-size:8px;color:#929fa9}
+.owners-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:500;color:#758a9e;margin-bottom:9px!important}
+.owners-performance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.owners-performance>div{border:1px solid #e0e6f0;border-radius:6px;padding:12px;background:#f5f7fd}
+.owners-performance small{font-size:9px;color:#8295a7;display:block}
+.owners-performance strong{display:block;font-size:19px;font-weight:700;margin-top:6px;letter-spacing:-.3px}
+.owners-performance>div:nth-child(3) strong{color:#3b965f}
+.owners-facilities-heading{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.owners-facilities-heading small{font-size:8px;color:#519d75}
+.owners-facilities{display:flex;flex-direction:column;gap:10px}
+.owners-facilities article{padding:12px;border:1px solid #dce7df;border-radius:8px}
+.owners-facilities article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.owners-facilities h4{font-size:11px;font-weight:600;line-height:1.5;margin:0}
+.owners-facilities p{font-size:9px;color:#8797a5;line-height:1.7;margin-top:5px}
+.owners-facilities footer{display:flex;align-items:center;justify-content:space-between;gap:7px;border-top:1px solid #e7eee9;padding-top:9px;margin-top:9px;font-size:9px}
+.owners-facilities footer span{color:#d5911a}
+.owners-facilities button{display:flex;align-items:center;gap:4px;background:none;color:#398b5e;padding:0;font-size:9px}
+.owners-empty-facilities{font-size:10px;color:#8b9c90;padding:15px;border:1px dashed #d5e4da;border-radius:7px}
+.owners-details-actions{display:flex;flex-wrap:wrap;gap:6px;padding:14px 12px;background:#f8faf9;border-top:1px solid #e1e8e2}
+.owners-details-actions .users-button{flex:1;font-size:9px!important;padding:7px 8px!important}
+.owners-review-fields{margin:0;display:flex;flex-direction:column;gap:12px}
+.owners-review-fields>div{display:flex;justify-content:space-between;gap:16px;font-size:12px}
+.owners-review-fields dt{color:#799185}
+.owners-review-fields dd{margin:0;text-align:right;font-weight:600}
+.owners-bulk-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.owners-bulk-list span{display:block;color:#87968d;font-size:10px;margin-top:3px}
+@media(max-width:1300px){.owners-page.with-details{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)}.owners-page-heading{flex-wrap:wrap}.owners-kpis{gap:7px}.owners-kpis article{padding:13px 9px}.owners-kpis strong{font-size:21px}.owners-pending-banner{flex-wrap:wrap}.owners-pending-banner>span{margin-left:0}.owners-pending-banner button{margin-left:auto}.owners-filter-row .users-search{flex-basis:100%}}
+@media(max-width:1000px){.owners-page.with-details{grid-template-columns:minmax(0,1fr)}.owners-page-heading{flex-wrap:nowrap}.owners-details-body{display:grid;grid-template-columns:1fr 1fr;align-items:start}.owners-kpis article{min-height:140px}.owners-details-actions{justify-content:flex-end}.owners-details-actions .users-button{flex:0 1 auto}}
+@media(max-width:640px){.owners-page-heading{flex-wrap:wrap}.owners-page-heading h1{font-size:22px}.owners-kpis{grid-template-columns:1fr 1fr;gap:10px}.owners-kpis strong{font-size:24px}.owners-pending-banner{gap:10px;padding:15px}.owners-pending-banner h2{font-size:13px}.owners-pending-banner>span{display:none}.owners-details-body{display:flex}.owners-filter-row select{max-width:100%;flex:1}.owners-filter-actions>div{margin-left:0}.owners-pagination nav{flex-wrap:wrap}.owners-heading-actions{flex-wrap:wrap}.owners-details-actions .users-button{flex:1}}

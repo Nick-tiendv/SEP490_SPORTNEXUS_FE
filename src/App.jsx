@@ -23,6 +23,13 @@ import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
 
 import AdminLayout from './Admin/Layout/AdminLayout.jsx'
 import AdminDashboard from './Admin/Dashboard/AdminDashboard.jsx'
+import UserManagement from './Admin/Users/UserManagement.jsx'
+import CourtOwnerManagement from './Admin/CourtOwners/CourtOwnerManagement.jsx'
+import FacilityManagement from './Admin/Facilities/FacilityManagement.jsx'
+import BookingManagement from './Admin/Bookings/BookingManagement.jsx'
+import LFGManagement from './Admin/LFG/LFGManagement.jsx'
+import TournamentManagement from './Admin/Tournaments/TournamentManagement.jsx'
+import PaymentManagement from './Admin/Payments/PaymentManagement.jsx'
 
 function App() {
   return (
@@ -59,6 +66,13 @@ function App() {
         {/* Admin module */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="court-owners" element={<CourtOwnerManagement />} />
+          <Route path="facilities" element={<FacilityManagement />} />
+          <Route path="bookings" element={<BookingManagement />} />
+          <Route path="lfg" element={<LFGManagement />} />
+          <Route path="tournaments" element={<TournamentManagement />} />
+          <Route path="payments" element={<PaymentManagement />} />
         </Route>
 
         {/* Fallback */}

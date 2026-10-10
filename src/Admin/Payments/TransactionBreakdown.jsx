@@ -1,0 +1,5 @@
+import { transactionBreakdown, typeLabels, money } from './paymentData.js'
+
+export default function TransactionBreakdown({ onType }) {
+  return <section className="payments-breakdown"><h2>Phân loại giao dịch</h2><p>Phân bổ số liệu minh họa riêng; không tính từ bảng.</p><div className="payments-distribution" aria-label="Phân bổ giá trị giao dịch">{transactionBreakdown.map(item => <button key={item.type} style={{ width: `${item.percentage}%`, background: item.color }} title={`${typeLabels[item.type]}: ${money(item.value)} (${item.percentage}%)`} aria-label={`${typeLabels[item.type]} ${item.percentage}% — lọc giao dịch`} onClick={() => onType(item.type)} />)}</div><ul>{transactionBreakdown.map(item => <li key={item.type}><button title={`${money(item.value)} · ${item.percentage}%`} onClick={() => onType(item.type)}><i style={{ background: item.color }} /><span>{typeLabels[item.type]}</span><strong>{money(item.value)}<small>{item.percentage}%</small></strong></button></li>)}</ul><p>Chọn loại giao dịch để lọc bảng bên dưới.</p></section>
+}
