@@ -21,6 +21,16 @@ import SplitPayment from './Player/Book a court/SplitPayment.jsx'
 import TournamentList from './Player/Finance & Events/TournamentList.jsx'
 import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
 
+// Court Owner Pages & Layout
+import CourtOwnerLayout from './Court Owner/CourtOwnerLayout.jsx'
+import CourtOwnerDashboard from './Court Owner/Dashboard.jsx'
+import CourtOwnerProfile from './Court Owner/Profile.jsx'
+import CourtManage from './Court Owner/Court Manage.jsx'
+import CheckQR from './Court Owner/Check QR.jsx'
+import ViewCourtBookingSchedule from './Court Owner/View Court Booking Schedule.jsx'
+import CreateAutomatedTournament from './Court Owner/Create Automated Tournament.jsx'
+import Settlement from './Court Owner/Settlement.jsx'
+
 function App() {
   return (
     <BrowserRouter>
@@ -52,6 +62,30 @@ function App() {
           <Route path="/split-payment" element={<SplitPayment />} />
           <Route path="/post-match-rating" element={<PostMatchRating />} />
         </Route>
+
+        {/* Court Owner App — wrapped in CourtOwnerLayout */}
+        <Route path="/owner" element={<CourtOwnerLayout />}>
+          <Route index element={<Navigate replace to="/owner/dashboard" />} />
+          <Route path="dashboard" element={<CourtOwnerDashboard />} />
+          <Route path="profile" element={<CourtOwnerProfile />} />
+          <Route path="courts" element={<CourtManage />} />
+          <Route path="court-manage" element={<CourtManage />} />
+          <Route path="check-qr" element={<CheckQR />} />
+          <Route path="schedule" element={<ViewCourtBookingSchedule />} />
+          <Route path="view-schedule" element={<ViewCourtBookingSchedule />} />
+          <Route path="tournament" element={<CreateAutomatedTournament />} />
+          <Route path="create-tournament" element={<CreateAutomatedTournament />} />
+          <Route path="settlement" element={<Settlement />} />
+        </Route>
+
+        {/* Direct aliases for convenience */}
+        <Route path="/owner-dashboard" element={<Navigate replace to="/owner/dashboard" />} />
+        <Route path="/owner-profile" element={<Navigate replace to="/owner/profile" />} />
+        <Route path="/court-manage" element={<Navigate replace to="/owner/courts" />} />
+        <Route path="/owner-qr" element={<Navigate replace to="/owner/check-qr" />} />
+        <Route path="/owner-schedule" element={<Navigate replace to="/owner/schedule" />} />
+        <Route path="/owner-tournament" element={<Navigate replace to="/owner/tournament" />} />
+        <Route path="/owner-settlement" element={<Navigate replace to="/owner/settlement" />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate replace to="/login" />} />

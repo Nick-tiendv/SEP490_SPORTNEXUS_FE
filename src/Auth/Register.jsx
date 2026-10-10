@@ -17,7 +17,11 @@ function Register() {
       localStorage.setItem('sportnexus_user_role', role)
       localStorage.setItem('sportnexus_registered_role', role)
     } catch {}
-    navigate('/onboarding')
+    if (role === 'court_owner') {
+      navigate('/owner/dashboard')
+    } else {
+      navigate('/onboarding')
+    }
   }
 
   const toggleSport = (sport) => {

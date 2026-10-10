@@ -56,8 +56,18 @@ function Login() {
               Chào mừng bạn trở lại với nền tảng đặt sân thể thao đa môn
             </p>
 
-            {/* Form */}
-            <form onSubmit={(e) => { e.preventDefault(); navigate('/dashboard') }} className="space-y-5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const savedRole = localStorage.getItem('sportnexus_user_role')
+                if (savedRole === 'court_owner') {
+                  navigate('/owner/dashboard')
+                } else {
+                  navigate('/dashboard')
+                }
+              }}
+              className="space-y-5"
+            >
               {/* Email Input */}
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
