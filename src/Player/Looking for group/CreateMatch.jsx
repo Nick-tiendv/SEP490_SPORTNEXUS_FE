@@ -543,100 +543,56 @@ function CreateMatch() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Cầu Lông Card */}
-                  <div
-                    onClick={() => setSport('badminton')}
-                    className={`relative p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3.5 ${
-                      sport === 'badminton'
-                        ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
-                        : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-                        sport === 'badminton'
-                          ? 'bg-white/20 text-white scale-105'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <span
-                        className="text-[26px] leading-none select-none"
-                        role="img"
-                        aria-label="Cầu Lông"
-                        style={{
-                          filter:
-                            sport === 'badminton'
-                              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
-                              : 'none',
-                        }}
-                      >
-                        🏸
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-[15px]">Cầu Lông</h3>
-                        {sport === 'badminton' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></span>
-                        )}
-                      </div>
-                      <p
-                        className={`text-[11px] mt-0.5 ${
-                          sport === 'badminton' ? 'text-green-100' : 'text-gray-400'
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {[
+                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', sub: 'Pro-Circuit' },
+                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓', sub: 'DUPR Arena' },
+                    { key: 'football', label: 'Bóng Đá', emoji: '⚽', sub: 'Sân 5 / Sân 7' },
+                    { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', sub: '3x3 & 5x5' },
+                    { key: 'tennis', label: 'Tennis', emoji: '🎾', sub: 'Đơn / Đôi' },
+                  ].map((item) => {
+                    const isSelected = sport === item.key
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => setSport(item.key)}
+                        className={`relative p-3 rounded-2xl cursor-pointer transition-all flex flex-col items-center text-center gap-2 ${
+                          isSelected
+                            ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
+                            : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        Badminton Pro-Circuit
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pickleball Card */}
-                  <div
-                    onClick={() => setSport('pickleball')}
-                    className={`relative p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3.5 ${
-                      sport === 'pickleball'
-                        ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
-                        : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-                        sport === 'pickleball'
-                          ? 'bg-white/20 text-white scale-105'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <span
-                        className="text-[26px] leading-none select-none"
-                        role="img"
-                        aria-label="Pickleball"
-                        style={{
-                          filter:
-                            sport === 'pickleball'
-                              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
-                              : 'none',
-                        }}
-                      >
-                        🏓
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-[15px]">Pickleball</h3>
-                        {sport === 'pickleball' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></span>
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
+                            isSelected
+                              ? 'bg-white/20 text-white scale-105'
+                              : 'bg-gray-100'
+                          }`}
+                        >
+                          <span
+                            className="text-[24px] leading-none select-none"
+                            role="img"
+                            aria-label={item.label}
+                          >
+                            {item.emoji}
+                          </span>
+                        </div>
+                        <div className="w-full">
+                          <h3 className="font-extrabold text-[13px] truncate">{item.label}</h3>
+                          <p
+                            className={`text-[10px] mt-0.5 truncate ${
+                              isSelected ? 'text-green-100' : 'text-gray-400'
+                            }`}
+                          >
+                            {item.sub}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399]"></span>
                         )}
                       </div>
-                      <p
-                        className={`text-[11px] mt-0.5 ${
-                          sport === 'pickleball' ? 'text-green-100' : 'text-gray-400'
-                        }`}
-                      >
-                        Paddle &amp; DUPR Arena
-                      </p>
-                    </div>
-                  </div>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -740,8 +696,7 @@ function CreateMatch() {
                           setIsDistrictDropdownOpen(true)
                         }}
                         onFocus={() => setIsDistrictDropdownOpen(true)}
-                        placeholder="Nhập tên quận, khu vực hoặc cụm sân (VD: Quận 7, Bình Thạnh, Rạch Miễu, Tao Đàn...)"
-                        className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-[#2D5F3F] focus:ring-2 focus:ring-[#2D5F3F]/20 rounded-xl pl-10 pr-9 py-2.5 text-xs text-gray-800 font-medium placeholder-gray-400 transition-all outline-none shadow-2xs"
+                        className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-[#2D5F3F] focus:ring-2 focus:ring-[#2D5F3F]/20 rounded-xl pl-10 pr-9 py-2.5 text-xs text-gray-800 font-medium transition-all outline-none shadow-2xs"
                       />
                       {districtSearchQuery && (
                         <button

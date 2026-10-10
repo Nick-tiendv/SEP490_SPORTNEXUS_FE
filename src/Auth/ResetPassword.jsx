@@ -175,7 +175,6 @@ function ResetPassword() {
                 type={showNewPassword ? "text" : "password"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nhập mật khẩu mới"
                 className="w-full pl-12 pr-12 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#4A7C3E] focus:bg-white transition-all text-gray-900"
               />
               <button
@@ -209,7 +208,6 @@ function ResetPassword() {
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Nhập lại mật khẩu mới"
                 className="w-full pl-12 pr-12 py-4 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#4A7C3E] focus:bg-white transition-all text-gray-900"
               />
               <button

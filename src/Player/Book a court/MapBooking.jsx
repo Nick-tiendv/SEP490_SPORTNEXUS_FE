@@ -131,6 +131,120 @@ const getDistanceForCourt = (court, playerLocation, liveCoords = null) => {
 }
 
 const COURTS = [
+  // ========== BÓNG ĐÁ (FOOTBALL) ==========
+  {
+    id: 'football-q7-1',
+    sport: 'football',
+    name: 'Sân Bóng Đá SportZone Q7',
+    street: 'Nguyễn Thị Thập',
+    address: '450 Nguyễn Thị Thập, P. Tân Quy, Quận 7, TP. Hồ Chí Minh',
+    mapQuery: '450 Nguyễn Thị Thập, Tân Quy, Quận 7, TP. Hồ Chí Minh',
+    district: 'q7',
+    lat: 10.7385,
+    lng: 106.7152,
+    rating: 4.8,
+    price: 320000,
+    courtCount: 6,
+    image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=300&h=300&fit=crop',
+    subCourt: 'Sân 7 người Cỏ Nhân Tạo',
+    subCourtDesc: 'Cỏ chuẩn FIFA, hệ thống chiếu sáng LED thi đấu đêm',
+    overrides: {},
+  },
+  {
+    id: 'football-tanbinh-1',
+    sport: 'football',
+    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
+    street: 'Phan Thúc Duyện',
+    address: '30 Phan Thúc Duyện, P.4, Tân Bình, TP. Hồ Chí Minh',
+    mapQuery: '30 Phan Thúc Duyện, Tân Bình, Hồ Chí Minh',
+    district: 'tanbinh',
+    lat: 10.8035,
+    lng: 106.6582,
+    rating: 4.9,
+    price: 300000,
+    courtCount: 8,
+    image: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=300&h=300&fit=crop',
+    subCourt: 'Sân 5 người A1',
+    subCourtDesc: 'Cụm sân bóng đá mini trung tâm Tân Bình, mái che mát',
+    overrides: {},
+  },
+
+  // ========== BÓNG RỔ (BASKETBALL) ==========
+  {
+    id: 'basketball-q1-1',
+    sport: 'basketball',
+    name: 'Sân Bóng Rổ Cung Thiếu Nhi Q1',
+    street: 'Nguyễn Thị Minh Khai',
+    address: '55 Nguyễn Thị Minh Khai, P. Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    mapQuery: '55 Nguyễn Thị Minh Khai, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    district: 'q1',
+    lat: 10.7812,
+    lng: 106.6965,
+    rating: 4.9,
+    price: 250000,
+    courtCount: 4,
+    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=300&h=300&fit=crop',
+    subCourt: 'Sân Đấu Chính - Trụ Kính FIBA',
+    subCourtDesc: 'Mặt sân cao su tổng hợp giảm chấn thương, vành rổ chuẩn thi đấu',
+    overrides: {},
+  },
+  {
+    id: 'basketball-thuduc-1',
+    sport: 'basketball',
+    name: 'Sân Bóng Rổ SSA Thảo Điền',
+    street: 'Quốc Hương',
+    address: '189 Quốc Hương, P. Thảo Điền, TP. Thủ Đức, TP. Hồ Chí Minh',
+    mapQuery: '189 Quốc Hương, Thảo Điền, Thủ Đức, Hồ Chí Minh',
+    district: 'thuduc',
+    lat: 10.8082,
+    lng: 106.7325,
+    rating: 4.8,
+    price: 280000,
+    courtCount: 3,
+    image: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=300&h=300&fit=crop',
+    subCourt: 'Sân Bóng Rổ Trong Nhà Pro',
+    subCourtDesc: 'Phòng gym kết hợp, máy lạnh thoáng mát, sàn gỗ chuyên nghiệp',
+    overrides: {},
+  },
+
+  // ========== TENNIS ==========
+  {
+    id: 'tennis-q10-1',
+    sport: 'tennis',
+    name: 'CLB Tennis Lan Anh Quận 10',
+    street: 'Cách Mạng Tháng 8',
+    address: '291 Cách Mạng Tháng 8, P.12, Quận 10, TP. Hồ Chí Minh',
+    mapQuery: 'CLB Lan Anh, 291 Cách Mạng Tháng 8, Quận 10, Hồ Chí Minh',
+    district: 'q10',
+    lat: 10.7785,
+    lng: 106.6782,
+    rating: 4.9,
+    price: 260000,
+    courtCount: 7,
+    image: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=300&h=300&fit=crop',
+    subCourt: 'Sân Tennis Mặt Cứng US Open 01',
+    subCourtDesc: 'Mặt sân chuẩn giải đấu quốc tế, khán đài và đèn đêm chuyên dụng',
+    overrides: {},
+  },
+  {
+    id: 'tennis-q7-1',
+    sport: 'tennis',
+    name: 'Sân Quần Vợt Sunrise City Q7',
+    street: 'Nguyễn Hữu Thọ',
+    address: '23 Nguyễn Hữu Thọ, P. Tân Hưng, Quận 7, TP. Hồ Chí Minh',
+    mapQuery: 'Sunrise City, Nguyễn Hữu Thọ, Quận 7, Hồ Chí Minh',
+    district: 'q7',
+    lat: 10.7495,
+    lng: 106.7025,
+    rating: 4.7,
+    price: 220000,
+    courtCount: 4,
+    image: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=300&h=300&fit=crop',
+    subCourt: 'Sân Tennis Sân Ngoài Trời T1',
+    subCourtDesc: 'Khuôn viên xanh, thoáng mát, dịch vụ nhặt bóng và huấn luyện viên',
+    overrides: {},
+  },
+
   // ========== TP. THỦ ĐỨC (QUẬN 2, QUẬN 9, THỦ ĐỨC) ==========
   {
     id: 'huean-td',
@@ -1560,7 +1674,6 @@ function MapBooking() {
                   id="mb-search-input"
                   type="text"
                   className="mb-search-input"
-                  placeholder="Tìm quận, tên đường, tên sân..."
                   autoComplete="off"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

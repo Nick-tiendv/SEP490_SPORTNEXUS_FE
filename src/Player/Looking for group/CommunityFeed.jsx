@@ -470,6 +470,45 @@ function CommunityFeed() {
             <span>Cầu Lông</span>
           </button>
 
+          {/* Bóng Đá */}
+          <button
+            onClick={() => setActiveSportFilter('football')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'football'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">⚽</span>
+            <span>Bóng Đá</span>
+          </button>
+
+          {/* Bóng Rổ */}
+          <button
+            onClick={() => setActiveSportFilter('basketball')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'basketball'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🏀</span>
+            <span>Bóng Rổ</span>
+          </button>
+
+          {/* Tennis */}
+          <button
+            onClick={() => setActiveSportFilter('tennis')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'tennis'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🎾</span>
+            <span>Tennis</span>
+          </button>
+
           {/* Dropdown Trình độ */}
           <div className="relative">
             <select
@@ -1229,29 +1268,28 @@ function CommunityFeed() {
               {/* Chọn môn */}
               <div>
                 <label className="font-bold text-gray-700 block mb-1">Môn thể thao:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'badminton' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'badminton'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏸 Cầu Lông</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'pickleball' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'pickleball'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏓 Pickleball</span>
-                  </button>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {[
+                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸' },
+                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓' },
+                    { key: 'football', label: 'Bóng Đá', emoji: '⚽' },
+                    { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀' },
+                    { key: 'tennis', label: 'Tennis', emoji: '🎾' },
+                  ].map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setNewMatch({ ...newMatch, sport: s.key })}
+                      className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center gap-1 ${
+                        newMatch.sport === s.key
+                          ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <span className="text-base">{s.emoji}</span>
+                      <span className="truncate">{s.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1260,7 +1298,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Tiêu đề kèo giao lưu:</label>
                 <input
                   type="text"
-                  placeholder="VD: [Cầu Lông Đôi] Cần 2 tay vợt giao lưu vui vẻ, sân mát mẻ"
                   value={newMatch.title}
                   onChange={(e) => setNewMatch({ ...newMatch, title: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
@@ -1273,7 +1310,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Sân &amp; Địa chỉ:</label>
                 <input
                   type="text"
-                  placeholder="VD: Sân Tre Xanh, 128 Đinh Bộ Lĩnh, Bình Thạnh"
                   value={newMatch.location}
                   onChange={(e) => setNewMatch({ ...newMatch, location: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"

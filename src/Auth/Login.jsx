@@ -66,8 +66,7 @@ function Login() {
                 <input
                   type="text"
                   id="email"
-                  placeholder="Nhập email hoặc số điện thoại..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900 placeholder:text-gray-400"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900"
                   required
                 />
               </div>
@@ -81,8 +80,7 @@ function Login() {
                   <input
                     type={passwordVisible ? 'text' : 'password'}
                     id="password"
-                    placeholder="Nhập mật khẩu..."
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900 placeholder:text-gray-400"
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900"
                     required
                   />
                   <button

@@ -128,6 +128,45 @@ const allLfgMatches = [
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
     badge: 'Cạnh Tranh Cao',
   },
+  {
+    id: 'lfg-5',
+    sport: 'football',
+    sportName: 'Bóng Đá Kèo Sân 7 Giao Lưu',
+    sportEmoji: '⚽',
+    missing: 'Thiếu 3 người',
+    missingColor: '#2563EB',
+    time: '20:00 Tối nay • Sân SportZone Q.7 (2.5 km)',
+    price: '65.000 đ / người',
+    host: 'Host Minh Nhật (Vui vẻ hòa đồng)',
+    img: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=100&h=100&fit=crop',
+    badge: 'Cỏ Chuẩn FIFA',
+  },
+  {
+    id: 'lfg-6',
+    sport: 'basketball',
+    sportName: 'Bóng Rổ Bán Chuyên 3x3',
+    sportEmoji: '🏀',
+    missing: 'Thiếu 2 người',
+    missingColor: '#EA580C',
+    time: '18:30 Tối mai • Sân SSA Thảo Điền (3.0 km)',
+    price: '55.000 đ / người',
+    host: 'Host Tuấn Kiệt (Elo 1400)',
+    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=100&h=100&fit=crop',
+    badge: 'Sàn Pro Trong Nhà',
+  },
+  {
+    id: 'lfg-7',
+    sport: 'tennis',
+    sportName: 'Tennis Đôi Nam Nữ Giao Lưu',
+    sportEmoji: '🎾',
+    missing: 'Thiếu 1 người',
+    missingColor: '#65A30D',
+    time: '06:00 Sáng chủ nhật • CLB Lan Anh Q.10 (1.5 km)',
+    price: '80.000 đ / người',
+    host: 'Host Thanh Trúc (NTRP 3.5)',
+    img: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=100&h=100&fit=crop',
+    badge: 'Mặt Sân Cứng',
+  },
 ]
 
 // Dữ liệu gợi ý sân trống
@@ -175,6 +214,39 @@ const allSuggestedCourts = [
     price: '110.000 đ/h • 6 Sân Chuẩn Thi Đấu',
     rating: '4.7 ★ (185 đánh giá)',
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-5',
+    sport: 'football',
+    sportEmoji: '⚽',
+    slot: 'Trống 19:00 - 21:00',
+    dist: 'Cách 2.4 km',
+    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
+    price: '300.000 đ/h • Cụm 8 Sân Cỏ Nhân Tạo',
+    rating: '4.9 ★ (420 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-6',
+    sport: 'basketball',
+    sportEmoji: '🏀',
+    slot: 'Trống 18:00 - 20:00',
+    dist: 'Cách 3.0 km',
+    name: 'Sân Bóng Rổ SSA Thảo Điền',
+    price: '280.000 đ/h • Sàn Thi Đấu Trong Nhà',
+    rating: '4.8 ★ (195 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-7',
+    sport: 'tennis',
+    sportEmoji: '🎾',
+    slot: 'Trống 17:00 - 19:00',
+    dist: 'Cách 1.8 km',
+    name: 'CLB Tennis Lan Anh Quận 10',
+    price: '260.000 đ/h • Chuẩn Quốc Tế',
+    rating: '4.9 ★ (610 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=100&h=100&fit=crop',
   },
 ]
 
@@ -269,10 +341,10 @@ function Dashboard() {
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
-                ? 'Đang xem toàn bộ sân & kèo cho cả Cầu Lông và Pickleball. Đặt sân & bảo chứng Escrow minh bạch.'
-                : isSportActive('badminton')
-                ? 'Đang hiển thị chuyên biệt cho Cầu Lông (Thảm BWF, Kèo giao lưu). Nhấn thêm Pickleball để xem cả 2 môn.'
-                : 'Đang hiển thị chuyên biệt cho Pickleball (Chuẩn USAPA, Kèo DUPR). Nhấn thêm Cầu Lông để xem cả 2 môn.'}
+                ? 'Đang xem toàn bộ sân & kèo cho cả 5 môn thể thao (Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis). Đặt sân & bảo chứng Escrow minh bạch.'
+                : selectedSports.length === 1
+                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find(s => s.key === selectedSports[0])?.label || ''}. Chọn thêm môn khác để mở rộng tìm kiếm.`
+                : `Đang lọc ${selectedSports.length} môn thể thao đang chọn. Đặt sân & ghép kèo bảo chứng Escrow.`}
             </p>
           </div>
 

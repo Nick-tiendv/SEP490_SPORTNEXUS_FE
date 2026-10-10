@@ -2798,7 +2798,6 @@ export default function Profile() {
                       rows={4}
                       value={writeReviewForm.content}
                       onChange={(e) => setWriteReviewForm({ ...writeReviewForm, content: e.target.value })}
-                      placeholder="Viết nhận xét chi tiết về bạn chơi: tinh thần thi đấu, sự đúng giờ, khả năng phối hợp cầu/bóng và văn hóa trên sân..."
                       style={{
                         width: '100%',
                         borderRadius: '12px',

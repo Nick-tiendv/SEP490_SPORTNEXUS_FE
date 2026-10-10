@@ -876,7 +876,6 @@ function PostMatchRating() {
                   rows={4}
                   value={writtenReview}
                   onChange={(e) => setWrittenReview(e.target.value)}
-                  placeholder={`Hãy viết vài dòng cảm nhận chân thực về ${selectedPlayer.name} (ví dụ: tinh thần thể thao, sự đúng giờ, khả năng phối hợp cùng sân, thái độ hòa nhã)...`}
                   style={{
                     width: '100%',
                     padding: '14px 16px',

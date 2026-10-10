@@ -158,8 +158,7 @@ export default function WalletEscrow() {
                   type="text"
                   value={inputVal ? `${inputVal} đ` : ''}
                   onChange={handleInputChange}
-                  placeholder="0 đ"
-                  className="w-full bg-transparent text-2xl md:text-[28px] font-extrabold text-[#111827] outline-none tracking-tight placeholder:text-gray-400"
+                  className="w-full bg-transparent text-2xl md:text-[28px] font-extrabold text-[#111827] outline-none tracking-tight"
                 />
                 {inputVal && (
                   <button

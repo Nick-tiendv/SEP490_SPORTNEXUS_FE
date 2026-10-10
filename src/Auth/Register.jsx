@@ -3,12 +3,22 @@ import { useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 function Register() {
+  const [role, setRole] = useState('player') // 'player' | 'court_owner'
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [selectedSports, setSelectedSports] = useState([])
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
+
+  const handleRegisterSubmit = (event) => {
+    event.preventDefault()
+    try {
+      localStorage.setItem('sportnexus_user_role', role)
+      localStorage.setItem('sportnexus_registered_role', role)
+    } catch {}
+    navigate('/onboarding')
+  }
 
   const toggleSport = (sport) => {
     setSelectedSports(prev => 
@@ -247,7 +257,79 @@ function Register() {
             </header>
             
             {/* Form */}
-            <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); navigate('/onboarding') }}>
+            <form className="space-y-5" onSubmit={handleRegisterSubmit}>
+              {/* Role Selection Field (Người chơi / Chủ sân) */}
+              <div>
+                <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                  Vai trò đăng ký <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Player Card */}
+                  <div
+                    onClick={() => setRole('player')}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                      role === 'player'
+                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      role === 'player' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-xl">🏃‍♂️</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                        <span>Người chơi</span>
+                        <span className="text-xs text-gray-500 font-normal">(Player)</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Đặt sân nhanh, tìm bạn ghép trận giao lưu &amp; tham gia giải đấu
+                      </p>
+                    </div>
+                    {role === 'player' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Court Owner Card */}
+                  <div
+                    onClick={() => setRole('court_owner')}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                      role === 'court_owner'
+                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      role === 'court_owner' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-xl">🏟️</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                        <span>Chủ sân</span>
+                        <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Quản lý cụm sân, biểu phí, lịch đặt sân &amp; doanh thu tự động
+                      </p>
+                    </div>
+                    {role === 'court_owner' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Full Name Field */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="full-name">
@@ -262,7 +344,6 @@ function Register() {
                   <input 
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                     id="full-name" 
-                    placeholder="Ví dụ: Nguyễn Văn A" 
                     required 
                     type="text" 
                   />
@@ -283,7 +364,6 @@ function Register() {
                     <input 
                       className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                       id="phone" 
-                      placeholder="0912 345 678" 
                       required 
                       type="tel" 
                     />
@@ -304,7 +384,6 @@ function Register() {
                     <input 
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                       id="email" 
-                      placeholder="email@example.com" 
                       required 
                       type="email" 
                     />
@@ -312,35 +391,35 @@ function Register() {
                 </div>
               </div>
 
-              {/* Sports Interest */}
+              {/* Sports Interest - Đầy đủ 5 môn */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Bộ môn thể thao quan tâm
                 </label>
-                <div className="text-xs text-gray-500 mb-3">(Có thể chọn cả hai)</div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="text-xs text-gray-500 mb-3">(Có thể chọn nhiều môn)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {/* Cầu Lông */}
                   <button
                     type="button"
                     onClick={() => toggleSport('badminton')}
-                    className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
                       selectedSports.includes('badminton')
                         ? 'border-[#4A7C59] bg-[#E8F5E3]'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                       selectedSports.includes('badminton') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
                     }`}>
-                      <span className="text-xl">🏸</span>
+                      <span className="text-lg">🏸</span>
                     </div>
-                    <div className="text-left flex-1">
-                      <div className="font-semibold text-[#2D5F3F]">Cầu Lông</div>
-                      <div className="text-xs text-gray-500">Badminton</div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Cầu Lông</div>
+                      <div className="text-[11px] text-gray-500 truncate">Badminton</div>
                     </div>
                     {selectedSports.includes('badminton') && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
@@ -351,65 +430,108 @@ function Register() {
                   <button
                     type="button"
                     onClick={() => toggleSport('pickleball')}
-                    className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
                       selectedSports.includes('pickleball')
                         ? 'border-[#4A7C59] bg-[#E8F5E3]'
                         : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      selectedSports.includes('pickleball') ? 'bg-[#4A7C59]' : 'bg-gray-100'
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('pickleball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
                     }`}>
-                      <svg className="w-7 h-7" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                          <linearGradient id="pickleballGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style={{stopColor: selectedSports.includes('pickleball') ? '#FFFFFF' : '#A95AA1'}} />
-                            <stop offset="35%" style={{stopColor: selectedSports.includes('pickleball') ? '#FFFFFF' : '#7B7FA8'}} />
-                            <stop offset="70%" style={{stopColor: selectedSports.includes('pickleball') ? '#FFFFFF' : '#4A9B9E'}} />
-                            <stop offset="100%" style={{stopColor: selectedSports.includes('pickleball') ? '#FFFFFF' : '#2DBEAA'}} />
-                          </linearGradient>
-                        </defs>
-                        
-                        {/* Paddle handle - exact shape from reference */}
-                        <path d="M 120 340 L 80 410 Q 70 430 75 445 Q 78 455 90 458 L 115 458 Q 127 455 130 445 Q 135 430 125 410 L 145 360" 
-                          stroke="url(#pickleballGradient)" 
-                          strokeWidth="32" 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round"
-                          fill="none" />
-                        
-                        {/* Handle grip lines - horizontal strokes */}
-                        <line x1="82" y1="418" x2="108" y2="418" stroke="url(#pickleballGradient)" strokeWidth="16" strokeLinecap="round" />
-                        <line x1="78" y1="438" x2="104" y2="438" stroke="url(#pickleballGradient)" strokeWidth="16" strokeLinecap="round" />
-                        
-                        {/* Paddle head - rounded square matching reference proportions */}
-                        <rect x="105" y="40" width="260" height="260" rx="88" 
-                          stroke="url(#pickleballGradient)" 
-                          strokeWidth="36" 
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          fill="none" />
-                        
-                        {/* Ball - positioned at bottom right corner */}
-                        <circle cx="380" cy="355" r="95" 
-                          stroke="url(#pickleballGradient)" 
-                          strokeWidth="32" 
-                          fill="none" />
-                        
-                        {/* Ball holes - 4 dots in perfect 2x2 grid */}
-                        <circle cx="355" cy="330" r="15" fill="url(#pickleballGradient)" />
-                        <circle cx="405" cy="330" r="15" fill="url(#pickleballGradient)" />
-                        <circle cx="355" cy="380" r="15" fill="url(#pickleballGradient)" />
-                        <circle cx="405" cy="380" r="15" fill="url(#pickleballGradient)" />
-                      </svg>
+                      <span className="text-lg">🏓</span>
                     </div>
-                    <div className="text-left flex-1">
-                      <div className="font-semibold text-[#2D5F3F]">Pickleball</div>
-                      <div className="text-xs text-gray-500">Trending 2026</div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Pickleball</div>
+                      <div className="text-[11px] text-gray-500 truncate">Trending</div>
                     </div>
                     {selectedSports.includes('pickleball') && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Bóng Đá */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('football')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('football')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('football') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">⚽</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Đá</div>
+                      <div className="text-[11px] text-gray-500 truncate">Football</div>
+                    </div>
+                    {selectedSports.includes('football') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Bóng Rổ */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('basketball')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('basketball')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('basketball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🏀</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Rổ</div>
+                      <div className="text-[11px] text-gray-500 truncate">Basketball</div>
+                    </div>
+                    {selectedSports.includes('basketball') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Tennis */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('tennis')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all col-span-2 sm:col-span-1 ${
+                      selectedSports.includes('tennis')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('tennis') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🎾</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Tennis</div>
+                      <div className="text-[11px] text-gray-500 truncate">Quần vợt</div>
+                    </div>
+                    {selectedSports.includes('tennis') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
@@ -445,7 +567,6 @@ function Register() {
                     <input 
                       className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                       id="password" 
-                      placeholder="Nhập mật khẩu an toàn" 
                       required 
                       type={passwordVisible ? 'text' : 'password'}
                       value={password}
@@ -511,7 +632,6 @@ function Register() {
                           : 'border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]/20'
                       } focus:ring-2 outline-none transition-all`}
                       id="confirm-password" 
-                      placeholder="Nhập lại mật khẩu" 
                       required 
                       type={confirmPasswordVisible ? 'text' : 'password'}
                       value={confirmPassword}

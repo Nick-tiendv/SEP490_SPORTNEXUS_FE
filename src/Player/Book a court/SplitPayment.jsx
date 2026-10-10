@@ -431,7 +431,6 @@ function SplitPayment() {
                 rows={2}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Nhập yêu cầu thêm về dụng cụ, thời gian hoặc lưu ý cho chủ sân..."
               />
             </section>
           </div>

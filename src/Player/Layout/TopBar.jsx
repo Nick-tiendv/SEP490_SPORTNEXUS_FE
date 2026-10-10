@@ -183,14 +183,14 @@ function TopBar() {
               }}
             >
               <span style={{ fontSize: '12px' }}>
-                {isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}
+                {isAllActive ? '✨' : '🎯'}
               </span>
               <span>
                 {isAllActive
-                  ? 'Tất cả: Cầu Lông & Pickleball'
-                  : isSportActive('badminton')
-                  ? 'Chỉ Cầu Lông'
-                  : 'Chỉ Pickleball'}
+                  ? 'Tất cả 5 môn thể thao'
+                  : selectedSports.length === 1
+                  ? `Chỉ ${SPORTS_LIST.find(s => s.key === selectedSports[0])?.label || ''}`
+                  : `${selectedSports.length} môn đang chọn`}
               </span>
             </div>
           </>

@@ -2062,7 +2062,6 @@ function CheckInQR() {
                       handleAddEmail()
                     }
                   }}
-                  placeholder=""
                   style={{
                     flex: 1,
                     background: 'transparent',
@@ -2705,7 +2704,6 @@ function CheckInQR() {
                   rows={3}
                   value={writtenReview}
                   onChange={(e) => setWrittenReview(e.target.value)}
-                  placeholder={`Viết nhận xét chi tiết về ${selectedCoPlayer.name || 'bạn chơi'} (kỹ thuật, tinh thần thể thao, sự đúng giờ)...`}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
