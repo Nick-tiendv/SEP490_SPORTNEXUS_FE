@@ -10,7 +10,8 @@ function TopBar() {
   const isTournament = location.pathname === '/tournament'
   const isWallet = location.pathname === '/wallet'
   const isProfile = location.pathname === '/profile'
-  const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
+  const { selectedSports, isAllActive, isSportActive, toggleSport, SPORTS_LIST = [] } = useSport()
+  const activeSportsList = SPORTS_LIST.filter(s => selectedSports?.includes(s.key))
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 2450000
@@ -183,14 +184,18 @@ function TopBar() {
               }}
             >
               <span style={{ fontSize: '12px' }}>
-                {isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}
+                {isAllActive
+                  ? '✨'
+                  : activeSportsList.length === 1
+                  ? activeSportsList[0].emoji
+                  : activeSportsList.map((s) => s.emoji).join(' ')}
               </span>
               <span>
                 {isAllActive
-                  ? 'Tất cả: Cầu Lông & Pickleball'
-                  : isSportActive('badminton')
-                  ? 'Chỉ Cầu Lông'
-                  : 'Chỉ Pickleball'}
+                  ? 'Tất cả môn thể thao'
+                  : activeSportsList.length === 1
+                  ? `Chỉ ${activeSportsList[0].label}`
+                  : `${activeSportsList.length} môn đang lọc`}
               </span>
             </div>
           </>

@@ -5,10 +5,14 @@ export const SportContext = createContext()
 export const SPORTS_LIST = [
   { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', color: '#2D5F3F' },
   { key: 'pickleball', label: 'Pickleball', emoji: '🏓', color: '#1B6A45' },
+  { key: 'football', label: 'Bóng Đá', emoji: '⚽', color: '#1E5631' },
+  { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', color: '#C2410C' },
+  { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#65A30D' },
 ]
 
+export const ALL_SPORTS_KEYS = SPORTS_LIST.map((s) => s.key)
+
 export function SportProvider({ children }) {
-  // selectedSports: array of keys, e.g. ['badminton'], ['pickleball'], or ['badminton', 'pickleball']
   const [selectedSports, setSelectedSports] = useState(() => {
     try {
       const saved = localStorage.getItem('sportnexus_selected_sports')
@@ -19,8 +23,8 @@ export function SportProvider({ children }) {
     } catch {
       // ignore
     }
-    // Mặc định chọn cả 2 môn để người dùng thấy đầy đủ, hoặc có thể chọn 1 môn
-    return ['badminton', 'pickleball']
+    // Mặc định chọn tất cả các môn để người dùng thấy đầy đủ
+    return ALL_SPORTS_KEYS
   })
 
   useEffect(() => {
@@ -32,27 +36,28 @@ export function SportProvider({ children }) {
   }, [selectedSports])
 
   const isSportActive = (key) => selectedSports.includes(key)
-  const isAllActive = selectedSports.length === 2
+  const isAllActive = selectedSports.length === SPORTS_LIST.length
 
-  /**
-   * Toggle / select sport theo yêu cầu:
-   * "khi click vào button môn nào sẽ chỉ hiển thị ra thông tin hay sân của môn đó,
-   *  và chỉ khi click cả 2 button 2 môn thì mới hiển thị toàn bộ của cả 2 môn"
-   */
   const toggleSport = (key) => {
     setSelectedSports((prev) => {
-      // Nếu đang chọn cả 2 môn: click vào môn nào sẽ lọc DUY NHẤT môn đó
-      if (prev.length === 2) {
+      // Nếu đang chọn toàn bộ các môn: click vào môn nào sẽ lọc DUY NHẤT môn đó
+      if (prev.length === SPORTS_LIST.length) {
         return [key]
       }
 
       // Nếu chỉ đang chọn 1 môn:
+      if (prev.length === 1 && prev.includes(key)) {
+        // Click lại chính môn đó: chuyển sang hiển thị tất cả các môn
+        return ALL_SPORTS_KEYS
+      }
+
+      // Nếu đang chọn nhiều môn hoặc môn khác:
       if (prev.includes(key)) {
-        // Click lại chính môn đó: chuyển sang hiển thị cả 2 môn
-        return ['badminton', 'pickleball']
+        const remaining = prev.filter((k) => k !== key)
+        return remaining.length > 0 ? remaining : ALL_SPORTS_KEYS
       } else {
-        // Click vào môn còn lại (người dùng click cả 2 button): hiển thị toàn bộ cả 2 môn
-        return ['badminton', 'pickleball']
+        const next = [...prev, key]
+        return next.length === SPORTS_LIST.length ? ALL_SPORTS_KEYS : next
       }
     })
   }
@@ -62,9 +67,9 @@ export function SportProvider({ children }) {
     setSelectedSports([key])
   }
 
-  // Chọn hiển thị cả 2 môn
+  // Chọn hiển thị tất cả môn
   const selectAllSports = () => {
-    setSelectedSports(['badminton', 'pickleball'])
+    setSelectedSports(ALL_SPORTS_KEYS)
   }
 
   return (
@@ -89,7 +94,7 @@ export function useSport() {
   const context = useContext(SportContext)
   if (!context) {
     return {
-      selectedSports: ['badminton', 'pickleball'],
+      selectedSports: ALL_SPORTS_KEYS,
       setSelectedSports: () => {},
       toggleSport: () => {},
       selectOnlySport: () => {},

@@ -178,7 +178,7 @@ function Wallet() {
             </div>
             <div className="relative flex items-center bg-surface-container-lowest px-space-md py-2 rounded-xl shadow-inner">
               <span className="material-symbols-outlined text-on-surface-variant text-[20px] mr-space-xs">search</span>
-              <input className="bg-transparent w-full font-body-sm text-body-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none" placeholder="Filter by match, player handle, or transaction hash..." type="text" />
+              <input className="bg-transparent w-full font-body-sm text-body-sm text-on-surface focus:outline-none" type="text" />
             </div>
           </div>
 

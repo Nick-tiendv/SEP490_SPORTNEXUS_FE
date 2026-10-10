@@ -7,7 +7,7 @@ export const tournamentStats = [
   { label: 'Tổng người tham gia', value: 2450, note: 'Số liệu toàn nền tảng mẫu', icon: 'participants' },
 ]
 export const statusLabels = { Registration: 'Đang mở đăng ký', Upcoming: 'Sắp diễn ra', Ongoing: 'Đang diễn ra', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' }
-export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt' }
+export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Football: 'Bóng đá', Basketball: 'Bóng rổ', Tennis: 'Quần vợt' }
 export const formatLabels = { Knockout: 'Loại trực tiếp · Đơn', RoundRobin: 'Vòng tròn · Đơn' }
 export const matchLabels = { Scheduled: 'Đã xếp lịch', Ongoing: 'Đang thi đấu', Completed: 'Đã kết thúc', Bye: 'Miễn vòng', Waiting: 'Chờ kết quả vòng trước' }
 export const number = value => value.toLocaleString('vi-VN')

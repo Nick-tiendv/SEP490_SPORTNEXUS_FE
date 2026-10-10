@@ -5,7 +5,7 @@ export const facilityStats = [
   { label: 'Đang bảo trì', value: 168, trend: '4,3% tổng cơ sở', icon: 'maintenance' },
   { label: 'Tổng số sân', value: 28450, trend: '+10,4% so với tháng trước', icon: 'courts' },
 ]
-export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá' }
+export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
 export const statusLabels = { Active: 'Hoạt động', Maintenance: 'Đang bảo trì', Disabled: 'Vô hiệu hóa' }
 export const courtStatusLabels = { Available: 'Sẵn sàng', InUse: 'Đang sử dụng', Maintenance: 'Bảo trì', Disabled: 'Tạm ngưng' }
 export const facilityOwners = [

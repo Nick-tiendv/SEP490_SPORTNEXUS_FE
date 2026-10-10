@@ -645,7 +645,6 @@ function TournamentList() {
                   type="text"
                   value={teammateName}
                   onChange={(e) => setTeammateName(e.target.value)}
-                  placeholder="Nhập tên đồng đội hoặc ID người chơi..."
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 font-semibold text-slate-800 focus:outline-emerald-500"
                 />
               </div>

@@ -140,20 +140,23 @@ function TopSideBar() {
               gap: '4px',
             }}
           >
-            <span style={{ fontSize: '9px' }}>{isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}</span>
+            <span style={{ fontSize: '9px' }}>
+              {isAllActive
+                ? '✨'
+                : SPORTS_LIST.find((s) => isSportActive(s.key))?.emoji || '🏅'}
+            </span>
             {isAllActive
-              ? 'Cả 2 môn'
-              : isSportActive('badminton')
-              ? 'Chỉ Cầu Lông'
-              : 'Chỉ Pickleball'}
+              ? 'Tất cả 5 môn'
+              : selectedSports.length === 1
+              ? `Chỉ ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}`
+              : `${selectedSports.length} môn đang chọn`}
           </span>
         </div>
 
-        {/* Sport Buttons */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Sport Buttons Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
           {SPORTS_LIST.map((s) => {
             const isActive = isSportActive(s.key)
-            const isBadminton = s.key === 'badminton'
 
             return (
               <button
@@ -164,50 +167,43 @@ function TopSideBar() {
                   isAllActive
                     ? `Click để chỉ hiển thị ${s.label}`
                     : isActive
-                    ? `Đang hiển thị ${s.label} (Click để xem cả 2 môn)`
-                    : `Click để hiển thị cả 2 môn`
+                    ? `Đang hiển thị ${s.label} (Click để xem tất cả)`
+                    : `Click để chọn ${s.label}`
                 }
                 style={{
-                  flex: 1,
-                  padding: '11px 6px',
-                  borderRadius: '14px',
+                  padding: '9px 4px',
+                  borderRadius: '12px',
                   border: isActive
-                    ? isBadminton
-                      ? '2px solid #2D5F3F'
-                      : '2px solid #047857'
+                    ? '2px solid #2D5F3F'
                     : '1.5px solid rgba(45, 95, 63, 0.16)',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '3px',
                   background: isActive
-                    ? isBadminton
-                      ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
-                      : 'linear-gradient(135deg, #047857 0%, #10B981 100%)'
+                    ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
                     : 'rgba(255, 255, 255, 0.85)',
                   color: isActive ? '#ffffff' : '#374151',
                   fontWeight: isActive ? 700 : 600,
-                  fontSize: '11.5px',
+                  fontSize: '11px',
                   transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
                   boxShadow: isActive
-                    ? '0 6px 16px rgba(45, 95, 63, 0.24)'
-                    : '0 2px 6px rgba(0, 0, 0, 0.03)',
+                    ? '0 4px 12px rgba(45, 95, 63, 0.24)'
+                    : '0 1px 4px rgba(0, 0, 0, 0.03)',
                   position: 'relative',
-                  transform: isActive ? 'translateY(-1.5px)' : 'none',
+                  transform: isActive ? 'translateY(-1px)' : 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = '#ECFDF5'
                     e.currentTarget.style.borderColor = '#10B981'
-                    e.currentTarget.style.transform = 'translateY(-1px)'
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.85)'
                     e.currentTarget.style.borderColor = 'rgba(45, 95, 63, 0.16)'
-                    e.currentTarget.style.transform = 'none'
                   }
                 }}
               >
@@ -216,23 +212,23 @@ function TopSideBar() {
                   <span
                     style={{
                       position: 'absolute',
-                      top: '4px',
-                      right: '5px',
-                      width: '14px',
-                      height: '14px',
+                      top: '2px',
+                      right: '3px',
+                      width: '12px',
+                      height: '12px',
                       borderRadius: '50%',
                       background: '#ffffff',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                     }}
                   >
                     <span
                       className="material-symbols-outlined"
                       style={{
-                        fontSize: '10px',
-                        color: isBadminton ? '#2D5F3F' : '#047857',
+                        fontSize: '9px',
+                        color: '#2D5F3F',
                         fontWeight: 900,
                       }}
                     >
@@ -243,7 +239,7 @@ function TopSideBar() {
 
                 <span
                   style={{
-                    fontSize: '24px',
+                    fontSize: '20px',
                     lineHeight: 1,
                     filter: isActive ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' : 'none',
                   }}
@@ -252,13 +248,13 @@ function TopSideBar() {
                 >
                   {s.emoji}
                 </span>
-                <span style={{ letterSpacing: '-0.2px' }}>{s.label}</span>
+                <span style={{ letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{s.label}</span>
               </button>
             )
           })}
         </div>
 
-        {/* Quick helper / Show All button when only 1 is active */}
+        {/* Quick helper / Show All button when not all is active */}
         {!isAllActive && (
           <button
             type="button"
@@ -288,7 +284,7 @@ function TopSideBar() {
             }}
           >
             <span>✨</span>
-            <span>Xem cả 2 môn thể thao</span>
+            <span>Xem tất cả môn thể thao</span>
           </button>
         )}
 
@@ -296,7 +292,7 @@ function TopSideBar() {
           <span style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic' }}>
             {isAllActive
               ? 'Nhấp 1 môn để lọc riêng'
-              : 'Nhấp môn còn lại để xem cả 2'}
+              : 'Nhấp thêm môn để xem kết hợp'}
           </span>
         </div>
       </div>

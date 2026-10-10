@@ -7,7 +7,7 @@ export const lfgStats = [
   { label: 'Kèo đã hủy', value: 64, note: 'Số liệu minh họa riêng', icon: 'cancelled' },
 ]
 export const statusLabels = { Open: 'Đang mở', Full: 'Đã đủ người', Completed: 'Hoàn thành', Cancelled: 'Đã hủy' }
-export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá' }
+export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
 export const slotLabels = { Occupied: 'Đã xác nhận', Pending: 'Chờ xác nhận', Available: 'Còn trống' }
 export const number = value => value.toLocaleString('vi-VN')
 export const money = value => `${number(value)} đ`

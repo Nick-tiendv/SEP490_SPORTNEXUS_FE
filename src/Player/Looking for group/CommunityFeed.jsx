@@ -283,10 +283,25 @@ function CommunityFeed() {
       return
     }
 
+    const sportBadgeMap = {
+      badminton: 'CẦU LÔNG ĐÔI',
+      pickleball: 'PICKLEBALL ĐÔI',
+      football: 'BÓNG ĐÁ SÂN 7',
+      basketball: 'BÓNG RỔ 3x3',
+      tennis: 'QUẦN VỢT ĐÔI',
+    }
+    const sportImageMap = {
+      badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
+      pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+      football: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&h=600&fit=crop',
+      basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
+      tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop',
+    }
+
     const created = {
       id: Date.now(),
       sport: newMatch.sport,
-      sportBadge: newMatch.sport === 'badminton' ? 'CẦU LÔNG ĐÔI' : 'PICKLEBALL ĐÔI',
+      sportBadge: sportBadgeMap[newMatch.sport] || 'GIAO LƯU THỂ THAO',
       subBadge: '✓ Kèo Mới Đăng',
       levelTag: newMatch.level,
       slotTag: `Cần ${newMatch.slots} Người`,
@@ -309,10 +324,7 @@ function CommunityFeed() {
       priceDisplay: `${new Intl.NumberFormat('vi-VN').format(newMatch.deposit)} đ`,
       buttonText: 'Chốt Slot Ngay',
       isFlashClaim: false,
-      image:
-        newMatch.sport === 'badminton'
-          ? 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop'
-          : 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+      image: sportImageMap[newMatch.sport] || sportImageMap.badminton,
     }
 
     setMatches((prev) => [created, ...prev])
@@ -466,8 +478,43 @@ function CommunityFeed() {
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
           >
-            <span className="text-[15px] leading-none">🏸</span>
-            <span>Cầu Lông</span>
+          {/* Bóng Đá */}
+          <button
+            onClick={() => setActiveSportFilter('football')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'football'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">⚽</span>
+            <span>Bóng Đá</span>
+          </button>
+
+          {/* Bóng Rổ */}
+          <button
+            onClick={() => setActiveSportFilter('basketball')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'basketball'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🏀</span>
+            <span>Bóng Rổ</span>
+          </button>
+
+          {/* Tennis */}
+          <button
+            onClick={() => setActiveSportFilter('tennis')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'tennis'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🎾</span>
+            <span>Tennis</span>
           </button>
 
           {/* Dropdown Trình độ */}
@@ -561,7 +608,15 @@ function CommunityFeed() {
                     <div className="absolute top-3 left-3">
                       <span className="inline-flex items-center gap-1.5 bg-[#134E4A]/90 backdrop-blur-md text-white text-[10.5px] font-bold px-2.5 py-1 rounded-lg shadow-sm uppercase tracking-wide">
                         <span className="text-[13px] leading-none">
-                          {match.sport === 'badminton' ? '🏸' : '🏓'}
+                          {match.sport === 'badminton'
+                            ? '🏸'
+                            : match.sport === 'pickleball'
+                            ? '🏓'
+                            : match.sport === 'football'
+                            ? '⚽'
+                            : match.sport === 'basketball'
+                            ? '🏀'
+                            : '🎾'}
                         </span>
                         {match.sportBadge}
                       </span>
@@ -1229,29 +1284,27 @@ function CommunityFeed() {
               {/* Chọn môn */}
               <div>
                 <label className="font-bold text-gray-700 block mb-1">Môn thể thao:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'badminton' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'badminton'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏸 Cầu Lông</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'pickleball' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'pickleball'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏓 Pickleball</span>
-                  </button>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'badminton', label: '🏸 Cầu Lông' },
+                    { key: 'pickleball', label: '🏓 Pickleball' },
+                    { key: 'football', label: '⚽ Bóng Đá' },
+                    { key: 'basketball', label: '🏀 Bóng Rổ' },
+                    { key: 'tennis', label: '🎾 Tennis' },
+                  ].map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setNewMatch({ ...newMatch, sport: s.key })}
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                        newMatch.sport === s.key
+                          ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>{s.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1260,7 +1313,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Tiêu đề kèo giao lưu:</label>
                 <input
                   type="text"
-                  placeholder="VD: [Cầu Lông Đôi] Cần 2 tay vợt giao lưu vui vẻ, sân mát mẻ"
                   value={newMatch.title}
                   onChange={(e) => setNewMatch({ ...newMatch, title: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
@@ -1273,7 +1325,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Sân &amp; Địa chỉ:</label>
                 <input
                   type="text"
-                  placeholder="VD: Sân Tre Xanh, 128 Đinh Bộ Lĩnh, Bình Thạnh"
                   value={newMatch.location}
                   onChange={(e) => setNewMatch({ ...newMatch, location: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"

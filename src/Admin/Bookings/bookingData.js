@@ -9,7 +9,7 @@ export const bookingStats = [
 export const bookingStatusLabels = { Confirmed: 'Đã xác nhận', Completed: 'Hoàn thành', Cancelled: 'Đã hủy', Pending: 'Chờ xác nhận' }
 export const paymentStatusLabels = { Paid: 'Đã thanh toán', Partial: 'Thanh toán một phần', Unpaid: 'Chưa thanh toán' }
 export const escrowLabels = { Held: 'Đang giữ tiền minh họa', Released: 'Đã đối soát minh họa', None: 'Chưa có tiền ký quỹ minh họa', Review: 'Chờ rà soát minh họa' }
-export const sportLabels = { Pickleball: 'Pickleball', Badminton: 'Cầu lông', Tennis: 'Quần vợt', Football: 'Bóng đá' }
+export const sportLabels = { Pickleball: 'Pickleball', Badminton: 'Cầu lông', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
 export const number = value => value.toLocaleString('vi-VN')
 export const money = value => `${number(value)} đ`
 export const date = value => value.split('-').reverse().join('/')

@@ -1563,7 +1563,6 @@ function CheckInQR() {
                       handleAddEmail()
                     }
                   }}
-                  placeholder=""
                   style={{
                     flex: 1,
                     background: 'transparent',

@@ -72,6 +72,51 @@ const upcomingMatchesData = [
     img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=160&h=160&fit=crop',
     qrCode: 'SNX-PCK-4412',
   },
+  {
+    id: 'up-3',
+    sport: 'football',
+    sportName: 'Bóng Đá',
+    sportEmoji: '⚽',
+    sportBadgeBg: '#FEF3C7',
+    sportBadgeColor: '#B45309',
+    time: '18:00 Thứ 7 (90 phút)',
+    type: 'Bóng Đá Mini Sân 7 • Giao Lưu',
+    deposit: 'Đã đặt cọc: 100.000 đ',
+    title: 'Sân Bóng Đá SportZone Q7 — Sân Cỏ Nhân Tạo 02',
+    address: 'Đường Nguyễn Văn Linh, Quận 7 (Cách 3.5km) • Đủ 14/14 người',
+    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=160&h=160&fit=crop',
+    qrCode: 'SNX-FTB-8832',
+  },
+  {
+    id: 'up-4',
+    sport: 'basketball',
+    sportName: 'Bóng Rổ',
+    sportEmoji: '🏀',
+    sportBadgeBg: '#FFEDD5',
+    sportBadgeColor: '#C2410C',
+    time: '17:00 Chủ Nhật (60 phút)',
+    type: 'Bóng Rổ 3x3 • Trình Độ Khá',
+    deposit: 'Đã đặt cọc: 50.000 đ',
+    title: 'SSA Thảo Điền Basketball Court — Sân Gỗ Trong Nhà',
+    address: 'Số 28 Thảo Điền, TP. Thủ Đức (Cách 2.1km) • Đủ 6/6 người',
+    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=160&h=160&fit=crop',
+    qrCode: 'SNX-BSK-1109',
+  },
+  {
+    id: 'up-5',
+    sport: 'tennis',
+    sportName: 'Tennis',
+    sportEmoji: '🎾',
+    sportBadgeBg: '#F7FEE7',
+    sportBadgeColor: '#4D7C0F',
+    time: '07:00 Sáng Thứ Bảy (120 phút)',
+    type: 'Tennis Đơn Nam • Elo 1400+',
+    deposit: 'Đã đặt cọc: 150.000 đ',
+    title: 'CLB Quần Vợt Lan Anh — Sân Cứng Đèn Đêm 01',
+    address: 'Số 291 Cách Mạng Tháng 8, Quận 10 (Cách 4.0km) • Đủ 2/2 người',
+    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=160&h=160&fit=crop',
+    qrCode: 'SNX-TNS-3321',
+  },
 ]
 
 // Dữ liệu kèo ghép trận LFG
@@ -128,6 +173,45 @@ const allLfgMatches = [
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
     badge: 'Cạnh Tranh Cao',
   },
+  {
+    id: 'lfg-5',
+    sport: 'football',
+    sportName: 'Bóng Đá Sân 7',
+    sportEmoji: '⚽',
+    missing: 'Thiếu 3 người',
+    missingColor: '#DC2626',
+    time: '19:00 Tối mai • Sân Kênh Tẻ Q.7 (2.0 km)',
+    price: '65.000 đ / người',
+    host: 'Host Minh Trí (Đá Tiền Đạo)',
+    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
+    badge: 'Cỏ Mới êm chân',
+  },
+  {
+    id: 'lfg-6',
+    sport: 'basketball',
+    sportName: 'Bóng Rổ 3x3 Bán Chuyên',
+    sportEmoji: '🏀',
+    missing: 'Thiếu 2 người',
+    missingColor: '#D97706',
+    time: '17:30 Chiều nay • Sân Cung Thiếu Nhi Q.1 (3.0 km)',
+    price: '40.000 đ / người',
+    host: 'Host Quốc Bảo',
+    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=100&h=100&fit=crop',
+    badge: 'Sân Trong Nhà',
+  },
+  {
+    id: 'lfg-7',
+    sport: 'tennis',
+    sportName: 'Tennis Giao Lưu Đôi',
+    sportEmoji: '🎾',
+    missing: 'Thiếu 1 người',
+    missingColor: '#DC2626',
+    time: '06:00 Sáng mai • Sân Sunrise City Q.7 (1.5 km)',
+    price: '120.000 đ / người',
+    host: 'Host Lê Nam (Elo 1550)',
+    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=100&h=100&fit=crop',
+    badge: 'Mặt Sân Cứng',
+  },
 ]
 
 // Dữ liệu gợi ý sân trống
@@ -175,6 +259,39 @@ const allSuggestedCourts = [
     price: '110.000 đ/h • 6 Sân Chuẩn Thi Đấu',
     rating: '4.7 ★ (185 đánh giá)',
     img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-5',
+    sport: 'football',
+    sportEmoji: '⚽',
+    slot: 'Trống 19:30 - 21:00',
+    dist: 'Cách 3.4 km',
+    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
+    price: '350.000 đ/h • Cụm 6 Sân 5-7 Người',
+    rating: '4.8 ★ (420 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-6',
+    sport: 'basketball',
+    sportEmoji: '🏀',
+    slot: 'Trống 18:00 - 20:00',
+    dist: 'Cách 2.4 km',
+    name: 'Sân Bóng Rổ SSA Thảo Điền',
+    price: '200.000 đ/h • Sân Tiêu Chuẩn FIBA',
+    rating: '4.9 ★ (190 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=100&h=100&fit=crop',
+  },
+  {
+    id: 'court-7',
+    sport: 'tennis',
+    sportEmoji: '🎾',
+    slot: 'Trống 06:00 - 08:00',
+    dist: 'Cách 1.8 km',
+    name: 'CLB Tennis Sunrise City Quận 7',
+    price: '220.000 đ/h • Mặt Sân Cứng Đạt Chuẩn ITF',
+    rating: '4.9 ★ (315 đánh giá)',
+    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=100&h=100&fit=crop',
   },
 ]
 
@@ -269,10 +386,10 @@ function Dashboard() {
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
-                ? 'Đang xem toàn bộ sân & kèo cho cả Cầu Lông và Pickleball. Đặt sân & bảo chứng Escrow minh bạch.'
-                : isSportActive('badminton')
-                ? 'Đang hiển thị chuyên biệt cho Cầu Lông (Thảm BWF, Kèo Elo). Nhấn thêm Pickleball để xem cả 2 môn.'
-                : 'Đang hiển thị chuyên biệt cho Pickleball (Chuẩn USAPA, Kèo DUPR). Nhấn thêm Cầu Lông để xem cả 2 môn.'}
+                ? 'Đang xem toàn bộ sân & kèo cho tất cả các môn: Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis. Đặt sân & bảo chứng Escrow minh bạch.'
+                : selectedSports.length === 1
+                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}. Nhấp thêm môn khác để xem kết hợp.`
+                : `${selectedSports.length} môn đang được lọc hiển thị. Nhấp để chuyển đổi môn thể thao.`}
             </p>
           </div>
 
