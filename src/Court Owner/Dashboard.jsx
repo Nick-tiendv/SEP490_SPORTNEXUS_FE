@@ -149,6 +149,17 @@ const complexZonesOverview = [
 
 export default function Dashboard() {
   const navigate = useNavigate()
+
+  // Tự động chuyển hướng về trang Người chơi nếu tài khoản đăng nhập có vai trò Player
+  useEffect(() => {
+    try {
+      const savedRole = localStorage.getItem('sportnexus_user_role')
+      if (savedRole === 'player') {
+        navigate('/dashboard', { replace: true })
+      }
+    } catch (e) {}
+  }, [navigate])
+
   const [ownerBalance, setOwnerBalance] = useState(() => {
     const saved = localStorage.getItem('court_owner_balance')
     return saved !== null ? Number(saved) : 48650000
@@ -186,7 +197,7 @@ export default function Dashboard() {
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
   return (
-    <div style={{ padding: '24px 32px 48px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="responsive-page-container" style={{ minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div

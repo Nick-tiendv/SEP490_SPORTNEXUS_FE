@@ -4556,6 +4556,11 @@ export default function Profile() {
               </button>
               <button
                 onClick={() => {
+                  try {
+                    localStorage.removeItem('sportnexus_user_role')
+                    localStorage.removeItem('sportnexus_current_user')
+                    localStorage.removeItem('sportnexus_auth_token')
+                  } catch (e) {}
                   setShowLogoutModal(false)
                   navigate('/login')
                 }}

@@ -1098,11 +1098,11 @@ const allSuggestedCourts = [
 function Dashboard() {
   const navigate = useNavigate()
 
-  // Tự động chuyển hướng sang trang Chủ Sân nếu tài khoản có vai trò là Court Owner
+  // Tự động chuyển hướng sang trang Quản trị nếu tài khoản có vai trò là Court Owner hoặc Admin
   useEffect(() => {
     try {
       const savedRole = localStorage.getItem('sportnexus_user_role')
-      if (savedRole === 'court_owner') {
+      if (savedRole === 'court_owner' || savedRole === 'admin') {
         navigate('/owner/dashboard', { replace: true })
       }
     } catch (e) {}
@@ -1159,8 +1159,8 @@ function Dashboard() {
 
   return (
     <div
+      className="responsive-page-container"
       style={{
-        padding: '24px 32px 48px',
         maxWidth: '1160px',
         margin: '0 auto',
         fontFamily: "'Inter', sans-serif",
