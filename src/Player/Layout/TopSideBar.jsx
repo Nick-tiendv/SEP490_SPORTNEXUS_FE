@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useLocation, Link } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 
 const navItems = [
@@ -23,83 +23,136 @@ function TopSideBar() {
   } = useSport()
 
   const [hoveredNav, setHoveredNav] = useState(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Lắng nghe toggle mở/đóng sidebar trên điện thoại
+  useEffect(() => {
+    const handleToggle = () => setMobileOpen((prev) => !prev)
+    const handleClose = () => setMobileOpen(false)
+    window.addEventListener('toggle-sportnexus-sidebar', handleToggle)
+    window.addEventListener('close-sportnexus-sidebar', handleClose)
+    return () => {
+      window.removeEventListener('toggle-sportnexus-sidebar', handleToggle)
+      window.removeEventListener('close-sportnexus-sidebar', handleClose)
+    }
+  }, [])
+
+  // Đóng sidebar khi người dùng chuyển trang
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
 
   return (
-    <aside
-      className="fixed left-0 top-0 h-full z-50 flex flex-col select-none"
-      style={{
-        width: '260px',
-        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(244, 252, 246, 0.90) 100%)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderRight: '1px solid rgba(45, 95, 63, 0.12)',
-        boxShadow: '4px 0 28px rgba(45, 95, 63, 0.06)',
-      }}
-    >
-      {/* Brand Logo Header */}
-      <div
+    <>
+      {/* Backdrop overlay khi mở trên điện thoại */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs transition-opacity"
+        />
+      )}
+
+      <aside
+        className={`fixed left-0 top-0 h-full z-50 flex flex-col select-none transition-transform duration-300 ease-in-out ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '20px 18px 16px 18px',
-          borderBottom: '1px solid rgba(45, 95, 63, 0.08)',
+          width: '260px',
+          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 252, 246, 0.94) 100%)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRight: '1px solid rgba(45, 95, 63, 0.12)',
+          boxShadow: '4px 0 28px rgba(45, 95, 63, 0.06)',
         }}
       >
+        {/* Brand Logo Header - Bấm vào tự động về Trang Chủ */}
         <div
           style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            boxShadow: '0 4px 14px rgba(45, 95, 63, 0.28)',
+            justifyContent: 'space-between',
+            padding: '16px 16px 14px 18px',
+            borderBottom: '1px solid rgba(45, 95, 63, 0.08)',
           }}
         >
-          <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '22px' }}>
-            bolt
-          </span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span
-              style={{
-                fontWeight: 800,
-                fontSize: '17px',
-                color: '#1C3524',
-                letterSpacing: '-0.4px',
-              }}
-            >
-              SportNexus
-            </span>
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                background: '#10B981',
-                boxShadow: '0 0 8px #10B981',
-              }}
-            />
-          </div>
-          <span
+          <Link
+            to="/dashboard"
+            onClick={() => setMobileOpen(false)}
             style={{
-              fontSize: '10.5px',
-              color: '#2D5F3F',
-              textTransform: 'uppercase',
-              letterSpacing: '0.6px',
-              fontWeight: 700,
-              opacity: 0.9,
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              textDecoration: 'none',
             }}
+            className="group cursor-pointer"
+            title="Về Trang Chủ SportNexus"
           >
-            {location.pathname === '/tournament' ? 'TOURNAMENT ENGINE' : 'Nền Tảng Thể Thao Đa Môn'}
-          </span>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(45, 95, 63, 0.28)',
+              }}
+              className="group-hover:scale-105 transition-transform"
+            >
+              <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '22px' }}>
+                bolt
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: '17px',
+                    color: '#1C3524',
+                    letterSpacing: '-0.4px',
+                  }}
+                >
+                  SportNexus
+                </span>
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10B981',
+                    boxShadow: '0 0 8px #10B981',
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  fontSize: '10.5px',
+                  color: '#2D5F3F',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.6px',
+                  fontWeight: 700,
+                  opacity: 0.9,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {location.pathname === '/tournament' ? 'TOURNAMENT ENGINE' : 'Nền Tảng Thể Thao Đa Môn'}
+              </span>
+            </div>
+          </Link>
+
+          {/* Nút đóng sidebar trên điện thoại */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            title="Đóng menu"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
-      </div>
 
       {/* Sport Selector Section */}
       <div style={{ padding: '16px 14px 12px' }}>
@@ -455,6 +508,7 @@ function TopSideBar() {
         </div>
       </div>
     </aside>
+    </>
   )
 }
 

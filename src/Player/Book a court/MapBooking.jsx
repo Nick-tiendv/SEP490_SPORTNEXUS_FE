@@ -131,6 +131,120 @@ const getDistanceForCourt = (court, playerLocation, liveCoords = null) => {
 }
 
 const COURTS = [
+  // ========== BÓNG ĐÁ (FOOTBALL) ==========
+  {
+    id: 'football-q7-1',
+    sport: 'football',
+    name: 'Sân Bóng Đá SportZone Q7',
+    street: 'Nguyễn Thị Thập',
+    address: '450 Nguyễn Thị Thập, P. Tân Quy, Quận 7, TP. Hồ Chí Minh',
+    mapQuery: '450 Nguyễn Thị Thập, Tân Quy, Quận 7, TP. Hồ Chí Minh',
+    district: 'q7',
+    lat: 10.7385,
+    lng: 106.7152,
+    rating: 4.8,
+    price: 320000,
+    courtCount: 6,
+    image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=300&h=300&fit=crop',
+    subCourt: 'Sân 7 người Cỏ Nhân Tạo',
+    subCourtDesc: 'Cỏ chuẩn FIFA, hệ thống chiếu sáng LED thi đấu đêm',
+    overrides: {},
+  },
+  {
+    id: 'football-tanbinh-1',
+    sport: 'football',
+    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
+    street: 'Phan Thúc Duyện',
+    address: '30 Phan Thúc Duyện, P.4, Tân Bình, TP. Hồ Chí Minh',
+    mapQuery: '30 Phan Thúc Duyện, Tân Bình, Hồ Chí Minh',
+    district: 'tanbinh',
+    lat: 10.8035,
+    lng: 106.6582,
+    rating: 4.9,
+    price: 300000,
+    courtCount: 8,
+    image: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=300&h=300&fit=crop',
+    subCourt: 'Sân 5 người A1',
+    subCourtDesc: 'Cụm sân bóng đá mini trung tâm Tân Bình, mái che mát',
+    overrides: {},
+  },
+
+  // ========== BÓNG RỔ (BASKETBALL) ==========
+  {
+    id: 'basketball-q1-1',
+    sport: 'basketball',
+    name: 'Sân Bóng Rổ Cung Thiếu Nhi Q1',
+    street: 'Nguyễn Thị Minh Khai',
+    address: '55 Nguyễn Thị Minh Khai, P. Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    mapQuery: '55 Nguyễn Thị Minh Khai, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+    district: 'q1',
+    lat: 10.7812,
+    lng: 106.6965,
+    rating: 4.9,
+    price: 250000,
+    courtCount: 4,
+    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=300&h=300&fit=crop',
+    subCourt: 'Sân Đấu Chính - Trụ Kính FIBA',
+    subCourtDesc: 'Mặt sân cao su tổng hợp giảm chấn thương, vành rổ chuẩn thi đấu',
+    overrides: {},
+  },
+  {
+    id: 'basketball-thuduc-1',
+    sport: 'basketball',
+    name: 'Sân Bóng Rổ SSA Thảo Điền',
+    street: 'Quốc Hương',
+    address: '189 Quốc Hương, P. Thảo Điền, TP. Thủ Đức, TP. Hồ Chí Minh',
+    mapQuery: '189 Quốc Hương, Thảo Điền, Thủ Đức, Hồ Chí Minh',
+    district: 'thuduc',
+    lat: 10.8082,
+    lng: 106.7325,
+    rating: 4.8,
+    price: 280000,
+    courtCount: 3,
+    image: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=300&h=300&fit=crop',
+    subCourt: 'Sân Bóng Rổ Trong Nhà Pro',
+    subCourtDesc: 'Phòng gym kết hợp, máy lạnh thoáng mát, sàn gỗ chuyên nghiệp',
+    overrides: {},
+  },
+
+  // ========== TENNIS ==========
+  {
+    id: 'tennis-q10-1',
+    sport: 'tennis',
+    name: 'CLB Tennis Lan Anh Quận 10',
+    street: 'Cách Mạng Tháng 8',
+    address: '291 Cách Mạng Tháng 8, P.12, Quận 10, TP. Hồ Chí Minh',
+    mapQuery: 'CLB Lan Anh, 291 Cách Mạng Tháng 8, Quận 10, Hồ Chí Minh',
+    district: 'q10',
+    lat: 10.7785,
+    lng: 106.6782,
+    rating: 4.9,
+    price: 260000,
+    courtCount: 7,
+    image: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=300&h=300&fit=crop',
+    subCourt: 'Sân Tennis Mặt Cứng US Open 01',
+    subCourtDesc: 'Mặt sân chuẩn giải đấu quốc tế, khán đài và đèn đêm chuyên dụng',
+    overrides: {},
+  },
+  {
+    id: 'tennis-q7-1',
+    sport: 'tennis',
+    name: 'Sân Quần Vợt Sunrise City Q7',
+    street: 'Nguyễn Hữu Thọ',
+    address: '23 Nguyễn Hữu Thọ, P. Tân Hưng, Quận 7, TP. Hồ Chí Minh',
+    mapQuery: 'Sunrise City, Nguyễn Hữu Thọ, Quận 7, Hồ Chí Minh',
+    district: 'q7',
+    lat: 10.7495,
+    lng: 106.7025,
+    rating: 4.7,
+    price: 220000,
+    courtCount: 4,
+    image: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=300&h=300&fit=crop',
+    subCourt: 'Sân Tennis Sân Ngoài Trời T1',
+    subCourtDesc: 'Khuôn viên xanh, thoáng mát, dịch vụ nhặt bóng và huấn luyện viên',
+    overrides: {},
+  },
+
   // ========== TP. THỦ ĐỨC (QUẬN 2, QUẬN 9, THỦ ĐỨC) ==========
   {
     id: 'huean-td',
@@ -1463,6 +1577,104 @@ function MapBooking() {
   const slots = useMemo(() => (selectedCourt ? buildSlots(selectedCourt) : []), [selectedCourt])
   const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
 
+  // Danh sách các sân con trong cụm sân hiện tại
+  const venueSubCourts = useMemo(() => {
+    if (!selectedCourt) return []
+    const count = selectedCourt.courtCount || 6
+    const basePrefix = selectedCourt.subCourt
+      ? selectedCourt.subCourt.replace(/\s*\d+$/, '').trim()
+      : selectedCourt.sport === 'pickleball'
+      ? 'Sân Pickleball'
+      : selectedCourt.sport === 'football'
+      ? 'Sân Bóng Đá'
+      : selectedCourt.sport === 'basketball'
+      ? 'Sân Bóng Rổ'
+      : selectedCourt.sport === 'tennis'
+      ? 'Sân Tennis'
+      : 'Sân Cầu Lông'
+
+    return Array.from({ length: count }, (_, idx) => {
+      const num = String(idx + 1).padStart(2, '0')
+      const id = `court-sub-${idx + 1}`
+      // Giả lập trạng thái đã kín lịch cho 1 số sân theo slot để giao diện phong phú, chân thực
+      const isBooked =
+        (selectedSlotId === 's5' && idx === 2) ||
+        (selectedSlotId === 's4' && idx === 3) ||
+        (selectedSlotId === 's6' && idx === 1) ||
+        (selectedSlotId === 's7' && idx === 4)
+
+      return {
+        id,
+        number: num,
+        name: `${basePrefix} ${num}`,
+        type:
+          idx === count - 1
+            ? 'Sân VIP Trung Tâm'
+            : selectedCourt.sport === 'pickleball'
+            ? 'Mặt sân Acrylic Pro chống lóa'
+            : selectedCourt.sport === 'football'
+            ? 'Cỏ nhân tạo 50mm chuẩn FIFA'
+            : selectedCourt.sport === 'basketball'
+            ? 'Sàn gỗ phong Maple Pro FIBA'
+            : selectedCourt.sport === 'tennis'
+            ? 'Mặt sân cứng DecoTurf US Open'
+            : 'Thảm PVC chuẩn thi đấu BWF',
+        isBooked,
+        note: isBooked ? 'Đã kín lịch' : 'Đang trống',
+      }
+    })
+  }, [selectedCourt, selectedSlotId])
+
+  // Trạng thái các sân được chọn trong khung giờ (cho phép chọn nhiều sân cùng một khung giờ)
+  const [selectedSubCourtIds, setSelectedSubCourtIds] = useState(['court-sub-1'])
+
+  // Tự động giữ ít nhất 1 sân khả dụng khi đổi cụm sân hoặc khung giờ
+  useEffect(() => {
+    if (!venueSubCourts.length) return
+    setSelectedSubCourtIds((prev) => {
+      const valid = prev.filter((id) => {
+        const found = venueSubCourts.find((c) => c.id === id)
+        return found && !found.isBooked
+      })
+      if (valid.length > 0) return valid
+      const firstAvail = venueSubCourts.find((c) => !c.isBooked)
+      return firstAvail ? [firstAvail.id] : []
+    })
+  }, [selectedCourtId, selectedSlotId, venueSubCourts])
+
+  const handleToggleSubCourt = (courtId) => {
+    const courtItem = venueSubCourts.find((c) => c.id === courtId)
+    if (!courtItem || courtItem.isBooked) return
+    setSelectedSubCourtIds((prev) => {
+      if (prev.includes(courtId)) {
+        if (prev.length <= 1) return prev // Giữ tối thiểu 1 sân
+        return prev.filter((id) => id !== courtId)
+      } else {
+        return [...prev, courtId]
+      }
+    })
+  }
+
+  const handleSelectAllSubCourts = () => {
+    const availableIds = venueSubCourts.filter((c) => !c.isBooked).map((c) => c.id)
+    if (availableIds.length > 0) {
+      setSelectedSubCourtIds(availableIds)
+    }
+  }
+
+  const handleSelectSingleSubCourt = (courtId) => {
+    const courtItem = venueSubCourts.find((c) => c.id === courtId)
+    if (!courtItem || courtItem.isBooked) return
+    setSelectedSubCourtIds([courtId])
+  }
+
+  const activeSubCourts = useMemo(
+    () => venueSubCourts.filter((c) => selectedSubCourtIds.includes(c.id)),
+    [venueSubCourts, selectedSubCourtIds]
+  )
+  const courtQuantity = activeSubCourts.length || 1
+  const totalBookingPrice = selectedSlot ? selectedSlot.price * courtQuantity : 0
+
   // Đếm ngược thời gian khóa giữ chỗ
   useEffect(() => {
     if (!selectedSlot) return undefined
@@ -1535,19 +1747,23 @@ function MapBooking() {
   const isFullPrice = priceRange[0] === PRICE_MIN && priceRange[1] === PRICE_MAX
 
   const handleConfirm = () => {
-    if (!selectedCourt || !selectedSlot) return
+    if (!selectedCourt || !selectedSlot || activeSubCourts.length === 0) return
+    const subCourtNames = activeSubCourts.map((c) => c.name)
     navigate('/split-payment', {
       state: {
         court: selectedCourt.name,
         address: selectedCourt.address,
         district: selectedCourt.district,
-        subCourt: selectedCourt.subCourt,
+        subCourt: subCourtNames.join(', '),
+        subCourts: subCourtNames,
+        courtCount: subCourtNames.length,
         subCourtDesc: selectedCourt.subCourtDesc,
         image: selectedCourt.image,
         sport: selectedCourt.sport,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
         hours: selectedSlot.hours || 1.5,
-        total: selectedSlot.price,
+        total: totalBookingPrice,
+        unitPrice: selectedSlot.price,
         hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1.5)),
       },
     })
@@ -1895,7 +2111,7 @@ function MapBooking() {
           <section className="mb-card" aria-label="Lịch sân">
             <div className="mb-slots-head">
               <div>
-                <h2>Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.subCourt : '—'}</h2>
+                <h2>Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}</h2>
               </div>
               <div className="mb-legend">
                 <span>
@@ -1933,7 +2149,7 @@ function MapBooking() {
                           <div className="mb-slot-badges">
                             <span className="mb-slot-badge">
                               <span className="material-symbols-outlined">check_circle</span>
-                              Đang chọn
+                              Đang chọn khung giờ
                             </span>
                             {holdLeft > 0 && (
                               <span className="mb-slot-timer" title="Thời gian hệ thống tạm khóa giữ chỗ cho bạn">
@@ -1947,10 +2163,12 @@ function MapBooking() {
                         <div className="mb-slot-selected-body">
                           <div className="mb-slot-court-name">
                             <span className="material-symbols-outlined">sports_tennis</span>
-                            <span>{selectedCourt.name} • <strong>{selectedCourt.subCourt}</strong></span>
+                            <span>
+                              {selectedCourt.name} • <strong>Đã chọn {courtQuantity} sân</strong>
+                            </span>
                           </div>
                           <div className="mb-slot-desc">
-                            {selectedCourt.subCourtDesc}
+                            {activeSubCourts.map((c) => c.name).join(', ')} ({selectedCourt.subCourtDesc})
                           </div>
                           {selectedCourt.address && (
                             <div className="mb-slot-addr">
@@ -1962,16 +2180,18 @@ function MapBooking() {
 
                         <div className="mb-slot-selected-foot">
                           <div className="mb-slot-price-wrap">
-                            <span className="mb-slot-price">{formatVnd(slot.price)}</span>
-                            <span className="mb-slot-rate">Đơn giá: ~{formatVnd(Math.round(slot.price / (slot.hours || 1)))}/giờ</span>
+                            <span className="mb-slot-price">{formatVnd(totalBookingPrice)}</span>
+                            <span className="mb-slot-rate">
+                              Đơn giá: {formatVnd(slot.price)}/sân ({courtQuantity} sân)
+                            </span>
                           </div>
                           <button
                             type="button"
                             className="mb-btn mb-btn--white mb-btn--checkout"
                             onClick={scrollToSummary}
-                            title="Xác nhận khung giờ này và tiến hành chốt sân"
+                            title="Xác nhận các sân này và tiến hành chốt sân"
                           >
-                            <span>Chốt Sân</span>
+                            <span>Chốt {courtQuantity} Sân</span>
                             <span className="material-symbols-outlined">arrow_forward</span>
                           </button>
                         </div>
@@ -2023,6 +2243,114 @@ function MapBooking() {
                 })}
               </div>
             )}
+
+            {/* BẢNG CHỌN SÂN TRONG CỤM (CHO PHÉP CHỌN VÀ ĐẶT NHIỀU SÂN CÙNG KHUNG GIỜ) */}
+            {selectedCourt && selectedSlot && (
+              <div className="mb-subcourts-container">
+                <div className="mb-subcourts-head">
+                  <div className="mb-subcourts-title-group">
+                    <span className="material-symbols-outlined mb-subcourts-ic">grid_view</span>
+                    <div>
+                      <h3 className="mb-subcourts-title">
+                        Chọn Sân Trong Cụm (Cho phép chọn và đặt nhiều sân cùng khung giờ)
+                      </h3>
+                      <p className="mb-subcourts-sub">
+                        Khung giờ: <strong>{selectedSlot.start} - {selectedSlot.end}</strong> • Đang chọn{' '}
+                        <strong className="mb-subcourts-highlight">{courtQuantity} sân</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mb-subcourts-actions">
+                    <button
+                      type="button"
+                      className="mb-subcourt-action-btn"
+                      onClick={handleSelectAllSubCourts}
+                      title="Chọn toàn bộ các sân còn trống trong khung giờ này"
+                    >
+                      <span className="material-symbols-outlined">select_all</span>
+                      Chọn tất cả sân trống
+                    </button>
+                    <button
+                      type="button"
+                      className="mb-subcourt-action-btn mb-subcourt-action-btn--ghost"
+                      onClick={() => handleSelectSingleSubCourt('court-sub-1')}
+                      title="Chỉ chọn 1 sân duy nhất"
+                    >
+                      Chỉ chọn 1 sân
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-subcourts-tip">
+                  <span className="material-symbols-outlined">tips_and_updates</span>
+                  <span>
+                    💡 <strong>Tính năng Đa Sân:</strong> Bạn có thể bấm chọn <strong>nhiều sân cùng lúc</strong> trong khung giờ {selectedSlot.start} - {selectedSlot.end} cho nhóm bạn đông người, giao lưu câu lạc bộ hoặc tổ chức giải đấu.
+                  </span>
+                </div>
+
+                <div className="mb-subcourts-grid">
+                  {venueSubCourts.map((court) => {
+                    const isSelected = selectedSubCourtIds.includes(court.id)
+                    const isBooked = court.isBooked
+
+                    return (
+                      <div
+                        key={court.id}
+                        className={`mb-subcourt-card ${
+                          isBooked ? 'is-booked' : isSelected ? 'is-selected' : 'is-available'
+                        }`}
+                        onClick={() => handleToggleSubCourt(court.id)}
+                        role="button"
+                        tabIndex={isBooked ? -1 : 0}
+                        aria-disabled={isBooked}
+                        title={
+                          isBooked
+                            ? `${court.name} đã kín lịch trong khung giờ này`
+                            : isSelected
+                            ? `Đang chọn ${court.name}. Bấm để bỏ chọn`
+                            : `Bấm để chọn ${court.name} (+${formatVnd(selectedSlot.price)})`
+                        }
+                      >
+                        <div className="mb-subcourt-card-top">
+                          <div className="mb-subcourt-checkbox">
+                            {isSelected ? (
+                              <span className="material-symbols-outlined">check_circle</span>
+                            ) : isBooked ? (
+                              <span className="material-symbols-outlined">lock</span>
+                            ) : (
+                              <span className="material-symbols-outlined">radio_button_unchecked</span>
+                            )}
+                          </div>
+                          <strong className="mb-subcourt-name">{court.name}</strong>
+                          <span
+                            className={`mb-subcourt-status ${
+                              isBooked ? 'status-booked' : isSelected ? 'status-selected' : 'status-avail'
+                            }`}
+                          >
+                            {isBooked ? 'Đã kín' : isSelected ? 'Đang chọn' : 'Trống'}
+                          </span>
+                        </div>
+
+                        <div className="mb-subcourt-card-body">
+                          <span className="mb-subcourt-type">{court.type}</span>
+                          <span className="mb-subcourt-rate">{formatVnd(selectedSlot.price)}/sân</span>
+                        </div>
+
+                        <div className="mb-subcourt-card-foot">
+                          <small>
+                            {isBooked
+                              ? 'Đã có người đặt'
+                              : isSelected
+                              ? '✓ Đã đưa vào danh sách'
+                              : '+ Nhấn để chọn thêm'}
+                          </small>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Summary */}
@@ -2033,21 +2361,38 @@ function MapBooking() {
               </div>
               <div className="mb-summary-info">
                 <h3>
-                  {selectedCourt ? selectedCourt.subCourt : 'Chưa chọn sân'}
-                  {selectedSlot && <span className="mb-pill-green">Đã khóa Giữ</span>}
+                  {selectedCourt
+                    ? `${courtQuantity} Sân: ${activeSubCourts.map((c) => c.name).join(', ')}`
+                    : 'Chưa chọn sân'}
+                  {selectedSlot && (
+                    <span className="mb-pill-green">Đã khóa Giữ ({courtQuantity} sân)</span>
+                  )}
                 </h3>
                 <p>
                   <span className="material-symbols-outlined">schedule</span>
                   {selectedSlot
                     ? `${selectedSlot.start} - ${selectedSlot.end} (Hôm nay, ${todayStr}) • ${formatHours(
                         selectedSlot.hours
-                      )}`
+                      )} • ${selectedCourt?.name}`
                     : 'Vui lòng chọn một khung giờ còn trống trên lưới lịch'}
                 </p>
+                {courtQuantity > 1 && (
+                  <div className="mb-summary-multicourt-note">
+                    <span className="material-symbols-outlined">layers</span>
+                    <span>
+                      Đang chọn <strong>{courtQuantity} sân cùng khung giờ</strong> ({formatVnd(selectedSlot.price)}/sân)
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="mb-summary-total">
-                <small>Tổng tiền sân:</small>
-                <strong>{selectedSlot ? formatVnd(selectedSlot.price) : '0 đ'}</strong>
+                <small>Tổng tiền {courtQuantity} sân:</small>
+                <strong>{selectedSlot ? formatVnd(totalBookingPrice) : '0 đ'}</strong>
+                {courtQuantity > 1 && (
+                  <span className="mb-summary-unit-calc">
+                    ({courtQuantity} sân × {formatVnd(selectedSlot.price)})
+                  </span>
+                )}
               </div>
             </div>
 
@@ -2055,16 +2400,16 @@ function MapBooking() {
               id="mb-confirm-booking"
               type="button"
               className="mb-btn mb-btn--primary mb-confirm"
-              disabled={!selectedSlot}
+              disabled={!selectedSlot || activeSubCourts.length === 0}
               onClick={handleConfirm}
             >
               <span className="material-symbols-outlined">check_circle</span>
-              Xác Nhận Chọn Sân
+              Xác Nhận Đặt {courtQuantity} Sân
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
             <p className="mb-secure-note">
               <span className="material-symbols-outlined">verified_user</span>
-              Hệ thống giữ chỗ độc quyền trong 15:00 phút để bạn tiến hành thanh toán an toàn.
+              Hệ thống giữ chỗ độc quyền trong 15:00 phút để bạn tiến hành thanh toán an toàn cho toàn bộ {courtQuantity} sân.
             </p>
           </section>
         </div>

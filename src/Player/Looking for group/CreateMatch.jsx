@@ -430,10 +430,10 @@ function CreateMatch() {
 
     const levelText =
       skillLevel === 'intermediate'
-        ? 'Elo 1400 - 1600'
+        ? 'Trung bình - Khá'
         : skillLevel === 'beginner'
-        ? 'Elo < 1300'
-        : 'Elo > 1700'
+        ? 'Mới tập chơi'
+        : 'Bán chuyên / Nâng cao'
 
     const sportMeta = {
       badminton: { name: 'Cầu Lông', badge: 'CẦU LÔNG ĐÔI', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' },
@@ -544,7 +544,7 @@ function CreateMatch() {
                     01. CHỌN BỘ MÔN THỂ THAO
                   </label>
                   <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    ELO / DUPR SYNCED
+                    ĐỒNG BỘ TRÌNH ĐỘ
                   </span>
                 </div>
 
@@ -987,9 +987,9 @@ function CreateMatch() {
                   </div>
                 </div>
 
-                {/* Yêu cầu Trình độ Elo / DUPR */}
+                {/* Yêu cầu Trình độ Người chơi */}
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ Elo / DUPR:</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Trung bình Khá */}
                     <div
@@ -1004,10 +1004,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'intermediate' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Trung bình Khá</span>
+                        <span>Trung bình - Khá</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo 1400 - 1600 (DUPR 3.0 - 4.0)
+                        Đánh chắc tay, giao lưu đều đặn
                       </p>
                     </div>
 
@@ -1027,11 +1027,11 @@ function CreateMatch() {
                         <span>Mới tập chơi</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &lt; 1300 (DUPR &lt; 2.5)
+                        Phong trào, vừa tập vừa giao lưu
                       </p>
                     </div>
 
-                    {/* Bán chuyên / Pro */}
+                    {/* Bán chuyên / Nâng cao */}
                     <div
                       onClick={() => setSkillLevel('pro')}
                       className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
@@ -1044,10 +1044,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'pro' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Bán chuyên / Pro</span>
+                        <span>Bán chuyên / Nâng cao</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &gt; 1700+ (DUPR &gt; 4.5)
+                        Thi đấu cọ xát, kỹ chiến thuật tốt
                       </p>
                     </div>
                   </div>
@@ -1248,7 +1248,7 @@ function CreateMatch() {
                       Minh Minh Minh (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      DUPR 3.8 • Elo 1650 • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
+                      Trình: Trung bình - Khá • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
                     </p>
                   </div>
                 </div>
@@ -1268,7 +1268,7 @@ function CreateMatch() {
                   </span>
                   <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
                   <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng Elo trực tuyến
+                    Đang có 18 vận động viên cùng trình độ trực tuyến
                   </p>
                 </div>
 

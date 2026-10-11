@@ -59,6 +59,9 @@ export function SportProvider({ children }) {
         const next = [...prev, key]
         return next.length === SPORTS_LIST.length ? ALL_SPORTS_KEYS : next
       }
+
+      // Nếu môn này chưa có: thêm môn đó vào danh sách (cho phép chọn 2, 3, 4 môn riêng)
+      return [...prev, key]
     })
   }
 

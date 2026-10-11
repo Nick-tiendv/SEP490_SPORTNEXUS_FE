@@ -1,9 +1,19 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
+
+import { toast } from 'sonner'
+import { registerUser } from '../api/auth/authApi.js'
 
 function Register() {
   const [role, setRole] = useState('player') // 'player' | 'court_owner'
+  const [username, setUsername] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const submitting = useRef(false)
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [selectedSports, setSelectedSports] = useState([])
@@ -11,13 +21,54 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
 
-  const handleRegisterSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    if (submitting.current) return
+
+    const payload = {
+      username: username.trim(),
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      role,
+      sports: selectedSports,
+    }
+
+    const nextErrors = {}
+    for (const key of ['username', 'fullName', 'phone', 'email']) {
+      if (!payload[key]) nextErrors[key] = 'Vui lòng điền thông tin này.'
+    }
+    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+      nextErrors.email = 'Email không hợp lệ.'
+    }
+    if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
+    if (!confirmPassword || password !== confirmPassword) {
+      nextErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
+    }
+    if (!event.currentTarget.elements.terms?.checked) {
+      nextErrors.terms = 'Vui lòng đồng ý với điều khoản dịch vụ.'
+    }
+
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) return
+
+    submitting.current = true
+    setLoading(true)
     try {
-      localStorage.setItem('sportnexus_user_role', role)
-      localStorage.setItem('sportnexus_registered_role', role)
-    } catch {}
-    navigate('/onboarding')
+      await registerUser(payload)
+      try {
+        localStorage.setItem('sportnexus_user_role', role)
+        localStorage.setItem('sportnexus_registered_role', role)
+      } catch {}
+      toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.')
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast.error(error?.message || 'Đăng ký thất bại. Vui lòng thử lại.')
+    } finally {
+      submitting.current = false
+      setLoading(false)
+    }
   }
 
   const toggleSport = (sport) => {
@@ -52,30 +103,20 @@ function Register() {
 
   return (
     <div className="min-h-screen sport-animated-bg flex flex-col">
-      {/* Top Header - Toàn màn hình */}
-      <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20">
+      {/* Top Header - Bấm logo để về trang chủ */}
+      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        {/* Logo Clickable về Trang Chủ */}
+        <Link to="/" className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity">
+          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
             </svg>
           </div>
           <div className="flex flex-col">
-            <span className="text-[#2D5F3F] font-bold text-lg leading-none">SportNexus</span>
-            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider">Tournament Engine</span>
+            <span className="text-[#2D5F3F] font-bold text-lg leading-tight tracking-tight">SportNexus</span>
+            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider font-semibold">Tournament Engine</span>
           </div>
-        </div>
-
-        {/* Trang Chủ Button */}
-        <div className="flex items-center">
-          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-            </svg>
-            <span className="font-medium">Trang chủ</span>
-          </a>
-        </div>
+        </Link>
       </header>
 
       <main className="flex-1 w-full flex flex-col lg:flex-row relative text-gray-900">
@@ -123,7 +164,7 @@ function Register() {
                   </div>
                   <div>
                     <div className="font-semibold text-[#2D5F3F] mb-1">Ghép Trận Nhanh</div>
-                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi cùng trình độ DUPR/Elo vô phòng đỗ.</div>
+                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi đúng trình độ, ghép đội cân bằng và tiện lợi.</div>
                   </div>
                 </div>
               </div>
@@ -257,29 +298,29 @@ function Register() {
             </header>
             
             {/* Form */}
-            <form className="space-y-5" onSubmit={handleRegisterSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate aria-busy={loading}>
               {/* Role Selection Field (Người chơi / Chủ sân) */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Vai trò đăng ký <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {/* Player Card */}
                   <div
                     onClick={() => setRole('player')}
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'player'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'player' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                      role === 'player' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
                     }`}>
                       <span className="text-xl">🏃‍♂️</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
                         <span>Người chơi</span>
                         <span className="text-xs text-gray-500 font-normal">(Player)</span>
                       </div>
@@ -288,7 +329,7 @@ function Register() {
                       </p>
                     </div>
                     {role === 'player' && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -302,16 +343,16 @@ function Register() {
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'court_owner'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'court_owner' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                      role === 'court_owner' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
                     }`}>
                       <span className="text-xl">🏟️</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
                         <span>Chủ sân</span>
                         <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
                       </div>
@@ -320,7 +361,7 @@ function Register() {
                       </p>
                     </div>
                     {role === 'court_owner' && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -330,6 +371,25 @@ function Register() {
                 </div>
               </div>
 
+              {/* Username Field */}
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                  Tên đăng nhập <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="username"
+                  name="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  autoComplete="username"
+                  required
+                  aria-invalid={!!errors.username}
+                  aria-describedby="username-error"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none"
+                  placeholder="Nhập tên đăng nhập"
+                />
+                {errors.username && <p id="username-error" role="alert" className="mt-1 text-sm text-red-600">{errors.username}</p>}
+              </div>
               {/* Full Name Field */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="full-name">
@@ -343,10 +403,18 @@ function Register() {
                   </div>
                   <input 
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                    id="full-name" 
+                    id="full-name"
+                    name="fullName"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    autoComplete="name"
+                    aria-invalid={!!errors.fullName}
+                    aria-describedby="fullName-error"
+                    placeholder="Ví dụ: Nguyễn Văn A"
                     required 
                     type="text" 
                   />
+                    {errors.fullName && <p id="fullName-error" role="alert" className="mt-1 text-sm text-red-600">{errors.fullName}</p>}
                 </div>
               </div>
               
@@ -363,10 +431,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="phone" 
+                      id="phone"
+                      name="phone"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      autoComplete="tel"
+                      aria-invalid={!!errors.phone}
+                      aria-describedby="phone-error"
+                      placeholder="0912 345 678"
                       required 
                       type="tel" 
                     />
+                    {errors.phone && <p id="phone-error" role="alert" className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                   </div>
                 </div>
 
@@ -383,10 +459,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="email" 
+                      id="email"
+                      name="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby="email-error"
+                      placeholder="email@example.com"
                       required 
                       type="email" 
                     />
+                    {errors.email && <p id="email-error" role="alert" className="mt-1 text-sm text-red-600">{errors.email}</p>}
                   </div>
                 </div>
               </div>
@@ -566,12 +650,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="password" 
+                      id="password"
+                      name="password"
+                      autoComplete="new-password"
+                      aria-invalid={!!errors.password}
+                      aria-describedby="password-error"
+                      placeholder="Nhập mật khẩu an toàn"
                       required 
                       type={passwordVisible ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
+                    {errors.password && <p id="password-error" role="alert" className="mt-1 text-sm text-red-600">{errors.password}</p>}
                     <button 
                       aria-label="Toggle password visibility" 
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
@@ -631,12 +721,18 @@ function Register() {
                             : 'border-red-500 focus:border-red-600 focus:ring-red-500/20'
                           : 'border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]/20'
                       } focus:ring-2 outline-none transition-all`}
-                      id="confirm-password" 
+                      id="confirm-password"
+                      name="confirmPassword"
+                      autoComplete="new-password"
+                      aria-invalid={!!errors.confirmPassword}
+                      aria-describedby="confirmPassword-error"
+                      placeholder="Nhập lại mật khẩu"
                       required 
                       type={confirmPasswordVisible ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
+                    {errors.confirmPassword && <p id="confirmPassword-error" role="alert" className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                     <button 
                       aria-label="Toggle confirm password visibility" 
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
@@ -673,13 +769,14 @@ function Register() {
                 </label>
               </div>
               
+              {errors.terms && <p role="alert" className="text-sm text-red-600">{errors.terms}</p>}
               {/* Primary Create Account Button */}
               <div className="pt-2">
                 <button 
                   className="w-full py-4 px-6 rounded-xl font-bold text-base text-white bg-[#4A7C59] hover:bg-[#3D6549] transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg hover:shadow-xl" 
-                  type="submit"
+                  type="submit" disabled={loading}
                 >
-                  TẠO TÀI KHOẢN NGAY
+                  {loading ? 'Đang đăng ký...' : 'TẠO TÀI KHOẢN NGAY'}
                 </button>
               </div>
             </form>
@@ -716,9 +813,9 @@ function Register() {
             <footer className="mt-8 text-center">
               <p className="text-sm text-gray-600">
                 Bạn đã có tài khoản?{' '}
-                <a className="text-[#4A7C59] font-semibold hover:underline" href="/login">
+                <Link className="text-[#4A7C59] font-semibold hover:underline" to="/login">
                   Đăng nhập ngay
-                </a>
+                </Link>
               </p>
             </footer>
             

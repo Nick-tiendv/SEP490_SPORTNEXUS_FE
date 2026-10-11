@@ -1,8 +1,10 @@
+import { useAuth } from '../../context/authContext.js'
 import { NavLink } from 'react-router-dom'
 import { LogOut, X } from 'lucide-react'
 import { adminMenu } from '../adminMenu.js'
 
 export default function AdminSidebar({ open, onClose }) {
+  const { logout } = useAuth()
   return (
     <aside className={`admin-sidebar ${open ? 'is-open' : ''}`} aria-label="Admin navigation">
       <NavLink className="admin-brand" to="/admin/dashboard" onClick={onClose}>
@@ -25,7 +27,7 @@ export default function AdminSidebar({ open, onClose }) {
       <div className="admin-sidebar-profile">
         <span className="admin-avatar">AT</span>
         <span className="admin-profile-copy"><strong>Alex Tran <span className="admin-online-dot" /></strong><small>Administrator</small></span>
-        <button className="admin-icon-button" disabled aria-label="Sign out (not implemented)"><LogOut size={16} /></button>
+        <button className="admin-icon-button" onClick={logout} aria-label="Đăng xuất"><LogOut size={16} /></button>
       </div>
     </aside>
   )

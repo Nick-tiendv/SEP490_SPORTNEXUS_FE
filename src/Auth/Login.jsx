@@ -1,92 +1,148 @@
 import './auth-pages.css'
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { loginUser } from '../api/auth/authApi.js'
+import { useAuth } from '../context/authContext.js'
+import { roleDestination } from './roleRoutes.js'
 
 function Login() {
+  const { login, logout, isAuthenticated, role } = useAuth()
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const submitting = useRef(false)
   const navigate = useNavigate()
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    if (submitting.current) return
+
+    const username = identifier.trim()
+    const nextErrors = {}
+    if (!username) nextErrors.username = 'Vui lòng nhập tên đăng nhập.'
+    if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) return
+
+    submitting.current = true
+    setLoading(true)
+    try {
+      const session = await loginUser({ username, password })
+      login(session)
+      toast.success('Đăng nhập thành công!')
+      const destination = roleDestination(session.role)
+      if (destination) {
+        navigate(destination, { replace: true })
+      } else {
+        toast.warning('Vai trò tài khoản chưa được cấu hình. Vui lòng liên hệ quản trị viên.')
+      }
+    } catch (error) {
+      toast.error(error?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
+    } finally {
+      submitting.current = false
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen sport-animated-bg flex flex-col">
-      {/* Header */}
-      <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20">
+      {/* Header - Bấm vào logo để tự động về trang chủ */}
+      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-100">
+        {/* Logo Clickable về Trang Chủ */}
+        <Link to="/" className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity">
+          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
             </svg>
           </div>
           <div className="flex flex-col">
-            <span className="text-[#2D5F3F] font-bold text-lg leading-none">SportNexus</span>
-            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider">Tournament Engine</span>
+            <span className="text-[#2D5F3F] font-bold text-lg leading-tight tracking-tight">SportNexus</span>
+            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider font-semibold">Tournament Engine</span>
           </div>
-        </div>
-
-        {/* Right Section */}
-        <div className="flex items-center gap-4">
-          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-            </svg>
-            <span className="font-medium">Trang chủ</span>
-          </a>
-        </div>
+        </Link>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center px-4 py-8">
+      <main className="flex-1 flex items-center justify-center px-3.5 sm:px-6 py-6 sm:py-10">
         <div className="w-full max-w-md">
           {/* Login Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl p-5 sm:p-8 border border-gray-100">
             {/* Logo Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-[#2D5F3F] rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-white ring-opacity-20">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <div className="flex justify-center mb-5 sm:mb-6">
+              <Link to="/" title="Về trang chủ" className="w-14 h-14 sm:w-16 sm:h-16 bg-[#2D5F3F] rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-white ring-opacity-20 hover:scale-105 transition-transform">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
                 </svg>
-              </div>
+              </Link>
             </div>
 
             {/* Title */}
-            <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 text-center mb-1.5 sm:mb-2">
               Đăng Nhập SportNexus
             </h1>
-            <p className="text-gray-600 text-center mb-8 text-sm">
-              Chào mừng bạn trở lại với nền tảng đặt sân thể thao đa môn
+            <p className="text-gray-600 text-center mb-6 text-xs sm:text-sm">
+              Chào mừng bạn trở lại với nền tảng thể thao đa môn SportNexus
             </p>
 
-            {/* Form */}
-            <form onSubmit={(e) => { e.preventDefault(); navigate('/dashboard') }} className="space-y-5">
-              {/* Email Input */}
+            {isAuthenticated && (
+              <div className="mb-4 text-sm text-[#2D5F3F]">
+                <p>Đã đăng nhập. {roleDestination(role) ? 'Bạn có thể mở trang chính.' : 'Vai trò tài khoản chưa được cấu hình.'}</p>
+                {roleDestination(role) && (
+                  <button type="button" className="underline mr-4" onClick={() => navigate(roleDestination(role))}>
+                    Trang chính
+                  </button>
+                )}
+                <button type="button" className="underline" onClick={logout}>Đăng xuất</button>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-4 sm:space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email hoặc Số điện thoại
+                <label htmlFor="username" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
+                  Tên đăng nhập
                 </label>
                 <input
                   type="text"
-                  id="email"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900"
+                  id="username"
+                  name="username"
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  autoComplete="username"
+                  aria-invalid={!!errors.username}
+                  aria-describedby="username-error"
+                  placeholder="Nhập tên đăng nhập..."
+                  className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                   required
                 />
+
               </div>
 
+              {errors.username && <p id="username-error" role="alert" className="text-sm text-red-600">{errors.username}</p>}
               {/* Password Input */}
               <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
                   Mật khẩu
                 </label>
                 <div className="relative">
                   <input
                     type={passwordVisible ? 'text' : 'password'}
                     id="password"
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-gray-900"
+                    name="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="current-password"
+                    aria-invalid={!!errors.password}
+                    aria-describedby="password-error"
+                    placeholder="Nhập mật khẩu..."
+                    className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 pr-11 sm:pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setPasswordVisible(!passwordVisible)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-3.5 sm:right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
                     {passwordVisible ? (
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -102,27 +158,29 @@ function Login() {
                 </div>
               </div>
 
+              {errors.password && <p id="password-error" role="alert" className="text-sm text-red-600">{errors.password}</p>}
               {/* Remember & Forgot Password */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
                 <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    defaultChecked
+                    disabled title="Phiên được lưu trong tab hiện tại"
                     className="w-4 h-4 text-[#2D5F3F] border-gray-300 rounded focus:ring-[#2D5F3F]"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Ghi nhớ đăng nhập</span>
+<span className="ml-2 text-sm text-gray-700">Lưu phiên trong tab hiện tại</span>
                 </label>
-                <a href="/forgot-password" className="text-sm text-[#2D5F3F] font-semibold hover:underline">
+                <Link to="/forgot-password" className="text-[#2D5F3F] font-semibold hover:underline">
                   Quên mật khẩu?
-                </a>
+                </Link>
               </div>
 
               {/* Submit Button */}
               <button
-                type="submit"
-                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200 uppercase tracking-wide"
+type="submit" disabled={loading}
+                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3 sm:py-3.5 px-6 rounded-lg transition-all duration-200 uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.99] text-sm sm:text-base"
               >
-                ĐĂNG NHẬP
+                <span>{loading ? 'Đang đăng nhập...' : 'ĐĂNG NHẬP'}</span>
+                {!loading && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
               </button>
             </form>
 
@@ -167,9 +225,9 @@ function Login() {
             {/* Register Link */}
             <p className="text-center mt-6 text-sm text-gray-600">
               Chưa có tài khoản?{' '}
-              <a href="/register" className="text-[#2D5F3F] font-semibold hover:underline">
+              <Link to="/register" className="text-[#2D5F3F] font-semibold hover:underline">
                 Đăng ký ngay
-              </a>
+              </Link>
             </p>
           </div>
         </div>

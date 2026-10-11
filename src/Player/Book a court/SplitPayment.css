@@ -887,55 +887,60 @@
 
 .sp-receipt-line--court {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
 }
 
-.sp-receipt-court-col {
+.sp-receipt-court-header {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  flex: 1;
-  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .sp-receipt-court-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sp-ink-secondary);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--sp-ink);
   line-height: 1.4;
 }
 
-/* Khung giờ trong dấu ngoặc đơn được đưa xuống dòng và làm nổi bật */
+/* Khung giờ thi đấu kéo dài toàn bộ hàng ngang, không bị ngắt dòng */
 .sp-receipt-slot-highlight {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   color: #15803d;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
-  width: fit-content;
-  margin-top: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .sp-receipt-slot-highlight .material-symbols-outlined {
-  font-size: 14px;
+  font-size: 15px;
   color: #16a34a;
+  flex-shrink: 0;
 }
 
 .sp-receipt-slot-highlight strong {
   color: #14532d;
   font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sp-receipt-slot-highlight span {
-  font-size: 11px;
+  font-size: 11.5px;
   color: #15803d;
+  white-space: nowrap;
 }
 
 /* Số tiền hiển thị đơn vị "đ" cùng hàng, không bao giờ rớt dòng */
