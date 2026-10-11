@@ -40,7 +40,8 @@ function Login() {
         toast.warning('Vai trò tài khoản chưa được cấu hình. Vui lòng liên hệ quản trị viên.')
       }
     } catch (error) {
-      toast.error(error?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
+      if (error?.code === 'MOCK_AUTH_BLOCKED') toast.warning(error.message)
+      else toast.error(error?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
     } finally {
       submitting.current = false
       setLoading(false)
