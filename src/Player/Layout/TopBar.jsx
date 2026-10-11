@@ -10,10 +10,18 @@ function TopBar() {
   const isTournament = location.pathname === '/tournament'
   const isWallet = location.pathname === '/wallet'
   const isProfile = location.pathname === '/profile'
-  const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
+  const { selectedSports, isAllActive, isSportActive, toggleSport, SPORTS_LIST } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 2450000
+  })
+
+  const [playerProfile, setPlayerProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return { name: 'Minh Minh Minh', username: '@minhminhminh' }
   })
 
   useEffect(() => {
@@ -21,8 +29,20 @@ function TopBar() {
       const saved = localStorage.getItem('escrow_balance')
       if (saved !== null) setWalletBalance(Number(saved))
     }
+    const handleProfileUpdate = () => {
+      try {
+        const saved = localStorage.getItem('player_profile_data')
+        if (saved) setPlayerProfile(JSON.parse(saved))
+      } catch (e) {}
+    }
     window.addEventListener('escrow_balance_updated', handleUpdate)
-    return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('storage', handleProfileUpdate)
+    return () => {
+      window.removeEventListener('escrow_balance_updated', handleUpdate)
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('storage', handleProfileUpdate)
+    }
   }, [])
 
   return (
@@ -189,7 +209,7 @@ function TopBar() {
                 {isAllActive
                   ? 'Tất cả 5 môn thể thao'
                   : selectedSports.length === 1
-                  ? `Chỉ ${SPORTS_LIST.find(s => s.key === selectedSports[0])?.label || ''}`
+                  ? `Chỉ ${(SPORTS_LIST || []).find(s => s.key === selectedSports[0])?.label || ''}`
                   : `${selectedSports.length} môn đang chọn`}
               </span>
             </div>
@@ -268,17 +288,28 @@ function TopBar() {
               fontSize: '12px',
               flexShrink: 0,
               boxShadow: '0 2px 8px rgba(45, 95, 63, 0.25)',
+              overflow: 'hidden',
             }}
           >
-            MMM
+            {playerProfile.avatar ? (
+              <img src={playerProfile.avatar} alt={playerProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              (playerProfile.name || 'MMM')
+                .trim()
+                .split(/\s+/)
+                .map((n) => n[0])
+                .slice(-3)
+                .join('')
+                .toUpperCase()
+            )}
           </div>
           {/* Name + stats */}
           <div style={{ lineHeight: 1.3 }}>
             <p style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: '#1C3524' }}>
-              Minh Minh Minh
+              {playerProfile.name || 'Minh Minh Minh'}
             </p>
             <p style={{ margin: 0, fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>
-              @minhminhminh
+              {playerProfile.username || '@minhminhminh'}
             </p>
           </div>
           {/* Rating badge */}

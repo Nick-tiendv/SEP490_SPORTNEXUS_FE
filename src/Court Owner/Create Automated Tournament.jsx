@@ -159,7 +159,7 @@ export default function CreateAutomatedTournament() {
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: '#F8FAFC' }}>
+    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div

@@ -1,7 +1,7 @@
 // Dashboard.jsx — SportNexus Player Dashboard
 // Thiết kế pastel sáng, năng động, thân thiện & hỗ trợ lọc theo môn Cầu Lông / Pickleball
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 
@@ -252,6 +252,40 @@ const allSuggestedCourts = [
 
 function Dashboard() {
   const navigate = useNavigate()
+
+  // Tự động chuyển hướng sang trang Chủ Sân nếu tài khoản có vai trò là Court Owner
+  useEffect(() => {
+    try {
+      const savedRole = localStorage.getItem('sportnexus_user_role')
+      if (savedRole === 'court_owner') {
+        navigate('/owner/dashboard', { replace: true })
+      }
+    } catch (e) {}
+  }, [navigate])
+
+  const [playerProfile, setPlayerProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return { name: 'Minh Minh Minh' }
+  })
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      try {
+        const saved = localStorage.getItem('player_profile_data')
+        if (saved) setPlayerProfile(JSON.parse(saved))
+      } catch (e) {}
+    }
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('storage', handleProfileUpdate)
+    return () => {
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('storage', handleProfileUpdate)
+    }
+  }, [])
+
   const {
     selectedSports,
     toggleSport,
@@ -323,7 +357,7 @@ function Dashboard() {
                   letterSpacing: '-0.5px',
                 }}
               >
-                Xin chào, Minh Minh Minh 👋
+                Xin chào, {playerProfile.name || 'Minh Minh Minh'} 👋
               </h1>
               <span
                 style={{

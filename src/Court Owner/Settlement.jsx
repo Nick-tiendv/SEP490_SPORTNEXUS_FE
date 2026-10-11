@@ -103,6 +103,12 @@ export default function Settlement() {
 
   // Lịch sử giao dịch
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS)
+  const [activeTxnTab, setActiveTxnTab] = useState('all')
+
+  const filteredTransactions = transactions.filter((t) => {
+    if (activeTxnTab === 'all') return true
+    return t.type === activeTxnTab
+  })
 
   // Modal rút tiền
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
@@ -174,7 +180,7 @@ export default function Settlement() {
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: '#F8FAFC' }}>
+    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -203,50 +209,74 @@ export default function Settlement() {
         </div>
       )}
 
-      {/* Header section */}
+      {/* Header section — Khung Tiêu Đề Glassmorphism Nổi Bật */}
       <div
         style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(45, 95, 63, 0.16)',
+          padding: '24px 28px',
+          boxShadow: '0 8px 30px rgba(15, 23, 42, 0.05)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '16px',
+          gap: '20px',
           marginBottom: '28px',
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <span
               style={{
-                background: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
-                color: '#fff',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
+                background: 'linear-gradient(135deg, #15803D 0%, #047857 100%)',
+                color: '#FFFFFF',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '11.5px',
+                fontWeight: 800,
+                letterSpacing: '0.6px',
                 textTransform: 'uppercase',
+                boxShadow: '0 2px 8px rgba(21, 128, 61, 0.25)',
               }}
             >
               FINANCIAL SETTLEMENT HUB
             </span>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
-              Báo cáo doanh thu & Rút tiền tức thì Napas 24/7
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#DCFCE7',
+                border: '1px solid #86EFAC',
+                color: '#15803D',
+                padding: '3px 10px',
+                borderRadius: '20px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+              }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 6px #10B981' }} />
+              Cổng Quyết Toán Napas 24/7 Trực Tuyến
             </span>
           </div>
+
           <h1
             style={{
               fontSize: '26px',
-              fontWeight: 800,
+              fontWeight: 900,
               color: '#0F172A',
-              margin: 0,
+              margin: '0 0 6px 0',
               letterSpacing: '-0.5px',
+              lineHeight: 1.25,
             }}
           >
-            Báo Cáo Doanh Thu & Quyết Toán (Settlement)
+            Báo Cáo Doanh Thu &amp; Quyết Toán Tài Chính
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '14px' }}>
-            Theo dõi số dư đã giải ngân từ Smart Escrow, đối soát doanh thu đa môn thể thao và tạo lệnh rút tiền về tài khoản ngân hàng.
+          <p style={{ margin: 0, color: '#475569', fontSize: '14px', lineHeight: 1.5, maxWidth: '680px' }}>
+            Theo dõi dòng tiền giải ngân minh bạch từ <strong>Smart Escrow</strong>, kiểm soát phân bổ doanh thu từng cụm sân và rút tiền tức thì 24/7.
           </p>
         </div>
 
@@ -257,29 +287,37 @@ export default function Settlement() {
             setShowWithdrawModal(true)
           }}
           style={{
-            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+            background: 'linear-gradient(135deg, #15803D 0%, #047857 100%)',
             color: '#FFFFFF',
             border: 'none',
-            borderRadius: '14px',
-            padding: '14px 24px',
-            fontSize: '15px',
+            borderRadius: '16px',
+            padding: '15px 26px',
+            fontSize: '14.5px',
             fontWeight: 800,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            boxShadow: '0 4px 15px rgba(16, 185, 129, 0.35)',
-            transition: 'transform 0.2s',
+            boxShadow: '0 6px 20px rgba(21, 128, 61, 0.32)',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)'
+            e.currentTarget.style.boxShadow = '0 8px 26px rgba(21, 128, 61, 0.42)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'none'
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(21, 128, 61, 0.32)'
           }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
             payments
           </span>
-          TẠO YÊU CẦU RÚT TIỀN (PAYOUT)
+          <span>TẠO YÊU CẦU RÚT TIỀN (PAYOUT)</span>
         </button>
       </div>
 
-      {/* 4 Core Financial KPI Cards */}
+      {/* 4 Core Financial KPI Cards — Từng Khung Nổi Bật & Tinh Tế */}
       <div
         style={{
           display: 'grid',
@@ -288,380 +326,747 @@ export default function Settlement() {
           marginBottom: '32px',
         }}
       >
-        {/* Available Balance (Đã Giải Ngân) */}
+        {/* Khung 1: Available Balance (Số Dư Khả Dụng) — Nổi Bật Tối Đa */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #064E3B 0%, #047857 100%)',
-            borderRadius: '18px',
-            padding: '24px',
+            background: 'linear-gradient(135deg, #064E3B 0%, #15803D 55%, #047857 100%)',
+            borderRadius: '20px',
+            padding: '24px 26px',
             color: '#FFFFFF',
-            boxShadow: '0 10px 25px -5px rgba(4, 120, 87, 0.3)',
+            boxShadow: '0 12px 30px -4px rgba(21, 128, 61, 0.35)',
+            border: '1.5px solid rgba(134, 239, 172, 0.4)',
             position: 'relative',
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#A7F3D0', fontWeight: 700, textTransform: 'uppercase' }}>
-                SỐ DƯ KHẢ DỤNG (AVAILABLE BALANCE)
-              </div>
-              <div style={{ fontSize: '30px', fontWeight: 900, color: '#FFFFFF', margin: '8px 0' }}>
-                {formatVND(availableBalance)}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px', color: '#6EE7B7' }}>
-                account_balance_wallet
-              </span>
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', color: '#D1FAE5', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-              check_circle
-            </span>
-            Sẵn sàng rút về tài khoản ngân hàng ngay
-          </div>
-        </div>
-
-        {/* Pending Escrow (Đang tạm giữ chờ check-in) */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: '18px',
-            padding: '24px',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#B45309', fontWeight: 700, textTransform: 'uppercase' }}>
-                TẠM GIỮ TẠI SMART ESCROW
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#D97706', margin: '8px 0' }}>
-                {formatVND(pendingEscrow)}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: '#FEF3C7',
-                color: '#D97706',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                lock_clock
-              </span>
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', color: '#64748B' }}>
-            Sẽ tự động giải ngân khi khách quét mã QR check-in
-          </div>
-        </div>
-
-        {/* Monthly Revenue */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: '18px',
-            padding: '24px',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#2563EB', fontWeight: 700, textTransform: 'uppercase' }}>
-                TỔNG DOANH THU THÁNG NÀY
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', margin: '8px 0' }}>
-                {formatVND(monthlyRevenue)}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: '#EFF6FF',
-                color: '#2563EB',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                trending_up
-              </span>
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', color: '#16A34A', fontWeight: 700 }}>
-            +18.4% so với tháng trước (Tăng trưởng cao)
-          </div>
-        </div>
-
-        {/* Platform Fee & Net Payout */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: '18px',
-            padding: '24px',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>
-                PHÍ NỀN TẢNG SPORTNEXUS (3%)
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#475569', margin: '8px 0' }}>
-                {formatVND(platformFee)}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: '#F1F5F9',
-                color: '#64748B',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
-                receipt_long
-              </span>
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', color: '#059669', fontWeight: 600 }}>
-            Đã bao gồm chi phí bảo hiểm Escrow & server
-          </div>
-        </div>
-      </div>
-
-      {/* Analytics Section: Revenue Breakdown by Zones & 7-Day Trend */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '24px', marginBottom: '32px' }}>
-        {/* 7-Day Trend Bar Chart */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: '18px',
-            border: '1px solid #E2E8F0',
-            padding: '24px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                Biểu Đồ Doanh Thu 7 Ngày Gần Nhất
-              </h3>
-              <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
-                Cuối tuần có doanh thu bứt phá vượt bậc nhờ cơ chế Dynamic Pricing
-              </p>
-            </div>
-            <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 700, background: '#DCFCE7', padding: '4px 10px', borderRadius: '6px' }}>
-              TB: 20.350.000 đ/ngày
-            </span>
-          </div>
-
-          {/* Bar Chart Bars */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '200px', paddingTop: '20px', borderBottom: '2px solid #E2E8F0' }}>
-            {[
-              { day: 'T2', val: 14200000, height: '48%', peak: false },
-              { day: 'T3', val: 15800000, height: '54%', peak: false },
-              { day: 'T4', val: 16500000, height: '56%', peak: false },
-              { day: 'T5', val: 18200000, height: '62%', peak: false },
-              { day: 'T6', val: 22400000, height: '76%', peak: false },
-              { day: 'T7 (Peak)', val: 29500000, height: '100%', peak: true },
-              { day: 'CN (Peak)', val: 28100000, height: '95%', peak: true },
-            ].map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '60px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: item.peak ? '#DC2626' : '#64748B' }}>
-                  {(item.val / 1000000).toFixed(1)}M
-                </span>
-                <div
-                  style={{
-                    width: '36px',
-                    height: item.height,
-                    borderRadius: '8px 8px 0 0',
-                    background: item.peak
-                      ? 'linear-gradient(180deg, #F97316 0%, #EA580C 100%)'
-                      : 'linear-gradient(180deg, #10B981 0%, #059669 100%)',
-                    boxShadow: item.peak ? '0 4px 12px rgba(249, 115, 22, 0.25)' : 'none',
-                    transition: 'height 0.3s',
-                  }}
-                />
-                <span style={{ fontSize: '12px', fontWeight: item.peak ? 800 : 600, color: item.peak ? '#EA580C' : '#334155', marginTop: '4px' }}>
-                  {item.day}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Revenue Breakdown by Zone */}
-        <div
-          style={{
-            background: '#FFFFFF',
-            borderRadius: '18px',
-            border: '1px solid #E2E8F0',
-            padding: '24px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-          }}
-        >
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-            Phân Bổ Doanh Thu Theo Bộ Môn
-          </h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {[
-              { label: 'Khu B — Bóng Đá Mini (3 sân)', pct: 42, color: '#3B82F6', rev: 59850000 },
-              { label: 'Khu A — Cầu Lông BWF (5 sân)', pct: 38, color: '#10B981', rev: 54150000 },
-              { label: 'Khu C — Pickleball Pro (4 sân)', pct: 15, color: '#F59E0B', rev: 21375000 },
-              { label: 'Khu D — Tennis ATP (2 sân)', pct: 5, color: '#EC4899', rev: 7125000 },
-            ].map((z, idx) => (
-              <div key={idx}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 700, color: '#334155' }}>{z.label}</span>
-                  <span style={{ fontWeight: 800, color: '#0F172A' }}>
-                    {z.pct}% ({formatVND(z.rev)})
-                  </span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '999px', overflow: 'hidden' }}>
-                  <div style={{ width: `${z.pct}%`, height: '100%', background: z.color, borderRadius: '999px' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Transaction Settlement History Table */}
-      <div
-        style={{
-          background: '#FFFFFF',
-          borderRadius: '18px',
-          border: '1px solid #E2E8F0',
-          padding: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>
-              Lịch Sử Giao Dịch Quyết Toán & Biến Động Số Dư
-            </h3>
-            <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
-              Ghi nhận minh bạch mọi dòng tiền giải ngân từ Escrow và lệnh rút tiền về ngân hàng
-            </p>
-          </div>
-
-          <button
-            onClick={() => showToast('Đang xuất bảng đối soát tài chính định dạng Excel/CSV...')}
+          {/* Subtle Ambient Glow */}
+          <div
             style={{
-              background: '#F1F5F9',
-              border: '1px solid #CBD5E1',
-              borderRadius: '8px',
-              padding: '8px 14px',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: '#334155',
-              cursor: 'pointer',
+              position: 'absolute',
+              right: '-25px',
+              top: '-25px',
+              width: '130px',
+              height: '130px',
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#A7F3D0',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.8px',
+                }}
+              >
+                SỐ DƯ KHẢ DỤNG (AVAILABLE)
+              </div>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.16)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#86EFAC' }}>
+                  account_balance_wallet
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '32px', fontWeight: 900, color: '#FFFFFF', letterSpacing: '-0.5px', margin: '4px 0 14px 0' }}>
+              {formatVND(availableBalance)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: '12.5px',
+              color: '#DCFCE7',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              background: 'rgba(255, 255, 255, 0.12)',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              width: 'fit-content',
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-              file_download
+            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#86EFAC' }}>
+              check_circle
             </span>
-            Xuất Báo Cáo
-          </button>
+            <span>Sẵn sàng rút tức thì Napas 24/7</span>
+          </div>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        {/* Khung 2: Pending Escrow (Tạm Giữ Tại Smart Escrow) — Tông Hổ Phách Sang Trọng */}
+        <div
+          style={{
+            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 251, 235, 0.94) 100%)',
+            borderRadius: '20px',
+            padding: '24px 26px',
+            border: '1.5px solid rgba(245, 158, 11, 0.35)',
+            boxShadow: '0 10px 28px -4px rgba(217, 119, 6, 0.10)',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#B45309',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.8px',
+                }}
+              >
+                TẠM GIỮ TẠI SMART ESCROW
+              </div>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: '#FEF3C7',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(217, 119, 6, 0.12)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#D97706' }}>
+                  lock_clock
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '28px', fontWeight: 900, color: '#B45309', letterSpacing: '-0.5px', margin: '4px 0 14px 0' }}>
+              {formatVND(pendingEscrow)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: '12.5px',
+              color: '#92400E',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#FEF3C7',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              width: 'fit-content',
+              fontWeight: 600,
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#D97706' }}>
+              verified_user
+            </span>
+            <span>Tự động giải ngân khi quét QR check-in</span>
+          </div>
+        </div>
+
+        {/* Khung 3: Monthly Revenue (Tổng Doanh Thu Tháng Này) — Tông Xanh Biển Chuyên Nghiệp */}
+        <div
+          style={{
+            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 247, 255, 0.94) 100%)',
+            borderRadius: '20px',
+            padding: '24px 26px',
+            border: '1.5px solid rgba(37, 99, 235, 0.30)',
+            boxShadow: '0 10px 28px -4px rgba(37, 99, 235, 0.10)',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#1D4ED8',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.8px',
+                }}
+              >
+                DOANH THU THÁNG HIỆN TẠI
+              </div>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: '#EFF6FF',
+                  border: '1px solid rgba(37, 99, 235, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.12)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#2563EB' }}>
+                  trending_up
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '28px', fontWeight: 900, color: '#1E40AF', letterSpacing: '-0.5px', margin: '4px 0 14px 0' }}>
+              {formatVND(monthlyRevenue)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: '12.5px',
+              color: '#065F46',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#DCFCE7',
+              border: '1px solid #86EFAC',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              width: 'fit-content',
+              fontWeight: 700,
+            }}
+          >
+            <span>🚀</span>
+            <span>+18.4% tăng trưởng so với tháng trước</span>
+          </div>
+        </div>
+
+        {/* Khung 4: Platform Fee (Phí Nền Tảng SportNexus 3%) — Tông Tím Đá Quý Thanh Lịch */}
+        <div
+          style={{
+            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 246, 255, 0.94) 100%)',
+            borderRadius: '20px',
+            padding: '24px 26px',
+            border: '1.5px solid rgba(124, 58, 237, 0.28)',
+            boxShadow: '0 10px 28px -4px rgba(124, 58, 237, 0.08)',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: '#6D28D9',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.8px',
+                }}
+              >
+                PHÍ NỀN TẢNG SPORTNEXUS (3%)
+              </div>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: '#F3E8FF',
+                  border: '1px solid rgba(124, 58, 237, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(124, 58, 237, 0.12)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#7C3AED' }}>
+                  receipt_long
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '28px', fontWeight: 900, color: '#5B21B6', letterSpacing: '-0.5px', margin: '4px 0 14px 0' }}>
+              {formatVND(platformFee)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: '12.5px',
+              color: '#5B21B6',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#F3E8FF',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              width: 'fit-content',
+              fontWeight: 600,
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#7C3AED' }}>
+              shield
+            </span>
+            <span>Bảo hiểm quỹ Escrow &amp; hạ tầng server</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Section: Khung Biểu Đồ 7 Ngày & Phân Bổ Doanh Thu Bộ Môn */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '24px', marginBottom: '32px' }}>
+        {/* Khung Biểu Đồ Doanh Thu 7 Ngày Gần Nhất */}
+        <div
+          style={{
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '20px',
+            border: '1.5px solid rgba(45, 95, 63, 0.16)',
+            padding: '24px 28px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: '22px' }}>
+                    bar_chart
+                  </span>
+                  Biểu Đồ Doanh Thu 7 Ngày Gần Nhất
+                </h3>
+                <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
+                  Cuối tuần doanh thu bứt phá nhờ cơ chế Định giá động (Dynamic Pricing)
+                </p>
+              </div>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: '#15803D',
+                  fontWeight: 800,
+                  background: '#DCFCE7',
+                  border: '1px solid #86EFAC',
+                  padding: '5px 12px',
+                  borderRadius: '20px',
+                  boxShadow: '0 1px 4px rgba(21, 128, 61, 0.1)',
+                }}
+              >
+                ⚡ TB: 20.35 Triệu đ/ngày
+              </span>
+            </div>
+
+            {/* Bar Chart Visualization */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                height: '210px',
+                paddingTop: '20px',
+                paddingBottom: '10px',
+                borderBottom: '2px solid #E2E8F0',
+                gap: '8px',
+              }}
+            >
+              {[
+                { day: 'Thứ 2', val: 14200000, height: '48%', peak: false },
+                { day: 'Thứ 3', val: 15800000, height: '54%', peak: false },
+                { day: 'Thứ 4', val: 16500000, height: '56%', peak: false },
+                { day: 'Thứ 5', val: 18200000, height: '62%', peak: false },
+                { day: 'Thứ 6', val: 22400000, height: '76%', peak: false },
+                { day: 'Thứ 7', val: 29500000, height: '100%', peak: true },
+                { day: 'CN', val: 28100000, height: '95%', peak: true },
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    flex: 1,
+                    gap: '8px',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: item.peak ? '#C2410C' : '#334155',
+                      background: item.peak ? '#FFEDD5' : '#F1F5F9',
+                      padding: '2px 6px',
+                      borderRadius: '6px',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {(item.val / 1000000).toFixed(1)}M
+                  </span>
+
+                  <div
+                    style={{
+                      width: '75%',
+                      maxWidth: '46px',
+                      height: item.height,
+                      borderRadius: '8px 8px 0 0',
+                      background: item.peak
+                        ? 'linear-gradient(180deg, #F97316 0%, #EA580C 100%)'
+                        : 'linear-gradient(180deg, #10B981 0%, #059669 100%)',
+                      boxShadow: item.peak
+                        ? '0 4px 14px rgba(234, 88, 12, 0.35)'
+                        : '0 4px 12px rgba(16, 185, 129, 0.25)',
+                      transition: 'transform 0.2s',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'scaleY(1.04)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+                    title={`${item.day}: ${formatVND(item.val)}`}
+                  />
+
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: item.peak ? 800 : 700,
+                      color: item.peak ? '#C2410C' : '#475569',
+                      marginTop: '4px',
+                    }}
+                  >
+                    {item.day}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI Summary Footer */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              marginTop: '18px',
+              paddingTop: '12px',
+            }}
+          >
+            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '10px 14px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Tổng 7 Ngày</div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>144.7 Triệu đ</div>
+            </div>
+            <div style={{ background: '#FFF7ED', borderRadius: '12px', padding: '10px 14px', border: '1px solid #FED7AA' }}>
+              <div style={{ fontSize: '11px', color: '#9A3412', fontWeight: 700 }}>Đỉnh Thứ 7 🔥</div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#C2410C', marginTop: '2px' }}>29.5 Triệu đ</div>
+            </div>
+            <div style={{ background: '#F0FDF4', borderRadius: '12px', padding: '10px 14px', border: '1px solid #BBF7D0' }}>
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 700 }}>Tỷ Lệ Lấp Đầy</div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#15803D', marginTop: '2px' }}>91.4% Giờ vàng</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Khung Phân Bổ Doanh Thu Theo Bộ Môn */}
+        <div
+          style={{
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '20px',
+            border: '1.5px solid rgba(45, 95, 63, 0.16)',
+            padding: '24px 28px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: '22px' }}>
+                  pie_chart
+                </span>
+                Phân Bổ Doanh Thu Theo Bộ Môn
+              </h3>
+              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>4 Bộ Môn Hoạt Động</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {[
+                { label: 'Khu B — Bóng Đá Mini (Sân 5-7)', emoji: '⚽', pct: 42, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', rev: 59850000 },
+                { label: 'Khu A — Cầu Lông BWF (5 sân VIP)', emoji: '🏸', pct: 38, color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', rev: 54150000 },
+                { label: 'Khu C — Pickleball USAPA Pro', emoji: '🏓', pct: 15, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', rev: 21375000 },
+                { label: 'Khu D — Quần Vợt Tennis ATP', emoji: '🎾', pct: 5, color: '#EC4899', bg: '#FDF2F8', border: '#FBCFE8', rev: 7125000 },
+              ].map((z, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: z.bg,
+                    border: `1px solid ${z.border}`,
+                    borderRadius: '14px',
+                    padding: '12px 16px',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>{z.emoji}</span>
+                      <span style={{ fontWeight: 800, color: '#1E293B' }}>{z.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          background: '#FFFFFF',
+                          border: `1px solid ${z.border}`,
+                          color: z.color,
+                          fontWeight: 900,
+                          fontSize: '11px',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                        }}
+                      >
+                        {z.pct}%
+                      </span>
+                      <span style={{ fontWeight: 900, color: '#0F172A', fontSize: '13.5px' }}>
+                        {formatVND(z.rev)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.8)', borderRadius: '999px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.04)' }}>
+                    <div
+                      style={{
+                        width: `${z.pct}%`,
+                        height: '100%',
+                        background: z.color,
+                        borderRadius: '999px',
+                        boxShadow: `0 0 8px ${z.color}80`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#F8FAFC',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              fontSize: '12px',
+              color: '#475569',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+              insights
+            </span>
+            <span>Bóng đá và Cầu lông đóng góp <strong>80%</strong> tổng doanh thu của cơ sở SportNexus Arena.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Khung Bảng Lịch Sử Quyết Toán & Biến Động Số Dư — Thiết Kế Minh Bạch Cao Cấp */}
+      <div
+        style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1.5px solid rgba(45, 95, 63, 0.16)',
+          padding: '26px 28px',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.05)',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: '24px' }}>
+                history_edu
+              </span>
+              Lịch Sử Quyết Toán &amp; Biến Động Số Dư Escrow
+            </h3>
+            <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13.5px' }}>
+              Mọi dòng tiền đều được ghi nhận phân rã minh bạch theo mã tham chiếu Napas và Smart Escrow
+            </p>
+          </div>
+
+          {/* Filter Tabs & Export Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Quick Filter Tabs */}
+            <div style={{ display: 'flex', background: '#F1F5F9', padding: '4px', borderRadius: '12px', gap: '4px' }}>
+              {[
+                { key: 'all', label: `Tất Cả (${transactions.length})` },
+                { key: 'escrow_release', label: '⚡ Giải Ngân Escrow' },
+                { key: 'withdrawal', label: '🏦 Rút Tiền' },
+                { key: 'fee', label: '📄 Phí Sàn' },
+              ].map((tab) => {
+                const isActive = activeTxnTab === tab.key
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveTxnTab(tab.key)}
+                    style={{
+                      border: 'none',
+                      background: isActive ? '#FFFFFF' : 'transparent',
+                      color: isActive ? '#15803D' : '#64748B',
+                      fontWeight: isActive ? 800 : 600,
+                      fontSize: '12px',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      boxShadow: isActive ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => showToast('🎉 Đang xuất bảng đối soát tài chính định dạng Excel (.xlsx)...')}
+              style={{
+                background: '#FFFFFF',
+                border: '1.5px solid #CBD5E1',
+                borderRadius: '10px',
+                padding: '8px 14px',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#334155',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#FFFFFF')}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+                file_download
+              </span>
+              <span>Xuất Báo Cáo</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Transactions Table */}
+        <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', background: '#FFFFFF' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+              <tr style={{ background: 'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)', borderBottom: '2px solid #CBD5E1' }}>
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
                   Mã Giao Dịch
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
                   Nội Dung Giao Dịch
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
                   Thời Gian
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
                   Số Tiền
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
-                  Mã Đối Soát / Tham Chiếu
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
+                  Mã Đối Soát Napas / Ref
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '14px 18px', fontSize: '12.5px', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
                   Trạng Thái
                 </th>
               </tr>
             </thead>
             <tbody>
-              {transactions.map((txn) => {
+              {filteredTransactions.map((txn) => {
                 const isPositive = txn.amount > 0
                 return (
-                  <tr key={txn.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 800, color: '#2563EB' }}>
+                  <tr
+                    key={txn.id}
+                    style={{
+                      borderBottom: '1px solid #F1F5F9',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#F8FAFC')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '14px 18px', fontSize: '13px', fontWeight: 800, color: '#2563EB', fontFamily: 'monospace' }}>
                       {txn.id}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{txn.title}</div>
-                      <div style={{ fontSize: '12px', color: '#64748B' }}>{txn.zone}</div>
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: '18px',
+                            color: isPositive ? '#16A34A' : txn.type === 'withdrawal' ? '#DC2626' : '#64748B',
+                          }}
+                        >
+                          {isPositive ? 'qr_code_scanner' : txn.type === 'withdrawal' ? 'arrow_upward' : 'receipt'}
+                        </span>
+                        <div>
+                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{txn.title}</div>
+                          <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>{txn.zone}</div>
+                        </div>
+                      </div>
                     </td>
-                    <td style={{ padding: '14px 16px', fontSize: '13px', color: '#475569' }}>
+                    <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569' }}>
                       {txn.timestamp}
                     </td>
                     <td
                       style={{
-                        padding: '14px 16px',
+                        padding: '14px 18px',
                         fontSize: '15px',
-                        fontWeight: 800,
-                        color: isPositive ? '#16A34A' : '#DC2626',
+                        fontWeight: 900,
+                        color: isPositive ? '#059669' : '#DC2626',
                       }}
                     >
                       {isPositive ? `+${formatVND(txn.amount)}` : formatVND(txn.amount)}
                     </td>
-                    <td style={{ padding: '14px 16px', fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
-                      {txn.refCode}
+                    <td style={{ padding: '14px 18px', fontSize: '12px', color: '#475569', fontFamily: 'monospace' }}>
+                      <span style={{ background: '#F1F5F9', padding: '3px 8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                        {txn.refCode}
+                      </span>
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
+                    <td style={{ padding: '14px 18px' }}>
                       <span
                         style={{
                           background: '#DCFCE7',
                           color: '#15803D',
-                          padding: '4px 8px',
-                          borderRadius: '6px',
+                          border: '1px solid #86EFAC',
+                          padding: '4px 10px',
+                          borderRadius: '20px',
                           fontSize: '11px',
-                          fontWeight: 700,
+                          fontWeight: 800,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
                         }}
                       >
-                        Thành Công
+                        <span>✓</span> Thành Công
                       </span>
                     </td>
                   </tr>

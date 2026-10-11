@@ -182,7 +182,7 @@ export default function ViewCourtBookingSchedule() {
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: '#F8FAFC' }}>
+    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -258,72 +258,6 @@ export default function ViewCourtBookingSchedule() {
           </p>
         </div>
 
-        {/* Date Selector Navigation */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            background: '#FFFFFF',
-            border: '1px solid #CBD5E1',
-            borderRadius: '12px',
-            padding: '6px 12px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-          }}
-        >
-          <button
-            onClick={() => {
-              const d = new Date(selectedDate)
-              d.setDate(d.getDate() - 1)
-              setSelectedDate(d.toISOString().split('T')[0])
-            }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex' }}
-          >
-            <span className="material-symbols-outlined">chevron_left</span>
-          </button>
-
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              border: 'none',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: '#0F172A',
-              cursor: 'pointer',
-              background: 'transparent',
-              outline: 'none',
-            }}
-          />
-
-          <button
-            onClick={() => {
-              const d = new Date(selectedDate)
-              d.setDate(d.getDate() + 1)
-              setSelectedDate(d.toISOString().split('T')[0])
-            }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex' }}
-          >
-            <span className="material-symbols-outlined">chevron_right</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedDate('2026-10-10')}
-            style={{
-              background: '#F1F5F9',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 10px',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: '#334155',
-              cursor: 'pointer',
-            }}
-          >
-            Hôm Nay
-          </button>
-        </div>
       </div>
 
       {/* Analytics KPI Bar */}

@@ -3,6 +3,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 function Login() {
+  const [role, setRole] = useState(() => {
+    try {
+      return localStorage.getItem('sportnexus_user_role') || 'court_owner'
+    } catch {
+      return 'court_owner'
+    }
+  })
   const [passwordVisible, setPasswordVisible] = useState(false)
   const navigate = useNavigate()
 
@@ -52,15 +59,51 @@ function Login() {
             <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
               Đăng Nhập SportNexus
             </h1>
-            <p className="text-gray-600 text-center mb-8 text-sm">
-              Chào mừng bạn trở lại với nền tảng đặt sân thể thao đa môn
+            <p className="text-gray-600 text-center mb-6 text-sm">
+              Chào mừng bạn trở lại với nền tảng quản lý &amp; đặt sân thể thao
             </p>
+
+            {/* Role Selection Tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100 rounded-xl mb-6 border border-gray-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setRole('court_owner')
+                  try { localStorage.setItem('sportnexus_user_role', 'court_owner') } catch (e) {}
+                }}
+                className={`py-2.5 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                  role === 'court_owner'
+                    ? 'bg-[#2D5F3F] text-white shadow-md'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <span className="text-base">🏟️</span>
+                <span>Chủ Sân</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRole('player')
+                  try { localStorage.setItem('sportnexus_user_role', 'player') } catch (e) {}
+                }}
+                className={`py-2.5 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                  role === 'player'
+                    ? 'bg-[#2D5F3F] text-white shadow-md'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                }`}
+              >
+                <span className="text-base">🏃‍♂️</span>
+                <span>Người Chơi</span>
+              </button>
+            </div>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                const savedRole = localStorage.getItem('sportnexus_user_role')
-                if (savedRole === 'court_owner') {
+                try {
+                  localStorage.setItem('sportnexus_user_role', role)
+                } catch (err) {}
+                if (role === 'court_owner') {
                   navigate('/owner/dashboard')
                 } else {
                   navigate('/dashboard')
@@ -130,9 +173,10 @@ function Login() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200 uppercase tracking-wide"
+                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3.5 px-6 rounded-lg transition-all duration-200 uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.99]"
               >
-                ĐĂNG NHẬP
+                <span>{role === 'court_owner' ? 'ĐĂNG NHẬP CỔNG CHỦ SÂN' : 'ĐĂNG NHẬP NGƯỜI CHƠI'}</span>
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
             </form>
 

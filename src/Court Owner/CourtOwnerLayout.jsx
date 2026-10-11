@@ -93,7 +93,7 @@ export default function CourtOwnerLayout() {
           boxShadow: '4px 0 28px rgba(45, 95, 63, 0.06)',
         }}
       >
-        {/* Brand Logo Header */}
+        {/* Brand Logo Header — Đồng bộ chuẩn xác theo Role Player */}
         <div
           style={{
             display: 'flex',
@@ -116,34 +116,45 @@ export default function CourtOwnerLayout() {
               boxShadow: '0 4px 14px rgba(45, 95, 63, 0.28)',
             }}
           >
-            <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '24px' }}>
-              stadium
+            <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '22px' }}>
+              bolt
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  fontWeight: 800,
+                  fontSize: '17px',
+                  color: '#1C3524',
+                  letterSpacing: '-0.4px',
+                }}
+              >
+                SportNexus
+              </span>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#10B981',
+                  boxShadow: '0 0 8px #10B981',
+                }}
+              />
+            </div>
             <span
               style={{
-                fontSize: '17px',
-                fontWeight: 800,
-                color: '#1C3524',
-                letterSpacing: '-0.3px',
-                lineHeight: 1.1,
-              }}
-            >
-              SportNexus
-            </span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 800,
-                color: '#15803D',
-                letterSpacing: '0.6px',
+                fontSize: '10.5px',
+                color: '#2D5F3F',
                 textTransform: 'uppercase',
-                marginTop: '2px',
+                letterSpacing: '0.6px',
+                fontWeight: 700,
+                opacity: 0.9,
+                whiteSpace: 'nowrap',
               }}
             >
-              Court Owner OS
+              Hệ Thống Quản Trị Chủ Sân
             </span>
           </div>
         </div>
