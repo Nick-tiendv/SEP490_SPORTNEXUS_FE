@@ -2,6 +2,9 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #eef9f1;
+  color: #1f2937;
+  font-family: 'Inter', sans-serif;
 }
 
 #root {
@@ -15,4 +18,28 @@ body {
 }
 *::-webkit-scrollbar {
   display: none;
+}
+
+/* =====================================================================
+   SPORT BACKGROUND - Hình nền thể thao nguyên bản, sắc nét & nổi bật 100%
+   Ảnh gốc: Cầu lông, Pickleball, Tennis, Bóng đá & Hoàng hôn
+   ===================================================================== */
+.sport-animated-bg {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+}
+
+/* Lớp hình nền thể thao cố định toàn màn hình, giữ nguyên 100% độ sắc nét và màu sắc gốc */
+.sport-animated-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url('/sports-bg.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }

@@ -21,6 +21,24 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+
+    /* Background thể thao: xem .sport-animated-bg trong src/index.css */
+
+    /* Slow Pulse Animation for Promo Box */
+    @keyframes pulse-slow {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.95;
+        transform: scale(1.02);
+      }
+    }
+
+    .animate-pulse-slow {
+      animation: pulse-slow 3s ease-in-out infinite;
+    }
   
 @layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}
 img[alt^="SportNexus logo mark"]{display:none!important}

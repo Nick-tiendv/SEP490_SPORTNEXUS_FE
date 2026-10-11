@@ -1,362 +1,3491 @@
-function Profile() {
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+export default function Profile() {
+  const navigate = useNavigate()
+
+  // State thông tin người chơi - Đồng bộ tên & handle
+  const [profile, setProfile] = useState(() => {
+    const saved = localStorage.getItem('player_profile_data')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return {
+          name: parsed.name || 'Minh Minh Minh',
+          username: parsed.username || '@minhminhminh',
+          location: parsed.location || 'Thủ Đức',
+          bio: parsed.bio || 'Bị cầu lông chơi',
+          joinDate: parsed.joinDate || 'Tháng 03/2024',
+          phone: parsed.phone || '0908 123 456',
+          reputationScore: parsed.reputationScore || 4.9,
+          totalReviews: parsed.totalReviews || 58,
+          matchesPlayed: parsed.matchesPlayed || 48,
+          winRate: parsed.winRate || 86,
+          punctualityRate: parsed.punctualityRate || 99,
+          ...parsed,
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    return {
+      name: 'Minh Minh Minh',
+      username: '@minhminhminh',
+      location: 'Thủ Đức',
+      joinDate: 'Tháng 03/2024',
+      phone: '0908 123 456',
+      bio: 'Bị cầu lông chơi',
+      reputationScore: 4.9,
+      totalReviews: 58,
+      matchesPlayed: 48,
+      winRate: 86,
+      punctualityRate: 99,
+    }
+  })
+
+  // State các môn thể thao
+  const [sportsData, setSportsData] = useState(() => {
+    const saved = localStorage.getItem('player_sports_data') || localStorage.getItem('player_sports_elo')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return parsed.map((s) => {
+          const { elo, ...rest } = s
+          return rest
+        })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    return [
+      {
+        id: 'badminton',
+        name: 'Cầu lông',
+        icon: '🏸',
+        level: 'Trung bình - Khá',
+        field: 'Trình độ',
+        ranked: true,
+        matches: 32,
+        winRate: '88%',
+        color: '#15803D',
+        bgColor: '#DCFCE7',
+      },
+      {
+        id: 'pickleball',
+        name: 'Pickleball',
+        icon: '🏓',
+        level: 'Mới chơi - Đang tiến bộ',
+        field: 'Trình độ',
+        ranked: true,
+        matches: 12,
+        winRate: '82%',
+        color: '#0284C7',
+        bgColor: '#E0F2FE',
+      },
+      {
+        id: 'football',
+        name: 'Bóng đá',
+        icon: '⚽',
+        level: 'Tiền vệ cánh',
+        field: 'Sở trường',
+        ranked: true,
+        matches: 4,
+        winRate: '75%',
+        color: '#D97706',
+        bgColor: '#FEF3C7',
+      },
+      {
+        id: 'tennis',
+        name: 'Quần vợt (Tennis)',
+        icon: '🎾',
+        level: 'Chưa có dữ liệu thi đấu',
+        field: 'Trạng thái',
+        ranked: false,
+        matches: 0,
+        winRate: '0%',
+        color: '#6B7280',
+        bgColor: '#F3F4F6',
+      },
+    ]
+  })
+
+  // Lưu profile khi thay đổi
+  useEffect(() => {
+    localStorage.setItem('player_profile_data', JSON.stringify(profile))
+  }, [profile])
+
+  // Lưu sportsData khi thay đổi
+  useEffect(() => {
+    localStorage.setItem('player_sports_data', JSON.stringify(sportsData))
+    localStorage.removeItem('player_sports_elo')
+  }, [sportsData])
+
+  // Trạng thái các Modal
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showEloModal, setShowEloModal] = useState(false)
+  const [selectedSportToEdit, setSelectedSportToEdit] = useState(null)
+  const [showAllReviewsModal, setShowAllReviewsModal] = useState(false)
+  const [showWriteReviewModal, setShowWriteReviewModal] = useState(false)
+  const [showMatchesModal, setShowMatchesModal] = useState(false)
+  const [showFavoriteCourtsModal, setShowFavoriteCourtsModal] = useState(false)
+  const [showNotificationModal, setShowNotificationModal] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [toastMessage, setToastMessage] = useState(null)
+
+  // Form edit profile tạm thời
+  const [editForm, setEditForm] = useState({ ...profile })
+
+  // Form cập nhật trình độ
+  const [skillForm, setSkillForm] = useState({
+    level: 'Trung bình - Khá',
+  })
+
+  // Form viết đánh giá sau trận cho người chơi cùng sân
+  const [writeReviewForm, setWriteReviewForm] = useState({
+    targetPlayer: 'Hoàng Nam',
+    rating: 5,
+    content: '',
+  })
+  const [hoveredStar, setHoveredStar] = useState(0)
+
+  // Toast helper
+  const triggerToast = (msg) => {
+    setToastMessage(msg)
+    setTimeout(() => {
+      setToastMessage(null)
+    }, 3500)
+  }
+
+  // Danh sách đánh giá mẫu ban đầu
+  const initialReviews = [
+    {
+      id: 1,
+      author: 'Lê Nam',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ đánh đôi',
+      avatarInitial: 'LN',
+      avatarBg: '#DCFCE7',
+      avatarColor: '#15803D',
+      matchType: 'Kèo Cầu lông',
+      court: 'Sân Q7 (Sân số 3)',
+      time: '2 ngày trước',
+      rating: 5,
+      content:
+        'Đánh cầu rất chuẩn và vui tính! Lên lưới chắc tay, giao lưu cực kỳ thoải mái, phối hợp nhịp nhàng.',
+      verifiedCheckout: true,
+      checkoutTime: '20:15',
+    },
+    {
+      id: 2,
+      author: 'Trần Hùng',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đồng đội đánh cặp',
+      avatarInitial: 'TH',
+      avatarBg: '#E0F2FE',
+      avatarColor: '#0284C7',
+      matchType: 'Kèo Pickleball',
+      court: 'Sân Nam Sài Gòn (Sân 2)',
+      time: '5 ngày trước',
+      rating: 5,
+      content:
+        'Đúng giờ, tinh thần thể thao tuyệt vời. Luôn chủ động chia tiền sân sòng phẳng và hỗ trợ bọc lót đồng đội.',
+      verifiedCheckout: true,
+      checkoutTime: '19:40',
+    },
+    {
+      id: 3,
+      author: 'Hoàng Anh Tuấn',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Bạn chơi cùng sân',
+      avatarInitial: 'AT',
+      avatarBg: '#FEF3C7',
+      avatarColor: '#B45309',
+      matchType: 'Kèo Cầu lông',
+      court: 'Sân Hoàng Vy Q8 (Sân 1)',
+      time: '1 tuần trước',
+      rating: 5,
+      content:
+        'Kỹ thuật phong cầu và đập cầu rất chuẩn mực. Thái độ thi đấu văn minh, rất mong tiếp tục giao lưu ở các giải phong trào tới!',
+      verifiedCheckout: true,
+      checkoutTime: '21:00',
+    },
+    {
+      id: 4,
+      author: 'Võ Minh Đạt',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ cùng sân',
+      avatarInitial: 'MĐ',
+      avatarBg: '#F3E8FF',
+      avatarColor: '#7E22CE',
+      matchType: 'Kèo Bóng đá',
+      court: 'Sân Cỏ Nhân Tạo Kênh Tẻ',
+      time: '2 tuần trước',
+      rating: 5,
+      content:
+        'Đá bóng nhiệt huyết, tôn trọng đối thủ và đồng đội. Chuyền bóng sắc bén, rất kỷ luật và hòa nhã!',
+      verifiedCheckout: true,
+      checkoutTime: '18:30',
+    },
+    {
+      id: 5,
+      author: 'Nguyễn Quốc Huy',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đồng đội đánh cặp',
+      avatarInitial: 'QH',
+      avatarBg: '#FCE7F3',
+      avatarColor: '#BE185D',
+      matchType: 'Kèo Cầu lông',
+      court: 'CLB Viettel Q.10 (Sân 4)',
+      time: '3 tuần trước',
+      rating: 5,
+      content:
+        'Bảo bọc lưới cực tốt, phản xạ nhanh và luôn động viên đồng đội lúc bị dẫn điểm. Rất uy tín!',
+      verifiedCheckout: true,
+      checkoutTime: '20:30',
+    },
+    {
+      id: 6,
+      author: 'Đặng Tuấn',
+      targetPlayer: 'Minh Minh Minh',
+      coPlayerRole: 'Đối thủ cùng sân',
+      avatarInitial: 'ĐT',
+      avatarBg: '#E0E7FF',
+      avatarColor: '#4338CA',
+      matchType: 'Kèo Cầu lông',
+      court: 'Sân Tân Phong Q7',
+      time: '28/09/2026',
+      rating: 4,
+      content:
+        'Trận đấu kịch tính đến set 3, chơi sòng phẳng, chấp hành nghiêm quy định giờ giấc và check-out trả sân đúng giờ.',
+      verifiedCheckout: true,
+      checkoutTime: '21:30',
+    },
+  ]
+
+  // State danh sách đánh giá sau trận (lưu localStorage)
+  const [reviewsList, setReviewsList] = useState(() => {
+    const saved = localStorage.getItem('player_match_reviews')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    return initialReviews
+  })
+
+  // Lưu reviewsList khi có thay đổi
+  useEffect(() => {
+    localStorage.setItem('player_match_reviews', JSON.stringify(reviewsList))
+  }, [reviewsList])
+
+  // Lấy phiên thi đấu check-out gần nhất
+  const getCheckoutSession = () => {
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.checkOutDone) {
+          return parsed
+        }
+      }
+    } catch (e) {}
+    return null
+  }
+
+  // Danh sách bạn chơi cùng sân từ phiên check-out hoặc mặc định
+  const getAvailableCoPlayers = () => {
+    const session = getCheckoutSession()
+    if (session && session.coPlayers && session.coPlayers.length > 0) {
+      return session.coPlayers
+    }
+    return [
+      { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
+      { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
+      { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
+    ]
+  }
+
+  // Mô phỏng check-out thành công nhanh để thử nghiệm
+  const handleSimulateCheckout = () => {
+    const session = {
+      courtId: 'Court 3',
+      courtName: 'Sân Cầu Lông BWF Pro 01',
+      sport: 'Cầu lông',
+      checkInDone: true,
+      checkInTime: '18:00',
+      checkOutDone: true,
+      checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      coPlayers: [
+        { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
+        { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
+        { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
+      ],
+    }
+    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
+    triggerToast('✅ Đã kích hoạt phiên chơi check-out thành công tại Sân Cầu Lông BWF Pro 01!')
+  }
+
+  // Gửi đánh giá sau trận (chỉ cho phép sau khi check-out thành công)
+  const handleSubmitReview = (e) => {
+    e.preventDefault()
+    const session = getCheckoutSession()
+    if (!session || !session.checkOutDone) {
+      triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-out thành công!')
+      return
+    }
+
+    if (!writeReviewForm.content || writeReviewForm.content.trim().length < 10) {
+      triggerToast('⚠️ Vui lòng viết nhận xét chi tiết bằng chữ (tối thiểu 10 ký tự)!')
+      return
+    }
+
+    if (!writeReviewForm.rating || writeReviewForm.rating < 1 || writeReviewForm.rating > 5) {
+      triggerToast('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
+      return
+    }
+
+    const newReview = {
+      id: Date.now(),
+      author: 'Bạn (Minh Minh Minh)',
+      targetPlayer: writeReviewForm.targetPlayer,
+      coPlayerRole: 'Bạn chơi cùng sân',
+      avatarInitial: writeReviewForm.targetPlayer.slice(0, 2).toUpperCase(),
+      avatarBg: '#DCFCE7',
+      avatarColor: '#15803D',
+      matchType: `Kèo ${session.sport || 'Cầu lông'}`,
+      court: `${session.courtName || 'Sân Cầu Lông BWF Pro 01'} (${session.courtId || 'Court 3'})`,
+      time: 'Vừa xong',
+      rating: Number(writeReviewForm.rating),
+      content: writeReviewForm.content.trim(),
+      verifiedCheckout: true,
+      checkoutTime: session.checkOutTime || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    const updated = [newReview, ...reviewsList]
+    setReviewsList(updated)
+    setProfile((prev) => ({
+      ...prev,
+      totalReviews: (prev.totalReviews || 0) + 1,
+    }))
+    setShowWriteReviewModal(false)
+    setWriteReviewForm({
+      targetPlayer: 'Hoàng Nam',
+      rating: 5,
+      content: '',
+    })
+    triggerToast(`🎉 Đã gửi đánh giá thành công cho ${newReview.targetPlayer}!`)
+  }
+
+  // Danh sách sân yêu thích
+  const favoriteCourts = [
+    {
+      name: 'Sân Cầu Lông Tân Phong (Quận 7)',
+      address: 'Số 45 Lê Văn Lương, Tân Phong, Quận 7',
+      sport: 'Cầu lông',
+      rating: 4.9,
+      courtsCount: '8 sân thảm PVC tiêu chuẩn',
+    },
+    {
+      name: 'SportNexus Arena Nam Sài Gòn',
+      address: 'Đường số 10, KDC Him Lam, Quận 7',
+      sport: 'Pickleball & Cầu lông',
+      rating: 5.0,
+      courtsCount: '12 sân có máy che & quạt làm mát',
+    },
+    {
+      name: 'CLB Pickleball Phú Mỹ Hưng',
+      address: 'Khu Đô Thị Phú Mỹ Hưng, Quận 7',
+      sport: 'Pickleball',
+      rating: 4.8,
+      courtsCount: '6 sân chuẩn USAPA',
+    },
+    {
+      name: 'Sân Bóng Đá SportZone Q7',
+      address: 'Nguyễn Văn Linh, Tân Phú, Quận 7',
+      sport: 'Bóng đá mini 5-7 người',
+      rating: 4.7,
+      courtsCount: '4 sân cỏ nhân tạo đời mới',
+    },
+    {
+      name: 'Sân Tennis Sunrise City',
+      address: 'Khu Sunrise City, Nguyễn Hữu Thọ, Quận 7',
+      sport: 'Tennis',
+      rating: 4.9,
+      courtsCount: '2 sân cứng tiêu chuẩn quốc tế',
+    },
+  ]
+
+  // Mở modal cập nhật trình độ
+  const handleOpenEloModal = (sport) => {
+    setSelectedSportToEdit(sport)
+    setSkillForm({
+      level: sport.level.includes('Chưa có') ? 'Mới tập chơi' : sport.level,
+    })
+    setShowEloModal(true)
+  }
+
+  // Lưu trình độ
+  const handleSaveElo = () => {
+    if (!selectedSportToEdit) return
+    setSportsData((prev) =>
+      prev.map((s) => {
+        if (s.id === selectedSportToEdit.id) {
+          return {
+            ...s,
+            level: skillForm.level,
+            field: 'Trình độ',
+            ranked: true,
+          }
+        }
+        return s
+      })
+    )
+    setShowEloModal(false)
+    triggerToast(
+      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (${skillForm.level})!`
+    )
+  }
+
+  // Lưu Form Edit Profile
+  const handleSaveProfile = () => {
+    setProfile({ ...editForm })
+    localStorage.setItem('player_profile_data', JSON.stringify(editForm))
+    window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
+    setShowEditModal(false)
+    triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
+  }
+
   return (
-    <div className="w-full px-margin md:px-margin-lg py-space-lg flex flex-col gap-space-xl max-w-[1600px] mx-auto">
+    <div
+      style={{
+        padding: '24px 28px 60px 28px',
+        maxWidth: '1440px',
+        margin: '0 auto',
+      }}
+    >
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '76px',
+            right: '28px',
+            zIndex: 9999,
+            background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+            color: '#fff',
+            padding: '12px 20px',
+            borderRadius: '14px',
+            fontWeight: 700,
+            fontSize: '14px',
+            boxShadow: '0 8px 24px rgba(21, 128, 61, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            animation: 'slideDown 0.3s ease-out',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+            check_circle
+          </span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
-      {/* Top Identity / Profile Kinetic Hub */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-space-lg">
-
-        {/* Athlete Profile Hero Card */}
-        <div className="xl:col-span-4 flex flex-col justify-between bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-lg shadow-xl relative overflow-hidden group">
-          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-primary-container/10 blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-secondary-container/10 blur-3xl pointer-events-none"></div>
-          <div className="flex flex-col gap-space-md relative z-10">
-            <div className="flex items-start justify-between">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-primary-container via-surface-bright to-secondary-container shadow-[0_0_24px_rgba(0,229,255,0.4)]">
-                  <img className="w-full h-full rounded-full object-cover"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaL9m0aF6p6ZCDAVXgtv5GGbcHB6YqWM64qr2CH2Xj7oiT-krG10srAIkhmT1e3yWXTMzHpp-1AkCZz0LU8M_wQphD11H-5DC3z-5vev8pDQ37OuKK9oGLbnhqdrKF1JxnZopn9-AYatwpWArVfIZtPSHr2H0wtcfYgbog1vW465emENxgE8T8aUuXQ0xKV5be_JvJig9pqgNQ1Bs1MfYhU-kZDR8IqlNtYe7rcx4EK8FiKRYEK7sI"
-                    alt="Hoang An athlete portrait"
-                  />
-                </div>
-                <span className="absolute bottom-0 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-lowest text-secondary-container shadow-[0_0_12px_#34ff8c]">
-                  <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                </span>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="px-space-sm py-0.5 rounded-full bg-primary-container/10 text-primary-container font-label-sm text-label-sm tracking-wider uppercase shadow-[0_0_12px_rgba(0,229,255,0.2)]">Division Gold II</span>
-                <span className="text-on-surface-variant font-label-sm text-label-sm tracking-widest uppercase">Regional Seed #14</span>
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <h1 className="font-headline-lg text-headline-lg text-on-surface font-extrabold tracking-tight">Hoang An</h1>
-                <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">VN // APAC</span>
-              </div>
-              <p className="font-body-md text-body-md text-primary-container">@hoangan_smash</p>
-              <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-xs text-secondary-container">history_toggle_off</span>
-                Active Athlete since Jan 2024 • Verified Kinetic ID: 884-KX
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-2 pt-space-md mt-space-md bg-surface-container-lowest/60 rounded-lg p-space-sm relative z-10">
-            <div className="flex flex-col items-center justify-center text-center">
-              <span className="font-headline-sm text-headline-sm text-on-surface font-bold">142</span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Matches</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center">
-              <span className="font-headline-sm text-headline-sm text-secondary-container font-bold">68.4%</span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Win Rate</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center">
-              <span className="font-headline-sm text-headline-sm text-primary-container font-bold">5</span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Cups</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="flex items-center text-secondary-container">
-                <span className="font-headline-sm text-headline-sm font-bold">4W</span>
-                <span className="material-symbols-outlined text-xs ml-0.5">local_fire_department</span>
-              </div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Streak</span>
-            </div>
+      {/* TOP HEADER THANH TIÊU ĐỀ: Đồng bộ hệ sinh thái SportNexus */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '24px',
+          background: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(16px)',
+          padding: '14px 20px',
+          borderRadius: '18px',
+          border: '1px solid rgba(45, 95, 63, 0.12)',
+          boxShadow: '0 4px 16px rgba(45, 95, 63, 0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={() => setShowNotificationModal(true)}
+            title="Cài đặt tài khoản"
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              border: '1px solid #E5E7EB',
+              background: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#374151',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#F9FAFB'
+              e.currentTarget.style.borderColor = '#15803D'
+              e.currentTarget.style.color = '#15803D'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#FFFFFF'
+              e.currentTarget.style.borderColor = '#E5E7EB'
+              e.currentTarget.style.color = '#374151'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+              settings
+            </span>
+          </button>
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: 800,
+                color: '#1C3524',
+                letterSpacing: '-0.4px',
+              }}
+            >
+              Hồ sơ người chơi
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '12.5px',
+                color: '#6B7280',
+                fontWeight: 500,
+              }}
+            >
+              Định danh vận động viên &amp; Hệ thống hồ sơ thể thao SportNexus
+            </p>
           </div>
         </div>
 
-        {/* Circular Radial Performance Gauges */}
-        <div className="xl:col-span-4 flex flex-col md:flex-row xl:flex-col gap-space-md">
-          {/* Elo Rating Gauge */}
-          <div className="flex-1 bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-md flex items-center justify-between shadow-lg relative overflow-hidden">
-            <div className="flex flex-col gap-1 z-10">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_#00e5ff]"></span>
-                <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Global Rating Matrix</span>
-              </div>
-              <span className="font-headline-md text-headline-md text-on-surface font-bold">Badminton Elo</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded bg-primary-container/10 text-primary-container font-label-md text-label-md">Top 8% Global</span>
-                <span className="font-body-sm text-body-sm text-secondary-container flex items-center font-semibold">
-                  <span className="material-symbols-outlined text-sm">trending_up</span>+65 this week
-                </span>
-              </div>
-            </div>
-            <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle className="text-surface-container" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" strokeWidth="8"></circle>
-                <circle className="text-primary-container transition-all duration-1000" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" strokeDasharray="251.2" strokeDashoffset="69.0" strokeLinecap="round" strokeWidth="8"></circle>
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center">
-                <span className="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">1450</span>
-                <span className="font-label-sm text-label-sm text-primary-container uppercase">ELO</span>
-              </div>
-            </div>
-          </div>
-          {/* Fairplay Score Gauge */}
-          <div className="flex-1 bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-md flex items-center justify-between shadow-lg relative overflow-hidden">
-            <div className="flex flex-col gap-1 z-10">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-secondary-container shadow-[0_0_8px_#34ff8c]"></span>
-                <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Kinetic Sportsmanship</span>
-              </div>
-              <span className="font-headline-md text-headline-md text-on-surface font-bold">Fairplay Score</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded bg-secondary-container/10 text-secondary-container font-label-md text-label-md flex items-center gap-1">
-                  <span className="material-symbols-outlined text-xs">shield</span>Prime Conduct
-                </span>
-                <span className="font-body-sm text-body-sm text-on-surface-variant">Zero Violations</span>
-              </div>
-            </div>
-            <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                <circle className="text-surface-container" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" strokeWidth="8"></circle>
-                <circle className="text-secondary-container transition-all duration-1000" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" strokeDasharray="251.2" strokeDashoffset="12.5" strokeLinecap="round" strokeWidth="8"></circle>
-              </svg>
-              <div className="absolute flex flex-col items-center justify-center">
-                <span className="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">95</span>
-                <span className="font-label-sm text-label-sm text-secondary-container uppercase">/100</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Athletic Radar Chart */}
-        <div className="xl:col-span-4 bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-md shadow-xl flex flex-col justify-between relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary-container text-lg">radar</span>
-              <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold tracking-tight">Athletic Radar</h2>
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">6-Axis Telemetry</span>
-          </div>
-          <div className="relative w-full aspect-square max-h-[220px] flex items-center justify-center">
-            <svg className="w-full h-full drop-shadow-[0_0_12px_rgba(0,229,255,0.25)]" viewBox="0 0 320 300">
-              <defs>
-                <linearGradient id="radarGrad" x1="0%" x2="100%" y1="0%" y2="100%">
-                  <stop offset="0%" stopColor="#00e5ff" stopOpacity="0.55"></stop>
-                  <stop offset="100%" stopColor="#34ff8c" stopOpacity="0.35"></stop>
-                </linearGradient>
-              </defs>
-              <polygon className="text-outline-variant/40" fill="none" points="160,50 245,100 245,200 160,250 75,200 75,100" stroke="currentColor" strokeWidth="1"></polygon>
-              <polygon className="text-outline-variant/30" fill="none" points="160,70 227,110 227,190 160,230 93,190 93,110" stroke="currentColor" strokeWidth="1"></polygon>
-              <polygon className="text-outline-variant/20" fill="none" points="160,90 210,120 210,180 160,210 110,180 110,120" stroke="currentColor" strokeWidth="1"></polygon>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="160" y1="150" y2="50"></line>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="245" y1="150" y2="100"></line>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="245" y1="150" y2="200"></line>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="160" y1="150" y2="250"></line>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="75" y1="150" y2="200"></line>
-              <line className="text-outline-variant/30" stroke="currentColor" strokeDasharray="2,2" strokeWidth="1" x1="160" x2="75" y1="150" y2="100"></line>
-              <polygon className="transition-all duration-700" fill="url(#radarGrad)" points="160,62 240,103 230,191 160,240 87,193 82,104" stroke="#00e5ff" strokeWidth="2.5"></polygon>
-              <circle className="fill-primary-container" cx="160" cy="62" r="3.5"></circle>
-              <circle className="fill-secondary-container" cx="240" cy="103" r="3.5"></circle>
-              <circle className="fill-primary-container" cx="230" cy="191" r="3.5"></circle>
-              <circle className="fill-secondary-container" cx="160" cy="240" r="3.5"></circle>
-              <circle className="fill-primary-container" cx="87" cy="193" r="3.5"></circle>
-              <circle className="fill-secondary-container" cx="82" cy="104" r="3.5"></circle>
-              <text className="fill-on-surface font-bold" fontSize="11" textAnchor="middle" x="160" y="38">SMASH 88</text>
-              <text className="fill-secondary-container font-semibold" fontSize="10" textAnchor="start" x="252" y="98">AGILITY 94</text>
-              <text className="fill-on-surface-variant" fontSize="10" textAnchor="start" x="252" y="208">NET 82</text>
-              <text className="fill-on-surface font-semibold" fontSize="11" textAnchor="middle" x="160" y="272">STAMINA 90</text>
-              <text className="fill-on-surface-variant" fontSize="10" textAnchor="end" x="68" y="208">TACTICS 86</text>
-              <text className="fill-primary-container font-semibold" fontSize="10" textAnchor="end" x="68" y="98">REACTION 92</text>
-            </svg>
-          </div>
-          <div className="flex items-center justify-between text-on-surface-variant pt-2">
-            <span className="font-body-sm text-body-sm">Calibrated via Arena OptoTrackers</span>
-            <span className="font-label-sm text-label-sm text-primary-container uppercase font-semibold">Top Decile</span>
-          </div>
+        {/* Action Button: Chỉnh sửa hồ sơ */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={() => {
+              setEditForm({ ...profile })
+              setShowEditModal(true)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+              color: '#FFFFFF',
+              border: 'none',
+              padding: '9px 18px',
+              borderRadius: '12px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(21, 128, 61, 0.25)',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(21, 128, 61, 0.35)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'none'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(21, 128, 61, 0.25)'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+              edit_square
+            </span>
+            <span>Chỉnh sửa hồ sơ</span>
+          </button>
         </div>
       </div>
 
-      {/* Match History & Telemetry Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
-        {/* Primary Match Feed (8 Cols) */}
-        <div className="lg:col-span-8 flex flex-col gap-space-md">
-          {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm bg-surface-container-low/80 backdrop-blur-xl p-space-sm rounded-xl">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <button className="px-space-md py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold shadow-[0_0_12px_rgba(0,229,255,0.3)]">All Matches</button>
-              <button className="px-space-md py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md whitespace-nowrap">Badminton Singles</button>
-              <button className="px-space-md py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md whitespace-nowrap">Badminton Doubles</button>
-              <button className="px-space-md py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md whitespace-nowrap">Tournament Ranked</button>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="relative flex items-center">
-                <span className="material-symbols-outlined absolute left-2.5 text-on-surface-variant text-sm">search</span>
-                <input className="bg-surface-container-highest/60 text-on-surface placeholder:text-on-surface-variant/60 text-body-sm font-body-sm pl-8 pr-3 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-container w-44 sm:w-52" placeholder="Search opponent or court..." type="text" />
+      {/* GRID 2 CỘT RESPONSIVE */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(340px, 420px) 1fr',
+          gap: '24px',
+          alignItems: 'start',
+        }}
+        className="profile-responsive-grid"
+      >
+        {/* ===================== CỘT BÊN TRÁI ===================== */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* CARD 1: HERO PROFILE CARD */}
+          <div
+            style={{
+              background: 'linear-gradient(180deg, #FFFFFF 0%, #F6FAF7 100%)',
+              borderRadius: '24px',
+              border: '1px solid rgba(45, 95, 63, 0.14)',
+              boxShadow: '0 10px 30px rgba(45, 95, 63, 0.06)',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            {/* Header dải màu trang trí phía trên - Đã xóa mục ID */}
+            <div
+              style={{
+                height: '88px',
+                background:
+                  'linear-gradient(135deg, #15803D 0%, #22C55E 60%, #86EFAC 100%)',
+                position: 'relative',
+              }}
+            />
+
+            {/* Nội dung bên trong Hero Card */}
+            <div style={{ padding: '0 22px 22px 22px', position: 'relative' }}>
+              {/* Avatar + Badge uy tín */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'space-between',
+                  marginTop: '-44px',
+                  marginBottom: '14px',
+                }}
+              >
+                {/* Avatar container - Đồng bộ avatar MMM với TopBar và CommunityFeed */}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      width: '88px',
+                      height: '88px',
+                      borderRadius: '50%',
+                      padding: '4px',
+                      background: '#FFFFFF',
+                      boxShadow: '0 8px 24px rgba(45, 95, 63, 0.22)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        background:
+                          'linear-gradient(135deg, #1B4D2E 0%, #2D5F3F 50%, #15803D 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FFFFFF',
+                        fontWeight: 900,
+                        fontSize: '28px',
+                        letterSpacing: '-0.5px',
+                        boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.25)',
+                      }}
+                    >
+                      MMM
+                    </div>
+                  </div>
+                  {/* Chấm tròn online / verified xanh lá góc dưới */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: '3px',
+                      right: '3px',
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '50%',
+                      background: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '14px',
+                        height: '14px',
+                        borderRadius: '50%',
+                        background: '#10B981',
+                      }}
+                    />
+                  </span>
+                </div>
+
+                {/* Badge: Người chơi uy tín 4.9 ★ (58) */}
+                <div
+                  style={{
+                    background: '#DCFCE7',
+                    border: '1px solid #86EFAC',
+                    borderRadius: '20px',
+                    padding: '5px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#15803D',
+                    boxShadow: '0 2px 6px rgba(21, 128, 61, 0.08)',
+                  }}
+                >
+                  <span style={{ color: '#EAB308' }}>★</span>
+                  <span>Người chơi uy tín {profile.reputationScore} ★ ({profile.totalReviews})</span>
+                </div>
               </div>
-              <button className="p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant transition-colors">
-                <span className="material-symbols-outlined text-base">tune</span>
-              </button>
+
+              {/* Tên & Thông tin người chơi: Minh Minh Minh */}
+              <div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '22px',
+                    fontWeight: 800,
+                    color: '#1C3524',
+                    letterSpacing: '-0.3px',
+                  }}
+                >
+                  {profile.name}
+                </h2>
+                <p
+                  style={{
+                    margin: '3px 0 10px 0',
+                    fontSize: '13.5px',
+                    color: '#15803D',
+                    fontWeight: 600,
+                  }}
+                >
+                  {profile.username}
+                </p>
+
+                {/* Meta info: Vị trí & Ngày gia nhập */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    fontSize: '13px',
+                    color: '#4B5563',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#6B7280' }}>
+                      location_on
+                    </span>
+                    <span>{profile.location}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#6B7280' }}>
+                      calendar_month
+                    </span>
+                    <span>Gia nhập: {profile.joinDate}</span>
+                  </div>
+                </div>
+
+                {/* Bio tóm tắt */}
+                {profile.bio && (
+                  <div
+                    style={{
+                      background: '#F9FAFB',
+                      borderRadius: '12px',
+                      padding: '10px 14px',
+                      fontSize: '12.5px',
+                      color: '#4B5563',
+                      lineHeight: 1.45,
+                      marginBottom: '18px',
+                      borderLeft: '3px solid #15803D',
+                    }}
+                  >
+                    {profile.bio}
+                  </div>
+                )}
+              </div>
+
+              {/* 3 THẺ THỐNG KÊ NHANH (48 Trận, 86% Tỷ lệ thắng, 99% Đúng giờ) */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '10px',
+                  background: '#F0FDF4',
+                  borderRadius: '16px',
+                  padding: '12px 8px',
+                  border: '1px solid #DCFCE7',
+                }}
+              >
+                {/* 1. Trận đã đấu */}
+                <div
+                  style={{
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    transition: 'transform 0.15s',
+                  }}
+                  onClick={() => setShowMatchesModal(true)}
+                  title="Nhấn để xem lịch sử 48 trận"
+                >
+                  <div
+                    style={{
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {profile.matchesPlayed}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#4B5563',
+                      fontWeight: 600,
+                      marginTop: '4px',
+                    }}
+                  >
+                    Trận đã đấu
+                  </div>
+                </div>
+
+                {/* 2. Tỷ lệ thắng */}
+                <div
+                  style={{
+                    textAlign: 'center',
+                    borderLeft: '1px solid #D1FAE5',
+                    borderRight: '1px solid #D1FAE5',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {profile.winRate}%
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#4B5563',
+                      fontWeight: 600,
+                      marginTop: '4px',
+                    }}
+                  >
+                    Tỷ lệ thắng
+                  </div>
+                </div>
+
+                {/* 3. Đúng giờ (Cao) */}
+                <div style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {profile.punctualityRate}%
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#4B5563',
+                      fontWeight: 600,
+                      marginTop: '4px',
+                    }}
+                  >
+                    Đúng giờ (Cao)
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center justify-between px-1">
-            <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">Recent Matches &amp; Verified Telemetry</h2>
-            <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Showing 5 of 142 Recorded</span>
+
+          {/* CARD 2: DANH HIỆU & HUY HIỆU (3 ĐÃ ĐẠT) */}
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '20px',
+              padding: '20px',
+              border: '1px solid rgba(45, 95, 63, 0.12)',
+              boxShadow: '0 4px 16px rgba(45, 95, 63, 0.04)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
+                  military_tech
+                </span>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '16px',
+                    fontWeight: 800,
+                    color: '#1C3524',
+                  }}
+                >
+                  Danh hiệu &amp; Huy hiệu
+                </h3>
+              </div>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#15803D',
+                  background: '#DCFCE7',
+                  padding: '3px 10px',
+                  borderRadius: '12px',
+                }}
+              >
+                3 Đã đạt
+              </span>
+            </div>
+
+            {/* 3 Thẻ Huy Hiệu */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '10px',
+              }}
+            >
+              {/* Huy hiệu 1: Vua giao lưu Q7 */}
+              <div
+                style={{
+                  background: 'linear-gradient(180deg, #FEFCE8 0%, #FEF08A 100%)',
+                  border: '1px solid #FDE047',
+                  borderRadius: '16px',
+                  padding: '14px 8px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 8px rgba(234, 179, 8, 0.12)',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: '#FEF08A',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    marginBottom: '8px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  🏆
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#854D0E',
+                    lineHeight: 1.25,
+                    marginBottom: '4px',
+                  }}
+                >
+                  Vua giao lưu Q7
+                </div>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#A16207',
+                    fontWeight: 600,
+                  }}
+                >
+                  Top 5% tuần
+                </div>
+              </div>
+
+              {/* Huy hiệu 2: Chiến binh đúng giờ */}
+              <div
+                style={{
+                  background: 'linear-gradient(180deg, #F0FDF4 0%, #BBF7D0 100%)',
+                  border: '1px solid #86EFAC',
+                  borderRadius: '16px',
+                  padding: '14px 8px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.12)',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: '#86EFAC',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    marginBottom: '8px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  🕒
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#166534',
+                    lineHeight: 1.25,
+                    marginBottom: '4px',
+                  }}
+                >
+                  Chiến binh đúng giờ
+                </div>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#15803D',
+                    fontWeight: 600,
+                  }}
+                >
+                  30 trận liên tiếp
+                </div>
+              </div>
+
+              {/* Huy hiệu 3: Fair-play 5 sao */}
+              <div
+                style={{
+                  background: 'linear-gradient(180deg, #F0FDFA 0%, #99F6E4 100%)',
+                  border: '1px solid #5EEAD4',
+                  borderRadius: '16px',
+                  padding: '14px 8px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 8px rgba(13, 148, 136, 0.12)',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+              >
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: '#5EEAD4',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '18px',
+                    marginBottom: '8px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  🤝
+                </div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#115E59',
+                    lineHeight: 1.25,
+                    marginBottom: '4px',
+                  }}
+                >
+                  Fair-play 5 sao
+                </div>
+                <div
+                  style={{
+                    fontSize: '10px',
+                    color: '#0F766E',
+                    fontWeight: 600,
+                  }}
+                >
+                  Uy tín tuyệt đối
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Match Cards */}
-          <div className="flex flex-col gap-space-sm">
-            {/* Match 1 - WIN */}
-            {[
-              { name: 'Marcus Vance', rank: '#18', elo: 1420, date: 'Today, 18:30 • Kinetic Arena Court 3', type: 'Singles Ranked', result: 'WIN', score: '21-18, 19-21, 21-16', elo_change: '+12', color: 'secondary', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBPHIoH-pnmdZU-mmWT6F0A6xdwbVLDGNblSMzMAYkemdfGkv7Q8Gayt-O3eMVK9mbYcf4CF8uCHNackSX9Pv2xcKeQRuj1YHvOdDIGJ38NJBfCwC-bZcZCGkAzAsWYmY04brpcKcRuhhI0e4Cn-4XykX_CEShnLk0bRQTzr_Es3zHcqAOKzIHeuf0kVglYvxofBc6I5A9aNlVNjVB_va4V84vSVCwdEf7LJshZsvS6GCVb3Iz6u-Z3', btnLabel: 'Replay & Telemetry' },
-              { name: 'Elena Rostova', rank: '#11', elo: 1485, date: 'Yesterday, 20:15 • Metro Badminton Hub', type: 'Singles Ranked', result: 'WIN', score: '21-19, 21-14', elo_change: '+18', color: 'secondary', img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDp4igp4V13LoP_jedcQfAjWW7dOVQxwy9Z0FvUgHbYxg32lcnHDqvHj0q_kK5PpWSUoWfC1qOzDpfg6Pqsgp5jt8yvLX1dBPSrWhg60AHG7jGh5cAyyygYHXcHan1iz19iHCjIrWxbAI8GddVFK3DGRzn5CnmudxjS9Zk36L2Ven8IAG8iZjEjfrB7cl2Rpv_FKodNzO4KL6HhDGIHOGtjvnLNs_EMevZSA0qK08r07g-GRZIsooOs', btnLabel: 'View Stats' },
-            ].map((m) => (
-              <div key={m.name} className="bg-surface-container-low/90 backdrop-blur-xl rounded-xl p-space-md shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md hover:bg-surface-container-high/60 transition-all">
-                <div className="flex items-center gap-space-md">
-                  <div className="relative">
-                    <img className="w-12 h-12 rounded-full object-cover" src={m.img} alt={m.name} />
-                    <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-surface-container-lowest text-primary-container text-[10px]">{m.rank}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="font-headline-sm text-headline-sm text-on-surface font-semibold leading-tight">{m.name}</span>
-                      <span className="text-on-surface-variant font-label-sm text-label-sm">Elo {m.elo}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-body-sm text-body-sm text-on-surface-variant">{m.date}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-surface-container text-primary-container font-label-sm text-label-sm">{m.type}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-space-lg">
-                  <div className="flex flex-col items-start md:items-end">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-secondary-container/15 text-secondary-container font-label-md text-label-md font-bold uppercase shadow-[0_0_10px_rgba(52,255,140,0.2)]">WIN</span>
-                      <span className="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">{m.score}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="font-label-md text-label-md text-secondary-container font-bold flex items-center">
-                        <span className="material-symbols-outlined text-sm">arrow_upward</span>{m.elo_change} ELO
-                      </span>
-                      <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs text-secondary-container">verified_user</span>Settled
-                      </span>
-                    </div>
-                  </div>
-                  <button className="px-space-md py-2 rounded-lg bg-surface-container hover:bg-primary-container hover:text-on-primary-container text-on-surface font-label-md text-label-md font-semibold transition-all whitespace-nowrap">{m.btnLabel}</button>
-                </div>
-              </div>
-            ))}
+          {/* CARD 3: TÀI KHOẢN & TIỆN ÍCH */}
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '20px',
+              padding: '20px',
+              border: '1px solid rgba(45, 95, 63, 0.12)',
+              boxShadow: '0 4px 16px rgba(45, 95, 63, 0.04)',
+            }}
+          >
+            <h3
+              style={{
+                margin: '0 0 16px 0',
+                fontSize: '16px',
+                fontWeight: 800,
+                color: '#1C3524',
+              }}
+            >
+              Tài khoản &amp; Tiện ích
+            </h3>
 
-            {/* Match 3 - LOSS */}
-            <div className="bg-surface-container-low/90 backdrop-blur-xl rounded-xl p-space-md shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md hover:bg-surface-container-high/60 transition-all">
-              <div className="flex items-center gap-space-md">
-                <div className="relative">
-                  <img className="w-12 h-12 rounded-full object-cover"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9e-QLDVmA2AG-cEBZVe1aL2NvvCVxEUtBdE7lTGU-wdR7NiWHu9Z-6etbcwMCQ_5xswURuDK-RWXb9pPEoMLdKrmfZIrJUtL89QZs4xfgUdAsUU0be5CTrUrTWRrLohb9FMVApGpZCnOK9yipjTX7NXQ94kbdVZbWrsa6waMxki-coaZ5mLbWxwNgsOgM6jBgRuciFwJKKz0Hlw0at4XjYYjE44VIcO2c7lUaFTiM9hPVRLQrD-IX"
-                    alt="Daisuke Tanaka" />
-                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-surface-container-lowest text-primary-container text-[10px]">#07</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* 1. Lịch sử trận đấu */}
+              <div
+                onClick={() => setShowMatchesModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#F9FAFB',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = 'transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      flag
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                    Lịch sử trận đấu
+                  </span>
                 </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="font-headline-sm text-headline-sm text-on-surface font-semibold leading-tight">Daisuke Tanaka</span>
-                    <span className="text-on-surface-variant font-label-sm text-label-sm">Elo 1510</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="font-body-sm text-body-sm text-on-surface-variant">Oct 12, 17:00 • Nexus Prime Court 1</span>
-                    <span className="px-1.5 py-0.5 rounded bg-tertiary-container/20 text-tertiary-fixed-dim font-label-sm text-label-sm">Tournament Semis</span>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803D' }}>
+                    48 trận
+                  </span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                    chevron_right
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-space-lg">
-                <div className="flex flex-col items-start md:items-end">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-error-container/40 text-error font-label-md text-label-md font-bold uppercase">LOSS</span>
-                    <span className="font-headline-sm text-headline-sm text-on-surface font-extrabold tracking-tight">18-21, 21-17, 19-21</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="font-label-md text-label-md text-error font-bold flex items-center">
-                      <span className="material-symbols-outlined text-sm">arrow_downward</span>-8 ELO
+
+              {/* 2. Sân yêu thích */}
+              <div
+                onClick={() => setShowFavoriteCourtsModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#F9FAFB',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = 'transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      favorite
                     </span>
-                    <span className="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs text-primary-container">gavel</span>BWF Standard
-                    </span>
                   </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                    Sân yêu thích
+                  </span>
                 </div>
-                <button className="px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-bright text-on-surface font-label-md text-label-md font-semibold transition-all whitespace-nowrap">Match Analysis</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803D' }}>
+                    5 địa điểm
+                  </span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                    chevron_right
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Cài đặt thông báo */}
+              <div
+                onClick={() => setShowNotificationModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#F9FAFB',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = 'transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      notifications
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                    Cài đặt thông báo
+                  </span>
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                  chevron_right
+                </span>
+              </div>
+
+              {/* 4. Trung tâm hỗ trợ */}
+              <div
+                onClick={() => setShowHelpModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#F9FAFB',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = 'transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      support_agent
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                    Trung tâm hỗ trợ
+                  </span>
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                  chevron_right
+                </span>
+              </div>
+
+              {/* 5. Đăng xuất */}
+              <div
+                onClick={() => setShowLogoutModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#FEF2F2',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid #FEE2E2',
+                  marginTop: '4px',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#FEE2E2'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#FEF2F2'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#FEE2E2',
+                      color: '#DC2626',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      logout
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#DC2626' }}>
+                    Đăng xuất
+                  </span>
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#DC2626' }}>
+                  chevron_right
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Tactical Analytics Sidebar (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-space-md">
-          {/* Elo Trajectory Chart */}
-          <div className="bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-lg shadow-xl flex flex-col gap-space-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary-container">show_chart</span>
-                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold">Elo Trajectory</h3>
+        {/* ===================== CỘT BÊN PHẢI ===================== */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* PHẦN 1: TRÌNH ĐỘ KỸ NĂNG */}
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              padding: '24px',
+              border: '1px solid rgba(45, 95, 63, 0.14)',
+              boxShadow: '0 8px 24px rgba(45, 95, 63, 0.05)',
+            }}
+          >
+            {/* Header: Icon + Trình độ & Badge HỆ THỐNG RANK */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#15803D' }}>
+                  workspace_premium
+                </span>
+                <div>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: '18px',
+                      fontWeight: 800,
+                      color: '#1C3524',
+                      letterSpacing: '-0.3px',
+                    }}
+                  >
+                    Trình độ kỹ năng
+                  </h2>
+                </div>
               </div>
-              <span className="px-2 py-0.5 rounded bg-surface-container text-secondary-container font-label-sm text-label-sm font-semibold">+65 Net</span>
+              <span
+                style={{
+                  background: '#DCFCE7',
+                  border: '1px solid #86EFAC',
+                  borderRadius: '20px',
+                  padding: '5px 12px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  color: '#15803D',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                HỆ THỐNG RANK
+              </span>
             </div>
-            <p className="font-body-sm text-body-sm text-on-surface-variant">7-day competitive rating momentum based on verified matches.</p>
-            <div className="h-32 w-full flex items-end justify-between gap-2 pt-4 px-1">
-              {[
-                { day: 'Mon', h: '48%', color: 'bg-surface-container' },
-                { day: 'Tue', h: '60%', color: 'bg-surface-container' },
-                { day: 'Wed', h: '52%', color: 'bg-surface-container' },
-                { day: 'Thu', h: '75%', color: 'bg-surface-container' },
-                { day: 'Fri', h: '68%', color: 'bg-surface-container' },
-                { day: 'Sat', h: '86%', color: 'bg-secondary-container/80 shadow-[0_0_10px_#34ff8c]' },
-                { day: 'Today', h: '94%', color: 'bg-primary-container shadow-[0_0_12px_#00e5ff]' },
-              ].map(({ day, h, color }) => (
-                <div key={day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                  <div className={`w-full rounded-t transition-all ${color}`} style={{ height: h }}></div>
-                  <span className={`font-label-sm text-label-sm ${day === 'Today' ? 'text-primary-container font-bold' : day === 'Sat' ? 'text-secondary-container font-bold' : 'text-on-surface-variant'}`}>{day}</span>
+
+            {/* Banner hướng dẫn (info box) */}
+            <div
+              style={{
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '16px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                marginBottom: '20px',
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: '20px', color: '#15803D', flexShrink: 0, marginTop: '1px' }}
+              >
+                info
+              </span>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '13px',
+                  color: '#166534',
+                  lineHeight: 1.5,
+                  fontWeight: 500,
+                }}
+              >
+                Tự đánh giá trình độ giúp SportNexus đề xuất đối thủ &amp; kèo ghép trận cân bằng nhất.
+              </p>
+            </div>
+
+            {/* DANH SÁCH 4 MÔN THỂ THAO */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {sportsData.map((sport) => {
+                const isTennis = sport.id === 'tennis'
+                return (
+                  <div
+                    key={sport.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      borderRadius: '18px',
+                      background: '#FFFFFF',
+                      border: isTennis
+                        ? '1.5px dashed #86EFAC'
+                        : '1px solid rgba(45, 95, 63, 0.12)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#15803D'
+                      e.currentTarget.style.transform = 'translateY(-1px)'
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(21, 128, 61, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = isTennis
+                        ? '#86EFAC'
+                        : 'rgba(45, 95, 63, 0.12)'
+                      e.currentTarget.style.transform = 'none'
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)'
+                    }}
+                  >
+                    {/* Left: Sport Icon + Name & Level */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div
+                        style={{
+                          width: '46px',
+                          height: '46px',
+                          borderRadius: '14px',
+                          background: sport.bgColor,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '22px',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        }}
+                      >
+                        {sport.icon}
+                      </div>
+
+                      <div>
+                        {/* Tên môn + Badge Trạng thái */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span
+                            style={{
+                              fontSize: '15.5px',
+                              fontWeight: 800,
+                              color: '#1C3524',
+                            }}
+                          >
+                            {sport.name}
+                          </span>
+                          {sport.ranked ? (
+                            <span
+                              style={{
+                                background: '#DCFCE7',
+                                color: '#15803D',
+                                border: '1px solid #86EFAC',
+                                borderRadius: '12px',
+                                padding: '2px 8px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                              }}
+                            >
+                              Đã xác nhận
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                background: '#F3F4F6',
+                                color: '#6B7280',
+                                border: '1px solid #E5E7EB',
+                                borderRadius: '12px',
+                                padding: '2px 8px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                              }}
+                            >
+                              Chưa xếp hạng
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Subtext: Trình độ hoặc Sở trường */}
+                        <div style={{ fontSize: '13px', color: '#6B7280' }}>
+                          <span>{sport.field}: </span>
+                          <strong style={{ color: sport.ranked ? '#1F2937' : '#9CA3AF' }}>
+                            {sport.level}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Action button */}
+                    <div>
+                      {isTennis ? (
+                        <button
+                          onClick={() => handleOpenEloModal(sport)}
+                          style={{
+                            background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '12px',
+                            padding: '9px 18px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: '0 3px 10px rgba(21, 128, 61, 0.25)',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.02)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)'
+                          }}
+                        >
+                          Đánh giá ngay
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenEloModal(sport)}
+                          style={{
+                            background: '#FFFFFF',
+                            color: '#15803D',
+                            border: '1px solid #86EFAC',
+                            borderRadius: '12px',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#DCFCE7'
+                            e.currentTarget.style.borderColor = '#15803D'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#FFFFFF'
+                            e.currentTarget.style.borderColor = '#86EFAC'
+                          }}
+                        >
+                          Cập nhật
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* PHẦN 2: ĐÁNH GIÁ SAU TRẬN */}
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              padding: '24px',
+              border: '1px solid rgba(45, 95, 63, 0.14)',
+              boxShadow: '0 8px 24px rgba(45, 95, 63, 0.05)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '14px',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#15803D' }}>
+                  forum
+                </span>
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '18px',
+                      fontWeight: 800,
+                      color: '#1C3524',
+                      letterSpacing: '-0.3px',
+                    }}
+                  >
+                    Đánh giá sau trận
+                  </h3>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowWriteReviewModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '8px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 3px 10px rgba(21, 128, 61, 0.25)',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
+                    rate_review
+                  </span>
+                  <span>Viết đánh giá sau trận</span>
+                </button>
+
+                <button
+                  onClick={() => setShowAllReviewsModal(true)}
+                  style={{
+                    background: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    color: '#15803D',
+                    borderRadius: '12px',
+                    padding: '7px 12px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span>Tất cả ({reviewsList.length})</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                    arrow_forward
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Banner quy định đánh giá sau trận */}
+            <div
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '14px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: '#475569',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
+                  verified_user
+                </span>
+                <span>
+                  <strong>Quy chuẩn đánh giá:</strong> Người chơi chỉ được phép <u>viết nhận xét</u> &amp; <u>chấm điểm sao</u> cho bạn chơi cùng sân <strong>sau khi check-out thành công</strong>.
+                </span>
+              </div>
+              <span
+                style={{
+                  background: '#DCFCE7',
+                  color: '#15803D',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  fontWeight: 800,
+                  fontSize: '11px',
+                  border: '1px solid #86EFAC',
+                }}
+              >
+                ✓ Xác thực sau Check-out
+              </span>
+            </div>
+
+            {/* Danh sách các đánh giá nổi bật */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {reviewsList.slice(0, 3).map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    borderRadius: '18px',
+                    padding: '16px 18px',
+                    background: '#FAFCFA',
+                    border: '1px solid rgba(45, 95, 63, 0.1)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      marginBottom: '10px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '12px',
+                          background: item.avatarBg,
+                          color: item.avatarColor,
+                          fontWeight: 800,
+                          fontSize: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.avatarInitial}
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '14.5px',
+                            fontWeight: 800,
+                            color: '#1F2937',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <span>{item.author}</span>
+                          {item.coPlayerRole && (
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#6B7280',
+                                background: '#F3F4F6',
+                                padding: '1px 6px',
+                                borderRadius: '6px',
+                              }}
+                            >
+                              {item.coPlayerRole}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#6B7280',
+                            marginTop: '2px',
+                          }}
+                        >
+                          {item.matchType} • {item.court} • {item.time}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: '8px',
+                          border: '1px solid #86EFAC',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                          check_circle
+                        </span>
+                        Đã check-out cùng sân
+                      </span>
+
+                      <div style={{ display: 'flex', color: '#EAB308', fontSize: '14px', gap: '1px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                            }}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: '13.5px',
+                      color: '#374151',
+                      lineHeight: 1.5,
+                      fontStyle: 'italic',
+                      paddingLeft: '4px',
+                      borderLeft: '3px solid #15803D',
+                    }}
+                  >
+                    “{item.content}”
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Venue Dominance */}
-          <div className="bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-md shadow-xl flex items-center justify-between gap-space-md">
-            <div className="flex items-center gap-space-md">
-              <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-primary-container">
-                <span className="material-symbols-outlined text-2xl">stadium</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="font-label-sm text-label-sm uppercase text-on-surface-variant">Dominant Ground</span>
-                <span className="font-headline-sm text-headline-sm text-on-surface font-bold">Kinetic Arena</span>
-                <span className="font-body-sm text-body-sm text-secondary-container">64% of total matches played</span>
-              </div>
-            </div>
-            <span className="px-2 py-1 rounded bg-surface-container-high text-primary-container font-label-md text-label-md font-semibold">Home Court</span>
-          </div>
-
-          {/* Rival Encounter */}
-          <div className="bg-surface-container-low/90 backdrop-blur-2xl rounded-xl p-space-md shadow-xl flex items-center justify-between gap-space-md">
-            <div className="flex items-center gap-space-md">
-              <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-secondary-container">
-                <span className="material-symbols-outlined text-2xl">swords</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="font-label-sm text-label-sm uppercase text-on-surface-variant">Most Frequent Rival</span>
-                <span className="font-headline-sm text-headline-sm text-on-surface font-bold">Marcus Vance</span>
-                <span className="font-body-sm text-body-sm text-on-surface-variant">5 Encounters • 4W - 1L Head-to-Head</span>
-              </div>
-            </div>
-            <button className="p-2 rounded-lg bg-surface-container hover:bg-surface-bright text-on-surface-variant hover:text-primary-container transition-colors">
-              <span className="material-symbols-outlined text-base">chevron_right</span>
-            </button>
-          </div>
-
-          {/* Challenge CTA */}
-          <div className="bg-gradient-to-br from-surface-container to-surface-container-lowest rounded-xl p-space-md shadow-xl flex flex-col gap-space-sm relative overflow-hidden">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary-container animate-ping"></span>
-              <span className="font-label-sm text-label-sm text-primary-container uppercase font-bold tracking-wider">Instant Queue Ready</span>
-            </div>
-            <h4 className="font-headline-sm text-headline-sm text-on-surface font-bold">Issue Open Arena Challenge</h4>
-            <p className="font-body-sm text-body-sm text-on-surface-variant">Dispatch an algorithmic open match invitation to players within +/-50 Elo range at Kinetic Arena.</p>
-            <button className="mt-2 w-full py-2.5 rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold shadow-[0_0_20px_rgba(0,229,255,0.4)] hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-lg">bolt</span>
-              Deploy Match Beacon
-            </button>
-          </div>
         </div>
       </div>
+
+      {/* ===================== CÁC MODAL TƯƠNG TÁC ===================== */}
+
+      {/* 1. MODAL CHỈNH SỬA HỒ SƠ */}
+      {showEditModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '18px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                Chỉnh sửa thông tin người chơi
+              </h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Họ và tên
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Tên định danh (Handle)
+                </label>
+                <input
+                  type="text"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Khu vực thi đấu ưa thích
+                </label>
+                <input
+                  type="text"
+                  value={editForm.location}
+                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Số điện thoại
+                </label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Giới thiệu bản thân (Bio)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                    resize: 'none',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => setShowEditModal(false)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #D1D5DB',
+                  background: '#FFFFFF',
+                  color: '#4B5563',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Lưu thay đổi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODAL CẬP NHẬT TRÌNH ĐỘ */}
+      {showEloModal && selectedSportToEdit && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '22px' }}>{selectedSportToEdit.icon}</span>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                  Cập nhật xếp hạng: {selectedSportToEdit.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowEloModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Mức độ kỹ năng / Sở trường
+                </label>
+                <select
+                  value={skillForm.level}
+                  onChange={(e) => setSkillForm({ ...skillForm, level: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                    background: '#FFFFFF',
+                  }}
+                >
+                  <option value="Mới tập chơi">Mới tập chơi - Căn bản</option>
+                  <option value="Mới chơi - Đang tiến bộ">Mới chơi - Đang tiến bộ</option>
+                  <option value="Trung bình - Khá">Trung bình - Khá</option>
+                  <option value="Khá - Đánh chắc tay">Khá - Đánh chắc tay</option>
+                  <option value="Bán chuyên / Thi đấu giải">Bán chuyên / Thi đấu giải</option>
+                  <option value="Tiền vệ cánh">Tiền vệ cánh (Bóng đá)</option>
+                  <option value="Tiền đạo cắm">Tiền đạo cắm (Bóng đá)</option>
+                </select>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Trình độ được dùng để ghép đối thủ và xếp lịch thi đấu phù hợp nhất với bạn.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
+              <button
+                onClick={() => setShowEloModal(false)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #D1D5DB',
+                  background: '#FFFFFF',
+                  color: '#4B5563',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveElo}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Xác nhận lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL XEM TẤT CẢ ĐÁNH GIÁ */}
+      {showAllReviewsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '680px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                  Tất cả đánh giá từ người chơi ({reviewsList.length})
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  100% đánh giá xác thực bằng chữ &amp; sao sau khi check-out sân SportNexus
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAllReviewsModal(false)
+                    setShowWriteReviewModal(true)
+                  }}
+                  style={{
+                    background: '#15803D',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                    rate_review
+                  </span>
+                  Viết đánh giá
+                </button>
+
+                <button
+                  onClick={() => setShowAllReviewsModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6B7280',
+                  }}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Danh sách các review */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {reviewsList.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    borderRadius: '16px',
+                    padding: '14px 16px',
+                    background: '#FAFCFA',
+                    border: '1px solid rgba(45, 95, 63, 0.1)',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '8px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: item.avatarBg,
+                          color: item.avatarColor,
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {item.avatarInitial}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{item.author}</span>
+                          {item.coPlayerRole && (
+                            <span style={{ fontSize: '10.5px', background: '#F3F4F6', color: '#6B7280', padding: '1px 5px', borderRadius: '4px' }}>
+                              {item.coPlayerRole}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                          {item.matchType} • {item.court} • {item.time}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: '6px',
+                          border: '1px solid #86EFAC',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                          check_circle
+                        </span>
+                        Đã check-out cùng sân
+                      </span>
+
+                      <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
+                        {[...Array(5)].map((_, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                            }}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#374151', fontStyle: 'italic', paddingLeft: '4px', borderLeft: '3px solid #15803D' }}>
+                    “{item.content}”
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <button
+                onClick={() => setShowAllReviewsModal(false)}
+                style={{
+                  padding: '9px 24px',
+                  borderRadius: '12px',
+                  background: '#15803D',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3B. MODAL VIẾT ĐÁNH GIÁ SAU TRẬN (CHỈ DÀNH CHO BẠN CHƠI CÙNG SÂN SAU KHI CHECK-OUT THÀNH CÔNG) */}
+      {showWriteReviewModal && (() => {
+        const session = getCheckoutSession()
+        const isEligible = session && session.checkOutDone
+        const coPlayers = getAvailableCoPlayers()
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000,
+              background: 'rgba(0, 0, 0, 0.5)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+            }}
+          >
+            <div
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '24px',
+                maxWidth: '560px',
+                width: '100%',
+                padding: '26px',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+                border: '1px solid rgba(45, 95, 63, 0.15)',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '16px',
+                  borderBottom: '1px solid #E5E7EB',
+                  paddingBottom: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                      rate_review
+                    </span>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                      Đánh giá sau trận đấu
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                      Chỉ mở sau khi hoàn tất check-out tại sân thi đấu
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowWriteReviewModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6B7280',
+                  }}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {!isEligible ? (
+                /* TH1: CHƯA CHECK-OUT THÀNH CÔNG -> KHÓA ĐÁNH GIÁ */
+                <div style={{ textAlign: 'center', padding: '16px 8px' }}>
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: '#FEF3C7',
+                      color: '#D97706',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px auto',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>
+                      lock
+                    </span>
+                  </div>
+
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 800, color: '#1F2937' }}>
+                    Chưa đủ điều kiện đánh giá sau trận
+                  </h4>
+
+                  <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#4B5563', lineHeight: 1.6 }}>
+                    Theo quy chuẩn minh bạch của SportNexus: Người chơi <strong>chỉ được phép đánh giá bằng hình thức viết nhận xét và chấm điểm sao cho người chơi cùng sân sau khi đã check-out thành công</strong>.
+                  </p>
+
+                  <div
+                    style={{
+                      background: '#F8FAFC',
+                      border: '1px dashed #CBD5E1',
+                      borderRadius: '16px',
+                      padding: '14px',
+                      marginBottom: '20px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      color: '#475569',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '4px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
+                        verified
+                      </span>
+                      Lợi ích của cơ chế xác thực check-out:
+                    </div>
+                    <div>• Ngăn chặn 100% đánh giá ảo, spam điểm danh dự</div>
+                    <div>• Đảm bảo 2 bên thực sự đã chơi cùng nhau trên sân</div>
+                    <div>• Bảo vệ quỹ ký quỹ Escrow và xếp hạng công bằng</div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowWriteReviewModal(false)
+                        navigate('/check-in')
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        borderRadius: '12px',
+                        background: '#15803D',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '13.5px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                        qr_code_scanner
+                      </span>
+                      Đi đến trang Check-in / Check-out sân
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSimulateCheckout()
+                        // Re-trigger re-render
+                        setShowWriteReviewModal(false)
+                        setTimeout(() => setShowWriteReviewModal(true), 200)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '12px',
+                        background: '#F0FDF4',
+                        color: '#15803D',
+                        fontWeight: 700,
+                        fontSize: '12.5px',
+                        border: '1px dashed #16A34A',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        bolt
+                      </span>
+                      Mô phỏng Check-out thành công ngay (Dùng thử)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* TH2: ĐÃ CHECK-OUT THÀNH CÔNG -> MỞ FORM ĐÁNH GIÁ CHI TIẾT */
+                <form onSubmit={handleSubmitReview} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Verified Session Info */}
+                  <div
+                    style={{
+                      background: '#F0FDF4',
+                      border: '1px solid #BBF7D0',
+                      borderRadius: '14px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
+                          task_alt
+                        </span>
+                        Đã Check-out thành công • {session.courtId || 'Court 3'}
+                      </div>
+                      <div style={{ color: '#15803D', fontSize: '11.5px', marginTop: '2px' }}>
+                        {session.courtName || 'Sân Cầu Lông BWF Pro 01'} (Lúc {session.checkOutTime || '19:35'})
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        background: '#DCFCE7',
+                        color: '#15803D',
+                        border: '1px solid #86EFAC',
+                        borderRadius: '8px',
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                      }}
+                    >
+                      Đủ điều kiện
+                    </span>
+                  </div>
+
+                  {/* 1. CHỌN NGƯỜI CHƠI CÙNG SÂN */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                      1. Chọn người chơi cùng sân cần đánh giá:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
+                      {coPlayers.map((cp) => {
+                        const isSelected = writeReviewForm.targetPlayer === cp.name
+                        return (
+                          <div
+                            key={cp.id}
+                            onClick={() => setWriteReviewForm({ ...writeReviewForm, targetPlayer: cp.name })}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: '12px',
+                              border: isSelected ? '2px solid #15803D' : '1px solid #E5E7EB',
+                              background: isSelected ? '#F0FDF4' : '#FFFFFF',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                background: isSelected ? '#15803D' : '#E0F2FE',
+                                color: isSelected ? '#FFFFFF' : '#0369A1',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 800,
+                                fontSize: '12px',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {cp.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {cp.name}
+                              </div>
+                              <div style={{ fontSize: '10.5px', color: '#6B7280' }}>
+                                {cp.role || 'Cùng sân'}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. CHẤM ĐIỂM SAO (1 - 5 SAO) */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                        2. Chấm điểm sao (Bắt buộc):
+                      </label>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#15803D' }}>
+                        {writeReviewForm.rating === 5 && '⭐⭐⭐⭐⭐ Xuất sắc • Tinh thần Fairplay cao'}
+                        {writeReviewForm.rating === 4 && '⭐⭐⭐⭐ Rất tốt • Phối hợp ăn ý, hòa nhã'}
+                        {writeReviewForm.rating === 3 && '⭐⭐⭐ Hài lòng • Trình độ ngang tài'}
+                        {writeReviewForm.rating === 2 && '⭐⭐ Cần cải thiện • Trễ giờ hoặc va chạm'}
+                        {writeReviewForm.rating === 1 && '⭐ Kém • Tinh thần phi thể thao'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', padding: '10px 14px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const isFilled = (hoveredStar || writeReviewForm.rating) >= star
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setWriteReviewForm({ ...writeReviewForm, rating: star })}
+                            onMouseEnter={() => setHoveredStar(star)}
+                            onMouseLeave={() => setHoveredStar(0)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              fontSize: '28px',
+                              cursor: 'pointer',
+                              color: isFilled ? '#EAB308' : '#D1D5DB',
+                              transition: 'transform 0.15s, color 0.15s',
+                              transform: isFilled ? 'scale(1.15)' : 'scale(1)',
+                              padding: '2px',
+                            }}
+                          >
+                            ★
+                          </button>
+                        )
+                      })}
+                      <span style={{ marginLeft: '10px', fontSize: '13px', fontWeight: 800, color: '#1F2937' }}>
+                        {writeReviewForm.rating} / 5 sao
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3. VIẾT NHẬN XÉT BẰNG CHỮ (BẮT BUỘC) */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                        3. Viết nhận xét chi tiết (Bắt buộc bằng chữ):
+                      </label>
+                      <span style={{ fontSize: '11px', color: writeReviewForm.content.trim().length >= 10 ? '#15803D' : '#DC2626' }}>
+                        {writeReviewForm.content.trim().length}/10 ký tự tối thiểu
+                      </span>
+                    </div>
+
+                    <textarea
+                      rows={4}
+                      value={writeReviewForm.content}
+                      onChange={(e) => setWriteReviewForm({ ...writeReviewForm, content: e.target.value })}
+                      style={{
+                        width: '100%',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        padding: '12px 14px',
+                        fontSize: '13.5px',
+                        lineHeight: 1.5,
+                        outline: 'none',
+                        resize: 'vertical',
+                        background: '#FFFFFF',
+                      }}
+                    />
+
+                    {/* Quick suggestion tags */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                      <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 600 }}>Gợi ý nhanh:</span>
+                      {[
+                        'Đúng giờ ⏱️',
+                        'Fairplay tuyệt đối ⭐',
+                        'Kỹ thuật phong cầu tốt 🏸',
+                        'Phối hợp ăn ý 🤝',
+                        'Vui vẻ, nhiệt tình 😊',
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            const cur = writeReviewForm.content
+                            const updated = cur ? `${cur}. ${tag}` : tag
+                            setWriteReviewForm({ ...writeReviewForm, content: updated })
+                          }}
+                          style={{
+                            background: '#F1F5F9',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px',
+                            padding: '3px 8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#334155',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +{tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #E5E7EB', paddingTop: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowWriteReviewModal(false)}
+                      style={{
+                        padding: '9px 18px',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        background: '#FFFFFF',
+                        color: '#4B5563',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={writeReviewForm.content.trim().length < 10}
+                      style={{
+                        padding: '9px 22px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        background: writeReviewForm.content.trim().length >= 10
+                          ? 'linear-gradient(135deg, #15803D 0%, #166534 100%)'
+                          : '#D1D5DB',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: writeReviewForm.content.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: writeReviewForm.content.trim().length >= 10 ? '0 3px 10px rgba(21, 128, 61, 0.3)' : 'none',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        send
+                      </span>
+                      Gửi đánh giá xác thực
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 4. MODAL LỊCH SỬ TRẬN ĐẤU */}
+      {showMatchesModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '620px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                  Lịch sử thi đấu ({profile.matchesPlayed} trận)
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Ghi nhận tự động từ Check-in QR &amp; Ghép trận SportNexus
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMatchesModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                {
+                  id: 1,
+                  sport: 'Cầu lông',
+                  opponent: 'Lê Nam & Tuấn Kiệt',
+                  court: 'Sân Q7 (Sân số 3)',
+                  score: '21 - 18, 21 - 15',
+                  result: 'Thắng',
+                  date: 'Hôm qua, 18:30',
+                },
+                {
+                  id: 2,
+                  sport: 'Pickleball',
+                  opponent: 'Trần Hùng & Bảo Long',
+                  court: 'Sân Nam Sài Gòn (Sân 2)',
+                  score: '11 - 8, 11 - 9',
+                  result: 'Thắng',
+                  date: '03/10/2026, 19:00',
+                },
+                {
+                  id: 3,
+                  sport: 'Cầu lông',
+                  opponent: 'Đặng Tuấn (Khá)',
+                  court: 'Sân Tân Phong Q7',
+                  score: '19 - 21, 20 - 22',
+                  result: 'Thua',
+                  date: '28/09/2026, 20:00',
+                },
+              ].map((m) => (
+                <div
+                  key={m.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 16px',
+                    borderRadius: '16px',
+                    background: '#F9FAFB',
+                    border: '1px solid #E5E7EB',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          background: m.result === 'Thắng' ? '#DCFCE7' : '#FEE2E2',
+                          color: m.result === 'Thắng' ? '#15803D' : '#DC2626',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        {m.result}
+                      </span>
+                      <strong style={{ fontSize: '14px', color: '#1F2937' }}>
+                        {m.sport}: {m.opponent}
+                      </strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
+                      {m.court} • {m.date}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1C3524' }}>
+                      {m.score}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <button
+                onClick={() => setShowMatchesModal(false)}
+                style={{
+                  padding: '9px 24px',
+                  borderRadius: '12px',
+                  background: '#15803D',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL SÂN YÊU THÍCH */}
+      {showFavoriteCourtsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '600px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                Danh sách sân yêu thích (5 địa điểm)
+              </h3>
+              <button
+                onClick={() => setShowFavoriteCourtsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {favoriteCourts.map((c, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 16px',
+                    borderRadius: '16px',
+                    background: '#FAFCFA',
+                    border: '1px solid rgba(45, 95, 63, 0.12)',
+                  }}
+                >
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14.5px', fontWeight: 800, color: '#1F2937' }}>
+                      {c.name}
+                    </h4>
+                    <p style={{ margin: '3px 0', fontSize: '12px', color: '#6B7280' }}>
+                      {c.address}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: '#15803D', fontWeight: 600 }}>
+                      <span>🏸 {c.sport}</span>
+                      <span>•</span>
+                      <span>⭐ {c.rating}</span>
+                      <span>•</span>
+                      <span>{c.courtsCount}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowFavoriteCourtsModal(false)
+                      navigate('/court-finder')
+                    }}
+                    style={{
+                      background: '#15803D',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '7px 14px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Đặt sân
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <button
+                onClick={() => setShowFavoriteCourtsModal(false)}
+                style={{
+                  padding: '9px 24px',
+                  borderRadius: '12px',
+                  background: '#6B7280',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL CÀI ĐẶT THÔNG BÁO */}
+      {showNotificationModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                Cài đặt thông báo SportNexus
+              </h3>
+              <button
+                onClick={() => setShowNotificationModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {[
+                { title: 'Kèo ghép trận LFG phù hợp trình độ', desc: 'Nhận thông báo khi có kèo cùng quận & rank ngang bằng' },
+                { title: 'Nhắc lịch đặt sân & Check-in QR', desc: 'Báo trước 60 phút và 15 phút trước giờ bóng lăn' },
+                { title: 'Biến động số dư ví Escrow', desc: 'Thông báo khi nạp tiền, hoàn tiền cọc, giải ngân cọc sân' },
+                { title: 'Đánh giá & Xếp hạng sau trận', desc: 'Nhận thông báo khi đối thủ hoặc đồng đội chấm điểm' },
+              ].map((item, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 0',
+                    borderBottom: '1px solid #F3F4F6',
+                  }}
+                >
+                  <div style={{ maxWidth: '320px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                      {item.title}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+                      {item.desc}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      accentColor: '#15803D',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => {
+                  setShowNotificationModal(false)
+                  triggerToast('✅ Đã lưu cài đặt thông báo!')
+                }}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: '#15803D',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Lưu cấu hình
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL TRUNG TÂM HỖ TRỢ */}
+      {showHelpModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                Trung tâm trợ giúp SportNexus
+              </h3>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13.5px', color: '#374151' }}>
+              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
+                <strong>📞 Hotline khẩn cấp 24/7:</strong> 1900 8899 (Hỗ trợ khiếu nại cọc sân, sự cố giờ chơi)
+              </div>
+              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
+                <strong>💬 Trợ lý AI Concierge:</strong> Nhấn nút robot góc dưới bên phải màn hình để được giải đáp tức thì.
+              </div>
+              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
+                <strong>📧 Email tiếp nhận tranh chấp:</strong> support@sportnexus.vn
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  background: '#15803D',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. MODAL XÁC NHẬN ĐĂNG XUẤT */}
+      {showLogoutModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              padding: '24px',
+              textAlign: 'center',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                background: '#FEE2E2',
+                color: '#DC2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px auto',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>
+                logout
+              </span>
+            </div>
+
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 800, color: '#1F2937' }}>
+              Xác nhận đăng xuất?
+            </h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '13.5px', color: '#6B7280', lineHeight: 1.5 }}>
+              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản <strong>{profile.name}</strong> không?
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid #D1D5DB',
+                  background: '#FFFFFF',
+                  color: '#4B5563',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutModal(false)
+                  navigate('/login')
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Style CSS Responsive nhúng */}
+      <style>{`
+        @media (max-width: 1024px) {
+          .profile-responsive-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
-
-export default Profile

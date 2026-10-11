@@ -3,291 +3,733 @@ import { useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 function Register() {
+  const [role, setRole] = useState('player') // 'player' | 'court_owner'
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [role, setRole] = useState('player') // 'player' | 'owner'
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
+  const [selectedSports, setSelectedSports] = useState([])
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
 
+  const handleRegisterSubmit = (event) => {
+    event.preventDefault()
+    try {
+      localStorage.setItem('sportnexus_user_role', role)
+      localStorage.setItem('sportnexus_registered_role', role)
+    } catch {}
+    if (role === 'court_owner') {
+      navigate('/owner/dashboard')
+    } else {
+      navigate('/onboarding')
+    }
+  }
+
+  const toggleSport = (sport) => {
+    setSelectedSports(prev => 
+      prev.includes(sport) 
+        ? prev.filter(s => s !== sport)
+        : [...prev, sport]
+    )
+  }
+
+  // Tính độ mạnh mật khẩu
+  const calculatePasswordStrength = (pass) => {
+    let strength = 0
+    if (pass.length >= 8) strength++
+    if (pass.length >= 12) strength++
+    if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) strength++
+    if (/\d/.test(pass)) strength++
+    if (/[^a-zA-Z0-9]/.test(pass)) strength++
+    return strength
+  }
+
+  const getPasswordStrength = () => {
+    const strength = calculatePasswordStrength(password)
+    if (strength === 0 || password.length === 0) return { level: 0, text: '', color: 'bg-gray-200' }
+    if (strength <= 2) return { level: 1, text: 'Yếu', color: 'bg-red-500' }
+    if (strength <= 3) return { level: 2, text: 'Trung bình', color: 'bg-yellow-500' }
+    return { level: 3, text: 'Mạnh', color: 'bg-green-500' }
+  }
+
+  const passwordStrength = getPasswordStrength()
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
+
   return (
-    <>
-      <main className="w-full min-h-screen flex flex-col lg:flex-row relative bg-surface text-on-surface">
-        {/* BEGIN: LeftHeroSide (45%-50% desktop split) */}
-        <section aria-label="Visual Showcase" className="relative hidden lg:flex lg:w-5/12 xl:w-1/2 flex-col justify-between overflow-hidden bg-surface-container-lowest border-r border-outline-variant/30 select-none">
-          {/* Background Badminton Action Imagery */}
-          <div className="absolute inset-0 z-0">
-            <img alt="Intense athletic badminton player executing a powerful high-flying jump smash" className="w-full h-full object-cover object-center scale-105 transform hover:scale-100 transition-transform duration-1000 ease-out opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnaZ3R7jloKq_--dDononhiUgmLnFkvkOXBrb4uShJOS3oDxnnTfc5txWfrOR8OlplB9tPAua_XFznFHyxnnRjprmSdaFLXEjcc2ub5LSfRhh9BQUDW9ASnGrXbWvWs8fC6KI6WhZb9DSFafJERwMJKwKrVEZSGHRjszK787EDhN5nIPXBYzV9Kj9L3jR_tjg_RqPkB77TQsv1TDo9ak9vFMbu-N-QEpCAUvfqlYfpco9ejomPKwov" />
-            {/* Multi-layer Gradient Overlays for High-Tech Mood */}
-            <div className="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-surface-container-lowest/70 to-surface-container-lowest/30" />
-            <div className="absolute inset-0 bg-gradient-to-r from-surface-container-lowest/90 via-transparent to-surface-container-lowest/20" />
-            <div className="absolute inset-0 court-grid-lines opacity-50" />
+    <div className="min-h-screen sport-animated-bg flex flex-col">
+      {/* Top Header - Toàn màn hình */}
+      <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        {/* Logo */}
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
+            </svg>
           </div>
-          
-          {/* Top Overlay: Brand Header */}
-          <div className="relative z-10 p-8 xl:p-12 flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-primary-container/10 border border-primary-container/40 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.2)]">
-                <span className="material-symbols-outlined text-primary-container text-[20px]">bolt</span>
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-headline-md tracking-wider text-on-surface leading-none">SPORTNEXUS</span>
-                  <span className="text-[10px] font-mono tracking-widest uppercase px-1.5 py-0.5 rounded bg-primary-container/20 text-primary-container border border-primary-container/30">KINETIC</span>
+          <div className="flex flex-col">
+            <span className="text-[#2D5F3F] font-bold text-lg leading-none">SportNexus</span>
+            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider">Tournament Engine</span>
+          </div>
+        </div>
+
+        {/* Trang Chủ Button */}
+        <div className="flex items-center">
+          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+            </svg>
+            <span className="font-medium">Trang chủ</span>
+          </a>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full flex flex-col lg:flex-row relative text-gray-900">
+        {/* BEGIN: LeftHeroSide - Vietnamese themed */}
+        <section aria-label="Visual Showcase" className="relative hidden lg:flex lg:w-[42%] flex-col justify-between overflow-hidden bg-white/30 backdrop-blur-sm p-8 xl:p-10 select-none">
+
+          {/* Center Content */}
+          <div className="space-y-6 max-w-md">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-[#4A7C59]/20 rounded-full px-4 py-2">
+              <span className="text-[#4A7C59]">👥</span>
+              <span className="text-sm text-[#2D5F3F] font-medium">CỘNG ĐỒNG VẬN ĐỘNG VIÊN</span>
+            </div>
+
+            {/* Main Heading */}
+            <h1 className="text-4xl xl:text-5xl font-bold text-[#2D5F3F] leading-tight">
+              Bứt Phá Đam Mê Cùng SportNexus
+            </h1>
+
+            {/* Description */}
+            <p className="text-[#4A7C59] leading-relaxed">
+              Hơn <span className="font-bold text-[#2D5F3F]">45.000</span> tay vợt <span className="font-bold text-[#2D5F3F]">Cầu lông & Pickleball</span> đang kết nối, <span className="font-bold text-[#2D5F3F]">đặt sân</span> và <span className="font-bold text-[#2D5F3F]">giao lưu thi đấu</span> mỗi ngày.
+            </p>
+
+            {/* Feature Boxes */}
+            <div className="space-y-3">
+              {/* Feature 1 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">📅</span>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#2D5F3F] mb-1">Đặt Sân Thông Minh</div>
+                    <div className="text-sm text-[#4A7C59]">Khóa sân tức thì trong 30 giây với biểu phí minh bạch.</div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-on-surface-variant font-mono tracking-wider mt-0.5">NEXT-GEN ATHLETIC PROTOCOL</p>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">👥</span>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#2D5F3F] mb-1">Ghép Trận Nhanh</div>
+                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi cùng trình độ DUPR vô phòng đỗ.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">🏆</span>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#2D5F3F] mb-1">Giải Đấu Chuyên Nghiệp</div>
+                    <div className="text-sm text-[#4A7C59]">Bảng đầu tư động, cập nhật điểm live và xếp hạng chuẩn.</div>
+                  </div>
+                </div>
               </div>
             </div>
-            {/* Live Court Telemetry Dot */}
-            <div className="flex items-center space-x-2 bg-surface-container/80 border border-outline-variant/50 rounded-full px-3 py-1.5 backdrop-blur-md">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-container" />
-              </span>
-              <span className="text-xs font-mono text-primary-container/90 tracking-wide font-medium">LIVE TELEMETRY</span>
+
+            {/* Promo Box - Refined with Better Spacing */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#059669] rounded-3xl p-7 shadow-2xl border-2 border-emerald-400/20 mb-12">
+              {/* Animated Background Effects */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {/* Floating Orbs */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-200 opacity-20 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-300 opacity-15 rounded-full blur-3xl animate-pulse" style={{animationDelay: '0.7s'}} />
+                <div className="absolute top-1/2 right-1/4 w-24 h-24 bg-yellow-300 opacity-10 rounded-full blur-2xl animate-pulse" style={{animationDelay: '1.4s'}} />
+                
+                {/* Decorative Icons */}
+                <div className="absolute top-6 right-12 text-3xl opacity-40 animate-bounce" style={{animationDuration: '3s'}}>🏸</div>
+                <div className="absolute top-12 right-24 text-2xl opacity-30 animate-bounce" style={{animationDuration: '4s', animationDelay: '0.5s'}}>✨</div>
+                <div className="absolute bottom-12 right-16 text-2xl opacity-25 animate-bounce" style={{animationDuration: '3.5s', animationDelay: '1s'}}>🎾</div>
+              </div>
+
+              {/* Content */}
+              <div className="relative z-10 space-y-5">
+                {/* HOT DEAL Badge - Refined */}
+                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 text-[#064E3B] rounded-full px-3.5 py-1.5 shadow-lg">
+                  {/* Fire Icon SVG - Compact & Sharp */}
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C12 2 9 6 9 10C9 12.2091 10.7909 14 13 14C15.2091 14 17 12.2091 17 10C17 6 14 2 14 2C14 2 12.5 4 12 6C11.5 4 12 2 12 2Z" />
+                    <path d="M12 14C9.23858 14 7 16.2386 7 19C7 21.7614 9.23858 24 12 24C14.7614 24 17 21.7614 17 19C17 16.2386 14.7614 14 12 14Z" opacity="0.7"/>
+                  </svg>
+                  <span className="text-xs font-black uppercase tracking-wider">Hot Deal</span>
+                </div>
+
+                {/* Title Section with Better Spacing */}
+                <div className="space-y-2">
+                  <div className="flex items-start gap-4">
+                    {/* Gift Icon */}
+                    <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-yellow-300 to-amber-400 rounded-2xl flex items-center justify-center shadow-xl">
+                      <span className="text-3xl">🎁</span>
+                    </div>
+                    
+                    {/* Title Text */}
+                    <div className="flex-1 space-y-1.5">
+                      <h3 className="text-2xl font-black text-white tracking-tight leading-tight">
+                        ƯU ĐÃI THÀNH VIÊN MỚI
+                      </h3>
+                      <p className="text-yellow-300 text-sm font-bold uppercase tracking-wide">
+                        Chỉ dành cho bạn!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Offer Details Card - Enhanced Spacing */}
+                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-5">
+                  <div className="flex items-start gap-4">
+                    {/* Voucher Icon */}
+                    <div className="flex-shrink-0 w-12 h-12 bg-yellow-400/20 rounded-xl flex items-center justify-center">
+                      <svg className="w-7 h-7 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                      </svg>
+                    </div>
+
+                    {/* Text Content with Improved Spacing */}
+                    <div className="flex-1 space-y-2">
+                      <div className="text-base font-bold text-white mb-2">
+                        Tặng ngay voucher giảm <span className="text-yellow-300 text-xl font-black">20%</span>
+                      </div>
+                      <p className="text-emerald-100 text-sm leading-relaxed">
+                        Áp dụng cho lượt đặt sân <span className="font-semibold text-white">Cầu lông</span> hoặc <span className="font-semibold text-white">Pickleball</span> đầu tiên sau khi đăng ký thành công.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                <button 
+                  type="button" 
+                  className="w-full group relative overflow-hidden bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 hover:from-yellow-400 hover:via-amber-400 hover:to-yellow-300 text-[#064E3B] font-black text-base px-6 py-4 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-yellow-400/50 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {/* Shine Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+                  
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    <span>Tham Gia Ngay</span>
+                    <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
-          
-          {/* Center Float: Metrics & Floating Badges */}
-          <div className="relative z-10 px-8 xl:px-12 space-y-4 my-auto">
-            {/* Primary Stat Card */}
-            <div className="glass-panel p-5 rounded-2xl max-w-sm border border-primary-container/20 shadow-[0_0_20px_rgba(0,229,255,0.15)] transform translate-y-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-mono uppercase tracking-widest text-on-surface-variant">Match Node Status</span>
-                <span className="px-2 py-0.5 text-[10px] font-semibold text-secondary-fixed bg-secondary-fixed/10 rounded-full border border-secondary-fixed/30 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-secondary-fixed inline-block" /> 99.98% Synced
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-headline-lg text-on-surface tracking-tight">48,290+</span>
-                <span className="text-xs text-primary-container font-medium">Verified Matches</span>
-              </div>
-              <p className="text-xs text-on-surface-variant mt-1">Smart court sensors & automated escrow settled across 340+ certified hubs.</p>
-            </div>
-            {/* Floating Secondary Micro-Pill */}
-            <div className="inline-flex items-center gap-2 bg-surface-container/80 border border-outline-variant/50 rounded-xl px-4 py-2 backdrop-blur-md text-xs font-mono text-on-surface-variant">
-              <span className="material-symbols-outlined text-[16px] text-primary-container">shield</span>
-              <span>BWF Standard Telemetry & Escrow Integrated</span>
-            </div>
-          </div>
-          
-          {/* Bottom Overlay: Motivational Statement */}
-          <div className="relative z-10 p-8 xl:p-12 bg-gradient-to-t from-surface-container-lowest via-surface-container-lowest/90 to-transparent">
-            <blockquote className="text-lg xl:text-xl font-headline-sm text-on-surface leading-relaxed tracking-normal">
-              "Elevate your game. Connect with elite players, unlock smart court access, and climb the verified leaderboards."
-            </blockquote>
-            <div className="flex items-center gap-3 mt-4 text-xs font-mono text-on-surface-variant">
-              <div className="flex -space-x-2 overflow-hidden">
-                <div className="inline-flex h-6 w-6 rounded-full bg-primary-container/20 ring-2 ring-surface-container-lowest border border-primary-container/40 text-[10px] text-primary-container items-center justify-center font-bold">AN</div>
-                <div className="inline-flex h-6 w-6 rounded-full bg-tertiary-container/30 ring-2 ring-surface-container-lowest border border-tertiary-container/40 text-[10px] text-tertiary-container items-center justify-center font-bold">MK</div>
-                <div className="inline-flex h-6 w-6 rounded-full bg-secondary-fixed/20 ring-2 ring-surface-container-lowest border border-secondary-fixed/40 text-[10px] text-secondary-fixed items-center justify-center font-bold">RL</div>
-              </div>
-              <span>Joined by 12,000+ registered athletes this month</span>
+
+          {/* Bottom: Footer */}
+          <div className="text-[10px] text-[#4A7C59] space-y-1 mt-8">
+            <div>© 2026 SPORTNEXUS VIETNAM. ALL RIGHTS RESERVED.</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">CAM KẾT BẢO MẬT</a>
+              <span>•</span>
+              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">CHÍNH SÁCH FAIRPLAY</a>
+              <span>•</span>
+              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">ĐIỀU KHOẢN DỊCH VỤ</a>
             </div>
           </div>
         </section>
         
-        {/* BEGIN: RightFormSide (55%-50% split) */}
-        <section aria-label="Registration Portal" className="flex-1 flex flex-col justify-center px-4 sm:px-8 md:px-14 py-10 lg:py-12 overflow-y-auto no-scrollbar relative bg-surface">
-          {/* Ambient Glow Behind Form */}
-          <div className="absolute top-1/4 right-1/4 w-80 h-80 bg-primary-container/5 rounded-full blur-[100px] pointer-events-none z-0" />
-          
-          <div className="w-full max-w-xl mx-auto relative z-10">
-            {/* Navigation Header */}
+        {/* BEGIN: RightFormSide */}
+        <section aria-label="Registration Portal" className="flex-1 flex flex-col justify-center px-4 sm:px-8 md:px-14 py-10 lg:py-12 overflow-y-auto bg-white/80 backdrop-blur-sm">
+          <div className="w-full max-w-xl mx-auto">
+            {/* Header */}
             <header className="mb-8">
-              <a className="inline-flex items-center text-xs font-mono text-on-surface-variant hover:text-primary-container transition-colors duration-200 group mb-4" href="/login">
-                <span className="material-symbols-outlined text-[16px] mr-1 transition-transform duration-200 group-hover:-translate-x-1">arrow_back</span>
-                BACK TO LOGIN
-              </a>
-              <div className="flex items-baseline gap-3">
-                <h1 className="text-3xl sm:text-4xl font-headline-lg text-on-surface tracking-tight">
-                  Join <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-container to-tertiary-fixed-dim">The SportNexus</span>
-                </h1>
-              </div>
-              <p className="font-body-sm text-on-surface-variant mt-2">
-                Create your athlete passport or register your facility to unlock verified tournaments and smart matches.
+              <h1 className="text-3xl sm:text-4xl font-bold text-[#2D5F3F] mb-2">
+                Đăng ký tài khoản
+              </h1>
+              <p className="text-[#6B7280]">
+                Gia nhập cộng đồng thể thao SportNexus ngay hôm nay.
               </p>
             </header>
             
-            {/* Registration Glass Card */}
-            <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-outline-variant/30 shadow-[0_8px_30px_rgb(0,0,0,0.4)] bg-surface-container/40">
-              
-              {/* Role Selector (Segmented Cards) */}
-              <div className="mb-6">
-                <label className="block font-label-sm uppercase tracking-wider text-on-surface-variant mb-2.5">
-                  Select Profile Role
+            {/* Form */}
+            <form className="space-y-5" onSubmit={handleRegisterSubmit}>
+              {/* Role Selection Field (Người chơi / Chủ sân) */}
+              <div>
+                <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                  Vai trò đăng ký <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Option 1: Player */}
-                  <button onClick={() => setRole('player')} className={`group relative flex flex-col p-3.5 rounded-xl border text-left transition-all duration-200 focus:outline-none ${role === 'player' ? 'border-primary-container bg-primary-container/10 shadow-[0_0_15px_rgba(0,229,255,0.15)]' : 'border-outline-variant/40 bg-surface-container-low hover:border-outline-variant'}`} type="button">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className={`w-7 h-7 rounded-lg border flex items-center justify-center ${role === 'player' ? 'bg-primary-container/20 border-primary-container/40 text-primary-container' : 'bg-surface-container-high border-outline-variant/30 text-on-surface-variant group-hover:text-on-surface'}`}>
-                        <span className="material-symbols-outlined text-[16px]">sports_tennis</span>
-                      </div>
-                      <span className={`text-[10px] font-mono tracking-wider font-semibold px-2 py-0.5 rounded-full border ${role === 'player' ? 'text-primary-container bg-primary-container/20 border-primary-container/40' : 'text-on-surface-variant bg-surface-container-high border-outline-variant/30'}`}>
-                        COMPETE & LFG
-                      </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Player Card */}
+                  <div
+                    onClick={() => setRole('player')}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                      role === 'player'
+                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      role === 'player' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-xl">🏃‍♂️</span>
                     </div>
-                    <div className={`font-headline-sm text-sm ${role === 'player' ? 'text-on-surface' : 'text-on-surface-variant'}`}>I am a Player</div>
-                    <div className="font-body-sm text-[11px] text-on-surface-variant leading-tight mt-0.5">Find games, rank up & join ladders</div>
-                  </button>
-                  
-                  {/* Option 2: Court Owner */}
-                  <button onClick={() => setRole('owner')} className={`group relative flex flex-col p-3.5 rounded-xl border text-left transition-all duration-200 focus:outline-none ${role === 'owner' ? 'border-primary-container bg-primary-container/10 shadow-[0_0_15px_rgba(0,229,255,0.15)]' : 'border-outline-variant/40 bg-surface-container-low hover:border-outline-variant'}`} type="button">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className={`w-7 h-7 rounded-lg border flex items-center justify-center ${role === 'owner' ? 'bg-primary-container/20 border-primary-container/40 text-primary-container' : 'bg-surface-container-high border-outline-variant/30 text-on-surface-variant group-hover:text-on-surface'}`}>
-                        <span className="material-symbols-outlined text-[16px]">domain</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                        <span>Người chơi</span>
+                        <span className="text-xs text-gray-500 font-normal">(Player)</span>
                       </div>
-                      <span className={`text-[10px] font-mono tracking-wider font-medium px-2 py-0.5 rounded-full border ${role === 'owner' ? 'text-primary-container bg-primary-container/20 border-primary-container/40' : 'text-on-surface-variant bg-surface-container-high border-outline-variant/30'}`}>
-                        MONETIZE
-                      </span>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Đặt sân nhanh, tìm bạn ghép trận giao lưu &amp; tham gia giải đấu
+                      </p>
                     </div>
-                    <div className={`font-headline-sm text-sm ${role === 'owner' ? 'text-on-surface' : 'text-on-surface-variant'}`}>I am a Court Owner</div>
-                    <div className="font-body-sm text-[11px] text-on-surface-variant leading-tight mt-0.5">Smart court gates & booking fees</div>
-                  </button>
+                    {role === 'player' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Court Owner Card */}
+                  <div
+                    onClick={() => setRole('court_owner')}
+                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                      role === 'court_owner'
+                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      role === 'court_owner' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-xl">🏟️</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                        <span>Chủ sân</span>
+                        <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Quản lý cụm sân, biểu phí, lịch đặt sân &amp; doanh thu tự động
+                      </p>
+                    </div>
+                    {role === 'court_owner' && (
+                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Name Field */}
+              <div>
+                <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="full-name">
+                  Họ và tên <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <input 
+                    className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
+                    id="full-name" 
+                    required 
+                    type="text" 
+                  />
                 </div>
               </div>
               
-              {/* Form Fields */}
-              <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); navigate('/onboarding') }}>
-                {/* Full Name Field */}
+              {/* Phone & Email Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Phone Field */}
                 <div>
-                  <label className="block font-label-sm uppercase tracking-wider text-on-surface-variant mb-1.5" htmlFor="full-name">
-                    Full Name
+                  <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="phone">
+                    Số điện thoại <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">person</span>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-600 text-sm font-medium">+84</span>
                     </div>
-                    <input className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface placeholder-outline font-body-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all duration-150 outline-none" id="full-name" placeholder="e.g., Hoang An" required type="text" />
+                    <input 
+                      className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
+                      id="phone" 
+                      required 
+                      type="tel" 
+                    />
                   </div>
                 </div>
-                
+
                 {/* Email Field */}
                 <div>
-                  <label className="block font-label-sm uppercase tracking-wider text-on-surface-variant mb-1.5" htmlFor="email">
-                    Email Address
+                  <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="email">
+                    Email <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">mail</span>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
                     </div>
-                    <input className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface placeholder-outline font-body-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all duration-150 outline-none" id="email" placeholder="athlete@kinetic.io" required type="email" />
+                    <input 
+                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
+                      id="email" 
+                      required 
+                      type="email" 
+                    />
                   </div>
                 </div>
-                
-                {/* Password Field */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block font-label-sm uppercase tracking-wider text-on-surface-variant" htmlFor="password">
-                      Password
-                    </label>
-                    <span className="text-[11px] font-mono text-primary-container">Strong</span>
-                  </div>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">lock</span>
+              </div>
+
+              {/* Sports Interest - Đầy đủ 5 môn */}
+              <div>
+                <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                  Bộ môn thể thao quan tâm
+                </label>
+                <div className="text-xs text-gray-500 mb-3">(Có thể chọn nhiều môn)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {/* Cầu Lông */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('badminton')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('badminton')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('badminton') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🏸</span>
                     </div>
-                    <input className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface placeholder-outline font-body-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all duration-150 outline-none" id="password" placeholder="Enter secure password" required type={passwordVisible ? 'text' : 'password'} />
-                    {/* Show / Hide Password Toggle */}
-                    <button aria-label="Toggle password visibility" className="absolute inset-y-0 right-0 pr-3 flex items-center text-on-surface-variant hover:text-primary-container transition-colors" onClick={() => setPasswordVisible(!passwordVisible)} type="button">
-                      <span className="material-symbols-outlined text-[18px]">{passwordVisible ? 'visibility_off' : 'visibility'}</span>
-                    </button>
-                  </div>
-                  {/* Password Strength Indicator Bars */}
-                  <div aria-hidden="true" className="mt-2 grid grid-cols-3 gap-1.5">
-                    <div className="h-1 rounded-full bg-primary-container transition-colors" />
-                    <div className="h-1 rounded-full bg-primary-container transition-colors" />
-                    <div className="h-1 rounded-full bg-primary-container transition-colors" />
-                  </div>
-                </div>
-                
-                {/* Confirm Password Field */}
-                <div>
-                  <label className="block font-label-sm uppercase tracking-wider text-on-surface-variant mb-1.5" htmlFor="confirm-password">
-                    Confirm Password
-                  </label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant group-focus-within:text-primary-container transition-colors">
-                      <span className="material-symbols-outlined text-[18px]">verified_user</span>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Cầu Lông</div>
+                      <div className="text-[11px] text-gray-500 truncate">Badminton</div>
                     </div>
-                    <input className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface placeholder-outline font-body-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all duration-150 outline-none" id="confirm-password" placeholder="Repeat secure password" required type={passwordVisible ? 'text' : 'password'} />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-secondary-fixed pointer-events-none">
-                      <span className="material-symbols-outlined text-[18px]">check</span>
+                    {selectedSports.includes('badminton') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Pickleball */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('pickleball')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('pickleball')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('pickleball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🏓</span>
                     </div>
-                  </div>
-                </div>
-                
-                {/* Agreement Checkbox */}
-                <div className="pt-1 flex items-start group cursor-pointer" onClick={() => document.getElementById('terms').click()}>
-                  <div className="flex items-center h-5">
-                    <input defaultChecked className="w-4 h-4 rounded bg-surface-container border-outline-variant text-primary-container focus:ring-primary-container focus:ring-offset-surface cursor-pointer" id="terms" name="terms" type="checkbox" onClick={e => e.stopPropagation()} />
-                  </div>
-                  <label className="ml-2.5 text-xs text-on-surface-variant leading-snug cursor-pointer group-hover:text-on-surface transition-colors" htmlFor="terms" onClick={e => e.preventDefault()}>
-                    I agree to the SportNexus{' '}
-                    <span className="text-primary-container hover:underline">Terms of Service</span>,{' '}
-                    <span className="text-primary-container hover:underline">Fairplay Protocol</span>, and{' '}
-                    <span className="text-primary-container hover:underline">Privacy Policy</span>.
-                  </label>
-                </div>
-                
-                {/* Primary Create Account Button */}
-                <div className="pt-2">
-                  <button className="w-full py-3.5 px-6 rounded-xl font-headline-sm font-bold text-sm tracking-wide text-on-primary-container bg-primary-container hover:bg-primary-fixed shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2" type="submit">
-                    <span className="material-symbols-outlined text-[20px]">bolt</span>
-                    <span>CREATE ACCOUNT</span>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Pickleball</div>
+                      <div className="text-[11px] text-gray-500 truncate">Trending</div>
+                    </div>
+                    {selectedSports.includes('pickleball') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Bóng Đá */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('football')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('football')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('football') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">⚽</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Đá</div>
+                      <div className="text-[11px] text-gray-500 truncate">Football</div>
+                    </div>
+                    {selectedSports.includes('football') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Bóng Rổ */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('basketball')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
+                      selectedSports.includes('basketball')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('basketball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🏀</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Rổ</div>
+                      <div className="text-[11px] text-gray-500 truncate">Basketball</div>
+                    </div>
+                    {selectedSports.includes('basketball') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Tennis */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSport('tennis')}
+                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all col-span-2 sm:col-span-1 ${
+                      selectedSports.includes('tennis')
+                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedSports.includes('tennis') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      <span className="text-lg">🎾</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Tennis</div>
+                      <div className="text-[11px] text-gray-500 truncate">Quần vợt</div>
+                    </div>
+                    {selectedSports.includes('tennis') && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
                   </button>
                 </div>
-              </form>
-              
-              {/* Social Divider */}
-              <div className="my-6 relative flex py-1 items-center">
-                <div className="flex-grow border-t border-outline-variant/30" />
-                <span className="flex-shrink mx-4 font-label-sm uppercase tracking-widest text-outline">Or register with</span>
-                <div className="flex-grow border-t border-outline-variant/30" />
+              </div>
+
+              {/* Password Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Password Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-[#2D5F3F]" htmlFor="password">
+                      Mật khẩu <span className="text-red-500">*</span>
+                    </label>
+                    {password.length > 0 && (
+                      <span className={`text-xs font-semibold ${
+                        passwordStrength.level === 1 ? 'text-red-500' : 
+                        passwordStrength.level === 2 ? 'text-yellow-600' : 
+                        'text-green-600'
+                      }`}>
+                        {passwordStrength.text}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <input 
+                      className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
+                      id="password" 
+                      required 
+                      type={passwordVisible ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button 
+                      aria-label="Toggle password visibility" 
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
+                      onClick={(e) => { e.preventDefault(); setPasswordVisible(!passwordVisible) }} 
+                      type="button"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {passwordVisible ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        )}
+                      </svg>
+                    </button>
+                  </div>
+                  {/* Password Strength Indicator */}
+                  {password.length > 0 && (
+                    <div className="mt-2">
+                      <div className="flex gap-1">
+                        <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          passwordStrength.level >= 1 ? passwordStrength.color : 'bg-gray-200'
+                        }`} />
+                        <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          passwordStrength.level >= 2 ? passwordStrength.color : 'bg-gray-200'
+                        }`} />
+                        <div className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          passwordStrength.level >= 3 ? passwordStrength.color : 'bg-gray-200'
+                        }`} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Password Field */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-[#2D5F3F]" htmlFor="confirm-password">
+                      Xác nhận mật khẩu <span className="text-red-500">*</span>
+                    </label>
+                    {confirmPassword.length > 0 && (
+                      <span className={`text-xs font-semibold ${passwordsMatch ? 'text-green-600' : 'text-red-500'}`}>
+                        {passwordsMatch ? '✓ Khớp' : '✗ Không khớp'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <input 
+                      className={`w-full pl-10 pr-10 py-3 rounded-lg border ${
+                        confirmPassword.length > 0 
+                          ? passwordsMatch 
+                            ? 'border-green-500 focus:border-green-600 focus:ring-green-500/20' 
+                            : 'border-red-500 focus:border-red-600 focus:ring-red-500/20'
+                          : 'border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]/20'
+                      } focus:ring-2 outline-none transition-all`}
+                      id="confirm-password" 
+                      required 
+                      type={confirmPasswordVisible ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                    <button 
+                      aria-label="Toggle confirm password visibility" 
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
+                      onClick={(e) => { e.preventDefault(); setConfirmPasswordVisible(!confirmPasswordVisible) }} 
+                      type="button"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {confirmPasswordVisible ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        )}
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
               
-              {/* Social Auth Buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <button className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-surface-container-low border border-outline-variant/40 hover:border-outline hover:bg-surface-container transition-colors font-label-md text-on-surface" type="button">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" fill="#EA4335" />
-                    <path d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" fill="#4285F4" />
-                    <path d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.5s.7 4.8 1.9 7.2l3.7-2.9z" fill="#FBBC05" />
-                    <path d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 17C3.7 20.7 7.5 24 12 24z" fill="#34A853" />
-                  </svg>
-                  <span>Google</span>
-                </button>
-                <button className="flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-surface-container-low border border-outline-variant/40 hover:border-outline hover:bg-surface-container transition-colors font-label-md text-on-surface" type="button">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.85c.66-.82 1.11-1.96.99-3.1-.96.04-2.12.64-2.8 1.44-.6.69-1.12 1.83-.98 2.95 1.07.08 2.16-.54 2.79-1.29z" />
-                  </svg>
-                  <span>Apple</span>
+              {/* Agreement Checkbox */}
+              <div className="flex items-start gap-3 pt-2">
+                <input 
+                  className="w-4 h-4 mt-1 rounded border-gray-300 text-[#4A7C59] focus:ring-[#4A7C59] cursor-pointer" 
+                  id="terms" 
+                  name="terms" 
+                  type="checkbox" 
+                  required
+                />
+                <label className="text-sm text-gray-600 leading-relaxed cursor-pointer" htmlFor="terms">
+                  Tôi đồng ý với{' '}
+                  <a href="#" className="text-[#4A7C59] hover:underline font-medium">Điều khoản dịch vụ</a>
+                  {' '}và{' '}
+                  <a href="#" className="text-[#4A7C59] hover:underline font-medium">Chính sách bảo mật</a>
+                  {' '}của SportNexus.
+                </label>
+              </div>
+              
+              {/* Primary Create Account Button */}
+              <div className="pt-2">
+                <button 
+                  className="w-full py-4 px-6 rounded-xl font-bold text-base text-white bg-[#4A7C59] hover:bg-[#3D6549] transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg hover:shadow-xl" 
+                  type="submit"
+                >
+                  TẠO TÀI KHOẢN NGAY
                 </button>
               </div>
+            </form>
+            
+            {/* Social Divider */}
+            <div className="my-6 relative flex py-2 items-center">
+              <div className="flex-grow border-t border-gray-300" />
+              <span className="flex-shrink mx-4 text-sm text-gray-500 uppercase tracking-wider">
+                Hoặc đăng ký nhanh bằng
+              </span>
+              <div className="flex-grow border-t border-gray-300" />
             </div>
             
-            {/* Bottom Sign In & Security Badges */}
-            <footer className="mt-6 text-center space-y-3">
-              <p className="font-body-sm text-on-surface-variant">
-                Already have an athlete passport? 
-                <a className="text-primary-container font-headline-sm text-sm hover:underline ml-1" href="/login">Sign In</a>
+            {/* Social Auth Buttons */}
+            <div className="grid grid-cols-2 gap-4">
+              <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors font-medium text-gray-700" type="button">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" fill="#EA4335" />
+                  <path d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" fill="#4285F4" />
+                  <path d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.5s.7 4.8 1.9 7.2l3.7-2.9z" fill="#FBBC05" />
+                  <path d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 17C3.7 20.7 7.5 24 12 24z" fill="#34A853" />
+                </svg>
+                <span>Google</span>
+              </button>
+              <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors font-medium text-gray-700" type="button">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                <span>Facebook</span>
+              </button>
+            </div>
+            
+            {/* Bottom Sign In Link */}
+            <footer className="mt-8 text-center">
+              <p className="text-sm text-gray-600">
+                Bạn đã có tài khoản?{' '}
+                <a className="text-[#4A7C59] font-semibold hover:underline" href="/login">
+                  Đăng nhập ngay
+                </a>
               </p>
-              <div className="flex items-center justify-center gap-3 font-label-sm text-outline tracking-wider">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[14px] text-secondary-fixed">lock</span>
-                  256-Bit SSL Encrypted
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[14px] text-primary-container">shield</span>
-                  Smart Escrow Ready
-                </span>
-              </div>
             </footer>
             
           </div>
         </section>
       </main>
-    </>
+    </div>
   )
 }
 
