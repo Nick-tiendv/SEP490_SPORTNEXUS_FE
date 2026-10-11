@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
+import ProtectedRoute from './Auth/ProtectedRoute.jsx'
+
 // Authentication
 import ForgotPassword from './Auth/ForgotPassword.jsx'
 import Login from './Auth/Login.jsx'
@@ -80,71 +82,79 @@ function App() {
         <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/register" element={<Register />} />
+
+        {/* Onboarding */}
         <Route path="/onboarding" element={<OnBoarding />} />
 
-        {/* Player application */}
-        <Route element={<PlayerLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/wallet" element={<WalletEscrow />} />
-          <Route path="/community" element={<CommunityFeed />} />
-          <Route path="/tournament" element={<TournamentList />} />
-          <Route path="/court-finder" element={<MapBooking />} />
-          <Route path="/court" element={<CourtDetails />} />
-          <Route path="/ai-chat" element={<AIChatBooking />} />
-          <Route path="/qr-pass" element={<CheckInQR />} />
-          <Route path="/check-in" element={<CheckInQR />} />
-          <Route path="/live-qr" element={<LiveQRPass />} />
-          <Route path="/flash-claim" element={<FlashClaim />} />
-          <Route path="/create-match" element={<CreateMatch />} />
-          <Route path="/split-payment" element={<SplitPayment />} />
-          <Route path="/post-match-rating" element={<PostMatchRating />} />
+        {/* Protected Player application */}
+        <Route element={<ProtectedRoute destination="/dashboard" />}>
+          <Route element={<PlayerLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/wallet" element={<WalletEscrow />} />
+            <Route path="/community" element={<CommunityFeed />} />
+            <Route path="/tournament" element={<TournamentList />} />
+            <Route path="/court-finder" element={<MapBooking />} />
+            <Route path="/court" element={<CourtDetails />} />
+            <Route path="/ai-chat" element={<AIChatBooking />} />
+            <Route path="/qr-pass" element={<CheckInQR />} />
+            <Route path="/check-in" element={<CheckInQR />} />
+            <Route path="/live-qr" element={<LiveQRPass />} />
+            <Route path="/flash-claim" element={<FlashClaim />} />
+            <Route path="/create-match" element={<CreateMatch />} />
+            <Route path="/split-payment" element={<SplitPayment />} />
+            <Route path="/post-match-rating" element={<PostMatchRating />} />
+          </Route>
         </Route>
 
-        {/* Admin application */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route
-            index
-            element={<Navigate replace to="/admin/dashboard" />}
-          />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="users" element={<UserManagement />} />
-          <Route path="court-owners" element={<CourtOwnerManagement />} />
-          <Route path="facilities" element={<FacilityManagement />} />
-          <Route path="bookings" element={<BookingManagement />} />
-          <Route path="lfg" element={<LFGManagement />} />
-          <Route path="tournaments" element={<TournamentManagement />} />
-          <Route path="payments" element={<PaymentManagement />} />
+        {/* Protected Admin application */}
+        <Route element={<ProtectedRoute destination="/admin/dashboard" />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route
+              index
+              element={<Navigate replace to="/admin/dashboard" />}
+            />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="court-owners" element={<CourtOwnerManagement />} />
+            <Route path="facilities" element={<FacilityManagement />} />
+            <Route path="bookings" element={<BookingManagement />} />
+            <Route path="lfg" element={<LFGManagement />} />
+            <Route path="tournaments" element={<TournamentManagement />} />
+            <Route path="payments" element={<PaymentManagement />} />
+          </Route>
         </Route>
 
-        {/* Court Owner application */}
-        <Route path="/owner" element={<CourtOwnerLayout />}>
-          <Route
-            index
-            element={<Navigate replace to="/owner/dashboard" />}
-          />
-          <Route path="dashboard" element={<CourtOwnerDashboard />} />
-          <Route path="profile" element={<CourtOwnerProfile />} />
-          <Route path="courts" element={<CourtManage />} />
-          <Route path="court-manage" element={<CourtManage />} />
-          <Route path="check-qr" element={<CheckQR />} />
-          <Route
-            path="schedule"
-            element={<ViewCourtBookingSchedule />}
-          />
-          <Route
-            path="view-schedule"
-            element={<ViewCourtBookingSchedule />}
-          />
-          <Route
-            path="tournament"
-            element={<CreateAutomatedTournament />}
-          />
-          <Route
-            path="create-tournament"
-            element={<CreateAutomatedTournament />}
-          />
-          <Route path="settlement" element={<Settlement />} />
+        {/* Protected Court Owner application */}
+        <Route element={<ProtectedRoute destination="/owner/dashboard" />}>
+          <Route path="/owner" element={<CourtOwnerLayout />}>
+            <Route
+              index
+              element={<Navigate replace to="/owner/dashboard" />}
+            />
+            <Route path="dashboard" element={<CourtOwnerDashboard />} />
+            <Route path="profile" element={<CourtOwnerProfile />} />
+            <Route path="courts" element={<CourtManage />} />
+            <Route path="court-manage" element={<CourtManage />} />
+            <Route path="check-qr" element={<CheckQR />} />
+            <Route
+              path="schedule"
+              element={<ViewCourtBookingSchedule />}
+            />
+            <Route
+              path="view-schedule"
+              element={<ViewCourtBookingSchedule />}
+            />
+            <Route
+              path="tournament"
+              element={<CreateAutomatedTournament />}
+            />
+            <Route
+              path="create-tournament"
+              element={<CreateAutomatedTournament />}
+            />
+            <Route path="settlement" element={<Settlement />} />
+          </Route>
         </Route>
 
         {/* Court Owner aliases */}

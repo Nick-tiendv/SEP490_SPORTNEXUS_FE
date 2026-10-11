@@ -1,3 +1,4 @@
+import { useAuth } from '../../context/authContext.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -20,6 +21,7 @@ export const PRESET_SPORTS_CATALOG = [
 ]
 
 export default function Profile() {
+  const { logout } = useAuth()
   const navigate = useNavigate()
 
   // State thông tin người chơi - Đồng bộ tên & handle
@@ -4562,6 +4564,7 @@ export default function Profile() {
                     localStorage.removeItem('sportnexus_auth_token')
                   } catch (e) {}
                   setShowLogoutModal(false)
+                  logout()
                   navigate('/login')
                 }}
                 style={{

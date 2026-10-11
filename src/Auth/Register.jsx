@@ -1,12 +1,19 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
+import { toast } from 'sonner'
+import { registerUser } from '../api/auth/authApi.js'
+
 function Register() {
-  const [role, setRole] = useState('player') // 'player' | 'court_owner'
+  const [role, setRole] = useState('player')
+  const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const submitting = useRef(false)
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [selectedSports, setSelectedSports] = useState([])
@@ -14,88 +21,49 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
 
-  // Hàm chuẩn hóa số điện thoại
-  const normalizePhone = (phoneStr) => {
-    if (!phoneStr) return ''
-    const digits = String(phoneStr).replace(/\D/g, '')
-    if (digits.startsWith('84') && digits.length >= 11) {
-      return '0' + digits.slice(2)
-    }
-    if (digits.length === 9) {
-      return '0' + digits
-    }
-    return digits
-  }
-
-  const handleRegisterSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    if (password && confirmPassword && password !== confirmPassword) {
-      alert('Mật khẩu xác nhận không trùng khớp!')
-      return
+    if (submitting.current) return
+
+    const payload = {
+      username: username.trim(),
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      role,
+      sports: selectedSports,
     }
 
+    const nextErrors = {}
+    for (const key of ['username', 'fullName', 'phone', 'email']) {
+      if (!payload[key]) nextErrors[key] = 'Vui lòng điền thông tin này.'
+    }
+    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+      nextErrors.email = 'Email không hợp lệ.'
+    }
+    if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
+    if (!confirmPassword || password !== confirmPassword) {
+      nextErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
+    }
+    if (!event.currentTarget.elements.terms.checked) {
+      nextErrors.terms = 'Vui lòng đồng ý với điều khoản dịch vụ.'
+    }
+
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) return
+
+    submitting.current = true
+    setLoading(true)
     try {
-      localStorage.setItem('sportnexus_user_role', role)
-      localStorage.setItem('sportnexus_registered_role', role)
-
-      const cleanEmail = (email || '').trim().toLowerCase()
-      const rawPhone = (phone || '').trim()
-      const normPhone = normalizePhone(rawPhone)
-
-      const userData = {
-        fullName: fullName.trim(),
-        email: cleanEmail,
-        phone: rawPhone,
-        normalizedPhone: normPhone,
-        role,
-        sports: selectedSports,
-        createdAt: new Date().toISOString()
-      }
-
-      // Lưu vào map sportnexus_users với tất cả các khóa tra cứu (email, phone gốc, phone chuẩn hóa, +84, 9 số)
-      const users = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
-      if (cleanEmail) users[cleanEmail] = userData
-      if (rawPhone) users[rawPhone] = userData
-      if (normPhone) {
-        users[normPhone] = userData
-        users['+84' + normPhone.replace(/^0/, '')] = userData
-        users[normPhone.replace(/^0/, '')] = userData
-      }
-      localStorage.setItem('sportnexus_users', JSON.stringify(users))
-
-      // Lưu vào mảng sportnexus_user_records
-      const userList = JSON.parse(localStorage.getItem('sportnexus_user_records') || '[]')
-      const filteredList = userList.filter((u) => {
-        const uEmail = (u.email || '').trim().toLowerCase()
-        const uPhoneNorm = normalizePhone(u.phone || '')
-        const matchEmail = cleanEmail && uEmail === cleanEmail
-        const matchPhone = normPhone && uPhoneNorm === normPhone
-        return !matchEmail && !matchPhone
-      })
-      filteredList.push(userData)
-      localStorage.setItem('sportnexus_user_records', JSON.stringify(filteredList))
-
-      // Lưu user phiên làm việc
-      localStorage.setItem('sportnexus_current_user', JSON.stringify(userData))
-
-      // Nếu đăng ký là Chủ sân, cập nhật hoặc tạo mới thông tin hồ sơ Chủ sân
-      if (role === 'court_owner') {
-        const existingOwner = JSON.parse(localStorage.getItem('sportnexus_owner_profile') || '{}')
-        const updatedOwner = {
-          ...existingOwner,
-          fullName: fullName.trim() || existingOwner.fullName || 'Chủ Sân SportNexus',
-          email: cleanEmail || existingOwner.email || 'owner@sportnexus.com',
-          phone: rawPhone || existingOwner.phone || '0908 123 456',
-          roleTitle: 'Chủ Cơ Sở',
-        }
-        localStorage.setItem('sportnexus_owner_profile', JSON.stringify(updatedOwner))
-      }
-    } catch (e) {}
-
-    if (role === 'court_owner') {
-      navigate('/owner/dashboard')
-    } else {
-      navigate('/onboarding')
+      await registerUser(payload)
+      toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.')
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast.error(error?.message || 'Đăng ký thất bại. Vui lòng thử lại.')
+    } finally {
+      submitting.current = false
+      setLoading(false)
     }
   }
 
@@ -326,7 +294,7 @@ function Register() {
             </header>
             
             {/* Form */}
-            <form className="space-y-5" onSubmit={handleRegisterSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit} noValidate aria-busy={loading}>
               {/* Role Selection Field (Người chơi / Chủ sân) */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
@@ -397,6 +365,26 @@ function Register() {
                 </div>
               </div>
 
+              {/* Username Field */}
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                  Tên đăng nhập <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="username"
+                  name="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  autoComplete="username"
+                  required
+                  aria-invalid={!!errors.username}
+                  aria-describedby="username-error"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none"
+                  placeholder="Nhập tên đăng nhập"
+                />
+                {errors.username && <p id="username-error" role="alert" className="mt-1 text-sm text-red-600">{errors.username}</p>}
+              </div>
+
               {/* Full Name Field */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="full-name">
@@ -410,12 +398,18 @@ function Register() {
                   </div>
                   <input 
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                    id="full-name" 
+id="full-name"
+                    name="fullName"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(event) => setFullName(event.target.value)}
+                    autoComplete="name"
+                    aria-invalid={!!errors.fullName}
+                    aria-describedby="fullName-error"
+                    placeholder="Ví dụ: Nguyễn Văn A"
                     required 
                     type="text" 
                   />
+                    {errors.fullName && <p id="fullName-error" role="alert" className="mt-1 text-sm text-red-600">{errors.fullName}</p>}
                 </div>
               </div>
               
@@ -432,12 +426,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="phone" 
+id="phone"
+                      name="phone"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(event) => setPhone(event.target.value)}
+                      autoComplete="tel"
+                      aria-invalid={!!errors.phone}
+                      aria-describedby="phone-error"
+                      placeholder="0912 345 678"
                       required 
                       type="tel" 
                     />
+                    {errors.phone && <p id="phone-error" role="alert" className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                   </div>
                 </div>
 
@@ -454,12 +454,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="email" 
+id="email"
+                      name="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby="email-error"
+                      placeholder="email@example.com"
                       required 
                       type="email" 
                     />
+                    {errors.email && <p id="email-error" role="alert" className="mt-1 text-sm text-red-600">{errors.email}</p>}
                   </div>
                 </div>
               </div>
@@ -639,12 +645,18 @@ function Register() {
                     </div>
                     <input 
                       className="w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
-                      id="password" 
+id="password"
+                      name="password"
+                      autoComplete="new-password"
+                      aria-invalid={!!errors.password}
+                      aria-describedby="password-error"
+                      placeholder="Nhập mật khẩu an toàn"
                       required 
                       type={passwordVisible ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
+                    {errors.password && <p id="password-error" role="alert" className="mt-1 text-sm text-red-600">{errors.password}</p>}
                     <button 
                       aria-label="Toggle password visibility" 
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
@@ -704,12 +716,18 @@ function Register() {
                             : 'border-red-500 focus:border-red-600 focus:ring-red-500/20'
                           : 'border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]/20'
                       } focus:ring-2 outline-none transition-all`}
-                      id="confirm-password" 
+id="confirm-password"
+                      name="confirmPassword"
+                      autoComplete="new-password"
+                      aria-invalid={!!errors.confirmPassword}
+                      aria-describedby="confirmPassword-error"
+                      placeholder="Nhập lại mật khẩu"
                       required 
                       type={confirmPasswordVisible ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
+                    {errors.confirmPassword && <p id="confirmPassword-error" role="alert" className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                     <button 
                       aria-label="Toggle confirm password visibility" 
                       className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-[#4A7C59]" 
@@ -746,13 +764,14 @@ function Register() {
                 </label>
               </div>
               
+              {errors.terms && <p role="alert" className="text-sm text-red-600">{errors.terms}</p>}
               {/* Primary Create Account Button */}
               <div className="pt-2">
                 <button 
                   className="w-full py-4 px-6 rounded-xl font-bold text-base text-white bg-[#4A7C59] hover:bg-[#3D6549] transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg hover:shadow-xl" 
-                  type="submit"
+                  type="submit" disabled={loading}
                 >
-                  TẠO TÀI KHOẢN NGAY
+                  {loading ? 'Đang đăng ký...' : 'TẠO TÀI KHOẢN NGAY'}
                 </button>
               </div>
             </form>

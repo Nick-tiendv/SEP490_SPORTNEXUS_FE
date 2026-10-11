@@ -1,195 +1,49 @@
 import './auth-pages.css'
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-
-// Hàm chuẩn hóa số điện thoại Việt Nam (xóa ký tự đặc biệt, chuẩn hóa 0xxx hoặc +84xxx)
-export const normalizePhone = (phoneStr) => {
-  if (!phoneStr) return ''
-  const digits = String(phoneStr).replace(/\D/g, '')
-  if (digits.startsWith('84') && digits.length >= 11) {
-    return '0' + digits.slice(2)
-  }
-  if (digits.length === 9) {
-    return '0' + digits
-  }
-  return digits
-}
-
-// Hàm nhận diện vai trò tài khoản dựa trên dữ liệu hệ thống
-export const detectUserRole = (rawInput) => {
-  if (!rawInput) return null
-  const cleanId = String(rawInput).trim().toLowerCase()
-  const normInput = normalizePhone(cleanId)
-
-  // 1. Kiểm tra trong danh sách người dùng đã đăng ký (sportnexus_users map)
-  try {
-    const usersMap = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
-    if (usersMap[cleanId] && usersMap[cleanId].role) {
-      return usersMap[cleanId].role
-    }
-    if (normInput && usersMap[normInput] && usersMap[normInput].role) {
-      return usersMap[normInput].role
-    }
-    // Duyệt tìm kiếm mảng người dùng
-    const found = Object.values(usersMap).find((u) => {
-      const uEmail = (u.email || '').trim().toLowerCase()
-      const uPhone = (u.phone || '').trim()
-      const uNormPhone = normalizePhone(uPhone)
-      return (
-        (uEmail && uEmail === cleanId) ||
-        (uPhone && uPhone === cleanId) ||
-        (normInput && uNormPhone && normInput === uNormPhone)
-      )
-    })
-    if (found && found.role) {
-      return found.role
-    }
-  } catch (err) {}
-
-  // 2. Kiểm tra trong mảng lịch sử đăng ký (sportnexus_user_records)
-  try {
-    const records = JSON.parse(localStorage.getItem('sportnexus_user_records') || '[]')
-    const foundRecord = records.find((u) => {
-      const uEmail = (u.email || '').trim().toLowerCase()
-      const uNormPhone = normalizePhone(u.phone || '')
-      return (
-        (uEmail && uEmail === cleanId) ||
-        (normInput && uNormPhone && normInput === uNormPhone)
-      )
-    })
-    if (foundRecord && foundRecord.role) {
-      return foundRecord.role
-    }
-  } catch (err) {}
-
-  // 3. Kiểm tra Profile Chủ Sân đã lưu trong hệ thống (sportnexus_owner_profile)
-  try {
-    const ownerSaved = localStorage.getItem('sportnexus_owner_profile')
-    if (ownerSaved) {
-      const ownerData = JSON.parse(ownerSaved)
-      const ownerEmail = (ownerData.email || '').trim().toLowerCase()
-      const ownerPhoneNorm = normalizePhone(ownerData.phone || '')
-      const ownerName = (ownerData.fullName || '').trim().toLowerCase()
-      if (
-        (ownerEmail && ownerEmail === cleanId) ||
-        (normInput && ownerPhoneNorm && normInput === ownerPhoneNorm) ||
-        cleanId === ownerName ||
-        cleanId === 'nguyen van duc' ||
-        cleanId === 'nguyenvanduc'
-      ) {
-        return 'court_owner'
-      }
-    }
-  } catch (err) {}
-
-  // 4. Danh sách tài khoản demo có sẵn (Seed Accounts)
-  const courtOwnerSeedList = [
-    'owner@sportnexus.com',
-    'chusan@sportnexus.com',
-    'chusan@gmail.com',
-    'chusan@sportnexus.vn',
-    'duc.nguyen@sportnexus.vn',
-    'courtowner@sportnexus.com',
-    'owner',
-    'chusan',
-    '0908123456',
-    '0908 123 456'
-  ]
-  const adminSeedList = [
-    'admin@sportnexus.com',
-    'admin@sportnexus.vn',
-    'quantri@sportnexus.com',
-    'admin',
-    'quantri'
-  ]
-  const playerSeedList = [
-    'player@sportnexus.com',
-    'player@sportnexus.vn',
-    'nguoichoi@gmail.com',
-    'minh.nguyen@sportnexus.vn',
-    'minh@sportnexus.vn',
-    'player',
-    'nguoichoi',
-    '0901234567',
-    '0901 123 456'
-  ]
-
-  if (courtOwnerSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'court_owner'
-  }
-  if (adminSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'admin'
-  }
-  if (playerSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'player'
-  }
-
-  // 5. Nhận diện từ khóa thông minh (Keywords)
-  if (
-    cleanId.includes('owner') ||
-    cleanId.includes('chusan') ||
-    cleanId.includes('court') ||
-    cleanId.includes('manager') ||
-    cleanId.includes('quanly') ||
-    cleanId.includes('facility') ||
-    cleanId.includes('san')
-  ) {
-    return 'court_owner'
-  }
-  if (cleanId.includes('admin') || cleanId.includes('quantri')) {
-    return 'admin'
-  }
-  if (
-    cleanId.includes('player') ||
-    cleanId.includes('nguoichoi') ||
-    cleanId.includes('member') ||
-    cleanId.includes('vdv')
-  ) {
-    return 'player'
-  }
-
-  return null
-}
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { loginUser } from '../api/auth/authApi.js'
+import { useAuth } from '../context/authContext.js'
+import { roleDestination } from './roleRoutes.js'
 
 function Login() {
+  const { login, logout, isAuthenticated, role } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const submitting = useRef(false)
   const navigate = useNavigate()
 
-  // Xác định trước vai trò hiển thị trực tiếp khi người dùng gõ
-  const previewRole = detectUserRole(identifier)
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    if (submitting.current) return
 
-  const handleLoginSubmit = (e) => {
-    e.preventDefault()
-    const detected = detectUserRole(identifier)
+    const username = identifier.trim()
+    const nextErrors = {}
+    if (!username) nextErrors.username = 'Vui lòng nhập tên đăng nhập.'
+    if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) return
 
-    // Nếu không nhận diện được qua các quy tắc trên, mặc định là player
-    const finalRole = detected || 'player'
-
-    // Lưu role phiên hiện tại vào localStorage
+    submitting.current = true
+    setLoading(true)
     try {
-      localStorage.setItem('sportnexus_user_role', finalRole)
-      localStorage.setItem('sportnexus_auth_token', 'sportnexus_token_' + Date.now())
-
-      // Cập nhật thông tin phiên đăng nhập
-      const cleanId = (identifier || '').trim().toLowerCase()
-      const usersMap = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
-      if (usersMap[cleanId]) {
-        localStorage.setItem('sportnexus_current_user', JSON.stringify(usersMap[cleanId]))
-      } else if (finalRole === 'court_owner' || finalRole === 'admin') {
-        const ownerSaved = localStorage.getItem('sportnexus_owner_profile')
-        if (ownerSaved) {
-          localStorage.setItem('sportnexus_current_user', ownerSaved)
-        }
+      const session = await loginUser({ username, password })
+      login(session)
+      toast.success('Đăng nhập thành công!')
+      const destination = roleDestination(session.role)
+      if (destination) {
+        navigate(destination, { replace: true })
+      } else {
+        toast.warning('Vai trò tài khoản chưa được cấu hình. Vui lòng liên hệ quản trị viên.')
       }
-    } catch (err) {}
-
-    // Tự động điều hướng đến trang đúng với vai trò
-    if (finalRole === 'court_owner' || finalRole === 'admin') {
-      navigate('/owner/dashboard')
-    } else {
-      navigate('/dashboard')
+    } catch (error) {
+      toast.error(error?.message || 'Đăng nhập thất bại. Vui lòng thử lại.')
+    } finally {
+      submitting.current = false
+      setLoading(false)
     }
   }
 
@@ -233,43 +87,39 @@ function Login() {
               Chào mừng bạn trở lại với nền tảng thể thao đa môn SportNexus
             </p>
 
-            <form onSubmit={handleLoginSubmit} className="space-y-4 sm:space-y-5">
-              {/* Email / SĐT Input */}
+            {isAuthenticated && (
+              <div className="mb-4 text-sm text-[#2D5F3F]">
+                <p>Đã đăng nhập. {roleDestination(role) ? 'Bạn có thể mở trang chính.' : 'Vai trò tài khoản chưa được cấu hình.'}</p>
+                {roleDestination(role) && (
+                  <button type="button" className="underline mr-4" onClick={() => navigate(roleDestination(role))}>
+                    Trang chính
+                  </button>
+                )}
+                <button type="button" className="underline" onClick={logout}>Đăng xuất</button>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="space-y-4 sm:space-y-5">
               <div>
-                <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
-                  Email hoặc Số điện thoại
+                <label htmlFor="username" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
+                  Tên đăng nhập
                 </label>
                 <input
                   type="text"
-                  id="email"
+                  id="username"
+                  name="username"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Nhập email hoặc số điện thoại..."
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  autoComplete="username"
+                  aria-invalid={!!errors.username}
+                  aria-describedby="username-error"
+                  placeholder="Nhập tên đăng nhập..."
                   className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                   required
                 />
 
-                {/* Badge thông báo nhận diện vai trò tự động */}
-                {identifier.trim().length > 1 && previewRole === 'court_owner' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-emerald-600">domain</span>
-                    <span>Tài khoản Chủ Sân (Court Owner) • Sẽ vào Trang Quản Trị Cơ Sở</span>
-                  </div>
-                )}
-                {identifier.trim().length > 1 && previewRole === 'admin' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-blue-600">admin_panel_settings</span>
-                    <span>Tài khoản Quản Trị Viên (Admin) • Sẽ vào Trang Quản Trị Hệ Thống</span>
-                  </div>
-                )}
-                {identifier.trim().length > 1 && previewRole === 'player' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-green-800 bg-green-50 border border-green-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-green-600">sports_tennis</span>
-                    <span>Tài khoản Người Chơi (Player) • Sẽ vào Trang Đặt Sân &amp; Ghép Kèo</span>
-                  </div>
-                )}
               </div>
 
+              {errors.username && <p id="username-error" role="alert" className="text-sm text-red-600">{errors.username}</p>}
               {/* Password Input */}
               <div>
                 <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
@@ -279,8 +129,12 @@ function Login() {
                   <input
                     type={passwordVisible ? 'text' : 'password'}
                     id="password"
+                    name="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="current-password"
+                    aria-invalid={!!errors.password}
+                    aria-describedby="password-error"
                     placeholder="Nhập mật khẩu..."
                     className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 pr-11 sm:pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                     required
@@ -304,15 +158,16 @@ function Login() {
                 </div>
               </div>
 
+              {errors.password && <p id="password-error" role="alert" className="text-sm text-red-600">{errors.password}</p>}
               {/* Remember & Forgot Password */}
               <div className="flex items-center justify-between text-xs sm:text-sm">
                 <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    defaultChecked
+                    disabled title="Phiên được lưu trong tab hiện tại"
                     className="w-4 h-4 text-[#2D5F3F] border-gray-300 rounded focus:ring-[#2D5F3F]"
                   />
-                  <span className="ml-2 text-gray-700">Ghi nhớ đăng nhập</span>
+<span className="ml-2 text-sm text-gray-700">Lưu phiên trong tab hiện tại</span>
                 </label>
                 <Link to="/forgot-password" className="text-[#2D5F3F] font-semibold hover:underline">
                   Quên mật khẩu?
@@ -321,11 +176,11 @@ function Login() {
 
               {/* Submit Button */}
               <button
-                type="submit"
+type="submit" disabled={loading}
                 className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3 sm:py-3.5 px-6 rounded-lg transition-all duration-200 uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.99] text-sm sm:text-base"
               >
-                <span>ĐĂNG NHẬP</span>
-                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                <span>{loading ? 'Đang đăng nhập...' : 'ĐĂNG NHẬP'}</span>
+                {!loading && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
               </button>
             </form>
 
