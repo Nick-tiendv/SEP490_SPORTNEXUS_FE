@@ -295,7 +295,6 @@ export default function InteractiveCourtMap({
                 type="text"
                 className="mb-origin-input"
                 value={customOrigin}
-                placeholder={`VD: 12 Võ Văn Ngân, Thủ Đức... (Hồ sơ: ${userProfileLocation})`}
                 onChange={(e) => setCustomOrigin(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') setIsEditingOrigin(false)

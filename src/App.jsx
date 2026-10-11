@@ -1,9 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+
+// Authentication
 import ForgotPassword from './Auth/ForgotPassword.jsx'
 import Login from './Auth/Login.jsx'
 import Register from './Auth/Register.jsx'
 import ResetPassword from './Auth/ResetPassword.jsx'
 import VerifyAccount from './Auth/VerifyAccount.jsx'
+
+// Player pages
 import AIChatBooking from './Player/Book a court/AIChatBooking.jsx'
 import CommunityFeed from './Player/Looking for group/CommunityFeed.jsx'
 import CourtDetails from './Player/Book a court/CourtDetails.jsx'
@@ -21,6 +25,7 @@ import SplitPayment from './Player/Book a court/SplitPayment.jsx'
 import TournamentList from './Player/Finance & Events/TournamentList.jsx'
 import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
 
+// Admin pages
 import AdminLayout from './Admin/Layout/AdminLayout.jsx'
 import AdminDashboard from './Admin/Dashboard/AdminDashboard.jsx'
 import UserManagement from './Admin/Users/UserManagement.jsx'
@@ -31,12 +36,45 @@ import LFGManagement from './Admin/LFG/LFGManagement.jsx'
 import TournamentManagement from './Admin/Tournaments/TournamentManagement.jsx'
 import PaymentManagement from './Admin/Payments/PaymentManagement.jsx'
 
+// Court Owner pages
+import CourtOwnerLayout from './Court Owner/CourtOwnerLayout.jsx'
+import CourtOwnerDashboard from './Court Owner/Dashboard.jsx'
+import CourtOwnerProfile from './Court Owner/Profile.jsx'
+import CourtManage from './Court Owner/Court Manage.jsx'
+import CheckQR from './Court Owner/Check QR.jsx'
+import ViewCourtBookingSchedule from './Court Owner/View Court Booking Schedule.jsx'
+import CreateAutomatedTournament from './Court Owner/Create Automated Tournament.jsx'
+import Settlement from './Court Owner/Settlement.jsx'
+
+// Redirect users to the appropriate homepage based on their role
+function HomeRedirect() {
+  try {
+    const role = localStorage.getItem('sportnexus_user_role')
+
+    if (role === 'admin') {
+      return <Navigate replace to="/admin/dashboard" />
+    }
+
+    if (role === 'court_owner') {
+      return <Navigate replace to="/owner/dashboard" />
+    }
+
+    if (role === 'player') {
+      return <Navigate replace to="/dashboard" />
+    }
+  } catch (error) {
+    // Fall back to the login page if localStorage is unavailable
+  }
+
+  return <Navigate replace to="/login" />
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Navigate replace to="/login" />} />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-account" element={<VerifyAccount />} />
@@ -44,7 +82,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/onboarding" element={<OnBoarding />} />
 
-        {/* Player app — all wrapped in a single shared layout */}
+        {/* Player application */}
         <Route element={<PlayerLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
@@ -63,8 +101,12 @@ function App() {
           <Route path="/post-match-rating" element={<PostMatchRating />} />
         </Route>
 
-        {/* Admin module */}
+        {/* Admin application */}
         <Route path="/admin" element={<AdminLayout />}>
+          <Route
+            index
+            element={<Navigate replace to="/admin/dashboard" />}
+          />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="court-owners" element={<CourtOwnerManagement />} />
@@ -75,8 +117,68 @@ function App() {
           <Route path="payments" element={<PaymentManagement />} />
         </Route>
 
+        {/* Court Owner application */}
+        <Route path="/owner" element={<CourtOwnerLayout />}>
+          <Route
+            index
+            element={<Navigate replace to="/owner/dashboard" />}
+          />
+          <Route path="dashboard" element={<CourtOwnerDashboard />} />
+          <Route path="profile" element={<CourtOwnerProfile />} />
+          <Route path="courts" element={<CourtManage />} />
+          <Route path="court-manage" element={<CourtManage />} />
+          <Route path="check-qr" element={<CheckQR />} />
+          <Route
+            path="schedule"
+            element={<ViewCourtBookingSchedule />}
+          />
+          <Route
+            path="view-schedule"
+            element={<ViewCourtBookingSchedule />}
+          />
+          <Route
+            path="tournament"
+            element={<CreateAutomatedTournament />}
+          />
+          <Route
+            path="create-tournament"
+            element={<CreateAutomatedTournament />}
+          />
+          <Route path="settlement" element={<Settlement />} />
+        </Route>
+
+        {/* Court Owner aliases */}
+        <Route
+          path="/owner-dashboard"
+          element={<Navigate replace to="/owner/dashboard" />}
+        />
+        <Route
+          path="/owner-profile"
+          element={<Navigate replace to="/owner/profile" />}
+        />
+        <Route
+          path="/court-manage"
+          element={<Navigate replace to="/owner/courts" />}
+        />
+        <Route
+          path="/owner-qr"
+          element={<Navigate replace to="/owner/check-qr" />}
+        />
+        <Route
+          path="/owner-schedule"
+          element={<Navigate replace to="/owner/schedule" />}
+        />
+        <Route
+          path="/owner-tournament"
+          element={<Navigate replace to="/owner/tournament" />}
+        />
+        <Route
+          path="/owner-settlement"
+          element={<Navigate replace to="/owner/settlement" />}
+        />
+
         {/* Fallback */}
-        <Route path="*" element={<Navigate replace to="/login" />} />
+        <Route path="*" element={<Navigate replace to="/" />} />
       </Routes>
     </BrowserRouter>
   )

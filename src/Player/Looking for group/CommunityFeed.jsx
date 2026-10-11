@@ -38,11 +38,11 @@ function CommunityFeed() {
         sport: 'badminton',
         sportBadge: 'CẦU LÔNG ĐÔI',
         subBadge: 'Cầu Yonex AS-40',
-        levelTag: 'Elo 1500 - 1700',
+        levelTag: 'Trung bình - Khá',
         slotTag: 'Cần 2 Người (Nam/Nữ)',
         time: '18:00 Tối Nay',
         timeSlot: 'evening',
-        title: '[Cầu Lông Đôi Nam Nữ] Giao lưu vui vẻ, sân thảm xịn (Elo 1500 - 1700)',
+        title: '[Cầu Lông Đôi Nam Nữ] Giao lưu vui vẻ, sân thảm xịn (Trung bình - Khá)',
         location: 'Sân Cầu Lông Tre Xanh, Đinh Bộ Lĩnh, Bình Thạnh',
         groupDesc: 'Nhóm văn phòng nhiệt tình, thân thiện',
         roster: [
@@ -65,11 +65,11 @@ function CommunityFeed() {
         sport: 'pickleball',
         sportBadge: 'PICKLEBALL ĐÔI',
         subBadge: '✓ Sân Thảm Tiêu Chuẩn',
-        levelTag: 'DUPR 3.5 - 4.0',
+        levelTag: 'Trình Khá',
         slotTag: 'Còn Trống 1 Chỗ',
         time: '20:30 Tối nay',
         timeSlot: 'evening',
-        title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (DUPR 3.5 - 4.0)',
+        title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)',
         location: 'Sân SportNexus Arena, Huỳnh Tấn Phát, Quận 7',
         groupDesc: 'Đã có 3/4 người (Host: Hoàng Bách)',
         roster: [
@@ -93,7 +93,7 @@ function CommunityFeed() {
         sport: 'badminton',
         sportBadge: 'CẦU LÔNG ĐÔI',
         subBadge: '✓ Sân Thảm Yonex',
-        levelTag: 'Elo 1400 - 1550',
+        levelTag: 'Trung bình',
         slotTag: 'Cần 2 Người (Nam/Nữ)',
         time: '14:30 Chiều nay',
         timeSlot: 'afternoon',
@@ -120,7 +120,7 @@ function CommunityFeed() {
         sport: 'pickleball',
         sportBadge: 'PICKLEBALL ĐÔI',
         subBadge: '✓ Sân Acrylic USAPA',
-        levelTag: 'DUPR 3.0 - 4.0',
+        levelTag: 'Trình Trung bình - Khá',
         slotTag: 'Còn Trống 2 Chỗ',
         time: '19:00 Tối mai',
         timeSlot: 'evening',
@@ -213,7 +213,7 @@ function CommunityFeed() {
     title: '',
     location: '',
     time: '19:30 Ngày mai',
-    level: 'Elo 1400 - 1600',
+    level: 'Trung bình - Khá',
     slots: 2,
     deposit: 50000,
   })
@@ -404,7 +404,7 @@ function CommunityFeed() {
             </h1>
             <p className="text-gray-600 text-sm mt-1 max-w-2xl leading-relaxed">
               Chốt slot thể thao tức thì qua giao thức ký quỹ Escrow bảo chứng 100%. Không lo bùng
-              kèo, chuẩn trình độ Elo &amp; DUPR xác minh.
+              kèo, ghép đúng trình độ của người chơi.
             </p>
           </div>
 
@@ -470,6 +470,45 @@ function CommunityFeed() {
             <span>Cầu Lông</span>
           </button>
 
+          {/* Bóng Đá */}
+          <button
+            onClick={() => setActiveSportFilter('football')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'football'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">⚽</span>
+            <span>Bóng Đá</span>
+          </button>
+
+          {/* Bóng Rổ */}
+          <button
+            onClick={() => setActiveSportFilter('basketball')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'basketball'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🏀</span>
+            <span>Bóng Rổ</span>
+          </button>
+
+          {/* Tennis */}
+          <button
+            onClick={() => setActiveSportFilter('tennis')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeSportFilter === 'tennis'
+                ? 'bg-[#3B6817] text-white shadow-sm'
+                : 'bg-transparent text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[15px] leading-none">🎾</span>
+            <span>Tennis</span>
+          </button>
+
           {/* Dropdown Trình độ */}
           <div className="relative">
             <select
@@ -477,10 +516,10 @@ function CommunityFeed() {
               onChange={(e) => setLevelFilter(e.target.value)}
               className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none"
             >
-              <option value="all">Trình độ: Tất Cả Elo/DUPR</option>
+              <option value="all">Trình độ: Tất Cả Trình Độ</option>
               <option value="beginner">Mới chơi / Nhập môn</option>
-              <option value="intermediate">Trung bình (Elo 1300 - 1600)</option>
-              <option value="advanced">Nâng cao (Elo 1600+ / DUPR 3.5+)</option>
+              <option value="intermediate">Trung bình - Khá</option>
+              <option value="advanced">Khá - Nâng cao</option>
             </select>
             <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-[16px]">
               expand_more
@@ -759,7 +798,7 @@ function CommunityFeed() {
                       Minh Minh Minh
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px]">
-                      DUPR 3.8 • Elo 1650
+                      Trình: Trung bình - Khá
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 mt-1">
@@ -1229,29 +1268,28 @@ function CommunityFeed() {
               {/* Chọn môn */}
               <div>
                 <label className="font-bold text-gray-700 block mb-1">Môn thể thao:</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'badminton' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'badminton'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏸 Cầu Lông</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewMatch({ ...newMatch, sport: 'pickleball' })}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 ${
-                      newMatch.sport === 'pickleball'
-                        ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                        : 'border-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <span>🏓 Pickleball</span>
-                  </button>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {[
+                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸' },
+                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓' },
+                    { key: 'football', label: 'Bóng Đá', emoji: '⚽' },
+                    { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀' },
+                    { key: 'tennis', label: 'Tennis', emoji: '🎾' },
+                  ].map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setNewMatch({ ...newMatch, sport: s.key })}
+                      className={`py-2 px-1 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center gap-1 ${
+                        newMatch.sport === s.key
+                          ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <span className="text-base">{s.emoji}</span>
+                      <span className="truncate">{s.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -1260,7 +1298,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Tiêu đề kèo giao lưu:</label>
                 <input
                   type="text"
-                  placeholder="VD: [Cầu Lông Đôi] Cần 2 tay vợt giao lưu vui vẻ, sân mát mẻ"
                   value={newMatch.title}
                   onChange={(e) => setNewMatch({ ...newMatch, title: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
@@ -1273,7 +1310,6 @@ function CommunityFeed() {
                 <label className="font-bold text-gray-700 block mb-1">Sân &amp; Địa chỉ:</label>
                 <input
                   type="text"
-                  placeholder="VD: Sân Tre Xanh, 128 Đinh Bộ Lĩnh, Bình Thạnh"
                   value={newMatch.location}
                   onChange={(e) => setNewMatch({ ...newMatch, location: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
@@ -1615,14 +1651,14 @@ function CommunityFeed() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="material-symbols-outlined text-gray-600 text-[16px]">military_tech</span>
-                    <label className="font-bold text-gray-800">Trình độ kỹ năng (Elo / DUPR):</label>
+                    <label className="font-bold text-gray-800">Trình độ kỹ năng:</label>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {[
-                      { key: 'all', label: 'Tất cả trình độ Elo / DUPR' },
-                      { key: 'beginner', label: 'Phong trào / Mới chơi (Elo < 1300 / DUPR < 3.0)' },
-                      { key: 'intermediate', label: 'Trung bình khá (Elo 1300 - 1600 / DUPR 3.0 - 3.8)' },
-                      { key: 'advanced', label: 'Chuyên sâu / Nâng cao (Elo 1600+ / DUPR 3.8+)' },
+                      { key: 'all', label: 'Tất cả trình độ' },
+                      { key: 'beginner', label: 'Phong trào / Mới chơi' },
+                      { key: 'intermediate', label: 'Trung bình - Khá' },
+                      { key: 'advanced', label: 'Khá - Nâng cao' },
                     ].map((lvl) => (
                       <button
                         key={lvl.key}

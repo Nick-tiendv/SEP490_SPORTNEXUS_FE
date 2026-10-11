@@ -430,10 +430,10 @@ function CreateMatch() {
 
     const levelText =
       skillLevel === 'intermediate'
-        ? 'Elo 1400 - 1600'
+        ? 'Trung bình - Khá'
         : skillLevel === 'beginner'
-        ? 'Elo < 1300'
-        : 'Elo > 1700'
+        ? 'Mới tập chơi'
+        : 'Bán chuyên / Nâng cao'
 
     const createdMatch = {
       id: Date.now(),
@@ -539,104 +539,60 @@ function CreateMatch() {
                     01. CHỌN BỘ MÔN THỂ THAO
                   </label>
                   <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    ELO / DUPR SYNCED
+                    ĐỒNG BỘ TRÌNH ĐỘ
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Cầu Lông Card */}
-                  <div
-                    onClick={() => setSport('badminton')}
-                    className={`relative p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3.5 ${
-                      sport === 'badminton'
-                        ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
-                        : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-                        sport === 'badminton'
-                          ? 'bg-white/20 text-white scale-105'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <span
-                        className="text-[26px] leading-none select-none"
-                        role="img"
-                        aria-label="Cầu Lông"
-                        style={{
-                          filter:
-                            sport === 'badminton'
-                              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
-                              : 'none',
-                        }}
-                      >
-                        🏸
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-[15px]">Cầu Lông</h3>
-                        {sport === 'badminton' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></span>
-                        )}
-                      </div>
-                      <p
-                        className={`text-[11px] mt-0.5 ${
-                          sport === 'badminton' ? 'text-green-100' : 'text-gray-400'
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {[
+                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', sub: 'Đơn / Đôi' },
+                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓', sub: 'Giao Lưu & Đấu' },
+                    { key: 'football', label: 'Bóng Đá', emoji: '⚽', sub: 'Sân 5 / Sân 7' },
+                    { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', sub: '3x3 & 5x5' },
+                    { key: 'tennis', label: 'Tennis', emoji: '🎾', sub: 'Đơn / Đôi' },
+                  ].map((item) => {
+                    const isSelected = sport === item.key
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => setSport(item.key)}
+                        className={`relative p-3 rounded-2xl cursor-pointer transition-all flex flex-col items-center text-center gap-2 ${
+                          isSelected
+                            ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
+                            : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        Badminton Pro-Circuit
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pickleball Card */}
-                  <div
-                    onClick={() => setSport('pickleball')}
-                    className={`relative p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3.5 ${
-                      sport === 'pickleball'
-                        ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
-                        : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-                        sport === 'pickleball'
-                          ? 'bg-white/20 text-white scale-105'
-                          : 'bg-gray-100'
-                      }`}
-                    >
-                      <span
-                        className="text-[26px] leading-none select-none"
-                        role="img"
-                        aria-label="Pickleball"
-                        style={{
-                          filter:
-                            sport === 'pickleball'
-                              ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
-                              : 'none',
-                        }}
-                      >
-                        🏓
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-extrabold text-[15px]">Pickleball</h3>
-                        {sport === 'pickleball' && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></span>
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
+                            isSelected
+                              ? 'bg-white/20 text-white scale-105'
+                              : 'bg-gray-100'
+                          }`}
+                        >
+                          <span
+                            className="text-[24px] leading-none select-none"
+                            role="img"
+                            aria-label={item.label}
+                          >
+                            {item.emoji}
+                          </span>
+                        </div>
+                        <div className="w-full">
+                          <h3 className="font-extrabold text-[13px] truncate">{item.label}</h3>
+                          <p
+                            className={`text-[10px] mt-0.5 truncate ${
+                              isSelected ? 'text-green-100' : 'text-gray-400'
+                            }`}
+                          >
+                            {item.sub}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399]"></span>
                         )}
                       </div>
-                      <p
-                        className={`text-[11px] mt-0.5 ${
-                          sport === 'pickleball' ? 'text-green-100' : 'text-gray-400'
-                        }`}
-                      >
-                        Paddle &amp; DUPR Arena
-                      </p>
-                    </div>
-                  </div>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -740,8 +696,7 @@ function CreateMatch() {
                           setIsDistrictDropdownOpen(true)
                         }}
                         onFocus={() => setIsDistrictDropdownOpen(true)}
-                        placeholder="Nhập tên quận, khu vực hoặc cụm sân (VD: Quận 7, Bình Thạnh, Rạch Miễu, Tao Đàn...)"
-                        className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-[#2D5F3F] focus:ring-2 focus:ring-[#2D5F3F]/20 rounded-xl pl-10 pr-9 py-2.5 text-xs text-gray-800 font-medium placeholder-gray-400 transition-all outline-none shadow-2xs"
+                        className="w-full bg-white border border-gray-200 hover:border-gray-300 focus:border-[#2D5F3F] focus:ring-2 focus:ring-[#2D5F3F]/20 rounded-xl pl-10 pr-9 py-2.5 text-xs text-gray-800 font-medium transition-all outline-none shadow-2xs"
                       />
                       {districtSearchQuery && (
                         <button
@@ -1038,9 +993,9 @@ function CreateMatch() {
                   </div>
                 </div>
 
-                {/* Yêu cầu Trình độ Elo / DUPR */}
+                {/* Yêu cầu Trình độ Người chơi */}
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ Elo / DUPR:</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Trung bình Khá */}
                     <div
@@ -1055,10 +1010,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'intermediate' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Trung bình Khá</span>
+                        <span>Trung bình - Khá</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo 1400 - 1600 (DUPR 3.0 - 4.0)
+                        Đánh chắc tay, giao lưu đều đặn
                       </p>
                     </div>
 
@@ -1078,11 +1033,11 @@ function CreateMatch() {
                         <span>Mới tập chơi</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &lt; 1300 (DUPR &lt; 2.5)
+                        Phong trào, vừa tập vừa giao lưu
                       </p>
                     </div>
 
-                    {/* Bán chuyên / Pro */}
+                    {/* Bán chuyên / Nâng cao */}
                     <div
                       onClick={() => setSkillLevel('pro')}
                       className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
@@ -1095,10 +1050,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'pro' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Bán chuyên / Pro</span>
+                        <span>Bán chuyên / Nâng cao</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Elo &gt; 1700+ (DUPR &gt; 4.5)
+                        Thi đấu cọ xát, kỹ chiến thuật tốt
                       </p>
                     </div>
                   </div>
@@ -1299,7 +1254,7 @@ function CreateMatch() {
                       Minh Minh Minh (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      DUPR 3.8 • Elo 1650 • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
+                      Trình: Trung bình - Khá • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
                     </p>
                   </div>
                 </div>
@@ -1319,7 +1274,7 @@ function CreateMatch() {
                   </span>
                   <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
                   <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng Elo trực tuyến
+                    Đang có 18 vận động viên cùng trình độ trực tuyến
                   </p>
                 </div>
 

@@ -10,10 +10,18 @@ function TopBar() {
   const isTournament = location.pathname === '/tournament'
   const isWallet = location.pathname === '/wallet'
   const isProfile = location.pathname === '/profile'
-  const { selectedSports, isAllActive, isSportActive, toggleSport } = useSport()
+  const { selectedSports, isAllActive, isSportActive, toggleSport, SPORTS_LIST } = useSport()
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 2450000
+  })
+
+  const [playerProfile, setPlayerProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return { name: 'Minh Minh Minh', username: '@minhminhminh' }
   })
 
   useEffect(() => {
@@ -21,32 +29,36 @@ function TopBar() {
       const saved = localStorage.getItem('escrow_balance')
       if (saved !== null) setWalletBalance(Number(saved))
     }
+    const handleProfileUpdate = () => {
+      try {
+        const saved = localStorage.getItem('player_profile_data')
+        if (saved) setPlayerProfile(JSON.parse(saved))
+      } catch (e) {}
+    }
     window.addEventListener('escrow_balance_updated', handleUpdate)
-    return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('storage', handleProfileUpdate)
+    return () => {
+      window.removeEventListener('escrow_balance_updated', handleUpdate)
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('storage', handleProfileUpdate)
+    }
   }, [])
 
   return (
-    <header
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: '260px',
-        right: 0,
-        zIndex: 40,
-        background: 'rgba(255, 255, 255, 0.88)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderBottom: '1px solid rgba(45, 95, 63, 0.12)',
-        boxShadow: '0 4px 20px rgba(45, 95, 63, 0.04)',
-        height: '60px',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 28px',
-        gap: '16px',
-      }}
-    >
+    <header className="app-topbar">
+      {/* Hamburger Menu Toggle on Mobile */}
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent('toggle-sportnexus-sidebar'))}
+        className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-[#2D5F3F]/20 text-[#1C3524] shadow-xs shrink-0 active:scale-95 transition-transform"
+        aria-label="Menu"
+      >
+        <span className="material-symbols-outlined text-[20px]">menu</span>
+      </button>
+
       {/* Breadcrumb & Sport Filter Status or Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
         {isWallet ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
@@ -183,14 +195,14 @@ function TopBar() {
               }}
             >
               <span style={{ fontSize: '12px' }}>
-                {isAllActive ? '✨' : isSportActive('badminton') ? '🏸' : '🏓'}
+                {isAllActive ? '✨' : '🎯'}
               </span>
               <span>
                 {isAllActive
-                  ? 'Tất cả: Cầu Lông & Pickleball'
-                  : isSportActive('badminton')
-                  ? 'Chỉ Cầu Lông'
-                  : 'Chỉ Pickleball'}
+                  ? 'Tất cả 5 môn thể thao'
+                  : selectedSports.length === 1
+                  ? `Chỉ ${(SPORTS_LIST || []).find(s => s.key === selectedSports[0])?.label || ''}`
+                  : `${selectedSports.length} môn đang chọn`}
               </span>
             </div>
           </>
@@ -226,10 +238,10 @@ function TopBar() {
           <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
             account_balance_wallet
           </span>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#1C3524' }}>
+          <span className="hidden sm:inline" style={{ fontSize: '13px', fontWeight: 600, color: '#1C3524' }}>
             Ví Escrow:
           </span>
-          <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: '#15803D', whiteSpace: 'nowrap' }}>
             {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
           </span>
         </Link>
@@ -240,9 +252,9 @@ function TopBar() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             textDecoration: 'none',
-            padding: '4px 8px',
+            padding: '4px 6px',
             borderRadius: '12px',
             transition: 'background 0.2s',
           }}
@@ -256,8 +268,8 @@ function TopBar() {
           {/* Avatar circle */}
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '36px',
+              height: '36px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
               display: 'flex',
@@ -268,32 +280,44 @@ function TopBar() {
               fontSize: '12px',
               flexShrink: 0,
               boxShadow: '0 2px 8px rgba(45, 95, 63, 0.25)',
+              overflow: 'hidden',
             }}
           >
-            MMM
+            {playerProfile.avatar ? (
+              <img src={playerProfile.avatar} alt={playerProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              (playerProfile.name || 'MMM')
+                .trim()
+                .split(/\s+/)
+                .map((n) => n[0])
+                .slice(-3)
+                .join('')
+                .toUpperCase()
+            )}
           </div>
-          {/* Name + stats */}
-          <div style={{ lineHeight: 1.3 }}>
-            <p style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: '#1C3524' }}>
-              Minh Minh Minh
+          {/* Name + stats - hidden on very small screens */}
+          <div className="hidden sm:block" style={{ lineHeight: 1.3 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#1C3524', whiteSpace: 'nowrap' }}>
+              {playerProfile.name || 'Minh Minh Minh'}
             </p>
-            <p style={{ margin: 0, fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>
-              @minhminhminh
+            <p style={{ margin: 0, fontSize: '10.5px', color: '#6B7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              {playerProfile.username || '@minhminhminh'}
             </p>
           </div>
           {/* Rating badge */}
           <div
+            className="hidden md:flex"
             style={{
               background: '#FFF3E0',
               border: '1px solid #FFE0B2',
               borderRadius: '10px',
-              padding: '4px 10px',
+              padding: '3px 8px',
               fontWeight: 800,
-              fontSize: '13px',
+              fontSize: '12px',
               color: '#E65100',
-              display: 'flex',
               alignItems: 'center',
-              gap: '4px',
+              gap: '3px',
+              whiteSpace: 'nowrap',
             }}
           >
             <span>⭐</span>

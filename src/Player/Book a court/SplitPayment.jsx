@@ -11,12 +11,15 @@ function SplitPayment() {
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'SportNexus Arena Q.7'
   const subCourt = state.subCourt || 'Sân BWF 01'
+  const subCourts = state.subCourts || (state.subCourt ? state.subCourt.split(', ') : ['Sân BWF 01'])
+  const courtCount = state.courtCount || subCourts.length || 1
   const address = state.address || '35 Huỳnh Tấn Phát, P. Tân Thuận Đông, Quận 7'
   const locationName = 'Quận 7, TP.HCM'
   const slotTime = state.slot || '19:30 - 21:00'
   const hours = state.hours || 1.5
   const totalAmount = Number(state.total) || 330000
   const hourlyRate = state.hourlyRate || 220000
+  const unitPrice = state.unitPrice || Math.round(totalAmount / courtCount)
   const courtImage =
     state.image ||
     'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop'
@@ -252,8 +255,11 @@ function SplitPayment() {
 
                   <div className="sp-court-stats-strip">
                     <div className="sp-stat-item">
-                      <small>MÃ SÂN</small>
-                      <strong>{subCourt}</strong>
+                      <small>MÃ SÂN ({courtCount} SÂN)</small>
+                      <strong title={subCourt}>{subCourt}</strong>
+                      {courtCount > 1 && (
+                        <span style={{ color: '#16a34a', fontWeight: 700 }}>{courtCount} sân cùng giờ</span>
+                      )}
                     </div>
                     <div className="sp-stat-item">
                       <small>KHUNG GIỜ</small>
@@ -261,9 +267,9 @@ function SplitPayment() {
                       <span>Hôm nay (T6, 24/10)</span>
                     </div>
                     <div className="sp-stat-item">
-                      <small>ĐƠN GIÁ ({hours}H)</small>
+                      <small>TỔNG TIỀN ({hours}H)</small>
                       <strong className="sp-price-color">{formatVnd(totalAmount)}</strong>
-                      <span>{formatVnd(hourlyRate)}/giờ</span>
+                      <span>{courtCount > 1 ? `${courtCount} sân × ${formatVnd(unitPrice)}` : `${formatVnd(hourlyRate)}/giờ`}</span>
                     </div>
                   </div>
                 </div>
@@ -425,7 +431,6 @@ function SplitPayment() {
                 rows={2}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Nhập yêu cầu thêm về dụng cụ, thời gian hoặc lưu ý cho chủ sân..."
               />
             </section>
           </div>
@@ -453,8 +458,8 @@ function SplitPayment() {
 
               <div className="sp-user-stats-grid">
                 <div className="sp-user-stat-card">
-                  <small>HẠNG / TRÌNH ĐỘ</small>
-                  <strong>DUPR 3.8 • Elo 1650</strong>
+                  <small>TRÌNH ĐỘ</small>
+                  <strong>Khá (Phong trào)</strong>
                 </div>
                 <div className="sp-user-stat-card">
                   <small>ĐIỂM FAIRPLAY</small>
@@ -482,17 +487,17 @@ function SplitPayment() {
 
               <div className="sp-receipt-rows">
                 <div className="sp-receipt-line sp-receipt-line--court">
-                  <div className="sp-receipt-court-col">
+                  <div className="sp-receipt-court-header">
                     <span className="sp-receipt-court-name">
-                      Tiền thuê {subCourt}
+                      Tiền thuê {courtCount > 1 ? `${courtCount} sân` : subCourt}
                     </span>
-                    <div className="sp-receipt-slot-highlight">
-                      <span className="material-symbols-outlined">schedule</span>
-                      <strong>{slotTime}</strong>
-                      <span>• Hôm nay</span>
-                    </div>
+                    <span className="sp-receipt-price-nowrap">{formatVnd(totalAmount)}</span>
                   </div>
-                  <span className="sp-receipt-price-nowrap">{formatVnd(totalAmount)}</span>
+                  <div className="sp-receipt-slot-highlight">
+                    <span className="material-symbols-outlined">schedule</span>
+                    <strong>{slotTime}</strong>
+                    <span>• Hôm nay {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
+                  </div>
                 </div>
                 <div className="sp-receipt-line">
                   <span className="sp-receipt-line-left sp-receipt-line-discount">
@@ -795,8 +800,8 @@ function SplitPayment() {
 
               <div className="sp-pass-user-stats">
                 <div className="sp-pass-stat-pill">
-                  <small>HẠNG / TRÌNH ĐỘ</small>
-                  <strong>DUPR 3.8 • Elo 1650</strong>
+                  <small>TRÌNH ĐỘ</small>
+                  <strong>Khá (Phong trào)</strong>
                 </div>
                 <div className="sp-pass-stat-pill">
                   <small>ĐIỂM FAIRPLAY</small>
@@ -827,9 +832,11 @@ function SplitPayment() {
                 </div>
 
                 <div className="sp-spec-item">
-                  <small>MÃ SÂN &amp; MẶT SÂN</small>
+                  <small>MÃ SÂN ({courtCount} SÂN) &amp; MẶT SÂN</small>
                   <strong>{subCourt}</strong>
-                  <span style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600 }}>{floorType}</span>
+                  <span style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600 }}>
+                    {floorType} {courtCount > 1 ? `• ${courtCount} sân cùng giờ` : ''}
+                  </span>
                 </div>
 
                 <div className="sp-spec-item">
