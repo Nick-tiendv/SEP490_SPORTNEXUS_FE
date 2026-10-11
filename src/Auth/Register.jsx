@@ -127,7 +127,7 @@ function Register() {
                   </div>
                   <div>
                     <div className="font-semibold text-[#2D5F3F] mb-1">Ghép Trận Nhanh</div>
-                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi cùng trình độ DUPR vô phòng đỗ.</div>
+                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi đúng trình độ, ghép đội cân bằng và tiện lợi.</div>
                   </div>
                 </div>
               </div>

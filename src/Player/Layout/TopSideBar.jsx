@@ -238,7 +238,7 @@ function TopSideBar() {
             }}
           >
             <span>✨</span>
-            <span>Xem cả 2 môn thể thao</span>
+            <span>Xem tất cả 5 môn thể thao</span>
           </button>
         )}
 
@@ -246,7 +246,9 @@ function TopSideBar() {
           <span style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic' }}>
             {isAllActive
               ? 'Nhấp 1 môn để lọc riêng'
-              : 'Nhấp môn còn lại để xem cả 2'}
+              : selectedSports.length === 0
+              ? 'Chọn môn hoặc bấm Tất cả'
+              : 'Bấm lại môn đã chọn để hủy'}
           </span>
         </div>
       </div>

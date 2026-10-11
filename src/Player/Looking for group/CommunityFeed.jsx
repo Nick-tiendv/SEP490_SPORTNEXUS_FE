@@ -65,11 +65,11 @@ function CommunityFeed() {
         sport: 'pickleball',
         sportBadge: 'PICKLEBALL ĐÔI',
         subBadge: '✓ Sân Thảm Tiêu Chuẩn',
-        levelTag: 'DUPR 3.5 - 4.0',
+        levelTag: 'Trình Khá',
         slotTag: 'Còn Trống 1 Chỗ',
         time: '20:30 Tối nay',
         timeSlot: 'evening',
-        title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (DUPR 3.5 - 4.0)',
+        title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)',
         location: 'Sân SportNexus Arena, Huỳnh Tấn Phát, Quận 7',
         groupDesc: 'Đã có 3/4 người (Host: Hoàng Bách)',
         roster: [
@@ -120,7 +120,7 @@ function CommunityFeed() {
         sport: 'pickleball',
         sportBadge: 'PICKLEBALL ĐÔI',
         subBadge: '✓ Sân Acrylic USAPA',
-        levelTag: 'DUPR 3.0 - 4.0',
+        levelTag: 'Trình Trung bình - Khá',
         slotTag: 'Còn Trống 2 Chỗ',
         time: '19:00 Tối mai',
         timeSlot: 'evening',
@@ -404,7 +404,7 @@ function CommunityFeed() {
             </h1>
             <p className="text-gray-600 text-sm mt-1 max-w-2xl leading-relaxed">
               Chốt slot thể thao tức thì qua giao thức ký quỹ Escrow bảo chứng 100%. Không lo bùng
-              kèo, chuẩn trình độ DUPR xác minh.
+              kèo, ghép đúng trình độ của người chơi.
             </p>
           </div>
 
@@ -518,8 +518,8 @@ function CommunityFeed() {
             >
               <option value="all">Trình độ: Tất Cả Trình Độ</option>
               <option value="beginner">Mới chơi / Nhập môn</option>
-              <option value="intermediate">Trung bình (DUPR 3.0 - 3.8)</option>
-              <option value="advanced">Nâng cao (DUPR 3.8+)</option>
+              <option value="intermediate">Trung bình - Khá</option>
+              <option value="advanced">Khá - Nâng cao</option>
             </select>
             <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-[16px]">
               expand_more
@@ -798,7 +798,7 @@ function CommunityFeed() {
                       Minh Minh Minh
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px]">
-                      DUPR 3.8
+                      Trình: Trung bình - Khá
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 mt-1">
@@ -1651,14 +1651,14 @@ function CommunityFeed() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="material-symbols-outlined text-gray-600 text-[16px]">military_tech</span>
-                    <label className="font-bold text-gray-800">Trình độ kỹ năng (DUPR):</label>
+                    <label className="font-bold text-gray-800">Trình độ kỹ năng:</label>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {[
                       { key: 'all', label: 'Tất cả trình độ' },
-                      { key: 'beginner', label: 'Phong trào / Mới chơi (DUPR < 3.0)' },
-                      { key: 'intermediate', label: 'Trung bình khá (DUPR 3.0 - 3.8)' },
-                      { key: 'advanced', label: 'Chuyên sâu / Nâng cao (DUPR 3.8+)' },
+                      { key: 'beginner', label: 'Phong trào / Mới chơi' },
+                      { key: 'intermediate', label: 'Trung bình - Khá' },
+                      { key: 'advanced', label: 'Khá - Nâng cao' },
                     ].map((lvl) => (
                       <button
                         key={lvl.key}

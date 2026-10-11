@@ -1,6 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+export const PRESET_SPORTS_CATALOG = [
+  { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
+  { key: 'pickleball', name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
+  { key: 'football', name: 'Bóng đá', icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' },
+  { key: 'basketball', name: 'Bóng rổ', icon: '🏀', color: '#EA580C', bgColor: '#FFF7ED' },
+  { key: 'tennis', name: 'Quần vợt (Tennis)', icon: '🎾', color: '#65A30D', bgColor: '#F7FEE7' },
+  { key: 'table_tennis', name: 'Bóng bàn', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
+  { key: 'volleyball', name: 'Bóng chuyền', icon: '🏐', color: '#F59E0B', bgColor: '#FEF3C7' },
+  { key: 'swimming', name: 'Bơi lội', icon: '🏊', color: '#06B6D4', bgColor: '#CFFAFE' },
+  { key: 'running', name: 'Chạy bộ / Điền kinh', icon: '🏃', color: '#10B981', bgColor: '#D1FAE5' },
+  { key: 'billiards', name: 'Bi-a (Billiards)', icon: '🎱', color: '#4B5563', bgColor: '#F3F4F6' },
+  { key: 'golf', name: 'Golf', icon: '⛳', color: '#059669', bgColor: '#D1FAE5' },
+  { key: 'bowling', name: 'Bowling', icon: '🎳', color: '#7C3AED', bgColor: '#EDE9FE' },
+  { key: 'cycling', name: 'Đạp xe', icon: '🚴', color: '#D97706', bgColor: '#FEF3C7' },
+  { key: 'martial_arts', name: 'Võ thuật', icon: '🥋', color: '#DC2626', bgColor: '#FEE2E2' },
+  { key: 'other', name: 'Môn thể thao khác (Tùy chỉnh)', icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' },
+]
+
 export default function Profile() {
   const navigate = useNavigate()
 
@@ -86,25 +104,37 @@ export default function Profile() {
         id: 'football',
         name: 'Bóng đá',
         icon: '⚽',
-        level: 'Tiền vệ cánh',
-        field: 'Sở trường',
+        level: 'Khá - Đá phong trào',
+        field: 'Trình độ',
         ranked: true,
-        matches: 4,
+        matches: 8,
         winRate: '75%',
-        color: '#D97706',
-        bgColor: '#FEF3C7',
+        color: '#2563EB',
+        bgColor: '#EFF6FF',
+      },
+      {
+        id: 'basketball',
+        name: 'Bóng rổ',
+        icon: '🏀',
+        level: 'Trung bình - Khá',
+        field: 'Trình độ',
+        ranked: true,
+        matches: 6,
+        winRate: '80%',
+        color: '#EA580C',
+        bgColor: '#FFF7ED',
       },
       {
         id: 'tennis',
         name: 'Quần vợt (Tennis)',
         icon: '🎾',
-        level: 'Chưa có dữ liệu thi đấu',
-        field: 'Trạng thái',
-        ranked: false,
-        matches: 0,
-        winRate: '0%',
-        color: '#6B7280',
-        bgColor: '#F3F4F6',
+        level: 'Mới tập chơi - Căn bản',
+        field: 'Trình độ',
+        ranked: true,
+        matches: 2,
+        winRate: '50%',
+        color: '#65A30D',
+        bgColor: '#F7FEE7',
       },
     ]
   })
@@ -122,7 +152,8 @@ export default function Profile() {
 
   // Trạng thái các Modal
   const [showEditModal, setShowEditModal] = useState(false)
-  const [showEloModal, setShowEloModal] = useState(false)
+  const [showSkillModal, setShowSkillModal] = useState(false)
+  const [showAddSportModal, setShowAddSportModal] = useState(false)
   const [selectedSportToEdit, setSelectedSportToEdit] = useState(null)
   const [showAllReviewsModal, setShowAllReviewsModal] = useState(false)
   const [showWriteReviewModal, setShowWriteReviewModal] = useState(false)
@@ -136,9 +167,20 @@ export default function Profile() {
   // Form edit profile tạm thời
   const [editForm, setEditForm] = useState({ ...profile })
 
-  // Form cập nhật trình độ
+  // Form cập nhật trình độ cho môn đã có
   const [skillForm, setSkillForm] = useState({
     level: 'Trung bình - Khá',
+    matches: 0,
+  })
+
+  // Form thêm môn thể thao mới & tự đánh giá ban đầu
+  const [newSportForm, setNewSportForm] = useState({
+    sportKey: 'table_tennis',
+    customName: '',
+    customIcon: '🎯',
+    level: 'Mới tập chơi',
+    field: 'Trình độ',
+    matches: 0,
   })
 
   // Form viết đánh giá sau trận cho người chơi cùng sân
@@ -282,31 +324,144 @@ export default function Profile() {
     localStorage.setItem('player_match_reviews', JSON.stringify(reviewsList))
   }, [reviewsList])
 
-  // Lấy phiên thi đấu check-out gần nhất
-  const getCheckoutSession = () => {
+  // Phiên thi đấu check-out mặc định chuẩn SportNexus
+  const defaultCheckoutSession = {
+    courtId: 'Court 3',
+    courtName: 'Sân Cầu Lông BWF Pro 01',
+    sport: 'Cầu lông',
+    checkInDone: true,
+    checkInTime: '18:00',
+    checkOutDone: true,
+    checkOutTime: '19:35',
+    coPlayers: [
+      { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', slotRep: 'Đại diện slot 1' },
+      { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 2' },
+      { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 3' },
+    ],
+  }
+
+  // Lấy phiên thi đấu check-out gần nhất (lưu localStorage)
+  const [checkoutSession, setCheckoutSession] = useState(() => {
     try {
       const saved = localStorage.getItem('sportnexus_last_checkout_session')
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed && parsed.checkOutDone) {
-          return parsed
+        if (parsed && parsed.checkOutDone) return parsed
+      }
+    } catch (e) {}
+    return defaultCheckoutSession
+  })
+
+  // Danh sách tất cả người chơi tại thời điểm vừa check-out thành công
+  const [checkoutCoPlayers, setCheckoutCoPlayers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.coPlayers && parsed.coPlayers.length > 0) {
+          return parsed.coPlayers
         }
       }
     } catch (e) {}
-    return null
+    return [
+      { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', slotRep: 'Đại diện slot 1' },
+      { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 2' },
+      { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 3' },
+    ]
+  })
+
+  // Trạng thái form thêm bạn đánh đôi (trường hợp 1 người đại diện đăng ký slot)
+  const [showAddDoublesPartnerForm, setShowAddDoublesPartnerForm] = useState(false)
+  const [doublesPartnerForm, setDoublesPartnerForm] = useState({
+    name: '',
+    role: 'Đồng đội đánh cặp',
+    representedBy: 'Hoàng Nam',
+  })
+
+  // Tự động đồng bộ khi có phiên check-out mới hoàn tất trong hệ thống
+  useEffect(() => {
+    const handleSyncCheckout = () => {
+      try {
+        const saved = localStorage.getItem('sportnexus_last_checkout_session')
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setCheckoutSession(parsed)
+          if (parsed && parsed.coPlayers && parsed.coPlayers.length > 0) {
+            setCheckoutCoPlayers(parsed.coPlayers)
+          }
+        }
+      } catch (e) {}
+    }
+    window.addEventListener('sportnexus_checkout_updated', handleSyncCheckout)
+    window.addEventListener('storage', handleSyncCheckout)
+    return () => {
+      window.removeEventListener('sportnexus_checkout_updated', handleSyncCheckout)
+      window.removeEventListener('storage', handleSyncCheckout)
+    }
+  }, [])
+
+  // Thêm người chơi đánh đôi (người đi cùng đại diện slot)
+  const handleAddDoublesPartner = (e) => {
+    if (e) e.preventDefault()
+    const name = doublesPartnerForm.name.trim()
+    if (!name) {
+      triggerToast('⚠️ Vui lòng nhập họ tên hoặc biệt danh người chơi đánh đôi!')
+      return
+    }
+
+    const newPartner = {
+      id: `partner_${Date.now()}`,
+      name: name,
+      role: doublesPartnerForm.role,
+      isDoublesGuest: true,
+      representedBy: doublesPartnerForm.representedBy || 'Người đại diện slot',
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=FEF3C7&color=D97706`,
+    }
+
+    const updated = [...checkoutCoPlayers, newPartner]
+    setCheckoutCoPlayers(updated)
+
+    // Cập nhật lưu bền vững vào session
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      const parsed = saved ? JSON.parse(saved) : { checkOutDone: true, courtId: 'Court 3', courtName: 'Sân Cầu Lông BWF Pro 01' }
+      parsed.coPlayers = updated
+      parsed.checkOutDone = true
+      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
+      setCheckoutSession(parsed)
+      window.dispatchEvent(new Event('sportnexus_checkout_updated'))
+    } catch (err) {}
+
+    // Tự động chọn người vừa thêm làm đối tượng đánh giá
+    setWriteReviewForm((prev) => ({
+      ...prev,
+      targetPlayer: newPartner.name,
+    }))
+
+    setShowAddDoublesPartnerForm(false)
+    setDoublesPartnerForm({
+      name: '',
+      role: 'Đồng đội đánh cặp',
+      representedBy: checkoutCoPlayers[0]?.name || 'Hoàng Nam',
+    })
+    triggerToast(`🎉 Đã thêm bạn đánh đôi "${name}" (${newPartner.role} • Đi cùng ${newPartner.representedBy}) vào danh sách đánh giá!`)
   }
 
-  // Danh sách bạn chơi cùng sân từ phiên check-out hoặc mặc định
-  const getAvailableCoPlayers = () => {
-    const session = getCheckoutSession()
-    if (session && session.coPlayers && session.coPlayers.length > 0) {
-      return session.coPlayers
-    }
-    return [
-      { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
-      { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
-      { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
-    ]
+  // Xóa bạn đánh đôi đã thêm thủ công (nếu cần)
+  const handleRemoveDoublesPartner = (id) => {
+    const updated = checkoutCoPlayers.filter((p) => p.id !== id)
+    setCheckoutCoPlayers(updated)
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        parsed.coPlayers = updated
+        localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
+        setCheckoutSession(parsed)
+        window.dispatchEvent(new Event('sportnexus_checkout_updated'))
+      }
+    } catch (err) {}
+    triggerToast('🗑️ Đã xóa người chơi khỏi danh sách đánh giá của trận.')
   }
 
   // Mô phỏng check-out thành công nhanh để thử nghiệm
@@ -320,19 +475,28 @@ export default function Profile() {
       checkOutDone: true,
       checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       coPlayers: [
-        { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp' },
-        { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân' },
-        { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân' },
+        { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', slotRep: 'Đại diện slot 1' },
+        { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 2' },
+        { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 3' },
       ],
     }
     localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
+    setCheckoutSession(session)
+    setCheckoutCoPlayers(session.coPlayers)
+    window.dispatchEvent(new Event('sportnexus_checkout_updated'))
     triggerToast('✅ Đã kích hoạt phiên chơi check-out thành công tại Sân Cầu Lông BWF Pro 01!')
   }
 
   // Gửi đánh giá sau trận (chỉ cho phép sau khi check-out thành công)
   const handleSubmitReview = (e) => {
     e.preventDefault()
-    const session = getCheckoutSession()
+    const session = checkoutSession || (() => {
+      try {
+        const saved = localStorage.getItem('sportnexus_last_checkout_session')
+        return saved ? JSON.parse(saved) : null
+      } catch (e) { return null }
+    })()
+
     if (!session || !session.checkOutDone) {
       triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-out thành công!')
       return
@@ -348,14 +512,21 @@ export default function Profile() {
       return
     }
 
+    const targetCoPlayer = checkoutCoPlayers.find((p) => p.name === writeReviewForm.targetPlayer)
+    const effectiveRole = targetCoPlayer?.isDoublesGuest
+      ? `${targetCoPlayer.role} • Đi cùng ${targetCoPlayer.representedBy}`
+      : targetCoPlayer?.role || 'Bạn chơi cùng sân'
+
     const newReview = {
       id: Date.now(),
       author: 'Bạn (Minh Minh Minh)',
       targetPlayer: writeReviewForm.targetPlayer,
-      coPlayerRole: 'Bạn chơi cùng sân',
+      coPlayerRole: effectiveRole,
+      isDoublesGuest: Boolean(targetCoPlayer?.isDoublesGuest),
+      representedBy: targetCoPlayer?.representedBy || null,
       avatarInitial: writeReviewForm.targetPlayer.slice(0, 2).toUpperCase(),
-      avatarBg: '#DCFCE7',
-      avatarColor: '#15803D',
+      avatarBg: targetCoPlayer?.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
+      avatarColor: targetCoPlayer?.isDoublesGuest ? '#D97706' : '#15803D',
       matchType: `Kèo ${session.sport || 'Cầu lông'}`,
       court: `${session.courtName || 'Sân Cầu Lông BWF Pro 01'} (${session.courtId || 'Court 3'})`,
       time: 'Vừa xong',
@@ -419,24 +590,27 @@ export default function Profile() {
     },
   ]
 
-  // Mở modal cập nhật trình độ
-  const handleOpenEloModal = (sport) => {
+  // Mở modal cập nhật trình độ & số trận
+  const handleOpenSkillModal = (sport) => {
     setSelectedSportToEdit(sport)
     setSkillForm({
       level: sport.level.includes('Chưa có') ? 'Mới tập chơi' : sport.level,
+      matches: sport.matches !== undefined ? sport.matches : 0,
     })
-    setShowEloModal(true)
+    setShowSkillModal(true)
   }
 
-  // Lưu trình độ
-  const handleSaveElo = () => {
+  // Lưu trình độ & số trận
+  const handleSaveSkill = () => {
     if (!selectedSportToEdit) return
+    const numMatches = Math.max(0, parseInt(skillForm.matches, 10) || 0)
     setSportsData((prev) =>
       prev.map((s) => {
         if (s.id === selectedSportToEdit.id) {
           return {
             ...s,
             level: skillForm.level,
+            matches: numMatches,
             field: 'Trình độ',
             ranked: true,
           }
@@ -444,10 +618,75 @@ export default function Profile() {
         return s
       })
     )
-    setShowEloModal(false)
+    setShowSkillModal(false)
     triggerToast(
-      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (${skillForm.level})!`
+      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (${skillForm.level} • ${numMatches} trận)!`
     )
+  }
+
+  // Mở modal thêm môn thể thao mới
+  const handleOpenAddSportModal = () => {
+    const available = PRESET_SPORTS_CATALOG.find(
+      (p) => p.key !== 'other' && !sportsData.some((s) => s.id === p.key || s.name.toLowerCase() === p.name.toLowerCase())
+    )
+    setNewSportForm({
+      sportKey: available ? available.key : 'other',
+      customName: '',
+      customIcon: '🎯',
+      level: 'Mới tập chơi',
+      field: 'Trình độ',
+      matches: 0,
+    })
+    setShowAddSportModal(true)
+  }
+
+  // Lưu môn thể thao mới & tự đánh giá trình độ ban đầu
+  const handleSaveNewSport = () => {
+    const isCustom = newSportForm.sportKey === 'other'
+    const preset = PRESET_SPORTS_CATALOG.find((p) => p.key === newSportForm.sportKey)
+    const sportName = isCustom ? newSportForm.customName.trim() : (preset ? preset.name : '')
+
+    if (!sportName) {
+      triggerToast('⚠️ Vui lòng nhập tên môn thể thao!')
+      return
+    }
+
+    const isDuplicate = sportsData.some(
+      (s) => s.id === newSportForm.sportKey || s.name.toLowerCase() === sportName.toLowerCase()
+    )
+    if (isDuplicate) {
+      triggerToast(`⚠️ Môn "${sportName}" đã có sẵn trong danh sách kỹ năng của bạn!`)
+      return
+    }
+
+    const newSport = {
+      id: isCustom ? `sport_${Date.now()}` : newSportForm.sportKey,
+      name: sportName,
+      icon: isCustom ? (newSportForm.customIcon.trim() || '🎯') : preset.icon,
+      level: newSportForm.level,
+      field: 'Trình độ',
+      ranked: true,
+      matches: Number(newSportForm.matches) || 0,
+      winRate: '100%',
+      color: preset?.color || '#15803D',
+      bgColor: preset?.bgColor || '#DCFCE7',
+    }
+
+    setSportsData((prev) => [...prev, newSport])
+    setShowAddSportModal(false)
+    triggerToast(`🎉 Đã thêm thành công môn ${newSport.name} (${newSport.level}) vào hồ sơ!`)
+  }
+
+  // Xóa môn thể thao khỏi danh sách kỹ năng
+  const handleDeleteSport = (sport) => {
+    if (sportsData.length <= 1) {
+      triggerToast('⚠️ Bạn cần giữ ít nhất một môn thể thao trong hồ sơ!')
+      return
+    }
+    if (window.confirm(`Bạn có chắc chắn muốn xóa môn "${sport.name}" khỏi danh sách trình độ kỹ năng?`)) {
+      setSportsData((prev) => prev.filter((s) => s.id !== sport.id))
+      triggerToast(`🗑️ Đã xóa môn ${sport.name} khỏi danh sách kỹ năng.`)
+    }
   }
 
   // Lưu Form Edit Profile
@@ -1417,13 +1656,15 @@ export default function Profile() {
               boxShadow: '0 8px 24px rgba(45, 95, 63, 0.05)',
             }}
           >
-            {/* Header: Icon + Trình độ & Badge HỆ THỐNG RANK */}
+            {/* Header: Icon + Trình độ & Nút Thêm Môn Thể Thao */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 marginBottom: '16px',
+                flexWrap: 'wrap',
+                gap: '10px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1440,25 +1681,57 @@ export default function Profile() {
                       letterSpacing: '-0.3px',
                     }}
                   >
-                    Trình độ kỹ năng
+                    Trình độ kỹ năng ({sportsData.length} môn)
                   </h2>
                 </div>
               </div>
-              <span
-                style={{
-                  background: '#DCFCE7',
-                  border: '1px solid #86EFAC',
-                  borderRadius: '20px',
-                  padding: '5px 12px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  color: '#15803D',
-                  letterSpacing: '0.5px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                HỆ THỐNG RANK
-              </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    background: '#DCFCE7',
+                    border: '1px solid #86EFAC',
+                    borderRadius: '20px',
+                    padding: '5px 12px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    color: '#15803D',
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  ĐÁNH GIÁ KỸ NĂNG
+                </span>
+                <button
+                  onClick={handleOpenAddSportModal}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '12px',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 3px 10px rgba(21, 128, 61, 0.25)',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 5px 14px rgba(21, 128, 61, 0.35)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none'
+                    e.currentTarget.style.boxShadow = '0 3px 10px rgba(21, 128, 61, 0.25)'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add</span>
+                  Thêm môn thể thao
+                </button>
+              </div>
             </div>
 
             {/* Banner hướng dẫn (info box) */}
@@ -1588,72 +1861,123 @@ export default function Profile() {
                           )}
                         </div>
 
-                        {/* Subtext: Trình độ hoặc Sở trường */}
-                        <div style={{ fontSize: '13px', color: '#6B7280' }}>
-                          <span>{sport.field}: </span>
-                          <strong style={{ color: sport.ranked ? '#1F2937' : '#9CA3AF' }}>
-                            {sport.level}
-                          </strong>
+                        {/* Subtext: Trình độ & Số trận đã chơi */}
+                        <div style={{ fontSize: '13px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span>
+                            {sport.field}: <strong style={{ color: sport.ranked ? '#1F2937' : '#9CA3AF' }}>{sport.level}</strong>
+                          </span>
+                          <span style={{ color: '#D1D5DB' }}>•</span>
+                          <span style={{ background: '#F3F4F6', color: '#374151', padding: '1px 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>
+                            {sport.matches !== undefined ? sport.matches : 0} trận đã chơi
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Right: Action button */}
-                    <div>
-                      {isTennis ? (
-                        <button
-                          onClick={() => handleOpenEloModal(sport)}
-                          style={{
-                            background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            borderRadius: '12px',
-                            padding: '9px 18px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            boxShadow: '0 3px 10px rgba(21, 128, 61, 0.25)',
-                            transition: 'all 0.2s',
-                          }}
-                          onMouseEnter={(e) => {
+                    {/* Right: Action buttons (Cập nhật & Xóa môn) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => handleOpenSkillModal(sport)}
+                        style={{
+                          background: isTennis ? 'linear-gradient(135deg, #15803D 0%, #166534 100%)' : '#FFFFFF',
+                          color: isTennis ? '#FFFFFF' : '#15803D',
+                          border: isTennis ? 'none' : '1px solid #86EFAC',
+                          borderRadius: '12px',
+                          padding: '8px 16px',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: isTennis ? '0 3px 10px rgba(21, 128, 61, 0.25)' : 'none',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (isTennis) {
                             e.currentTarget.style.transform = 'scale(1.02)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)'
-                          }}
-                        >
-                          Đánh giá ngay
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenEloModal(sport)}
-                          style={{
-                            background: '#FFFFFF',
-                            color: '#15803D',
-                            border: '1px solid #86EFAC',
-                            borderRadius: '12px',
-                            padding: '8px 16px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                          }}
-                          onMouseEnter={(e) => {
+                          } else {
                             e.currentTarget.style.background = '#DCFCE7'
                             e.currentTarget.style.borderColor = '#15803D'
-                          }}
-                          onMouseLeave={(e) => {
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (isTennis) {
+                            e.currentTarget.style.transform = 'scale(1)'
+                          } else {
                             e.currentTarget.style.background = '#FFFFFF'
                             e.currentTarget.style.borderColor = '#86EFAC'
+                          }
+                        }}
+                      >
+                        {isTennis && !sport.ranked ? 'Đánh giá ngay' : 'Cập nhật trình độ'}
+                      </button>
+
+                      {sportsData.length > 1 && (
+                        <button
+                          onClick={() => handleDeleteSport(sport)}
+                          title={`Xóa môn ${sport.name} khỏi danh sách kỹ năng`}
+                          style={{
+                            background: '#F9FAFB',
+                            color: '#9CA3AF',
+                            border: '1px solid #E5E7EB',
+                            borderRadius: '12px',
+                            padding: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#FEE2E2'
+                            e.currentTarget.style.borderColor = '#FCA5A5'
+                            e.currentTarget.style.color = '#DC2626'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#F9FAFB'
+                            e.currentTarget.style.borderColor = '#E5E7EB'
+                            e.currentTarget.style.color = '#9CA3AF'
                           }}
                         >
-                          Cập nhật
+                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
                         </button>
                       )}
                     </div>
                   </div>
                 )
               })}
+
+              {/* Nút thêm môn thể thao dạng Card viền nét đứt */}
+              <button
+                onClick={handleOpenAddSportModal}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  padding: '16px 20px',
+                  borderRadius: '18px',
+                  background: '#F9FAFB',
+                  border: '2px dashed #86EFAC',
+                  color: '#15803D',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  width: '100%',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#15803D'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                  e.currentTarget.style.transform = 'none'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>add_circle</span>
+                <span>+ Thêm môn thể thao mới &amp; Tự đánh giá trình độ ban đầu</span>
+              </button>
             </div>
           </div>
 
@@ -2062,6 +2386,93 @@ export default function Profile() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Tổng số trận đã đấu
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((prev) => ({
+                      ...prev,
+                      matchesPlayed: Math.max(0, (parseInt(prev.matchesPlayed, 10) || 0) - 1),
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    -
+                  </button>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editForm.matchesPlayed === undefined ? '' : editForm.matchesPlayed}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '')
+                      setEditForm((prev) => ({
+                        ...prev,
+                        matchesPlayed: val === '' ? '' : parseInt(val, 10),
+                      }))
+                    }}
+                    onBlur={() => {
+                      if (editForm.matchesPlayed === '' || isNaN(editForm.matchesPlayed)) {
+                        setEditForm((prev) => ({ ...prev, matchesPlayed: 0 }))
+                      }
+                    }}
+                    placeholder="0"
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      border: '1.5px solid #15803D',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      outline: 'none',
+                      background: '#F0FDF4',
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((prev) => ({
+                      ...prev,
+                      matchesPlayed: (parseInt(prev.matchesPlayed, 10) || 0) + 1,
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
                   Giới thiệu bản thân (Bio)
                 </label>
                 <textarea
@@ -2116,7 +2527,7 @@ export default function Profile() {
       )}
 
       {/* 2. MODAL CẬP NHẬT TRÌNH ĐỘ */}
-      {showEloModal && selectedSportToEdit && (
+      {showSkillModal && selectedSportToEdit && (
         <div
           style={{
             position: 'fixed',
@@ -2154,11 +2565,11 @@ export default function Profile() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '22px' }}>{selectedSportToEdit.icon}</span>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Cập nhật xếp hạng: {selectedSportToEdit.name}
+                  Cập nhật trình độ người chơi: {selectedSportToEdit.name}
                 </h3>
               </div>
               <button
-                onClick={() => setShowEloModal(false)}
+                onClick={() => setShowSkillModal(false)}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -2173,7 +2584,7 @@ export default function Profile() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                  Mức độ kỹ năng / Sở trường
+                  Trình độ người chơi
                 </label>
                 <select
                   value={skillForm.level}
@@ -2188,23 +2599,161 @@ export default function Profile() {
                     background: '#FFFFFF',
                   }}
                 >
-                  <option value="Mới tập chơi">Mới tập chơi - Căn bản</option>
+                  <option value="Mới tập chơi">Mới tập chơi (Căn bản)</option>
                   <option value="Mới chơi - Đang tiến bộ">Mới chơi - Đang tiến bộ</option>
+                  <option value="Trung bình">Trung bình (Giao lưu phong trào)</option>
                   <option value="Trung bình - Khá">Trung bình - Khá</option>
                   <option value="Khá - Đánh chắc tay">Khá - Đánh chắc tay</option>
-                  <option value="Bán chuyên / Thi đấu giải">Bán chuyên / Thi đấu giải</option>
-                  <option value="Tiền vệ cánh">Tiền vệ cánh (Bóng đá)</option>
-                  <option value="Tiền đạo cắm">Tiền đạo cắm (Bóng đá)</option>
+                  <option value="Bán chuyên / Nâng cao">Bán chuyên / Nâng cao</option>
+                  <option value="Chuyên nghiệp / Thi đấu giải">Chuyên nghiệp / Thi đấu giải</option>
                 </select>
                 <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  Trình độ được dùng để ghép đối thủ và xếp lịch thi đấu phù hợp nhất với bạn.
+                  Thiết lập trình độ thực tế giúp hệ thống tự động ghép kèo cân bằng, đúng thực lực.
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                  Số trận đã chơi ({selectedSportToEdit.name})
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSkillForm((prev) => ({
+                      ...prev,
+                      matches: Math.max(0, (parseInt(prev.matches, 10) || 0) - 1),
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
+                  >
+                    -
+                  </button>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={skillForm.matches === undefined ? '' : skillForm.matches}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '')
+                      setSkillForm((prev) => ({
+                        ...prev,
+                        matches: val === '' ? '' : parseInt(val, 10),
+                      }))
+                    }}
+                    onBlur={() => {
+                      if (skillForm.matches === '' || isNaN(skillForm.matches)) {
+                        setSkillForm((prev) => ({ ...prev, matches: 0 }))
+                      }
+                    }}
+                    placeholder="0"
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      border: '1.5px solid #15803D',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      outline: 'none',
+                      background: '#F0FDF4',
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setSkillForm((prev) => ({
+                      ...prev,
+                      matches: (parseInt(prev.matches, 10) || 0) + 1,
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#6B7280', marginRight: '4px' }}>Cộng nhanh:</span>
+                  {[1, 5, 10].map((inc) => (
+                    <button
+                      key={inc}
+                      type="button"
+                      onClick={() => setSkillForm((prev) => ({
+                        ...prev,
+                        matches: (parseInt(prev.matches, 10) || 0) + inc,
+                      }))}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid #BBF7D0',
+                        background: '#DCFCE7',
+                        color: '#15803D',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +{inc}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSkillForm((prev) => ({ ...prev, matches: 0 }))}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid #E5E7EB',
+                      background: '#F9FAFB',
+                      color: '#6B7280',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    Đặt về 0
+                  </button>
+                </div>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  💡 Bạn có thể nhập trực tiếp số trận từ bàn phím hoặc dùng các nút tăng/giảm ở hai bên.
                 </p>
               </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
               <button
-                onClick={() => setShowEloModal(false)}
+                onClick={() => setShowSkillModal(false)}
                 style={{
                   padding: '9px 18px',
                   borderRadius: '12px',
@@ -2218,7 +2767,7 @@ export default function Profile() {
                 Hủy
               </button>
               <button
-                onClick={handleSaveElo}
+                onClick={handleSaveSkill}
                 style={{
                   padding: '9px 20px',
                   borderRadius: '12px',
@@ -2230,6 +2779,380 @@ export default function Profile() {
                 }}
               >
                 Xác nhận lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2B. MODAL THÊM MÔN THỂ THAO & TỰ ĐÁNH GIÁ TRÌNH ĐỘ BAN ĐẦU */}
+      {showAddSportModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '520px',
+              width: '100%',
+              padding: '26px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '18px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '14px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '12px',
+                    background: '#DCFCE7',
+                    color: '#15803D',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                  }}
+                >
+                  🏅
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                    Thêm môn thể thao &amp; Tự đánh giá
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>
+                    Thiết lập trình độ ban đầu để ghép kèo chính xác
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddSportModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                  padding: '4px',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Form Fields */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Chọn môn thể thao */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                  1. Chọn môn thể thao
+                </label>
+                <select
+                  value={newSportForm.sportKey}
+                  onChange={(e) => {
+                    const selected = PRESET_SPORTS_CATALOG.find(p => p.key === e.target.value)
+                    setNewSportForm({
+                      ...newSportForm,
+                      sportKey: e.target.value,
+                      customName: selected?.key !== 'other' ? selected?.name || '' : '',
+                      customIcon: selected?.icon || '🎯',
+                    })
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                    background: '#FFFFFF',
+                    fontWeight: 600,
+                  }}
+                >
+                  {PRESET_SPORTS_CATALOG.map((p) => {
+                    const alreadyHas = sportsData.some(
+                      (s) => s.id === p.key || s.name.toLowerCase() === p.name.toLowerCase()
+                    )
+                    return (
+                      <option key={p.key} value={p.key} disabled={alreadyHas && p.key !== 'other'}>
+                        {p.icon} {p.name} {alreadyHas && p.key !== 'other' ? '(Đã có trong hồ sơ)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+
+              {/* Nếu chọn "other", cho phép tự nhập tên & icon */}
+              {newSportForm.sportKey === 'other' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                      Biểu tượng
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={2}
+                      value={newSportForm.customIcon}
+                      onChange={(e) => setNewSportForm({ ...newSportForm, customIcon: e.target.value })}
+                      placeholder="🎯"
+                      style={{
+                        width: '100%',
+                        textAlign: 'center',
+                        padding: '10px',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        fontSize: '18px',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                      Tên môn thể thao tùy chỉnh *
+                    </label>
+                    <input
+                      type="text"
+                      value={newSportForm.customName}
+                      onChange={(e) => setNewSportForm({ ...newSportForm, customName: e.target.value })}
+                      placeholder="Ví dụ: Cầu mây, Leo núi, Bi lắc..."
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '12px',
+                        border: '1px solid #D1D5DB',
+                        fontSize: '14px',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tự đánh giá trình độ ban đầu */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                  2. Tự đánh giá trình độ ban đầu của bạn
+                </label>
+                <select
+                  value={newSportForm.level}
+                  onChange={(e) => setNewSportForm({ ...newSportForm, level: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #D1D5DB',
+                    fontSize: '14px',
+                    outline: 'none',
+                    background: '#FFFFFF',
+                    fontWeight: 600,
+                  }}
+                >
+                  <option value="Mới tập chơi">Mới tập chơi (Căn bản, làm quen môn thể thao)</option>
+                  <option value="Mới chơi - Đang tiến bộ">Mới chơi - Đang tiến bộ (Nắm luật, phát bóng tốt)</option>
+                  <option value="Trung bình">Trung bình (Giao lưu phong trào ổn định)</option>
+                  <option value="Trung bình - Khá">Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)</option>
+                  <option value="Khá - Đánh chắc tay">Khá - Đánh chắc tay (Chiến thuật tốt, điều bóng khó)</option>
+                  <option value="Bán chuyên / Nâng cao">Bán chuyên / Nâng cao (Tập luyện chuyên sâu)</option>
+                  <option value="Chuyên nghiệp / Thi đấu giải">Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)</option>
+                </select>
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280', lineHeight: 1.4 }}>
+                  💡 Trình độ tự đánh giá ban đầu này sẽ hiển thị trên thẻ hồ sơ của bạn và làm mốc ghép kèo. Bạn có thể tự cập nhật lại bất kỳ khi nào trình độ được nâng cao.
+                </p>
+              </div>
+
+              {/* Số trận thi đấu trước đây (Tùy chọn) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                  3. Số trận đã chơi / kinh nghiệm giao lưu (Tùy chọn)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewSportForm((prev) => ({
+                      ...prev,
+                      matches: Math.max(0, (parseInt(prev.matches, 10) || 0) - 1),
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
+                  >
+                    -
+                  </button>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={newSportForm.matches === undefined ? '' : newSportForm.matches}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '')
+                      setNewSportForm((prev) => ({
+                        ...prev,
+                        matches: val === '' ? '' : parseInt(val, 10),
+                      }))
+                    }}
+                    onBlur={() => {
+                      if (newSportForm.matches === '' || isNaN(newSportForm.matches)) {
+                        setNewSportForm((prev) => ({ ...prev, matches: 0 }))
+                      }
+                    }}
+                    placeholder="0"
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      border: '1.5px solid #15803D',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      color: '#15803D',
+                      outline: 'none',
+                      background: '#F0FDF4',
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setNewSportForm((prev) => ({
+                      ...prev,
+                      matches: (parseInt(prev.matches, 10) || 0) + 1,
+                    }))}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      border: '1px solid #D1D5DB',
+                      background: '#F9FAFB',
+                      color: '#374151',
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#6B7280', marginRight: '4px' }}>Cộng nhanh:</span>
+                  {[1, 5, 10].map((inc) => (
+                    <button
+                      key={inc}
+                      type="button"
+                      onClick={() => setNewSportForm((prev) => ({
+                        ...prev,
+                        matches: (parseInt(prev.matches, 10) || 0) + inc,
+                      }))}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid #BBF7D0',
+                        background: '#DCFCE7',
+                        color: '#15803D',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +{inc}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setNewSportForm((prev) => ({ ...prev, matches: 0 }))}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid #E5E7EB',
+                      background: '#F9FAFB',
+                      color: '#6B7280',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    Đặt về 0
+                  </button>
+                </div>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  💡 Bạn có thể nhập trực tiếp số trận từ bàn phím hoặc dùng các nút tăng/giảm ở hai bên.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
+              <button
+                onClick={() => setShowAddSportModal(false)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #D1D5DB',
+                  background: '#FFFFFF',
+                  color: '#4B5563',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveNewSport}
+                style={{
+                  padding: '10px 22px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(21, 128, 61, 0.3)',
+                }}
+              >
+                Thêm môn thể thao &amp; Lưu trình độ
               </button>
             </div>
           </div>
@@ -2445,9 +3368,8 @@ export default function Profile() {
 
       {/* 3B. MODAL VIẾT ĐÁNH GIÁ SAU TRẬN (CHỈ DÀNH CHO BẠN CHƠI CÙNG SÂN SAU KHI CHECK-OUT THÀNH CÔNG) */}
       {showWriteReviewModal && (() => {
-        const session = getCheckoutSession()
-        const isEligible = session && session.checkOutDone
-        const coPlayers = getAvailableCoPlayers()
+        const session = checkoutSession || defaultCheckoutSession
+        const isEligible = Boolean(session && session.checkOutDone)
 
         return (
           <div
@@ -2661,10 +3583,10 @@ export default function Profile() {
                         <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
                           task_alt
                         </span>
-                        Đã Check-out thành công • {session.courtId || 'Court 3'}
+                        Đã Check-out thành công • {session?.courtId || 'Court 3'}
                       </div>
                       <div style={{ color: '#15803D', fontSize: '11.5px', marginTop: '2px' }}>
-                        {session.courtName || 'Sân Cầu Lông BWF Pro 01'} (Lúc {session.checkOutTime || '19:35'})
+                        {session?.courtName || 'Sân Cầu Lông BWF Pro 01'} (Lúc {session?.checkOutTime || '19:35'})
                       </div>
                     </div>
                     <span
@@ -2682,13 +3604,173 @@ export default function Profile() {
                     </span>
                   </div>
 
-                  {/* 1. CHỌN NGƯỜI CHƠI CÙNG SÂN */}
+                  {/* 1. CHỌN NGƯỜI CHƠI CÙNG SÂN & THÊM BẠN ĐÁNH ĐÔI */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
-                      1. Chọn người chơi cùng sân cần đánh giá:
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
-                      {coPlayers.map((cp) => {
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>
+                        1. Chọn người chơi cần đánh giá ({checkoutCoPlayers.length} người trong trận):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDoublesPartnerForm(!showAddDoublesPartnerForm)}
+                        style={{
+                          background: showAddDoublesPartnerForm ? '#FEE2E2' : '#F0FDF4',
+                          border: showAddDoublesPartnerForm ? '1px solid #FCA5A5' : '1px dashed #16A34A',
+                          color: showAddDoublesPartnerForm ? '#DC2626' : '#15803D',
+                          borderRadius: '10px',
+                          padding: '4px 10px',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                          {showAddDoublesPartnerForm ? 'close' : 'person_add'}
+                        </span>
+                        <span>{showAddDoublesPartnerForm ? 'Đóng form thêm' : '+ Thêm bạn đánh đôi (Đi cùng đại diện)'}</span>
+                      </button>
+                    </div>
+
+                    {/* Form thêm bạn đánh đôi đi cùng (Trường hợp 1 người đại diện đăng ký slot) */}
+                    {showAddDoublesPartnerForm && (
+                      <div
+                        style={{
+                          background: '#FFFBEB',
+                          border: '1.5px dashed #F59E0B',
+                          borderRadius: '16px',
+                          padding: '14px 16px',
+                          marginBottom: '12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '18px' }}>🏸</span>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#92400E' }}>
+                            Thêm người chơi đánh đôi cùng trận (Chưa có tài khoản slot)
+                          </div>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '11.5px', color: '#B45309', lineHeight: 1.4 }}>
+                          Áp dụng cho trận đánh đôi khi 1 người đại diện đứng ra đăng ký slot và dẫn bạn cặp đi cùng. Bạn có thể thêm bạn đánh cùng vào đây để viết nhận xét và chấm sao.
+                        </p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
+                              Họ tên / Biệt danh bạn đánh đôi *
+                            </label>
+                            <input
+                              type="text"
+                              value={doublesPartnerForm.name}
+                              onChange={(e) => setDoublesPartnerForm({ ...doublesPartnerForm, name: e.target.value })}
+                              placeholder="Ví dụ: Minh Tuấn, Bạn cặp của Nam..."
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                borderRadius: '10px',
+                                border: '1px solid #FCD34D',
+                                fontSize: '13px',
+                                outline: 'none',
+                                background: '#FFFFFF',
+                              }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
+                              Vai trò trong trận đấu
+                            </label>
+                            <select
+                              value={doublesPartnerForm.role}
+                              onChange={(e) => setDoublesPartnerForm({ ...doublesPartnerForm, role: e.target.value })}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                borderRadius: '10px',
+                                border: '1px solid #FCD34D',
+                                fontSize: '13px',
+                                outline: 'none',
+                                background: '#FFFFFF',
+                              }}
+                            >
+                              <option value="Đồng đội đánh cặp">Đồng đội đánh cặp (Team bạn)</option>
+                              <option value="Đối thủ đánh đôi">Đối thủ đánh đôi (Team đối phương)</option>
+                              <option value="Bạn giao lưu cùng sân">Bạn giao lưu cùng sân</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
+                              Đi cùng người đại diện slot
+                            </label>
+                            <select
+                              value={doublesPartnerForm.representedBy}
+                              onChange={(e) => setDoublesPartnerForm({ ...doublesPartnerForm, representedBy: e.target.value })}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                borderRadius: '10px',
+                                border: '1px solid #FCD34D',
+                                fontSize: '13px',
+                                outline: 'none',
+                                background: '#FFFFFF',
+                              }}
+                            >
+                              {checkoutCoPlayers.filter(p => !p.isDoublesGuest).map((p) => (
+                                <option key={p.id} value={p.name}>
+                                  Đi cùng: {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddDoublesPartnerForm(false)}
+                            style={{
+                              padding: '6px 14px',
+                              borderRadius: '8px',
+                              border: '1px solid #E5E7EB',
+                              background: '#FFFFFF',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#6B7280',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddDoublesPartner}
+                            style={{
+                              padding: '6px 16px',
+                              borderRadius: '8px',
+                              border: 'none',
+                              background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
+                              color: '#FFFFFF',
+                              fontSize: '12.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)',
+                            }}
+                          >
+                            Xác nhận thêm &amp; Chọn đánh giá ngay
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Danh sách người chơi trong trận (gồm người đăng ký và người đánh đôi đi cùng) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px' }}>
+                      {checkoutCoPlayers.map((cp) => {
                         const isSelected = writeReviewForm.targetPlayer === cp.name
                         return (
                           <div
@@ -2698,39 +3780,66 @@ export default function Profile() {
                               padding: '10px 12px',
                               borderRadius: '12px',
                               border: isSelected ? '2px solid #15803D' : '1px solid #E5E7EB',
-                              background: isSelected ? '#F0FDF4' : '#FFFFFF',
+                              background: isSelected ? '#F0FDF4' : cp.isDoublesGuest ? '#FFFDF5' : '#FFFFFF',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
+                              justifyContent: 'space-between',
                               gap: '8px',
                               transition: 'all 0.15s',
+                              position: 'relative',
                             }}
                           >
-                            <div
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '8px',
-                                background: isSelected ? '#15803D' : '#E0F2FE',
-                                color: isSelected ? '#FFFFFF' : '#0369A1',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 800,
-                                fontSize: '12px',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {cp.name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {cp.name}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                              <div
+                                style={{
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '9px',
+                                  background: isSelected ? '#15803D' : cp.isDoublesGuest ? '#FEF3C7' : '#E0F2FE',
+                                  color: isSelected ? '#FFFFFF' : cp.isDoublesGuest ? '#D97706' : '#0369A1',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 800,
+                                  fontSize: '12px',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {cp.name.slice(0, 2).toUpperCase()}
                               </div>
-                              <div style={{ fontSize: '10.5px', color: '#6B7280' }}>
-                                {cp.role || 'Cùng sân'}
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '13px', fontWeight: 800, color: '#1F2937', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {cp.name}
+                                </div>
+                                <div style={{ fontSize: '10.5px', color: cp.isDoublesGuest ? '#B45309' : '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {cp.isDoublesGuest ? `Đánh đôi • ${cp.representedBy}` : (cp.role || 'Cùng sân')}
+                                </div>
                               </div>
                             </div>
+
+                            {/* Nút xóa bạn đánh đôi nếu là người thêm bổ sung */}
+                            {cp.isDoublesGuest && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleRemoveDoublesPartner(cp.id)
+                                }}
+                                title="Xóa người chơi đánh đôi này"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#9CA3AF',
+                                  padding: '2px',
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.color = '#DC2626')}
+                                onMouseLeave={(e) => (e.currentTarget.style.color = '#9CA3AF')}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                              </button>
+                            )}
                           </div>
                         )
                       })}

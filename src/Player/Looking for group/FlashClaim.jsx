@@ -66,7 +66,7 @@ function FlashClaim() {
                   PICKLEBALL ĐÔI
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  DUPR 3.5 - 4.0
+                  Trình Khá
                 </span>
               </div>
               <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/70 px-2.5 py-0.5 rounded-md">
@@ -75,7 +75,7 @@ function FlashClaim() {
             </div>
 
             <h4 className="font-extrabold text-[#111827] text-sm sm:text-base leading-snug mb-3">
-              [Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (DUPR 3.5 - 4.0)
+              [Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-gray-600">
