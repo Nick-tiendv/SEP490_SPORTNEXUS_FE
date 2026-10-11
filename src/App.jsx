@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import ProtectedRoute from './Auth/ProtectedRoute.jsx'
+import { useAuth } from './context/authContext.js'
+import { roleDestination } from './Auth/roleRoutes.js'
 
 // Authentication
 import ForgotPassword from './Auth/ForgotPassword.jsx'
@@ -50,25 +52,8 @@ import Settlement from './Court Owner/Settlement.jsx'
 
 // Redirect users to the appropriate homepage based on their role
 function HomeRedirect() {
-  try {
-    const role = localStorage.getItem('sportnexus_user_role')
-
-    if (role === 'admin') {
-      return <Navigate replace to="/admin/dashboard" />
-    }
-
-    if (role === 'court_owner') {
-      return <Navigate replace to="/owner/dashboard" />
-    }
-
-    if (role === 'player') {
-      return <Navigate replace to="/dashboard" />
-    }
-  } catch (error) {
-    // Fall back to the login page if localStorage is unavailable
-  }
-
-  return <Navigate replace to="/login" />
+  const { isAuthenticated, role } = useAuth()
+  return <Navigate replace to={isAuthenticated ? roleDestination(role) || '/login' : '/login'} />
 }
 
 function App() {
@@ -84,10 +69,10 @@ function App() {
         <Route path="/register" element={<Register />} />
 
         {/* Onboarding */}
-        <Route path="/onboarding" element={<OnBoarding />} />
 
         {/* Protected Player application */}
-        <Route element={<ProtectedRoute destination="/dashboard" />}>
+        <Route element={<ProtectedRoute destination="/dashboard" requiredRole="Player" />}>
+          <Route path="/onboarding" element={<OnBoarding />} />
           <Route element={<PlayerLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
@@ -108,7 +93,7 @@ function App() {
         </Route>
 
         {/* Protected Admin application */}
-        <Route element={<ProtectedRoute destination="/admin/dashboard" />}>
+        <Route element={<ProtectedRoute destination="/admin/dashboard" requiredRole="Admin" />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route
               index

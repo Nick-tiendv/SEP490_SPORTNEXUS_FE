@@ -2,10 +2,12 @@ import axios from 'axios'
 
 let tokenReader = () => null
 let unauthorizedHandler = () => {}
-export function configureAuthentication(readToken, onUnauthorized) {
+let mockSessionReader = () => false
+export function configureAuthentication(readToken, onUnauthorized, readMockSession = () => false) {
   tokenReader = readToken
   unauthorizedHandler = onUnauthorized
-  return () => { tokenReader = () => null; unauthorizedHandler = () => {} }
+  mockSessionReader = readMockSession
+  return () => { tokenReader = () => null; unauthorizedHandler = () => {}; mockSessionReader = () => false }
 }
 
 export function normalizeApiError(error) {
@@ -34,6 +36,10 @@ const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 apiClient.interceptors.request.use(config => {
+  if (!config.skipAuth && mockSessionReader()) {
+    config.headers.delete('Authorization')
+    throw Object.assign(new Error('DEV MODE: Phiên mock chỉ dùng để xem giao diện. API được bảo vệ cần đăng nhập bằng JWT thật.'), { isNormalized: true, code: 'MOCK_AUTH_BLOCKED' })
+  }
   if (!config.baseURL) throw Object.assign(new Error('Chưa cấu hình địa chỉ API.'), { isNormalized: true })
   const token = config.skipAuth ? null : tokenReader()
   if (token) config.headers.set('Authorization', `Bearer ${token}`)

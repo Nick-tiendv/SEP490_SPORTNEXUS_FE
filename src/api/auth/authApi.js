@@ -14,8 +14,12 @@ export async function registerUser(payload) {
   return validateResponse((await apiClient.post('/api/auth/register', registrationPayload(payload), { skipAuth: true })).data)
 }
 export async function loginUser({ username, password }) {
-  const body = validateResponse((await apiClient.post('/api/auth/login', { username, password }, { skipAuth: true })).data)
-  if (typeof body.data?.token !== 'string' || !body.data.token || typeof body.data?.role !== 'string' || !body.data.role) {
+  const response = await apiClient.post('/api/auth/login', { username, password }, { skipAuth: true })
+  const body = validateResponse(response.data)
+  if (response.status !== 200 || body.statusCode !== 200) {
+    throw Object.assign(new Error('Phản hồi đăng nhập không hợp lệ.'), { isNormalized: true })
+  }
+  if (typeof body.data?.token !== 'string' || !body.data.token.trim() || typeof body.data?.role !== 'string' || !body.data.role.trim()) {
     throw Object.assign(new Error('Phản hồi đăng nhập thiếu token hoặc vai trò.'), { isNormalized: true })
   }
   return body.data
