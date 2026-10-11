@@ -229,8 +229,8 @@ function Login() {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 text-center mb-1.5 sm:mb-2">
               Đăng Nhập SportNexus
             </h1>
-            <p className="text-gray-600 text-center mb-6 text-xs sm:text-sm">
-              Chào mừng bạn trở lại với nền tảng thể thao đa môn SportNexus
+            <p className="text-gray-600 text-center mb-6 text-[10px] min-[360px]:text-[11.5px] min-[390px]:text-xs sm:text-sm whitespace-nowrap">
+              Chào mừng bạn trở lại với nền tảng đặt sân thể thao đa môn
             </p>
 
             <form onSubmit={handleLoginSubmit} className="space-y-4 sm:space-y-5">
@@ -253,19 +253,19 @@ function Login() {
                 {identifier.trim().length > 1 && previewRole === 'court_owner' && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg">
                     <span className="material-symbols-outlined text-[16px] text-emerald-600">domain</span>
-                    <span>Tài khoản Chủ Sân (Court Owner) • Sẽ vào Trang Quản Trị Cơ Sở</span>
+                    <span>Tài khoản Chủ Sân (Court Owner)</span>
                   </div>
                 )}
                 {identifier.trim().length > 1 && previewRole === 'admin' && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-300 px-3 py-1.5 rounded-lg">
                     <span className="material-symbols-outlined text-[16px] text-blue-600">admin_panel_settings</span>
-                    <span>Tài khoản Quản Trị Viên (Admin) • Sẽ vào Trang Quản Trị Hệ Thống</span>
+                    <span>Tài khoản Quản Trị Viên (Admin)</span>
                   </div>
                 )}
                 {identifier.trim().length > 1 && previewRole === 'player' && (
                   <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-green-800 bg-green-50 border border-green-300 px-3 py-1.5 rounded-lg">
                     <span className="material-symbols-outlined text-[16px] text-green-600">sports_tennis</span>
-                    <span>Tài khoản Người Chơi (Player) • Sẽ vào Trang Đặt Sân &amp; Ghép Kèo</span>
+                    <span>Tài khoản Người Chơi (Player)</span>
                   </div>
                 )}
               </div>
