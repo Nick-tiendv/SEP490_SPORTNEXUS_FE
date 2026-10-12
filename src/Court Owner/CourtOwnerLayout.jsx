@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react'
 const navItems = [
   { label: 'Trang Chủ', path: '/owner/dashboard', icon: 'home', desc: 'Tổng quan vận hành cơ sở' },
   { label: 'Quản Lý Cụm Sân', path: '/owner/courts', icon: 'domain', desc: 'Cụm phức hợp & Định giá động' },
-  { label: 'Quét QR Check-in', path: '/owner/check-qr', icon: 'qr_code_scanner', desc: 'Xác nhận vào sân & Giải ngân Escrow' },
+  { label: 'Quét QR Check-in', path: '/owner/check-qr', icon: 'qr_code_scanner', desc: 'Xác nhận & Giải ngân' },
   { label: 'Lịch Đặt Sân Tích Hợp', path: '/owner/schedule', icon: 'calendar_month', desc: 'Lưới lịch đa bộ môn' },
   { label: 'Giải Đấu Tự Động', path: '/owner/tournament', icon: 'emoji_events', desc: 'Tự bốc thăm & Sơ đồ nhánh đấu' },
-  { label: 'Báo Cáo & Rút Tiền', path: '/owner/settlement', icon: 'account_balance_wallet', desc: 'Quyết toán doanh thu & Payout' },
+  { label: 'Báo Cáo & Rút Tiền', path: '/owner/settlement', icon: 'account_balance_wallet', desc: 'Doanh thu & Quyết toán' },
 ]
 
 export default function CourtOwnerLayout() {
@@ -78,85 +78,125 @@ export default function CourtOwnerLayout() {
   }
 
   const pageInfo = getCurrentPageTitle()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Đóng sidebar khi đổi trang trên điện thoại
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
 
   return (
     <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif" }} className="sport-animated-bg">
-      {/* Court Owner Fixed Sidebar (260px) */}
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs transition-opacity"
+        />
+      )}
+
+      {/* Court Owner Sidebar (Drawer on mobile, fixed on desktop) */}
       <aside
-        className="fixed left-0 top-0 h-full z-50 flex flex-col select-none"
+        className={`fixed left-0 top-0 h-full z-50 flex flex-col select-none transition-transform duration-300 ease-in-out ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
         style={{
           width: '260px',
-          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 252, 246, 0.92) 100%)',
+          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 252, 246, 0.94) 100%)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
           borderRight: '1px solid rgba(45, 95, 63, 0.12)',
           boxShadow: '4px 0 28px rgba(45, 95, 63, 0.06)',
         }}
       >
-        {/* Brand Logo Header — Đồng bộ chuẩn xác theo Role Player */}
+        {/* Brand Logo Header — Bấm vào tự động về Trang Chủ */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            padding: '20px 18px 16px 18px',
+            justifyContent: 'space-between',
+            padding: '16px 16px 14px 18px',
             borderBottom: '1px solid rgba(45, 95, 63, 0.08)',
           }}
         >
-          <div
+          <Link
+            to="/owner/dashboard"
+            onClick={() => setMobileOpen(false)}
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 4px 14px rgba(45, 95, 63, 0.28)',
+              gap: '12px',
+              textDecoration: 'none',
             }}
+            className="group cursor-pointer"
+            title="Về Trang Chủ Chủ Sân"
           >
-            <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '22px' }}>
-              bolt
-            </span>
-          </div>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(45, 95, 63, 0.28)',
+              }}
+              className="group-hover:scale-105 transition-transform"
+            >
+              <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '22px' }}>
+                bolt
+              </span>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: '17px',
+                    color: '#1C3524',
+                    letterSpacing: '-0.4px',
+                  }}
+                >
+                  SportNexus
+                </span>
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10B981',
+                    boxShadow: '0 0 8px #10B981',
+                  }}
+                />
+              </div>
               <span
                 style={{
-                  fontWeight: 800,
-                  fontSize: '17px',
-                  color: '#1C3524',
-                  letterSpacing: '-0.4px',
+                  fontSize: '10.5px',
+                  color: '#2D5F3F',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.6px',
+                  fontWeight: 700,
+                  opacity: 0.9,
+                  whiteSpace: 'nowrap',
                 }}
               >
-                SportNexus
+                Hệ Thống Quản Trị Chủ Sân
               </span>
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#10B981',
-                  boxShadow: '0 0 8px #10B981',
-                }}
-              />
             </div>
-            <span
-              style={{
-                fontSize: '10.5px',
-                color: '#2D5F3F',
-                textTransform: 'uppercase',
-                letterSpacing: '0.6px',
-                fontWeight: 700,
-                opacity: 0.9,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Hệ Thống Quản Trị Chủ Sân
-            </span>
-          </div>
+          </Link>
+
+          {/* Nút đóng sidebar trên điện thoại */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            title="Đóng menu"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
 
         {/* Operating Facility Box */}
@@ -280,31 +320,23 @@ export default function CourtOwnerLayout() {
 
       </aside>
 
-      {/* Main Area Offset by 260px */}
-      <div style={{ paddingLeft: '260px' }}>
+      {/* Main Area Offset by 260px on desktop, 0 on mobile */}
+      <div className="app-main-content-wrapper">
         {/* Fixed Topbar matching Player TopBar layout */}
-        <header
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: '260px',
-            right: 0,
-            zIndex: 40,
-            background: 'rgba(255, 255, 255, 0.88)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
-            borderBottom: '1px solid rgba(45, 95, 63, 0.12)',
-            boxShadow: '0 4px 20px rgba(45, 95, 63, 0.04)',
-            height: '60px',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 28px',
-            gap: '16px',
-          }}
-        >
+        <header className="app-topbar">
+          {/* Hamburger Menu Toggle on Mobile */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-[#2D5F3F]/20 text-[#1C3524] shadow-xs shrink-0 active:scale-95 transition-transform"
+            aria-label="Menu"
+          >
+            <span className="material-symbols-outlined text-[20px]">menu</span>
+          </button>
+
           {/* Breadcrumb & Facility Status (Left side) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F', flexShrink: 0 }}>
               home
             </span>
             <Link
@@ -314,20 +346,21 @@ export default function CourtOwnerLayout() {
                 color: '#4B5563',
                 textDecoration: 'none',
                 fontWeight: 600,
+                whiteSpace: 'nowrap',
               }}
             >
               Chủ Sân SportNexus
             </Link>
             <span style={{ color: '#9CA3AF', fontSize: '13px' }}>›</span>
-            <span style={{ fontSize: '13.5px', color: '#1C3524', fontWeight: 800 }}>
+            <span style={{ fontSize: '13.5px', color: '#1C3524', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {pageInfo.title}
             </span>
 
-            {/* Live Facility Active Badge */}
+            {/* Live Facility Active Badge - Hidden on small mobile */}
             <div
+              className="hidden md:inline-flex"
               style={{
                 marginLeft: '12px',
-                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
                 background: '#DCFCE7',
@@ -337,6 +370,7 @@ export default function CourtOwnerLayout() {
                 fontSize: '11.5px',
                 fontWeight: 700,
                 color: '#15803D',
+                whiteSpace: 'nowrap',
               }}
             >
               <span style={{ fontSize: '11px' }}>🟢</span>
@@ -345,7 +379,7 @@ export default function CourtOwnerLayout() {
           </div>
 
           {/* Right Controls: Available Wallet + Pending Escrow + Profile Avatar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {/* Realtime Available Balance Wallet Pill */}
             <Link
               to="/owner/settlement"
@@ -356,7 +390,7 @@ export default function CourtOwnerLayout() {
                 gap: '8px',
                 background: 'linear-gradient(135deg, #EAF7EE 0%, #E0F5E6 100%)',
                 borderRadius: '20px',
-                padding: '6px 14px',
+                padding: '5px 12px',
                 border: '1px solid rgba(45, 95, 63, 0.2)',
                 boxShadow: '0 2px 6px rgba(45, 95, 63, 0.05)',
                 textDecoration: 'none',
@@ -367,33 +401,34 @@ export default function CourtOwnerLayout() {
                 account_balance_wallet
               </span>
               <div>
-                <div style={{ fontSize: '9.5px', color: '#15803D', fontWeight: 800, textTransform: 'uppercase' }}>
+                <div className="hidden sm:block" style={{ fontSize: '9px', color: '#15803D', fontWeight: 800, textTransform: 'uppercase' }}>
                   Số Dư Khả Dụng
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#1C3524' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#1C3524', whiteSpace: 'nowrap' }}>
                   {formatVND(ownerBalance)}
                 </div>
               </div>
             </Link>
 
-            {/* Pending Escrow Pill */}
+            {/* Pending Escrow Pill - hidden on small mobile */}
             <div
+              className="hidden md:flex"
               style={{
-                display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
                 background: '#FEF3C7',
                 borderRadius: '20px',
-                padding: '6px 12px',
+                padding: '5px 10px',
                 border: '1px solid #F59E0B',
                 fontSize: '12px',
+                whiteSpace: 'nowrap',
               }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#B45309' }}>
                 lock_clock
               </span>
               <div>
-                <div style={{ fontSize: '9.5px', color: '#92400E', fontWeight: 800, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '9px', color: '#92400E', fontWeight: 800, textTransform: 'uppercase' }}>
                   Tạm Giữ Escrow
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#78350F' }}>
@@ -409,13 +444,13 @@ export default function CourtOwnerLayout() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                paddingLeft: '10px',
+                gap: '8px',
+                paddingLeft: '8px',
                 borderLeft: '1px solid rgba(45, 95, 63, 0.15)',
                 textDecoration: 'none',
                 cursor: 'pointer',
                 borderRadius: '10px',
-                padding: '4px 8px 4px 10px',
+                padding: '4px 6px',
                 transition: 'background 0.2s',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(45, 95, 63, 0.06)')}
@@ -425,19 +460,19 @@ export default function CourtOwnerLayout() {
                 src={ownerProfile.avatar}
                 alt={ownerProfile.fullName}
                 style={{
-                  width: '38px',
-                  height: '38px',
+                  width: '36px',
+                  height: '36px',
                   borderRadius: '50%',
                   border: '2px solid #10B981',
                   objectFit: 'cover',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
                 }}
               />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1C3524', lineHeight: 1.2 }}>
+              <div className="hidden sm:flex flex-col">
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#1C3524', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
                   {ownerProfile.fullName}
                 </span>
-                <span style={{ fontSize: '11px', color: '#15803D', fontWeight: 700 }}>
+                <span style={{ fontSize: '10.5px', color: '#15803D', fontWeight: 700 }}>
                   Chủ Cơ Sở
                 </span>
               </div>

@@ -31,12 +31,26 @@ import ViewCourtBookingSchedule from './Court Owner/View Court Booking Schedule.
 import CreateAutomatedTournament from './Court Owner/Create Automated Tournament.jsx'
 import Settlement from './Court Owner/Settlement.jsx'
 
+function HomeRedirect() {
+  try {
+    const token = localStorage.getItem('sportnexus_auth_token')
+    const role = localStorage.getItem('sportnexus_user_role')
+    if (token && (role === 'court_owner' || role === 'admin')) {
+      return <Navigate replace to="/owner/dashboard" />
+    }
+    if (token && role === 'player') {
+      return <Navigate replace to="/dashboard" />
+    }
+  } catch (e) {}
+  return <Navigate replace to="/login" />
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<Navigate replace to="/login" />} />
+        {/* Public routes - Root redirects dynamically to matching role homepage */}
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-account" element={<VerifyAccount />} />
@@ -86,9 +100,11 @@ function App() {
         <Route path="/owner-schedule" element={<Navigate replace to="/owner/schedule" />} />
         <Route path="/owner-tournament" element={<Navigate replace to="/owner/tournament" />} />
         <Route path="/owner-settlement" element={<Navigate replace to="/owner/settlement" />} />
+        <Route path="/admin" element={<Navigate replace to="/owner/dashboard" />} />
+        <Route path="/admin/*" element={<Navigate replace to="/owner/dashboard" />} />
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate replace to="/login" />} />
+        <Route path="*" element={<Navigate replace to="/" />} />
       </Routes>
     </BrowserRouter>
   )

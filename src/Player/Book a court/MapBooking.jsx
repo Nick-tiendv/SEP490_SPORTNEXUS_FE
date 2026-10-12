@@ -1435,6 +1435,12 @@ function MapBooking() {
       ? selectedCourt.subCourt.replace(/\s*\d+$/, '').trim()
       : selectedCourt.sport === 'pickleball'
       ? 'Sân Pickleball'
+      : selectedCourt.sport === 'football'
+      ? 'Sân Bóng Đá'
+      : selectedCourt.sport === 'basketball'
+      ? 'Sân Bóng Rổ'
+      : selectedCourt.sport === 'tennis'
+      ? 'Sân Tennis'
       : 'Sân Cầu Lông'
 
     return Array.from({ length: count }, (_, idx) => {
@@ -1456,6 +1462,12 @@ function MapBooking() {
             ? 'Sân VIP Trung Tâm'
             : selectedCourt.sport === 'pickleball'
             ? 'Mặt sân Acrylic Pro chống lóa'
+            : selectedCourt.sport === 'football'
+            ? 'Cỏ nhân tạo 50mm chuẩn FIFA'
+            : selectedCourt.sport === 'basketball'
+            ? 'Sàn gỗ phong Maple Pro FIBA'
+            : selectedCourt.sport === 'tennis'
+            ? 'Mặt sân cứng DecoTurf US Open'
             : 'Thảm PVC chuẩn thi đấu BWF',
         isBooked,
         note: isBooked ? 'Đã kín lịch' : 'Đang trống',

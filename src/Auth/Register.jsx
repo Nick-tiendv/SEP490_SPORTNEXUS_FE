@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import './auth-pages.css'
 
 function Register() {
   const [role, setRole] = useState('player') // 'player' | 'court_owner'
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [selectedSports, setSelectedSports] = useState([])
@@ -11,12 +14,84 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
 
+  // Hàm chuẩn hóa số điện thoại
+  const normalizePhone = (phoneStr) => {
+    if (!phoneStr) return ''
+    const digits = String(phoneStr).replace(/\D/g, '')
+    if (digits.startsWith('84') && digits.length >= 11) {
+      return '0' + digits.slice(2)
+    }
+    if (digits.length === 9) {
+      return '0' + digits
+    }
+    return digits
+  }
+
   const handleRegisterSubmit = (event) => {
     event.preventDefault()
+    if (password && confirmPassword && password !== confirmPassword) {
+      alert('Mật khẩu xác nhận không trùng khớp!')
+      return
+    }
+
     try {
       localStorage.setItem('sportnexus_user_role', role)
       localStorage.setItem('sportnexus_registered_role', role)
-    } catch {}
+
+      const cleanEmail = (email || '').trim().toLowerCase()
+      const rawPhone = (phone || '').trim()
+      const normPhone = normalizePhone(rawPhone)
+
+      const userData = {
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        phone: rawPhone,
+        normalizedPhone: normPhone,
+        role,
+        sports: selectedSports,
+        createdAt: new Date().toISOString()
+      }
+
+      // Lưu vào map sportnexus_users với tất cả các khóa tra cứu (email, phone gốc, phone chuẩn hóa, +84, 9 số)
+      const users = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
+      if (cleanEmail) users[cleanEmail] = userData
+      if (rawPhone) users[rawPhone] = userData
+      if (normPhone) {
+        users[normPhone] = userData
+        users['+84' + normPhone.replace(/^0/, '')] = userData
+        users[normPhone.replace(/^0/, '')] = userData
+      }
+      localStorage.setItem('sportnexus_users', JSON.stringify(users))
+
+      // Lưu vào mảng sportnexus_user_records
+      const userList = JSON.parse(localStorage.getItem('sportnexus_user_records') || '[]')
+      const filteredList = userList.filter((u) => {
+        const uEmail = (u.email || '').trim().toLowerCase()
+        const uPhoneNorm = normalizePhone(u.phone || '')
+        const matchEmail = cleanEmail && uEmail === cleanEmail
+        const matchPhone = normPhone && uPhoneNorm === normPhone
+        return !matchEmail && !matchPhone
+      })
+      filteredList.push(userData)
+      localStorage.setItem('sportnexus_user_records', JSON.stringify(filteredList))
+
+      // Lưu user phiên làm việc
+      localStorage.setItem('sportnexus_current_user', JSON.stringify(userData))
+
+      // Nếu đăng ký là Chủ sân, cập nhật hoặc tạo mới thông tin hồ sơ Chủ sân
+      if (role === 'court_owner') {
+        const existingOwner = JSON.parse(localStorage.getItem('sportnexus_owner_profile') || '{}')
+        const updatedOwner = {
+          ...existingOwner,
+          fullName: fullName.trim() || existingOwner.fullName || 'Chủ Sân SportNexus',
+          email: cleanEmail || existingOwner.email || 'owner@sportnexus.com',
+          phone: rawPhone || existingOwner.phone || '0908 123 456',
+          roleTitle: 'Chủ Cơ Sở',
+        }
+        localStorage.setItem('sportnexus_owner_profile', JSON.stringify(updatedOwner))
+      }
+    } catch (e) {}
+
     if (role === 'court_owner') {
       navigate('/owner/dashboard')
     } else {
@@ -56,30 +131,20 @@ function Register() {
 
   return (
     <div className="min-h-screen sport-animated-bg flex flex-col">
-      {/* Top Header - Toàn màn hình */}
-      <header className="w-full px-8 py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20">
+      {/* Top Header - Bấm logo để về trang chủ */}
+      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        {/* Logo Clickable về Trang Chủ */}
+        <Link to="/" className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity">
+          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
             </svg>
           </div>
           <div className="flex flex-col">
-            <span className="text-[#2D5F3F] font-bold text-lg leading-none">SportNexus</span>
-            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider">Tournament Engine</span>
+            <span className="text-[#2D5F3F] font-bold text-lg leading-tight tracking-tight">SportNexus</span>
+            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider font-semibold">Tournament Engine</span>
           </div>
-        </div>
-
-        {/* Trang Chủ Button */}
-        <div className="flex items-center">
-          <a href="/" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-            </svg>
-            <span className="font-medium">Trang chủ</span>
-          </a>
-        </div>
+        </Link>
       </header>
 
       <main className="flex-1 w-full flex flex-col lg:flex-row relative text-gray-900">
@@ -127,7 +192,7 @@ function Register() {
                   </div>
                   <div>
                     <div className="font-semibold text-[#2D5F3F] mb-1">Ghép Trận Nhanh</div>
-                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi cùng trình độ DUPR vô phòng đỗ.</div>
+                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi đúng trình độ, ghép đội cân bằng và tiện lợi.</div>
                   </div>
                 </div>
               </div>
@@ -267,32 +332,31 @@ function Register() {
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Vai trò đăng ký <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {/* Player Card */}
                   <div
                     onClick={() => setRole('player')}
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'player'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'player' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                      role === 'player' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
                     }`}>
                       <span className="text-xl">🏃‍♂️</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
                         <span>Người chơi</span>
-                        <span className="text-xs text-gray-500 font-normal">(Player)</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Đặt sân nhanh, tìm bạn ghép trận giao lưu &amp; tham gia giải đấu
+                        Đặt sân, ghép kèo thi đấu &amp; tham gia giải đấu thể thao
                       </p>
                     </div>
                     {role === 'player' && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -306,25 +370,24 @@ function Register() {
                     className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'court_owner'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'court_owner' ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
+                      role === 'court_owner' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
                     }`}>
                       <span className="text-xl">🏟️</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
                         <span>Chủ sân</span>
-                        <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Quản lý cụm sân, biểu phí, lịch đặt sân &amp; doanh thu tự động
+                        Quản lý cụm sân, biểu giá động &amp; duyệt lịch đặt
                       </p>
                     </div>
                     {role === 'court_owner' && (
-                      <div className="absolute top-2 right-2 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center">
+                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
@@ -348,6 +411,8 @@ function Register() {
                   <input 
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                     id="full-name" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     required 
                     type="text" 
                   />
@@ -368,6 +433,8 @@ function Register() {
                     <input 
                       className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                       id="phone" 
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                       required 
                       type="tel" 
                     />
@@ -388,6 +455,8 @@ function Register() {
                     <input 
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all" 
                       id="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required 
                       type="email" 
                     />
@@ -720,9 +789,9 @@ function Register() {
             <footer className="mt-8 text-center">
               <p className="text-sm text-gray-600">
                 Bạn đã có tài khoản?{' '}
-                <a className="text-[#4A7C59] font-semibold hover:underline" href="/login">
+                <Link className="text-[#4A7C59] font-semibold hover:underline" to="/login">
                   Đăng nhập ngay
-                </a>
+                </Link>
               </p>
             </footer>
             

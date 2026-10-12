@@ -138,6 +138,65 @@ function CheckInQR() {
     setTimeout(() => setToastMessage(null), 3000)
   }
 
+  // Trạng thái thêm bạn đánh đôi (người đi cùng đại diện slot)
+  const [showAddDoublesPartner, setShowAddDoublesPartner] = useState(false)
+  const [doublesPartnerName, setDoublesPartnerName] = useState('')
+  const [doublesPartnerRole, setDoublesPartnerRole] = useState('Đồng đội đánh cặp')
+  const [doublesPartnerRep, setDoublesPartnerRep] = useState('Hoàng Nam')
+
+  // Thêm người chơi đánh đôi đi cùng đại diện
+  const handleAddDoublesParticipant = (e) => {
+    if (e) e.preventDefault()
+    const trimmed = doublesPartnerName.trim()
+    if (!trimmed) {
+      setToastMessage('⚠️ Vui lòng nhập họ tên hoặc biệt danh người chơi đánh đôi!')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+
+    const newParticipant = {
+      id: `partner_${Date.now()}`,
+      name: trimmed,
+      email: `${trimmed.toLowerCase().replace(/\s+/g, '')}@guest.local`,
+      role: doublesPartnerRole,
+      isDoublesGuest: true,
+      representedBy: doublesPartnerRep || 'Người đại diện slot',
+      isSelected: false,
+    }
+
+    const updatedParticipants = [...matchParticipants, newParticipant]
+    setMatchParticipants(updatedParticipants)
+    setSelectedCoPlayer(newParticipant)
+    setShowAddDoublesPartner(false)
+    setDoublesPartnerName('')
+
+    // Tự động đồng bộ và lưu vào session check-out
+    try {
+      const saved = localStorage.getItem('sportnexus_last_checkout_session')
+      const parsed = saved ? JSON.parse(saved) : {
+        courtId: 'Court 3',
+        courtName: 'Sân Cầu Lông BWF Pro 01',
+        sport: 'Cầu Lông',
+        checkOutDone: true,
+        checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      }
+      parsed.coPlayers = updatedParticipants.map((p) => ({
+        id: p.id,
+        name: p.name || p.email.split('@')[0],
+        email: p.email,
+        role: p.role || 'Bạn chơi cùng sân',
+        isDoublesGuest: p.isDoublesGuest,
+        representedBy: p.representedBy,
+      }))
+      parsed.checkOutDone = true
+      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
+      window.dispatchEvent(new Event('sportnexus_checkout_updated'))
+    } catch (e) {}
+
+    setToastMessage(`🎉 Đã thêm bạn đánh đôi "${trimmed}" (Đi cùng ${newParticipant.representedBy}) vào danh sách đánh giá!`)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
   // Xử lý xác nhận Check-out trả sân
   const handleConfirmCheckOut = () => {
     setShowCheckOutModal(false)
@@ -156,9 +215,12 @@ function CheckInQR() {
         name: p.name || p.email.split('@')[0],
         email: p.email,
         role: p.role || 'Bạn chơi cùng sân',
+        isDoublesGuest: Boolean(p.isDoublesGuest),
+        representedBy: p.representedBy || null,
       })),
     }
     localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(sessionData))
+    window.dispatchEvent(new Event('sportnexus_checkout_updated'))
     setToastMessage(`🎉 Check-out trả sân thành công lúc ${checkOutTime}! Mời bạn đánh giá bạn chơi cùng sân.`)
     setTimeout(() => setToastMessage(null), 3500)
 
@@ -202,14 +264,20 @@ function CheckInQR() {
     }
 
     const targetName = selectedCoPlayer?.name || selectedCoPlayer?.email?.split('@')[0] || 'Bạn chơi'
+    const effectiveRole = selectedCoPlayer?.isDoublesGuest
+      ? `${selectedCoPlayer.role} • Đi cùng ${selectedCoPlayer.representedBy}`
+      : selectedCoPlayer?.role || 'Bạn chơi cùng sân'
+
     const newReview = {
       id: Date.now(),
       author: 'Bạn (Người chơi cùng sân)',
       targetPlayer: targetName,
-      coPlayerRole: selectedCoPlayer?.role || 'Bạn chơi cùng sân',
+      coPlayerRole: effectiveRole,
+      isDoublesGuest: Boolean(selectedCoPlayer?.isDoublesGuest),
+      representedBy: selectedCoPlayer?.representedBy || null,
       avatarInitial: targetName.slice(0, 2).toUpperCase(),
-      avatarBg: '#DCFCE7',
-      avatarColor: '#15803D',
+      avatarBg: selectedCoPlayer?.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
+      avatarColor: selectedCoPlayer?.isDoublesGuest ? '#D97706' : '#15803D',
       matchType: 'Kèo Cầu Lông',
       court: 'Sân Cầu Lông BWF Pro 01 (Court 3)',
       time: 'Vừa xong',
@@ -2577,6 +2645,23 @@ function CheckInQR() {
                     <div style={{ fontSize: '11.5px', color: '#64748B' }}>
                       {selectedCoPlayer.role || 'Bạn cùng sân'}
                     </div>
+                    {selectedCoPlayer.isDoublesGuest && (
+                      <span
+                        style={{
+                          background: '#FEF3C7',
+                          color: '#B45309',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          border: '1px solid #FDE68A',
+                          display: 'inline-block',
+                          marginTop: '2px',
+                        }}
+                      >
+                        🏸 Đánh đôi (Đi cùng {selectedCoPlayer.representedBy})
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -2600,10 +2685,147 @@ function CheckInQR() {
                   >
                     {matchParticipants.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name || p.email.split('@')[0]}
+                        {p.name || p.email.split('@')[0]} {p.isDoublesGuest ? '(Đánh đôi)' : ''}
                       </option>
                     ))}
                   </select>
+                )}
+              </div>
+
+              {/* Nút mở form thêm bạn đánh đôi (nếu chỉ 1 người đại diện đăng ký slot) */}
+              <div style={{ marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddDoublesPartner(!showAddDoublesPartner)}
+                  style={{
+                    width: '100%',
+                    padding: '7px 10px',
+                    borderRadius: '10px',
+                    background: showAddDoublesPartner ? '#FEF3C7' : '#F0FDF4',
+                    border: showAddDoublesPartner ? '1px solid #F59E0B' : '1px dashed #16A34A',
+                    color: showAddDoublesPartner ? '#B45309' : '#15803D',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                    {showAddDoublesPartner ? 'expand_less' : 'person_add'}
+                  </span>
+                  {showAddDoublesPartner ? 'Đóng form thêm bạn đánh đôi' : '+ Thêm bạn đánh đôi (Đi cùng đại diện slot)'}
+                </button>
+
+                {showAddDoublesPartner && (
+                  <div
+                    style={{
+                      background: '#FFFBEB',
+                      border: '1px solid #FDE68A',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      marginTop: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#92400E', fontWeight: 600 }}>
+                      Dành cho trường hợp đánh đôi chỉ có 1 đại diện đặt slot trên app:
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Nhập họ tên / biệt danh bạn đánh đôi..."
+                      value={doublesPartnerName}
+                      onChange={(e) => setDoublesPartnerName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '7px 10px',
+                        borderRadius: '8px',
+                        border: '1px solid #FCD34D',
+                        fontSize: '12px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        background: '#ffffff',
+                      }}
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <select
+                        value={doublesPartnerRole}
+                        onChange={(e) => setDoublesPartnerRole(e.target.value)}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #FCD34D',
+                          fontSize: '11px',
+                          background: '#ffffff',
+                          outline: 'none',
+                        }}
+                      >
+                        <option value="Đồng đội đánh cặp">Đồng đội đánh cặp</option>
+                        <option value="Đối thủ đánh đôi">Đối thủ đánh đôi</option>
+                      </select>
+                      <select
+                        value={doublesPartnerRep}
+                        onChange={(e) => setDoublesPartnerRep(e.target.value)}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #FCD34D',
+                          fontSize: '11px',
+                          background: '#ffffff',
+                          outline: 'none',
+                        }}
+                      >
+                        {matchParticipants
+                          .filter((p) => !p.isDoublesGuest)
+                          .map((p) => (
+                            <option key={p.id} value={p.name || p.email.split('@')[0]}>
+                              Đi cùng: {p.name || p.email.split('@')[0]}
+                            </option>
+                          ))}
+                        <option value="Người chơi chính">Đi cùng: Người chơi chính</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDoublesPartner(false)}
+                        style={{
+                          flex: 1,
+                          padding: '6px',
+                          borderRadius: '6px',
+                          background: '#F1F5F9',
+                          border: 'none',
+                          color: '#475569',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddDoublesParticipant}
+                        style={{
+                          flex: 2,
+                          padding: '6px',
+                          borderRadius: '6px',
+                          background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
+                          border: 'none',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Thêm & Chọn Đánh Giá
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 

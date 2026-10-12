@@ -18,7 +18,7 @@ function TournamentList() {
 
   // Registration state for upcoming tournament
   const [isRegistered, setIsRegistered] = useState(false)
-  const [teammateName, setTeammateName] = useState('Bảo Long (DUPR 3.8)')
+  const [teammateName, setTeammateName] = useState('Bảo Long (Trình Khá)')
   const [agreedEscrow, setAgreedEscrow] = useState(true)
 
   // Escrow balance from localStorage
@@ -634,7 +634,7 @@ function TournamentList() {
                 <input
                   type="text"
                   disabled
-                  value="Minh Minh Minh (DUPR 3.8)"
+                  value="Minh Minh Minh (Trình Khá)"
                   className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 font-semibold text-slate-800"
                 />
               </div>

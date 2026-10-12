@@ -430,10 +430,10 @@ function CreateMatch() {
 
     const levelText =
       skillLevel === 'intermediate'
-        ? 'Trung bình - Khá (DUPR 3.0 - 4.0)'
+        ? 'Trung bình - Khá'
         : skillLevel === 'beginner'
-        ? 'Mới tập chơi (DUPR < 2.5)'
-        : 'Bán chuyên / Pro (DUPR > 4.5)'
+        ? 'Mới tập chơi'
+        : 'Bán chuyên / Nâng cao'
 
     const createdMatch = {
       id: Date.now(),
@@ -539,14 +539,14 @@ function CreateMatch() {
                     01. CHỌN BỘ MÔN THỂ THAO
                   </label>
                   <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    DUPR SYNCED
+                    ĐỒNG BỘ TRÌNH ĐỘ
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {[
-                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', sub: 'Pro-Circuit' },
-                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓', sub: 'DUPR Arena' },
+                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', sub: 'Đơn / Đôi' },
+                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓', sub: 'Giao Lưu & Đấu' },
                     { key: 'football', label: 'Bóng Đá', emoji: '⚽', sub: 'Sân 5 / Sân 7' },
                     { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', sub: '3x3 & 5x5' },
                     { key: 'tennis', label: 'Tennis', emoji: '🎾', sub: 'Đơn / Đôi' },
@@ -993,9 +993,9 @@ function CreateMatch() {
                   </div>
                 </div>
 
-                {/* Yêu cầu Trình độ DUPR */}
+                {/* Yêu cầu Trình độ Người chơi */}
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ (DUPR):</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Trung bình Khá */}
                     <div
@@ -1010,10 +1010,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'intermediate' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Trung bình Khá</span>
+                        <span>Trung bình - Khá</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        DUPR 3.0 - 4.0
+                        Đánh chắc tay, giao lưu đều đặn
                       </p>
                     </div>
 
@@ -1033,11 +1033,11 @@ function CreateMatch() {
                         <span>Mới tập chơi</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        DUPR &lt; 2.5
+                        Phong trào, vừa tập vừa giao lưu
                       </p>
                     </div>
 
-                    {/* Bán chuyên / Pro */}
+                    {/* Bán chuyên / Nâng cao */}
                     <div
                       onClick={() => setSkillLevel('pro')}
                       className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
@@ -1050,10 +1050,10 @@ function CreateMatch() {
                         <span className="material-symbols-outlined text-[16px]">
                           {skillLevel === 'pro' ? 'check_box' : 'check_box_outline_blank'}
                         </span>
-                        <span>Bán chuyên / Pro</span>
+                        <span>Bán chuyên / Nâng cao</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        DUPR &gt; 4.5
+                        Thi đấu cọ xát, kỹ chiến thuật tốt
                       </p>
                     </div>
                   </div>
@@ -1254,7 +1254,7 @@ function CreateMatch() {
                       Minh Minh Minh (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      DUPR 3.8 • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
+                      Trình: Trung bình - Khá • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
                     </p>
                   </div>
                 </div>

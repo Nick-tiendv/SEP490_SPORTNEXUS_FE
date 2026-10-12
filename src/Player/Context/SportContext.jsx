@@ -41,23 +41,18 @@ export function SportProvider({ children }) {
 
   const toggleSport = (key) => {
     setSelectedSports((prev) => {
-      // Nếu đang chọn tất cả các môn: click vào môn nào sẽ lọc DUY NHẤT môn đó
+      // Nếu đang chọn tất cả các môn: click vào 1 môn sẽ lọc DUY NHẤT môn đó (chọn 1 môn riêng)
       if (prev.length === SPORTS_LIST.length) {
         return [key]
       }
 
-      // Nếu chỉ đang chọn 1 môn:
+      // Nếu môn này đã được chọn: click lại chính môn đó sẽ HỦY CHỌN môn đó (không tự động nhảy sang tất cả)
       if (prev.includes(key)) {
-        // Click lại chính môn đó: chuyển sang hiển thị tất cả môn
-        return ALL_SPORTS_KEYS
-      } else {
-        // Click vào môn khác: thêm vào danh sách hoặc nếu đã đủ thì thành tất cả
-        const next = [...prev, key]
-        if (next.length === SPORTS_LIST.length) {
-          return ALL_SPORTS_KEYS
-        }
-        return next
+        return prev.filter((k) => k !== key)
       }
+
+      // Nếu môn này chưa có: thêm môn đó vào danh sách (cho phép chọn 2, 3, 4 môn riêng)
+      return [...prev, key]
     })
   }
 

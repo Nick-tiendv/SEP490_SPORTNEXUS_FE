@@ -21,13 +21,13 @@ function PlayerLayout() {
       {/* Fixed Sidebar */}
       <TopSideBar />
 
-      {/* Main area: offset by sidebar width */}
-      <div style={{ paddingLeft: '260px' }}>
+      {/* Main area: offset by sidebar width on desktop, 0 on mobile */}
+      <div className="app-main-content-wrapper">
         {/* Fixed Topbar */}
         <TopBar />
 
         {/* Page content */}
-        <main style={{ width: '100%', paddingTop: '56px', minHeight: '100vh' }}>
+        <main style={{ width: '100%', paddingTop: '60px', minHeight: '100vh', boxSizing: 'border-box' }}>
           <Outlet />
         </main>
       </div>

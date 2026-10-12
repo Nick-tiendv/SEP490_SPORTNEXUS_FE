@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
-// Tài khoản ngân hàng liên kết sẵn của Chủ Sân
-const LINKED_BANK_ACCOUNTS = [
+// Tài khoản ngân hàng liên kết sẵn dự phòng
+const DEFAULT_LINKED_BANKS = [
   {
     id: 'vcb-01',
     bankName: 'Vietcombank',
@@ -12,6 +12,7 @@ const LINKED_BANK_ACCOUNTS = [
     branch: 'Chi nhánh Nam Sài Gòn - Q.7',
     isDefault: true,
     logo: '🏦',
+    isFromProfile: false,
   },
   {
     id: 'mb-02',
@@ -22,18 +23,52 @@ const LINKED_BANK_ACCOUNTS = [
     branch: 'Sở Giao Dịch TP.HCM',
     isDefault: false,
     logo: '🎖️',
-  },
-  {
-    id: 'tcb-03',
-    bankName: 'Techcombank',
-    bankShort: 'TCB',
-    accountNumber: '19036789012345',
-    accountHolder: 'NGUYEN VAN DUC',
-    branch: 'Chi nhánh Phú Mỹ Hưng',
-    isDefault: false,
-    logo: '⚡',
+    isFromProfile: false,
   },
 ]
+
+// Hàm lấy danh sách tài khoản ngân hàng nhận tiền, ưu tiên đồng bộ từ Hồ Sơ Chủ Sân (sportnexus_owner_profile)
+export const getOwnerBankAccounts = () => {
+  try {
+    const saved = localStorage.getItem('sportnexus_owner_profile')
+    if (saved) {
+      const profile = JSON.parse(saved)
+      if (profile.bankName || profile.bankAccount) {
+        const rawBankName = (profile.bankName || 'Vietcombank').trim()
+        const bankParts = rawBankName.split(/[-—–\s]+/)
+        const bankShort = bankParts[0]?.toUpperCase() || 'VCB'
+
+        const profileAccount = {
+          id: 'owner-profile-account',
+          bankName: rawBankName,
+          bankShort: bankShort,
+          accountNumber: profile.bankAccount || '0071000987654',
+          accountHolder: (profile.bankHolder || profile.fullName || 'CHỦ CƠ SỞ').toUpperCase(),
+          branch: 'Tài khoản chính (Đồng bộ theo Hồ Sơ Chủ Sân)',
+          isDefault: true,
+          logo: '🏦',
+          isFromProfile: true,
+        }
+
+        const backupAccount = {
+          id: 'backup-mb-account',
+          bankName: 'MB Bank',
+          bankShort: 'MB',
+          accountNumber: '88880908123456',
+          accountHolder: (profile.businessName ? profile.businessName.split('(')[0].trim() : 'SPORTNEXUS ARENA').toUpperCase(),
+          branch: 'Tài khoản công ty dự phòng',
+          isDefault: false,
+          logo: '🎖️',
+          isFromProfile: false,
+        }
+
+        return [profileAccount, backupAccount]
+      }
+    }
+  } catch (e) {}
+
+  return DEFAULT_LINKED_BANKS
+}
 
 // Danh sách lịch sử giao dịch quyết toán & giải ngân
 const INITIAL_TRANSACTIONS = [
@@ -110,14 +145,40 @@ export default function Settlement() {
     return t.type === activeTxnTab
   })
 
-  // Modal rút tiền
+  // Modal rút tiền & Danh sách tài khoản ngân hàng (đồng bộ tự động từ Hồ sơ Chủ sân)
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
-  const [selectedBank, setSelectedBank] = useState(LINKED_BANK_ACCOUNTS[0])
+  const [bankAccounts, setBankAccounts] = useState(getOwnerBankAccounts)
+  const [selectedBank, setSelectedBank] = useState(() => {
+    const list = getOwnerBankAccounts()
+    return list[0] || DEFAULT_LINKED_BANKS[0]
+  })
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawNote, setWithdrawNote] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [successWithdrawReceipt, setSuccessWithdrawReceipt] = useState(null)
   const [toastMessage, setToastMessage] = useState(null)
+
+  // Lắng nghe sự kiện cập nhật hồ sơ chủ sân từ trang Profile để đồng bộ ngân hàng tức thì
+  useEffect(() => {
+    const syncProfileBank = () => {
+      const updatedList = getOwnerBankAccounts()
+      setBankAccounts(updatedList)
+      setSelectedBank((prev) => {
+        if (!prev || prev.isFromProfile || prev.id === 'owner-profile-account') {
+          return updatedList[0]
+        }
+        const existing = updatedList.find((b) => b.id === prev.id)
+        return existing || updatedList[0]
+      })
+    }
+
+    window.addEventListener('sportnexus_owner_profile_updated', syncProfileBank)
+    window.addEventListener('storage', syncProfileBank)
+    return () => {
+      window.removeEventListener('sportnexus_owner_profile_updated', syncProfileBank)
+      window.removeEventListener('storage', syncProfileBank)
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('court_owner_balance', availableBalance.toString())
@@ -283,6 +344,9 @@ export default function Settlement() {
         {/* Action Button: Rút Tiền Về Ngân Hàng */}
         <button
           onClick={() => {
+            const updatedList = getOwnerBankAccounts()
+            setBankAccounts(updatedList)
+            setSelectedBank(updatedList[0])
             setWithdrawAmount('')
             setShowWithdrawModal(true)
           }}
@@ -1140,7 +1204,7 @@ export default function Settlement() {
               </div>
               <button
                 type="button"
-                onClick={() => setWithdrawAmount(availableBalance.toString())}
+                onClick={() => setWithdrawAmount(formatVND(availableBalance))}
                 style={{
                   background: '#10B981',
                   color: '#FFFFFF',
@@ -1159,12 +1223,31 @@ export default function Settlement() {
             <form onSubmit={handleExecuteWithdrawal}>
               {/* Select Bank Account */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                  Tài Khoản Ngân Hàng Nhận Tiền:
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Tài Khoản Ngân Hàng Nhận Tiền:
+                  </label>
+                  <Link
+                    to="/owner/profile"
+                    title="Đến trang Hồ Sơ để cập nhật số tài khoản hoặc ngân hàng thụ hưởng"
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#15803D',
+                      textDecoration: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>Cập nhật trong Hồ sơ</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>open_in_new</span>
+                  </Link>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {LINKED_BANK_ACCOUNTS.map((acc) => {
-                    const isSelected = selectedBank.id === acc.id
+                  {bankAccounts.map((acc) => {
+                    const isSelected = selectedBank?.id === acc.id
                     return (
                       <div
                         key={acc.id}
@@ -1184,10 +1267,27 @@ export default function Settlement() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontSize: '24px' }}>{acc.logo}</span>
                           <div>
-                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                              {acc.bankName} — {acc.accountNumber}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                                {acc.bankName} — {acc.accountNumber}
+                              </span>
+                              {acc.isFromProfile && (
+                                <span
+                                  style={{
+                                    fontSize: '10px',
+                                    background: '#DCFCE7',
+                                    color: '#15803D',
+                                    fontWeight: 800,
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    border: '1px solid #86EFAC',
+                                  }}
+                                >
+                                  Đã đồng bộ từ Hồ Sơ
+                                </span>
+                              )}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#64748B' }}>
+                            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
                               {acc.accountHolder} • {acc.branch}
                             </div>
                           </div>
@@ -1206,48 +1306,64 @@ export default function Settlement() {
 
               {/* Enter Amount */}
               <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Số Tiền Cần Rút (VNĐ):
-                </label>
-                <input
-                  type="number"
-                  step="50000"
-                  required
-                  placeholder="Nhập số tiền..."
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '18px',
-                    fontWeight: 800,
-                    color: '#0F172A',
-                  }}
-                />
-
-                {/* Quick amount chips */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                  {[5000000, 10000000, 20000000, 40000000].map((v) => (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Số Tiền Cần Rút:
+                  </label>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>
+                    Tối thiểu 100.000 đ
+                  </span>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    value={withdrawAmount}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '')
+                      if (!digits) {
+                        setWithdrawAmount('')
+                        return
+                      }
+                      const num = Number(digits)
+                      if (num > 100000000000) return
+                      setWithdrawAmount(formatVND(num))
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 38px 12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '18px',
+                      fontWeight: 800,
+                      color: '#0F172A',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                  {withdrawAmount && (
                     <button
-                      key={v}
                       type="button"
-                      onClick={() => setWithdrawAmount(v.toString())}
+                      onClick={() => setWithdrawAmount('')}
+                      title="Xóa số tiền"
                       style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        border: '1px solid #CBD5E1',
-                        background: '#F8FAFC',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: '#475569',
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
                         cursor: 'pointer',
+                        color: '#94A3B8',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
                       }}
                     >
-                      {(v / 1000000).toFixed(0)} Triệu
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>cancel</span>
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -1258,7 +1374,6 @@ export default function Settlement() {
                 </label>
                 <input
                   type="text"
-                  placeholder="VD: Rút doanh thu tuần 41..."
                   value={withdrawNote}
                   onChange={(e) => setWithdrawNote(e.target.value)}
                   style={{

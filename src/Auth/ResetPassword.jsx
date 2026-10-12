@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import './auth-pages.css'
 
 function ResetPassword() {
@@ -83,11 +83,11 @@ function ResetPassword() {
   return (
     <div className="min-h-screen flex flex-col sport-animated-bg">
       {/* Header */}
-      <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3 px-6">
+      <header className="w-full bg-white/80 backdrop-blur-sm shadow-sm py-3.5 px-4 sm:px-6">
         <div className="w-full flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-[#4A7C3E] rounded-lg flex items-center justify-center">
+          {/* Logo - Bấm vào tự động về trang chủ */}
+          <Link to="/" className="flex items-center gap-2 cursor-pointer group hover:opacity-90 transition-opacity">
+            <div className="w-10 h-10 bg-[#4A7C3E] rounded-lg flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
               </svg>
@@ -96,18 +96,7 @@ function ResetPassword() {
               <span className="text-lg font-bold text-gray-900">SportNexus</span>
               <span className="text-[10px] text-gray-600 uppercase tracking-wide">Tournament Engine</span>
             </div>
-          </div>
-
-          {/* Trang chủ - ngoài cùng bên phải */}
-          <button 
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900 text-sm font-medium hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            TRANG CHỦ
-          </button>
+          </Link>
         </div>
       </header>
 

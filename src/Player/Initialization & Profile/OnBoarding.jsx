@@ -4,22 +4,55 @@ import { useState } from 'react'
 function OnBoarding() {
   const navigate = useNavigate()
   const [selectedSports, setSelectedSports] = useState(['badminton'])
-  const [skillRating, setSkillRating] = useState(1450)
+  const SKILL_TIERS = [
+    { label: 'Mới tập chơi', sub: 'Căn bản, làm quen môn thể thao' },
+    { label: 'Mới chơi - Đang tiến bộ', sub: 'Nắm chắc luật, giao lưu vui vẻ' },
+    { label: 'Trung bình', sub: 'Đánh đều tay phong trào' },
+    { label: 'Trung bình - Khá', sub: 'Điều cầu/bóng tốt, phối hợp ăn ý' },
+    { label: 'Khá - Đánh chắc tay', sub: 'Chiến thuật tốt, phản xạ nhanh' },
+    { label: 'Bán chuyên / Nâng cao', sub: 'Tập luyện thường xuyên, kỹ thuật chuẩn' },
+    { label: 'Chuyên nghiệp / Thi đấu giải', sub: 'Vận động viên thi đấu giải' },
+  ]
+  const [skillIndex, setSkillIndex] = useState(2)
 
   const toggleSport = (sport) => {
     if (selectedSports.includes(sport)) {
-      setSelectedSports(selectedSports.filter(s => s !== sport))
+      if (selectedSports.length > 1) {
+        setSelectedSports(selectedSports.filter(s => s !== sport))
+      }
     } else {
       setSelectedSports([...selectedSports, sport])
     }
   }
 
-  const getTier = (val) => {
-    if (val <= 1000) return 'Beginner'
-    if (val <= 1250) return 'Novice'
-    if (val <= 1500) return 'Intermediate'
-    if (val <= 1800) return 'Advanced'
-    return 'Pro Circuit'
+  const handleCompleteSetup = () => {
+    // Lưu các môn đã chọn kèm trình độ ban đầu vào localStorage
+    const sportMetadata = {
+      badminton: { name: 'Cầu Lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
+      pickleball: { name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
+      football: { name: 'Bóng Đá', icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' },
+      basketball: { name: 'Bóng Rổ', icon: '🏀', color: '#EA580C', bgColor: '#FFF7ED' },
+      tennis: { name: 'Tennis', icon: '🎾', color: '#65A30D', bgColor: '#F7FEE7' },
+    }
+    const currentTier = SKILL_TIERS[skillIndex].label
+    const newSportsData = selectedSports.map((key) => {
+      const meta = sportMetadata[key] || { name: key, icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' }
+      return {
+        id: key,
+        name: meta.name,
+        icon: meta.icon,
+        level: currentTier,
+        field: 'Trình độ',
+        ranked: true,
+        matches: 0,
+        winRate: '100%',
+        color: meta.color,
+        bgColor: meta.bgColor,
+      }
+    })
+    localStorage.setItem('player_sports_data', JSON.stringify(newSportsData))
+    localStorage.setItem('sportnexus_selected_sports', JSON.stringify(selectedSports))
+    navigate('/dashboard')
   }
 
   return (
@@ -78,25 +111,45 @@ function OnBoarding() {
           <div className="mb-10 bg-surface-container/40 p-6 rounded-xl border border-outline-variant/10">
             <h2 className="font-headline-sm text-on-surface mb-6 flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-bold text-sm">2</span>
-              Self-Assess Skill Matrix
+              Tự Đánh Giá Trình Độ Ban Đầu
             </h2>
             <div className="flex flex-col gap-4">
               <div className="flex justify-between items-center">
-                <span className="font-headline-sm text-primary-container">{getTier(skillRating)}</span>
-                <span className="font-bold text-primary-container bg-primary-container/10 px-3 py-1 rounded-full">{getTier(skillRating)}</span>
+                <div>
+                  <span className="font-headline-sm text-primary-container font-bold text-lg">
+                    {SKILL_TIERS[skillIndex].label}
+                  </span>
+                  <p className="text-xs text-on-surface-variant m-0 mt-0.5">
+                    {SKILL_TIERS[skillIndex].sub}
+                  </p>
+                </div>
+                <span className="font-bold text-primary-container bg-primary-container/10 px-3 py-1 rounded-full text-xs">
+                  Cấp {skillIndex + 1}/{SKILL_TIERS.length}
+                </span>
               </div>
-              <input type="range" min="800" max="2200" step="25" value={skillRating} onChange={(e) => setSkillRating(Number(e.target.value))} className="w-full accent-primary-container" />
-              <div className="flex justify-between text-xs text-on-surface-variant">
-                <span>Beginner</span>
-                <span>Pro Circuit</span>
+              <input
+                type="range"
+                min="0"
+                max={SKILL_TIERS.length - 1}
+                step="1"
+                value={skillIndex}
+                onChange={(e) => setSkillIndex(Number(e.target.value))}
+                className="w-full accent-primary-container cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-on-surface-variant font-medium">
+                <span>Mới tập chơi</span>
+                <span>Chuyên nghiệp / Thi đấu giải</span>
               </div>
             </div>
           </div>
 
           {/* Submit */}
           <div className="flex justify-end pt-4 border-t border-outline-variant/20">
-            <button className="py-3 px-8 rounded-xl bg-gradient-to-r from-primary-container to-secondary-fixed text-on-primary-container font-headline-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:brightness-110 transition-all" onClick={() => navigate('/dashboard')}>
-              <span>Complete Setup & Enter Hub</span>
+            <button
+              className="py-3 px-8 rounded-xl bg-gradient-to-r from-primary-container to-secondary-fixed text-on-primary-container font-headline-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:brightness-110 transition-all cursor-pointer"
+              onClick={handleCompleteSetup}
+            >
+              <span>Hoàn tất &amp; Vào trang chủ</span>
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
           </div>
