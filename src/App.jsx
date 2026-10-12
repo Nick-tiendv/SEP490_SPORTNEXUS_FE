@@ -33,11 +33,12 @@ import Settlement from './Court Owner/Settlement.jsx'
 
 function HomeRedirect() {
   try {
+    const token = localStorage.getItem('sportnexus_auth_token')
     const role = localStorage.getItem('sportnexus_user_role')
-    if (role === 'court_owner' || role === 'admin') {
+    if (token && (role === 'court_owner' || role === 'admin')) {
       return <Navigate replace to="/owner/dashboard" />
     }
-    if (role === 'player') {
+    if (token && role === 'player') {
       return <Navigate replace to="/dashboard" />
     }
   } catch (e) {}

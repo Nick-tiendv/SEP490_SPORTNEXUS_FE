@@ -4560,6 +4560,8 @@ export default function Profile() {
                     localStorage.removeItem('sportnexus_user_role')
                     localStorage.removeItem('sportnexus_current_user')
                     localStorage.removeItem('sportnexus_auth_token')
+                    localStorage.removeItem('sportnexus_user_id')
+                    localStorage.removeItem('sportnexus_user_fullname')
                   } catch (e) {}
                   setShowLogoutModal(false)
                   navigate('/login')

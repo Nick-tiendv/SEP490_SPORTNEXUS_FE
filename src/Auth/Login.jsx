@@ -1,6 +1,7 @@
 import './auth-pages.css'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { loginApi } from '../api/authApi'
 
 // Hàm chuẩn hóa số điện thoại Việt Nam (xóa ký tự đặc biệt, chuẩn hóa 0xxx hoặc +84xxx)
 export const normalizePhone = (phoneStr) => {
@@ -155,41 +156,74 @@ function Login() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const navigate = useNavigate()
 
   // Xác định trước vai trò hiển thị trực tiếp khi người dùng gõ
   const previewRole = detectUserRole(identifier)
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault()
-    const detected = detectUserRole(identifier)
+    setErrorMessage('')
+    setSuccessMessage('')
+    setIsLoading(true)
 
-    // Nếu không nhận diện được qua các quy tắc trên, mặc định là player
-    const finalRole = detected || 'player'
-
-    // Lưu role phiên hiện tại vào localStorage
     try {
-      localStorage.setItem('sportnexus_user_role', finalRole)
-      localStorage.setItem('sportnexus_auth_token', 'sportnexus_token_' + Date.now())
+      // 1. Gọi API đăng nhập backend POST /api/auth/login
+      const response = await loginApi(identifier, password)
 
-      // Cập nhật thông tin phiên đăng nhập
-      const cleanId = (identifier || '').trim().toLowerCase()
-      const usersMap = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
-      if (usersMap[cleanId]) {
-        localStorage.setItem('sportnexus_current_user', JSON.stringify(usersMap[cleanId]))
-      } else if (finalRole === 'court_owner' || finalRole === 'admin') {
-        const ownerSaved = localStorage.getItem('sportnexus_owner_profile')
-        if (ownerSaved) {
-          localStorage.setItem('sportnexus_current_user', ownerSaved)
+      // Kiểm tra statusCode và data từ response
+      if (response && (response.statusCode === 200 || response.statusCode === 201) && response.data) {
+        const { token, userId, fullName, role } = response.data
+
+        // Chuẩn hóa role nhận từ API (Player -> player, CourtOwner -> court_owner, Admin -> admin)
+        const normalizedRoleStr = String(role || '').toLowerCase()
+        let finalRole = 'player'
+        if (normalizedRoleStr.includes('owner') || normalizedRoleStr.includes('chusan')) {
+          finalRole = 'court_owner'
+        } else if (normalizedRoleStr.includes('admin')) {
+          finalRole = 'admin'
+        } else {
+          finalRole = 'player'
         }
-      }
-    } catch (err) {}
 
-    // Tự động điều hướng đến trang đúng với vai trò
-    if (finalRole === 'court_owner' || finalRole === 'admin') {
-      navigate('/owner/dashboard')
-    } else {
-      navigate('/dashboard')
+        // Lưu thông tin phiên đăng nhập vào localStorage
+        localStorage.setItem('sportnexus_auth_token', token)
+        localStorage.setItem('sportnexus_user_role', finalRole)
+        localStorage.setItem('sportnexus_user_id', userId || '')
+        localStorage.setItem('sportnexus_user_fullname', fullName || '')
+        localStorage.setItem(
+          'sportnexus_current_user',
+          JSON.stringify({
+            userId,
+            fullName,
+            username: identifier.trim(),
+            role: finalRole,
+            rawRole: role,
+            token,
+          })
+        )
+
+        setSuccessMessage(`Đăng nhập thành công! Chào mừng ${fullName || identifier}.`)
+
+        // Chuyển hướng theo đúng vai trò trả về từ API
+        setTimeout(() => {
+          if (finalRole === 'court_owner' || finalRole === 'admin') {
+            navigate('/owner/dashboard')
+          } else {
+            navigate('/dashboard')
+          }
+        }, 500)
+      } else {
+        throw new Error(response?.message || 'Đăng nhập không thành công!')
+      }
+    } catch (err) {
+      console.error('Login error:', err)
+      setErrorMessage(err.message || 'Tài khoản hoặc mật khẩu không chính xác!')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -234,19 +268,43 @@ function Login() {
             </p>
 
             <form onSubmit={handleLoginSubmit} className="space-y-4 sm:space-y-5">
-              {/* Email / SĐT Input */}
+              {/* Thông báo lỗi khi call API */}
+              {errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs sm:text-sm text-red-700 animate-fadeIn">
+                  <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1 font-medium">{errorMessage}</div>
+                </div>
+              )}
+
+              {/* Thông báo thành công */}
+              {successMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs sm:text-sm text-emerald-800 animate-fadeIn">
+                  <svg className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1 font-medium">{successMessage}</div>
+                </div>
+              )}
+
+              {/* Username / Email / SĐT Input */}
               <div>
                 <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
-                  Email hoặc Số điện thoại
+                  Tên đăng nhập, Email hoặc SĐT
                 </label>
                 <input
                   type="text"
                   id="email"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Nhập email hoặc số điện thoại..."
+                  onChange={(e) => {
+                    setIdentifier(e.target.value)
+                    if (errorMessage) setErrorMessage('')
+                  }}
+                  placeholder="Ví dụ: User1, email hoặc số điện thoại..."
                   className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                   required
+                  disabled={isLoading}
                 />
 
                 {/* Badge thông báo nhận diện vai trò tự động */}
@@ -280,14 +338,19 @@ function Login() {
                     type={passwordVisible ? 'text' : 'password'}
                     id="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      if (errorMessage) setErrorMessage('')
+                    }}
                     placeholder="Nhập mật khẩu..."
                     className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 pr-11 sm:pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D5F3F] focus:border-transparent text-sm sm:text-base text-gray-900"
                     required
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setPasswordVisible(!passwordVisible)}
+                    disabled={isLoading}
                     className="absolute right-3.5 sm:right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
                     {passwordVisible ? (
@@ -322,10 +385,23 @@ function Login() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] text-white font-bold py-3 sm:py-3.5 px-6 rounded-lg transition-all duration-200 uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.99] text-sm sm:text-base"
+                disabled={isLoading}
+                className="w-full bg-[#2D5F3F] hover:bg-[#234a32] disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold py-3 sm:py-3.5 px-6 rounded-lg transition-all duration-200 uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.99] text-sm sm:text-base"
               >
-                <span>ĐĂNG NHẬP</span>
-                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>ĐANG ĐĂNG NHẬP...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>ĐĂNG NHẬP</span>
+                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                  </>
+                )}
               </button>
             </form>
 
