@@ -206,6 +206,87 @@ export default function Dashboard() {
       )}
 
 
+      {/* Top Welcome / Overview Header Banner Hub */}
+      <div
+        style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '20px',
+          padding: '24px 28px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
+          marginBottom: '24px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                color: '#fff',
+                padding: '4px 10px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 800,
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+              }}
+            >
+              Trung Tâm Quản Trị Chủ Sân
+            </span>
+            <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
+              SportNexus Operating System
+            </span>
+          </div>
+          <h1
+            style={{
+              fontSize: '26px',
+              fontWeight: 900,
+              color: '#0F172A',
+              margin: 0,
+              letterSpacing: '-0.5px',
+            }}
+          >
+            Tổng Quan Hoạt Động & Tài Chính Cơ Sở
+          </h1>
+          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+            Giám sát doanh thu, giải ngân Smart Escrow tức thì và điều phối hoạt động sân thể thao theo thời gian thực.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              background: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: '12px',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ color: '#16A34A', fontSize: '20px' }}>
+              verified
+            </span>
+            <div>
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase' }}>
+                Trạng Thái Hệ Thống
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                14/14 Sân Sẵn Sàng
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 4 Core Financial & Operation Metric Cards */}
       <div
         style={{
@@ -218,11 +299,14 @@ export default function Dashboard() {
         {/* Metric 1: Available Balance */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #064E3B 0%, #065F46 100%)',
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.94) 0%, rgba(6, 95, 70, 0.94) 100%)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
             color: '#FFFFFF',
             borderRadius: '16px',
             padding: '20px',
-            boxShadow: '0 4px 15px rgba(6, 78, 59, 0.2)',
+            boxShadow: '0 8px 30px rgba(6, 78, 59, 0.25)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -247,11 +331,13 @@ export default function Dashboard() {
         {/* Metric 2: Pending Escrow */}
         <div
           style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
             borderRadius: '16px',
             padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -265,7 +351,7 @@ export default function Dashboard() {
           <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#B45309' }}>
             19.820.000 đ
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B' }}>
+          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600 }}>
             Giải ngân tự động khi quét QR vào sân
           </div>
         </div>
@@ -273,25 +359,27 @@ export default function Dashboard() {
         {/* Metric 3: Occupancy Rate */}
         <div
           style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
             borderRadius: '16px',
             padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#2563EB', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1D4ED8', textTransform: 'uppercase' }}>
               TỶ LỆ LẤP ĐẦY TRONG NGÀY
             </span>
-            <span className="material-symbols-outlined" style={{ color: '#2563EB', fontSize: '22px' }}>
+            <span className="material-symbols-outlined" style={{ color: '#1D4ED8', fontSize: '22px' }}>
               pie_chart
             </span>
           </div>
           <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#0F172A' }}>
-            78.3% <span style={{ fontSize: '14px', fontWeight: 600, color: '#16A34A' }}>(94/120 slot)</span>
+            78.3% <span style={{ fontSize: '14px', fontWeight: 700, color: '#047857' }}>(94/120 slot)</span>
           </div>
-          <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 700 }}>
+          <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>
             🔥 Giờ cao điểm tối đạt 96% công suất
           </div>
         </div>
@@ -299,25 +387,27 @@ export default function Dashboard() {
         {/* Metric 4: Projected Daily Revenue */}
         <div
           style={{
-            background: '#FFFFFF',
-            border: '1px solid #E2E8F0',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
             borderRadius: '16px',
             padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#15803D', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#047857', textTransform: 'uppercase' }}>
               DOANH THU DỰ KIẾN HÔM NAY
             </span>
-            <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: '22px' }}>
+            <span className="material-symbols-outlined" style={{ color: '#047857', fontSize: '22px' }}>
               trending_up
             </span>
           </div>
           <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#0F172A' }}>
             22.850.000 đ
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B' }}>
+          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600 }}>
             Tự động tính theo Dynamic Pricing
           </div>
         </div>
@@ -325,16 +415,42 @@ export default function Dashboard() {
 
       {/* SECTION 1: LẦN LƯỢT TẤT CẢ CÁC CHỨC NĂNG BÊN SIDEBAR (Action Cards Grid) */}
       <div style={{ marginBottom: '36px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div
+          style={{
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            borderRadius: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
+            padding: '18px 24px',
+            boxShadow: '0 8px 30px rgba(15, 23, 42, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            marginBottom: '18px',
+          }}
+        >
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
               Trung Tâm Chức Năng Quản Trị (Core Capabilities)
             </h2>
-            <p style={{ margin: '2px 0 0 0', color: '#64748B', fontSize: '13px' }}>
+            <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
               Truy cập nhanh lần lượt tất cả các nghiệp vụ quản lý cơ sở từ sidebar
             </p>
           </div>
-          <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 700, background: '#DCFCE7', padding: '4px 10px', borderRadius: '6px' }}>
+          <span
+            style={{
+              fontSize: '12px',
+              color: '#047857',
+              fontWeight: 800,
+              background: '#DCFCE7',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              border: '1px solid #86EFAC',
+            }}
+          >
             5/5 Chức Năng Hoạt Động
           </span>
         </div>
@@ -347,11 +463,13 @@ export default function Dashboard() {
               to={card.link}
               style={{
                 textDecoration: 'none',
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.90)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.8)',
                 padding: '22px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                boxShadow: '0 8px 30px rgba(15, 23, 42, 0.05)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
@@ -401,13 +519,13 @@ export default function Dashboard() {
                   </span>
                 </div>
 
-                <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: '11px', color: '#1E293B', fontWeight: 800, textTransform: 'uppercase' }}>
                   {card.subtitle}
                 </div>
                 <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: '4px 0 8px 0' }}>
                   {card.title}
                 </h3>
-                <p style={{ margin: 0, fontSize: '13px', color: '#64748B', lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: '13.5px', color: '#1E293B', lineHeight: 1.5, fontWeight: 600 }}>
                   {card.desc}
                 </p>
               </div>
@@ -440,11 +558,13 @@ export default function Dashboard() {
         {/* Left: Upcoming Check-in Queue */}
         <div
           style={{
-            background: '#FFFFFF',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             borderRadius: '18px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
             padding: '22px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -452,7 +572,7 @@ export default function Dashboard() {
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
                 Lịch Check-in Chờ Giải Ngân Escrow Hôm Nay
               </h3>
-              <p style={{ margin: '2px 0 0 0', color: '#64748B', fontSize: '12.5px' }}>
+              <p style={{ margin: '2px 0 0 0', color: '#1E293B', fontSize: '13px', fontWeight: 600 }}>
                 Người chơi sắp tới sân — Sẵn sàng quét mã QR để giải ngân tiền cọc
               </p>
             </div>
@@ -486,7 +606,7 @@ export default function Dashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: item.status === 'checked_in' ? '#F0FDF4' : '#FFFFFF',
+                  background: item.status === 'checked_in' ? 'rgba(240, 253, 244, 0.95)' : 'rgba(255, 255, 255, 0.95)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -497,16 +617,16 @@ export default function Dashboard() {
                   />
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
                         {item.customer}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#64748B' }}>({item.phone})</span>
+                      <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>({item.phone})</span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600, marginTop: '2px' }}>
+                    <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700, marginTop: '2px' }}>
                       {item.court}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
-                      Khung giờ: <strong>{item.time}</strong>
+                    <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
+                      Khung giờ: <strong style={{ color: '#0F172A' }}>{item.time}</strong>
                     </div>
                   </div>
                 </div>
@@ -546,11 +666,13 @@ export default function Dashboard() {
         {/* Right: Complex Zones Monitor */}
         <div
           style={{
-            background: '#FFFFFF',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             borderRadius: '18px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid rgba(255, 255, 255, 0.90)',
             padding: '22px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -559,7 +681,7 @@ export default function Dashboard() {
             </h3>
             <Link
               to="/owner/courts"
-              style={{ fontSize: '12px', color: '#10B981', fontWeight: 700, textDecoration: 'none' }}
+              style={{ fontSize: '12px', color: '#047857', fontWeight: 800, textDecoration: 'none' }}
             >
               Chỉnh Sửa Giá
             </Link>
@@ -570,10 +692,10 @@ export default function Dashboard() {
               <div
                 key={zone.id}
                 style={{
-                  border: '1px solid #F1F5F9',
+                  border: '1px solid #CBD5E1',
                   borderRadius: '12px',
                   padding: '12px 14px',
-                  background: '#F8FAFC',
+                  background: 'rgba(248, 250, 252, 0.95)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -584,18 +706,18 @@ export default function Dashboard() {
                     >
                       {zone.icon}
                     </span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                       {zone.name.split('—')[0].trim()}
                     </span>
                   </div>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#16A34A' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#047857' }}>
                     Lấp đầy: {zone.occupancy}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: '#64748B' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11.5px', color: '#1E293B', fontWeight: 700 }}>
                   <span>{zone.activeCourts}/{zone.totalCourts} sân hoạt động</span>
-                  <span style={{ fontWeight: 600, color: '#B45309' }}>{zone.currentPrice}</span>
+                  <span style={{ fontWeight: 800, color: '#9A3412' }}>{zone.currentPrice}</span>
                 </div>
               </div>
             ))}
@@ -610,7 +732,7 @@ export default function Dashboard() {
               padding: '10px',
               borderRadius: '10px',
               border: '1px dashed #CBD5E1',
-              background: '#FFFFFF',
+              background: 'rgba(255, 255, 255, 0.85)',
               color: '#334155',
               fontSize: '12.5px',
               fontWeight: 700,

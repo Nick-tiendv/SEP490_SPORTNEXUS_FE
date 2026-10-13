@@ -301,12 +301,19 @@ export default function CourtManage() {
       {/* Header Section */}
       <div
         style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          padding: '24px 28px',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '16px',
-          marginBottom: '28px',
+          gap: '20px',
+          marginBottom: '24px',
         }}
       >
         <div>
@@ -325,14 +332,14 @@ export default function CourtManage() {
             >
               Cơ Sở Phức Hợp Thể Thao
             </span>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
+            <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
               Mã cơ sở: <strong>SNX-FAC-HCM07</strong>
             </span>
           </div>
           <h1
             style={{
               fontSize: '26px',
-              fontWeight: 800,
+              fontWeight: 900,
               color: '#0F172A',
               margin: 0,
               letterSpacing: '-0.5px',
@@ -340,7 +347,7 @@ export default function CourtManage() {
           >
             {complexData.facilityName}
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#475569', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10B981' }}>
               location_on
             </span>
@@ -349,7 +356,7 @@ export default function CourtManage() {
         </div>
 
         {/* Quick Stats Badges */}
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <div
             style={{
               background: '#FFFFFF',
@@ -359,7 +366,7 @@ export default function CourtManage() {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             }}
           >
             <div
@@ -377,8 +384,8 @@ export default function CourtManage() {
               <span className="material-symbols-outlined">domain</span>
             </div>
             <div>
-              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Quy mô Cụm</div>
-              <div style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
+              <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>Quy mô Cụm</div>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A' }}>
                 {complexData.zones.length} Khu Vực • {totalCourts} Sân Con
               </div>
             </div>
@@ -393,7 +400,7 @@ export default function CourtManage() {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             }}
           >
             <div
@@ -411,8 +418,8 @@ export default function CourtManage() {
               <span className="material-symbols-outlined">sports_score</span>
             </div>
             <div>
-              <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Tỷ lệ Sẵn Sàng</div>
-              <div style={{ fontSize: '18px', fontWeight: 800, color: '#16A34A' }}>
+              <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>Tỷ lệ Sẵn Sàng</div>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#16A34A' }}>
                 {activeCourts}/{totalCourts} Đang Phục Vụ ({Math.round((activeCourts / totalCourts) * 100)}%)
               </div>
             </div>
@@ -423,27 +430,33 @@ export default function CourtManage() {
       {/* Tabs Navigation */}
       <div
         style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          padding: '6px 12px',
+          boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)',
           display: 'flex',
           gap: '8px',
-          borderBottom: '2px solid #E2E8F0',
           marginBottom: '24px',
+          flexWrap: 'wrap',
         }}
       >
         <button
           onClick={() => setActiveTab('zones')}
           style={{
-            padding: '12px 20px',
-            fontSize: '15px',
-            fontWeight: 700,
-            color: activeTab === 'zones' ? '#10B981' : '#64748B',
+            padding: '10px 18px',
+            fontSize: '14.5px',
+            fontWeight: 800,
+            color: activeTab === 'zones' ? '#047857' : '#334155',
             border: 'none',
-            borderBottom: activeTab === 'zones' ? '3px solid #10B981' : '3px solid transparent',
-            background: 'none',
+            borderRadius: '10px',
+            background: activeTab === 'zones' ? '#ECFDF5' : 'transparent',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '-2px',
             transition: 'all 0.2s',
           }}
         >
@@ -456,18 +469,17 @@ export default function CourtManage() {
         <button
           onClick={() => setActiveTab('pricing')}
           style={{
-            padding: '12px 20px',
-            fontSize: '15px',
-            fontWeight: 700,
-            color: activeTab === 'pricing' ? '#10B981' : '#64748B',
+            padding: '10px 18px',
+            fontSize: '14.5px',
+            fontWeight: 800,
+            color: activeTab === 'pricing' ? '#047857' : '#334155',
             border: 'none',
-            borderBottom: activeTab === 'pricing' ? '3px solid #10B981' : '3px solid transparent',
-            background: 'none',
+            borderRadius: '10px',
+            background: activeTab === 'pricing' ? '#ECFDF5' : 'transparent',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '-2px',
             transition: 'all 0.2s',
           }}
         >
@@ -492,18 +504,17 @@ export default function CourtManage() {
         <button
           onClick={() => setActiveTab('timegrid')}
           style={{
-            padding: '12px 20px',
-            fontSize: '15px',
-            fontWeight: 700,
-            color: activeTab === 'timegrid' ? '#10B981' : '#64748B',
+            padding: '10px 18px',
+            fontSize: '14.5px',
+            fontWeight: 800,
+            color: activeTab === 'timegrid' ? '#047857' : '#334155',
             border: 'none',
-            borderBottom: activeTab === 'timegrid' ? '3px solid #10B981' : '3px solid transparent',
-            background: 'none',
+            borderRadius: '10px',
+            background: activeTab === 'timegrid' ? '#ECFDF5' : 'transparent',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            marginBottom: '-2px',
             transition: 'all 0.2s',
           }}
         >
@@ -521,11 +532,13 @@ export default function CourtManage() {
           <div>
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.90)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.8)',
                 padding: '18px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                boxShadow: '0 8px 30px rgba(15, 23, 42, 0.05)',
               }}
             >
               <div
@@ -539,7 +552,7 @@ export default function CourtManage() {
                 <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
                   Danh Sách Khu Vực
                 </h3>
-                <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
+                <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>
                   {complexData.zones.length} khu
                 </span>
               </div>
@@ -555,7 +568,7 @@ export default function CourtManage() {
                         padding: '14px',
                         borderRadius: '12px',
                         cursor: 'pointer',
-                        border: isSelected ? `2px solid ${zone.color}` : '1px solid #E2E8F0',
+                        border: isSelected ? `2px solid ${zone.color}` : '1px solid #CBD5E1',
                         background: isSelected ? `${zone.color}0D` : '#FFFFFF',
                         transition: 'all 0.2s',
                         display: 'flex',
@@ -582,16 +595,16 @@ export default function CourtManage() {
                           </span>
                         </div>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
                             {zone.name.split('—')[0].trim()}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '2px' }}>
                             {zone.sportLabel} • {zone.courts.length} sân
                           </div>
                         </div>
                       </div>
 
-                      <span className="material-symbols-outlined" style={{ color: isSelected ? zone.color : '#CBD5E1', fontSize: '20px' }}>
+                      <span className="material-symbols-outlined" style={{ color: isSelected ? zone.color : '#94A3B8', fontSize: '20px' }}>
                         chevron_right
                       </span>
                     </div>
@@ -609,9 +622,9 @@ export default function CourtManage() {
                   borderRadius: '10px',
                   border: '1px dashed #CBD5E1',
                   background: '#F8FAFC',
-                  color: '#475569',
+                  color: '#0F172A',
                   fontSize: '13px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -632,11 +645,13 @@ export default function CourtManage() {
           <div>
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.9)',
                 padding: '24px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
               }}
             >
               {/* Zone Top Info Banner */}
@@ -659,19 +674,19 @@ export default function CourtManage() {
                         background: `${selectedZone.color}20`,
                         color: selectedZone.color,
                         fontSize: '12px',
-                        fontWeight: 700,
+                        fontWeight: 800,
                       }}
                     >
                       {selectedZone.sportLabel}
                     </span>
-                    <span style={{ fontSize: '13px', color: '#64748B' }}>
+                    <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
                       Tổng: {selectedZone.courts.length} sân đấu
                     </span>
                   </div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
                     {selectedZone.name}
                   </h2>
-                  <p style={{ margin: '6px 0 0 0', color: '#64748B', fontSize: '13px', maxWidth: '650px' }}>
+                  <p style={{ margin: '6px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600, maxWidth: '650px' }}>
                     {selectedZone.description}
                   </p>
                 </div>
@@ -685,7 +700,7 @@ export default function CourtManage() {
                     borderRadius: '10px',
                     padding: '10px 18px',
                     fontSize: '14px',
-                    fontWeight: 700,
+                    fontWeight: 800,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -702,7 +717,7 @@ export default function CourtManage() {
 
               {/* Amenities tags */}
               <div style={{ marginBottom: '24px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                   Tiện ích trang bị cho khu vực:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -711,11 +726,11 @@ export default function CourtManage() {
                       key={idx}
                       style={{
                         background: '#F1F5F9',
-                        color: '#334155',
+                        color: '#0F172A',
                         padding: '6px 12px',
                         borderRadius: '8px',
                         fontSize: '12px',
-                        fontWeight: 600,
+                        fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
@@ -740,24 +755,24 @@ export default function CourtManage() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   marginBottom: '24px',
-                  border: '1px solid #E2E8F0',
+                  border: '1px solid #CBD5E1',
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>
+                  <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>
                     Mức Giá Áp Dụng Cho Khu Này
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
                     <div>
-                      <span style={{ fontSize: '13px', color: '#64748B' }}>Giờ chuẩn: </span>
-                      <strong style={{ fontSize: '16px', color: '#0F172A' }}>
+                      <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>Giờ chuẩn: </span>
+                      <strong style={{ fontSize: '16px', color: '#0F172A', fontWeight: 900 }}>
                         {formatVND(selectedZone.basePrice)}/h
                       </strong>
                     </div>
                     <span style={{ color: '#CBD5E1' }}>|</span>
                     <div>
-                      <span style={{ fontSize: '13px', color: '#EF4444' }}>Giờ cao điểm: </span>
-                      <strong style={{ fontSize: '16px', color: '#EF4444' }}>
+                      <span style={{ fontSize: '13px', color: '#EF4444', fontWeight: 600 }}>Giờ cao điểm: </span>
+                      <strong style={{ fontSize: '16px', color: '#EF4444', fontWeight: 900 }}>
                         {formatVND(selectedZone.peakPrice)}/h
                       </strong>
                     </div>
@@ -772,8 +787,8 @@ export default function CourtManage() {
                     borderRadius: '8px',
                     padding: '8px 14px',
                     fontSize: '13px',
-                    fontWeight: 700,
-                    color: '#334155',
+                    fontWeight: 800,
+                    color: '#0F172A',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -788,7 +803,7 @@ export default function CourtManage() {
               </div>
 
               {/* Courts Grid */}
-              <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 900, color: '#0F172A', marginBottom: '16px' }}>
                 Danh Sách Các Sân Con Trong {selectedZone.name.split('—')[0].trim()}
               </h3>
 
@@ -800,10 +815,10 @@ export default function CourtManage() {
                       key={court.id}
                       style={{
                         background: '#FFFFFF',
-                        border: isActive ? '1px solid #E2E8F0' : '1px solid #FED7AA',
+                        border: isActive ? '1.5px solid #CBD5E1' : '1.5px solid #FED7AA',
                         borderRadius: '12px',
                         padding: '16px',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
                         transition: 'transform 0.2s',
                         position: 'relative',
                       }}
@@ -819,7 +834,7 @@ export default function CourtManage() {
                         <span
                           style={{
                             fontSize: '11px',
-                            fontWeight: 700,
+                            fontWeight: 800,
                             padding: '3px 8px',
                             borderRadius: '6px',
                             background: isActive ? '#DCFCE7' : '#FEF3C7',
@@ -840,17 +855,17 @@ export default function CourtManage() {
                           {isActive ? 'Hoạt động tốt' : 'Đang bảo trì'}
                         </span>
 
-                        <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600 }}>
+                        <span style={{ fontSize: '11px', color: '#475569', fontWeight: 800 }}>
                           ID: {court.id.toUpperCase()}
                         </span>
                       </div>
 
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                         {court.name}
                       </div>
 
-                      <div style={{ fontSize: '13px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#94A3B8' }}>
+                      <div style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#10B981' }}>
                           layers
                         </span>
                         {court.floor}
@@ -875,7 +890,7 @@ export default function CourtManage() {
                             padding: '6px 12px',
                             borderRadius: '8px',
                             fontSize: '12px',
-                            fontWeight: 700,
+                            fontWeight: 800,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -893,14 +908,14 @@ export default function CourtManage() {
                           title="Cài đặt thiết bị IoT & camera"
                           style={{
                             background: 'none',
-                            border: '1px solid #E2E8F0',
+                            border: '1px solid #CBD5E1',
                             borderRadius: '8px',
                             width: '32px',
                             height: '32px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: '#64748B',
+                            color: '#1E293B',
                             cursor: 'pointer',
                           }}
                         >
@@ -984,11 +999,13 @@ export default function CourtManage() {
             {/* Base Rates table for each Zone */}
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.90)',
                 padding: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
               }}
             >
               <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginBottom: '14px' }}>
@@ -998,17 +1015,17 @@ export default function CourtManage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                   <thead>
-                    <tr style={{ borderBottom: '2px solid #E2E8F0', background: '#F8FAFC' }}>
-                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                    <tr style={{ borderBottom: '2px solid #CBD5E1', background: '#F8FAFC' }}>
+                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                         Khu Vực & Bộ Môn
                       </th>
-                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                         Giá Giờ Thường (Base Rate)
                       </th>
-                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                         Giá Giờ Cao Điểm (Peak Rate)
                       </th>
-                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                      <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                         Chênh Lệch
                       </th>
                     </tr>
@@ -1038,7 +1055,7 @@ export default function CourtManage() {
                               <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
                                 {zone.name.split('—')[0].trim()}
                               </div>
-                              <div style={{ fontSize: '12px', color: '#64748B' }}>{zone.sportLabel}</div>
+                              <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>{zone.sportLabel}</div>
                             </div>
                           </div>
                         </td>
@@ -1100,11 +1117,13 @@ export default function CourtManage() {
             {/* Dynamic Rules Configuration */}
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.90)',
                 padding: '20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
               }}
             >
               <div
@@ -1118,7 +1137,7 @@ export default function CourtManage() {
                 <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
                   Quy Tắc Định Giá Động Đang Áp Dụng
                 </h3>
-                <span style={{ fontSize: '13px', color: '#10B981', fontWeight: 700 }}>
+                <span style={{ fontSize: '13px', color: '#047857', fontWeight: 800 }}>
                   ● 4/4 Quy tắc đang hoạt động
                 </span>
               </div>
@@ -1158,7 +1177,7 @@ export default function CourtManage() {
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>
+                          <span style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
                             {rule.name}
                           </span>
                           <span
@@ -1174,19 +1193,19 @@ export default function CourtManage() {
                             {rule.badge}
                           </span>
                         </div>
-                        <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>{rule.description}</p>
-                        <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '12px', color: '#475569' }}>
+                        <p style={{ margin: 0, fontSize: '13.5px', color: '#1E293B', fontWeight: 600 }}>{rule.description}</p>
+                        <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '12px', color: '#334155', fontWeight: 600 }}>
                           <span>
-                            <strong>Khung giờ:</strong> {rule.timeRange}
+                            <strong style={{ color: '#0F172A' }}>Khung giờ:</strong> {rule.timeRange}
                           </span>
                           <span>•</span>
                           <span>
-                            <strong>Ngày áp dụng:</strong> {rule.days.join(', ')}
+                            <strong style={{ color: '#0F172A' }}>Ngày áp dụng:</strong> {rule.days.join(', ')}
                           </span>
                           <span>•</span>
                           <span>
-                            <strong>Hệ số:</strong>{' '}
-                            <span style={{ color: rule.multiplier >= 1 ? '#EF4444' : '#10B981', fontWeight: 800 }}>
+                            <strong style={{ color: '#0F172A' }}>Hệ số:</strong>{' '}
+                            <span style={{ color: rule.multiplier >= 1 ? '#DC2626' : '#047857', fontWeight: 800 }}>
                               {rule.multiplier}x
                             </span>
                           </span>
@@ -1233,17 +1252,19 @@ export default function CourtManage() {
           <div>
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
                 borderRadius: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.90)',
                 padding: '20px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.04)',
+                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
                 position: 'sticky',
                 top: '84px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <span className="material-symbols-outlined" style={{ color: '#10B981', fontSize: '24px' }}>
+                <span className="material-symbols-outlined" style={{ color: '#047857', fontSize: '24px' }}>
                   calculate
                 </span>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
@@ -1253,7 +1274,7 @@ export default function CourtManage() {
 
               {/* Select sport */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                   Chọn Bộ Môn / Khu Vực
                 </label>
                 <select
@@ -1265,7 +1286,7 @@ export default function CourtManage() {
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     color: '#0F172A',
                     background: '#F8FAFC',
                   }}
@@ -1279,7 +1300,7 @@ export default function CourtManage() {
 
               {/* Select Day Type */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                   Ngày Trong Tuần
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -1288,11 +1309,11 @@ export default function CourtManage() {
                     style={{
                       padding: '8px 12px',
                       borderRadius: '8px',
-                      border: simDay === 'weekday' ? '2px solid #10B981' : '1px solid #CBD5E1',
+                      border: simDay === 'weekday' ? '2px solid #047857' : '1px solid #CBD5E1',
                       background: simDay === 'weekday' ? '#ECFDF5' : '#FFFFFF',
-                      color: simDay === 'weekday' ? '#065F46' : '#475569',
+                      color: simDay === 'weekday' ? '#065F46' : '#1E293B',
                       fontSize: '13px',
-                      fontWeight: 700,
+                      fontWeight: 800,
                       cursor: 'pointer',
                     }}
                   >
@@ -1305,9 +1326,9 @@ export default function CourtManage() {
                       borderRadius: '8px',
                       border: simDay === 'weekend' ? '2px solid #F97316' : '1px solid #CBD5E1',
                       background: simDay === 'weekend' ? '#FFF7ED' : '#FFFFFF',
-                      color: simDay === 'weekend' ? '#9A3412' : '#475569',
+                      color: simDay === 'weekend' ? '#9A3412' : '#1E293B',
                       fontSize: '13px',
-                      fontWeight: 700,
+                      fontWeight: 800,
                       cursor: 'pointer',
                     }}
                   >
@@ -1319,10 +1340,10 @@ export default function CourtManage() {
               {/* Slider for Hours */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                  <label style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                     Khung Giờ Thi Đấu:
                   </label>
-                  <strong style={{ fontSize: '14px', color: '#0F172A' }}>
+                  <strong style={{ fontSize: '14px', color: '#0F172A', fontWeight: 800 }}>
                     {simHour.toString().padStart(2, '0')}:00 - {(simHour + 1).toString().padStart(2, '0')}:00
                   </strong>
                 </div>
@@ -1332,9 +1353,9 @@ export default function CourtManage() {
                   max="23"
                   value={simHour}
                   onChange={(e) => setSimHour(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#10B981', cursor: 'pointer' }}
+                  style={{ width: '100%', accentColor: '#047857', cursor: 'pointer' }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#1E293B', fontWeight: 700, marginTop: '2px' }}>
                   <span>05:00</span>
                   <span>12:00</span>
                   <span>18:00 (Peak)</span>
@@ -1396,20 +1417,20 @@ export default function CourtManage() {
 
       {/* TAB 3: CẤU HÌNH LƯỚI THỜI GIAN (TIME GRID CONFIGURATION) */}
       {activeTab === 'timegrid' && (
-        <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', padding: '24px' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.90)', padding: '24px', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
           <div style={{ marginBottom: '24px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 6px 0' }}>
               Cấu Hình Khung Giờ Hoạt Động & Lưới Thời Gian (Time Grid Slots)
             </h2>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '14px' }}>
+            <p style={{ margin: 0, color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
               Thiết lập khung giờ mở cửa, đóng cửa, bước nhảy thời lượng đặt sân và thời gian đệm vệ sinh sân giữa các ca.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', marginBottom: '32px' }}>
             {/* Giờ mở cửa */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                 Giờ Mở Cửa Cơ Sở
               </label>
               <input
@@ -1426,14 +1447,14 @@ export default function CourtManage() {
                   color: '#0F172A',
                 }}
               />
-              <span style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', display: 'block' }}>
+              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Bắt đầu nhận ca đặt sân đầu tiên
               </span>
             </div>
 
             {/* Giờ đóng cửa */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                 Giờ Đóng Cửa Cơ Sở
               </label>
               <input
@@ -1450,14 +1471,14 @@ export default function CourtManage() {
                   color: '#0F172A',
                 }}
               />
-              <span style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', display: 'block' }}>
+              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Ca chơi cuối cùng kết thúc
               </span>
             </div>
 
             {/* Bước nhảy khung giờ */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                 Thời Lượng Mỗi Slot (Bước Nhảy)
               </label>
               <select
@@ -1478,14 +1499,14 @@ export default function CourtManage() {
                 <option value={90}>90 phút / slot (Bóng đá trận dài)</option>
                 <option value={120}>120 phút / slot (2 tiếng)</option>
               </select>
-              <span style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', display: 'block' }}>
+              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Quy định độ dài mỗi ô đặt lịch
               </span>
             </div>
 
             {/* Thời gian đệm vệ sinh */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
                 Thời Gian Đệm Vệ Sinh / Lau Sân
               </label>
               <select
@@ -1506,7 +1527,7 @@ export default function CourtManage() {
                 <option value={10}>10 phút lau sàn BWF & nhặt bóng</option>
                 <option value={15}>15 phút</option>
               </select>
-              <span style={{ fontSize: '12px', color: '#64748B', marginTop: '6px', display: 'block' }}>
+              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Tránh chồng chéo người chơi đến ca sau
               </span>
             </div>
@@ -1529,7 +1550,7 @@ export default function CourtManage() {
                     style={{
                       padding: '10px 14px',
                       borderRadius: '10px',
-                      border: isPeak ? '1px solid #FCA5A5' : isOffpeak ? '1px solid #A7F3D0' : '1px solid #E2E8F0',
+                      border: isPeak ? '1px solid #FCA5A5' : isOffpeak ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
                       background: isPeak ? '#FEF2F2' : isOffpeak ? '#ECFDF5' : '#FFFFFF',
                       textAlign: 'center',
                       minWidth: '85px',
@@ -1540,10 +1561,10 @@ export default function CourtManage() {
                     </div>
                     <div
                       style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
+                        fontSize: '10.5px',
+                        fontWeight: 800,
                         marginTop: '4px',
-                        color: isPeak ? '#EF4444' : isOffpeak ? '#059669' : '#64748B',
+                        color: isPeak ? '#DC2626' : isOffpeak ? '#047857' : '#1E293B',
                       }}
                     >
                       {isPeak ? 'Giờ Vàng 🔥' : isOffpeak ? 'Happy Hour' : 'Chuẩn'}
