@@ -1,7 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
-export function DemoDialog({ title, onClose, children, closeLabel = 'Close dialog' }) {
+const adminDisplayLabels = {
+  "Admin": "Quản trị",
+  "Administrator": "Quản trị viên",
+  "Player": "Người chơi",
+  "Court Owner": "Chủ sân",
+  "CourtOwner": "Chủ sân",
+  "Active": "Đang hoạt động",
+  "Inactive": "Ngừng hoạt động",
+  "Suspended": "Đã tạm khóa",
+  "Verified": "Đã xác minh",
+  "Pending": "Đang chờ xử lý",
+  "Rejected": "Đã từ chối",
+  "Unverified": "Chưa xác minh",
+  "All": "Tất cả"
+}
+
+
+export function DemoDialog({ title, onClose, children, closeLabel = "Đóng hộp thoại" }) {
   const dialog = useRef(null)
   useEffect(() => {
     const previous = document.activeElement
@@ -30,20 +47,20 @@ export function UserFormDialog({ user, users, onClose, onSave }) {
   const submit = event => {
     event.preventDefault()
     const clean = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
-    if (clean.name.length < 2) return setError('Name must contain at least two characters.')
-    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(clean.username)) return setError('Username must be 3–30 letters, numbers, dots, underscores or hyphens.')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError('Enter a valid email address.')
-    if (clean.phone && !/^[+\d\s()-]{7,20}$/.test(clean.phone)) return setError('Enter a valid phone number or leave it empty.')
-    if (users.some(item => item.id !== user?.id && (item.username.toLowerCase() === clean.username.toLowerCase() || item.email.toLowerCase() === clean.email.toLowerCase()))) return setError('Username or email already exists in the demo dataset.')
+    if (clean.name.length < 2) return setError("Họ và tên phải có ít nhất 2 ký tự.")
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(clean.username)) return setError("Tên đăng nhập phải có 3–30 ký tự gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.")
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError("Vui lòng nhập địa chỉ Email hợp lệ.")
+    if (clean.phone && !/^[+\d\s()-]{7,20}$/.test(clean.phone)) return setError("Vui lòng nhập số điện thoại hợp lệ hoặc để trống.")
+    if (users.some(item => item.id !== user?.id && (item.username.toLowerCase() === clean.username.toLowerCase() || item.email.toLowerCase() === clean.email.toLowerCase()))) return setError("Tên đăng nhập hoặc Email đã tồn tại trong dữ liệu mẫu.")
     onSave(clean)
   }
-  return <DemoDialog title={`${user ? 'Edit' : 'Add'} User — Demo`} onClose={onClose}><p className="users-demo-note">Prototype only. Changes are held in memory and reset on reload. No backend account will be created or updated.</p><form onSubmit={submit} className="users-form">
-    {[['name', 'Full name'], ['username', 'Username'], ['email', 'Email'], ['phone', 'Phone (optional)']].map(([name, label]) => <label key={name}>{label}<input name={name} type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'} value={values[name]} onChange={change} required={name !== 'phone'} maxLength={name === 'name' ? 80 : 120} /></label>)}
-    <label>Role<select name="role" value={values.role} onChange={change}>{['Player', 'Court Owner', 'Administrator'].map(role => <option key={role}>{role}</option>)}</select></label>
-    {error && <p className="users-form-error" role="alert">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose}>Cancel</button><button className="users-button primary" type="submit">{user ? 'Apply demo changes' : 'Add demo user'}</button></footer>
+  return <DemoDialog title={`${user ? "Chỉnh sửa" : "Thêm"} người dùng — Bản mẫu`} onClose={onClose}><p className="users-demo-note">Đây là bản mẫu. Thay đổi chỉ lưu trong phiên và được đặt lại khi tải trang. Không tạo hoặc cập nhật tài khoản trên máy chủ.</p><form onSubmit={submit} className="users-form">
+    {[['name', "Họ và tên"], ['username', "Tên đăng nhập"], ['email', 'Email'], ['phone', "Số điện thoại (không bắt buộc)"]].map(([name, label]) => <label key={name}>{label}<input name={name} type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'} value={values[name]} onChange={change} required={name !== 'phone'} maxLength={name === 'name' ? 80 : 120} /></label>)}
+    <label>Vai trò<select name="role" value={values.role} onChange={change}>{['Player', 'Court Owner', 'Administrator'].map(role => <option key={role} value={role}>{adminDisplayLabels[role] || role}</option>)}</select></label>
+    {error && <p className="users-form-error" role="alert">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose}>Hủy</button><button className="users-button primary" type="submit">{user ? "Lưu thay đổi mẫu" : "Thêm người dùng mẫu"}</button></footer>
   </form></DemoDialog>
 }
 
 export function SuspensionDialog({ users, restore, onClose, onConfirm }) {
-  return <DemoDialog title={`${restore ? 'Restore' : 'Suspend'} ${users.length === 1 ? 'user' : `${users.length} users`} — Demo`} onClose={onClose}><p className="users-demo-note">This action updates local prototype state only. It does not change real accounts, wallets, bookings or backend data.</p><p>{restore ? 'Restore access for' : 'Suspend'} {users.map(user => user.name).join(', ')}?</p><footer><button className="users-button" onClick={onClose}>Cancel</button><button className={`users-button ${restore ? 'primary' : 'users-danger'}`} onClick={onConfirm}>Confirm demo {restore ? 'restore' : 'suspension'}</button></footer></DemoDialog>
+  return <DemoDialog title={`${restore ? "Khôi phục" : "Tạm khóa"} ${users.length === 1 ? 'người dùng' : `${users.length} người dùng`} — Bản mẫu`} onClose={onClose}><p className="users-demo-note">Thao tác chỉ cập nhật trạng thái trong bản mẫu. Không thay đổi tài khoản, ví, đơn đặt sân hoặc dữ liệu máy chủ thực tế.</p><p>{restore ? "Khôi phục quyền truy cập cho" : "Tạm khóa"} {users.map(user => user.name).join(', ')}?</p><footer><button className="users-button" onClick={onClose}>Hủy</button><button className={`users-button ${restore ? 'primary' : 'users-danger'}`} onClick={onConfirm}>Xác nhận thao tác mẫu {restore ? 'khôi phục' : 'tạm khóa'}</button></footer></DemoDialog>
 }

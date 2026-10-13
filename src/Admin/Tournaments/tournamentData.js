@@ -9,9 +9,9 @@ export const tournamentStats = [
 export const statusLabels = { Registration: 'Đang mở đăng ký', Upcoming: 'Sắp diễn ra', Ongoing: 'Đang diễn ra', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' }
 export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Football: 'Bóng đá', Basketball: 'Bóng rổ', Tennis: 'Quần vợt' }
 export const formatLabels = { Knockout: 'Loại trực tiếp · Đơn', RoundRobin: 'Vòng tròn · Đơn' }
-export const matchLabels = { Scheduled: 'Đã xếp lịch', Ongoing: 'Đang thi đấu', Completed: 'Đã kết thúc', Bye: 'Miễn vòng', Waiting: 'Chờ kết quả vòng trước' }
+export const matchLabels = { Scheduled: 'Đã lên lịch', Ongoing: 'Đang thi đấu', Completed: 'Đã hoàn thành', Bye: 'Miễn vòng', Waiting: 'Chờ kết quả vòng trước' }
 export const number = value => value.toLocaleString('vi-VN')
-export const money = value => `${number(value)} đ`
+export const money = value => `${number(value)} ₫`
 export const date = value => value.split('-').reverse().join('/')
 export const normalize = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
 export function parseDate(value) {

@@ -42,4 +42,155 @@
   
 @layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}
 img[alt^="SportNexus logo mark"]{display:none!important}
+
+/* Standalone Login/Register layout; other pages keep their existing styles. */
+.auth-standalone {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+.auth-standalone > .auth-standalone-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 24px 14px;
+  box-sizing: border-box;
+}
+.auth-register-panel {
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+  padding: 32px 20px;
+  border-radius: 24px;
+}
+@media (min-width: 640px) {
+  .auth-standalone > .auth-standalone-main { padding: 40px 24px; }
+  .auth-register-panel { padding: 40px 48px; }
+}
+
+/* Full-screen sports background and centered translucent Login card. */
+.auth-login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: url('/sports-bg.jpg') center / cover no-repeat fixed;
+}
+.auth-login > .auth-standalone-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+.auth-login .auth-login-form { width: 100%; max-width: 520px; min-width: 0; }
+.auth-login .auth-login-card {
+  padding: 32px;
+  background: rgba(255, 255, 255, .94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, .6);
+  border-radius: 22px;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, .16);
+}
+.auth-login .auth-login-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #e5f1e8;
+  color: #2d5f3f;
+}
+.auth-login .auth-login-logo path { fill: currentColor; }
+.auth-login .auth-login-card h1 { font-size: 28px; font-weight: 800; line-height: 1.25; }
+.auth-login .auth-login-card h1 + p { font-size: 14px; line-height: 1.6; }
+.auth-login form label { font-size: 13px; font-weight: 600; }
+.auth-login form input[type='text'],
+.auth-login form input[type='password'] {
+  height: 48px;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 15px;
+}
+.auth-login form button[type='submit'] { min-height: 52px; border-radius: 10px; font-size: 16px; }
+@media (min-width: 768px) and (max-width: 1023px) {
+  .auth-login .auth-login-form { max-width: 480px; }
+}
+@media (max-width: 767px) {
+  .auth-login > .auth-standalone-main { padding: 24px 16px; }
+  .auth-login .auth-login-card { padding: 24px 20px; }
+  .auth-login .auth-login-card h1 { font-size: 24px; }
+  .auth-login .auth-login-card h1 + p { font-size: 13px; }
+  .auth-login form label { font-size: 12px; }
+}
+
+/* Register keeps its introduction and form in separate responsive columns. */
+.auth-register > .auth-standalone-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  padding: 0;
+}
+.auth-register .auth-register-intro {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 36px 24px;
+  background: linear-gradient(125deg, rgba(5, 28, 21, .82), rgba(12, 48, 34, .65) 60%, rgba(8, 30, 23, .48));
+}
+.auth-register .auth-register-intro-content { width: 100%; max-width: 480px; margin-inline: auto; }
+.auth-register .auth-register-intro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  color: #173f2b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+}
+.auth-register .auth-register-intro-badge svg { flex-shrink: 0; }
+.auth-register .auth-register-intro-title {
+  margin: 22px 0 18px;
+  color: #fff;
+  font-size: clamp(28px, 5vw, 34px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .3);
+  overflow-wrap: anywhere;
+}
+.auth-register .auth-register-intro-title span { color: #a3f5b9; }
+.auth-register .auth-register-intro-description {
+  max-width: 430px;
+  margin: 0;
+  color: #f3faf5;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.6;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .25);
+}
+.auth-register .auth-register-intro-description strong { font-weight: 700; }
+.auth-register .auth-register-panel {
+  max-width: none;
+  padding: 32px 20px;
+  border-radius: 0;
+}
+@media (min-width: 640px) {
+  .auth-register .auth-register-intro { padding: 44px 40px; }
+  .auth-register .auth-register-intro-badge { font-size: 12px; }
+  .auth-register .auth-register-panel { padding: 40px 48px; }
+}
+@media (min-width: 900px) {
+  .auth-register > .auth-standalone-main { grid-template-columns: minmax(0, 42fr) minmax(0, 58fr); }
+  .auth-register .auth-register-intro { align-items: flex-start; padding: clamp(120px, 28svh, 260px) 40px 56px; }
+  .auth-register .auth-register-intro-title { font-size: clamp(44px, 3.65vw, 52px); }
+  .auth-register .auth-register-intro-description { font-size: 18px; }
+}
+@media (min-width: 1200px) {
+  .auth-register .auth-register-intro { padding-inline: 56px; }
+  .auth-register .auth-register-panel { padding: 48px 56px; }
+}
 @layer base { html, body { margin: 0; padding: 0; } body { overscroll-behavior: none; } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }

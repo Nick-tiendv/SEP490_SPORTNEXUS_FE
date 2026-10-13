@@ -6,12 +6,12 @@ export const bookingStats = [
   { label: 'Đã hủy', value: 3820, trend: '4,0% tỷ lệ hủy minh họa', icon: 'cancelled' },
   { label: 'Doanh thu đặt sân', value: 4850000000, trend: '+18,9% so với tháng trước', icon: 'revenue' },
 ]
-export const bookingStatusLabels = { Confirmed: 'Đã xác nhận', Completed: 'Hoàn thành', Cancelled: 'Đã hủy', Pending: 'Chờ xác nhận' }
+export const bookingStatusLabels = { Confirmed: 'Đã xác nhận', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy', Pending: 'Đang chờ xử lý' }
 export const paymentStatusLabels = { Paid: 'Đã thanh toán', Partial: 'Thanh toán một phần', Unpaid: 'Chưa thanh toán' }
 export const escrowLabels = { Held: 'Đang giữ tiền minh họa', Released: 'Đã đối soát minh họa', None: 'Chưa có tiền ký quỹ minh họa', Review: 'Chờ rà soát minh họa' }
 export const sportLabels = { Pickleball: 'Pickleball', Badminton: 'Cầu lông', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
 export const number = value => value.toLocaleString('vi-VN')
-export const money = value => `${number(value)} đ`
+export const money = value => `${number(value)} ₫`
 export const date = value => value.split('-').reverse().join('/')
 export function parseBookingDate(value) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)

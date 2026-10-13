@@ -102,190 +102,24 @@ function Register() {
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
 
   return (
-    <div className="min-h-screen sport-animated-bg flex flex-col">
-      {/* Top Header - Bấm logo để về trang chủ */}
-      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-200">
-        {/* Logo Clickable về Trang Chủ */}
-        <Link to="/" className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity">
-          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
-            </svg>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[#2D5F3F] font-bold text-lg leading-tight tracking-tight">SportNexus</span>
-            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider font-semibold">Tournament Engine</span>
-          </div>
-        </Link>
-      </header>
+    <div className="auth-standalone auth-register sport-animated-bg flex flex-col">
 
-      <main className="flex-1 w-full flex flex-col lg:flex-row relative text-gray-900">
-        {/* BEGIN: LeftHeroSide - Vietnamese themed */}
-        <section aria-label="Visual Showcase" className="relative hidden lg:flex lg:w-[42%] flex-col justify-between overflow-hidden bg-white/30 backdrop-blur-sm p-8 xl:p-10 select-none">
 
-          {/* Center Content */}
-          <div className="space-y-6 max-w-md">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-[#4A7C59]/20 rounded-full px-4 py-2">
-              <span className="text-[#4A7C59]">👥</span>
-              <span className="text-sm text-[#2D5F3F] font-medium">CỘNG ĐỒNG VẬN ĐỘNG VIÊN</span>
+      <main className="auth-standalone-main relative text-gray-900">
+        <section className="auth-register-intro" aria-label="Giới thiệu SportNexus">
+          <div className="auth-register-intro-content">
+            <div className="auth-register-intro-badge">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <circle cx="9" cy="8" r="3" />
+                <path strokeLinecap="round" d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5.65" />
+              </svg>
+              <span>CỘNG ĐỒNG VẬN ĐỘNG VIÊN</span>
             </div>
-
-            {/* Main Heading */}
-            <h1 className="text-4xl xl:text-5xl font-bold text-[#2D5F3F] leading-tight">
-              Bứt Phá Đam Mê Cùng SportNexus
-            </h1>
-
-            {/* Description */}
-            <p className="text-[#4A7C59] leading-relaxed">
-              Hơn <span className="font-bold text-[#2D5F3F]">45.000</span> tay vợt <span className="font-bold text-[#2D5F3F]">Cầu lông & Pickleball</span> đang kết nối, <span className="font-bold text-[#2D5F3F]">đặt sân</span> và <span className="font-bold text-[#2D5F3F]">giao lưu thi đấu</span> mỗi ngày.
-            </p>
-
-            {/* Feature Boxes */}
-            <div className="space-y-3">
-              {/* Feature 1 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
-                    <span className="text-xl">📅</span>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#2D5F3F] mb-1">Đặt Sân Thông Minh</div>
-                    <div className="text-sm text-[#4A7C59]">Khóa sân tức thì trong 30 giây với biểu phí minh bạch.</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Feature 2 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
-                    <span className="text-xl">👥</span>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#2D5F3F] mb-1">Ghép Trận Nhanh</div>
-                    <div className="text-sm text-[#4A7C59]">Tìm bạn chơi đúng trình độ, ghép đội cân bằng và tiện lợi.</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Feature 3 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-[#4A7C59]/10">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#E8F5E3] flex items-center justify-center flex-shrink-0">
-                    <span className="text-xl">🏆</span>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[#2D5F3F] mb-1">Giải Đấu Chuyên Nghiệp</div>
-                    <div className="text-sm text-[#4A7C59]">Bảng đầu tư động, cập nhật điểm live và xếp hạng chuẩn.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Promo Box - Refined with Better Spacing */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#059669] rounded-3xl p-7 shadow-2xl border-2 border-emerald-400/20 mb-12">
-              {/* Animated Background Effects */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {/* Floating Orbs */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-200 opacity-20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-300 opacity-15 rounded-full blur-3xl animate-pulse" style={{animationDelay: '0.7s'}} />
-                <div className="absolute top-1/2 right-1/4 w-24 h-24 bg-yellow-300 opacity-10 rounded-full blur-2xl animate-pulse" style={{animationDelay: '1.4s'}} />
-                
-                {/* Decorative Icons */}
-                <div className="absolute top-6 right-12 text-3xl opacity-40 animate-bounce" style={{animationDuration: '3s'}}>🏸</div>
-                <div className="absolute top-12 right-24 text-2xl opacity-30 animate-bounce" style={{animationDuration: '4s', animationDelay: '0.5s'}}>✨</div>
-                <div className="absolute bottom-12 right-16 text-2xl opacity-25 animate-bounce" style={{animationDuration: '3.5s', animationDelay: '1s'}}>🎾</div>
-              </div>
-
-              {/* Content */}
-              <div className="relative z-10 space-y-5">
-                {/* HOT DEAL Badge - Refined */}
-                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 text-[#064E3B] rounded-full px-3.5 py-1.5 shadow-lg">
-                  {/* Fire Icon SVG - Compact & Sharp */}
-                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C12 2 9 6 9 10C9 12.2091 10.7909 14 13 14C15.2091 14 17 12.2091 17 10C17 6 14 2 14 2C14 2 12.5 4 12 6C11.5 4 12 2 12 2Z" />
-                    <path d="M12 14C9.23858 14 7 16.2386 7 19C7 21.7614 9.23858 24 12 24C14.7614 24 17 21.7614 17 19C17 16.2386 14.7614 14 12 14Z" opacity="0.7"/>
-                  </svg>
-                  <span className="text-xs font-black uppercase tracking-wider">Hot Deal</span>
-                </div>
-
-                {/* Title Section with Better Spacing */}
-                <div className="space-y-2">
-                  <div className="flex items-start gap-4">
-                    {/* Gift Icon */}
-                    <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-yellow-300 to-amber-400 rounded-2xl flex items-center justify-center shadow-xl">
-                      <span className="text-3xl">🎁</span>
-                    </div>
-                    
-                    {/* Title Text */}
-                    <div className="flex-1 space-y-1.5">
-                      <h3 className="text-2xl font-black text-white tracking-tight leading-tight">
-                        ƯU ĐÃI THÀNH VIÊN MỚI
-                      </h3>
-                      <p className="text-yellow-300 text-sm font-bold uppercase tracking-wide">
-                        Chỉ dành cho bạn!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Offer Details Card - Enhanced Spacing */}
-                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-5">
-                  <div className="flex items-start gap-4">
-                    {/* Voucher Icon */}
-                    <div className="flex-shrink-0 w-12 h-12 bg-yellow-400/20 rounded-xl flex items-center justify-center">
-                      <svg className="w-7 h-7 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                      </svg>
-                    </div>
-
-                    {/* Text Content with Improved Spacing */}
-                    <div className="flex-1 space-y-2">
-                      <div className="text-base font-bold text-white mb-2">
-                        Tặng ngay voucher giảm <span className="text-yellow-300 text-xl font-black">20%</span>
-                      </div>
-                      <p className="text-emerald-100 text-sm leading-relaxed">
-                        Áp dụng cho lượt đặt sân <span className="font-semibold text-white">Cầu lông</span> hoặc <span className="font-semibold text-white">Pickleball</span> đầu tiên sau khi đăng ký thành công.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CTA Button */}
-                <button 
-                  type="button" 
-                  className="w-full group relative overflow-hidden bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 hover:from-yellow-400 hover:via-amber-400 hover:to-yellow-300 text-[#064E3B] font-black text-base px-6 py-4 rounded-full transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-yellow-400/50 hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  {/* Shine Effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-                  
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    <span>Tham Gia Ngay</span>
-                    <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom: Footer */}
-          <div className="text-[10px] text-[#4A7C59] space-y-1 mt-8">
-            <div>© 2026 SPORTNEXUS VIETNAM. ALL RIGHTS RESERVED.</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">CAM KẾT BẢO MẬT</a>
-              <span>•</span>
-              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">CHÍNH SÁCH FAIRPLAY</a>
-              <span>•</span>
-              <a href="#" className="hover:text-[#2D5F3F] whitespace-nowrap">ĐIỀU KHOẢN DỊCH VỤ</a>
-            </div>
+            <h2 className="auth-register-intro-title">Bứt Phá Đam Mê<br />Cùng <span>SportNexus</span></h2>
+            <p className="auth-register-intro-description">Hơn <strong>45.000</strong> tay vợt Cầu lông &amp; Pickleball đang kết nối, đặt sân và giao lưu thi đấu mỗi ngày.</p>
           </div>
         </section>
-        
-        {/* BEGIN: RightFormSide */}
-        <section aria-label="Registration Portal" className="flex-1 flex flex-col justify-center px-4 sm:px-8 md:px-14 py-10 lg:py-12 overflow-y-auto bg-white/80 backdrop-blur-sm">
+        <section aria-label="Registration Portal" className="auth-register-panel bg-white/80 backdrop-blur-sm">
           <div className="w-full max-w-xl mx-auto">
             {/* Header */}
             <header className="mb-8">
@@ -810,14 +644,14 @@ function Register() {
             </div>
             
             {/* Bottom Sign In Link */}
-            <footer className="mt-8 text-center">
+            <div className="mt-8 text-center">
               <p className="text-sm text-gray-600">
                 Bạn đã có tài khoản?{' '}
                 <Link className="text-[#4A7C59] font-semibold hover:underline" to="/login">
                   Đăng nhập ngay
                 </Link>
               </p>
-            </footer>
+            </div>
             
           </div>
         </section>

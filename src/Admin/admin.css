@@ -44,7 +44,7 @@
 .admin-header{height:70px;display:flex;align-items:center;gap:18px;background:#fff;border-bottom:1px solid var(--admin-border);padding:0 25px}
 .admin-header-context strong,.admin-header-context small{display:block;color:#357455;font-size:10px;line-height:1.3}
 .admin-header-context small{font-size:9px}
-.admin-breadcrumb{white-space:nowrap;font-size:11px;font-weight:600}
+.admin-breadcrumb{white-space:normal;overflow-wrap:anywhere;font-size:11px;font-weight:600}
 .admin-breadcrumb>span{margin-right:8px;color:#95a0a8}
 .admin-search{display:flex;align-items:center;gap:8px;flex:1;min-width:100px;background:#f6f9f9;border:1px solid #e3eaea;border-radius:8px;padding:8px 10px;color:#8a98a3}
 .admin-search input{border:0;background:transparent;outline:none;width:100%;font-size:10px;color:#4c5c68}

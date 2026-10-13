@@ -39,6 +39,9 @@ import BookingManagement from './Admin/Bookings/BookingManagement.jsx'
 import LFGManagement from './Admin/LFG/LFGManagement.jsx'
 import TournamentManagement from './Admin/Tournaments/TournamentManagement.jsx'
 import PaymentManagement from './Admin/Payments/PaymentManagement.jsx'
+import ReviewsReportsPage from './Admin/Reviews/ReviewsReportsPage.jsx'
+import NotificationManagement from './Admin/Notifications/NotificationManagement.jsx'
+import SystemSettings from './Admin/Settings/SystemSettings.jsx'
 
 // Court Owner pages
 import CourtOwnerLayout from './Court Owner/CourtOwnerLayout.jsx'
@@ -107,6 +110,9 @@ function App() {
             <Route path="lfg" element={<LFGManagement />} />
             <Route path="tournaments" element={<TournamentManagement />} />
             <Route path="payments" element={<PaymentManagement />} />
+            <Route path="reviews-reports" element={<ReviewsReportsPage />} />
+            <Route path="notifications" element={<NotificationManagement />} />
+            <Route path="settings" element={<SystemSettings />} />
           </Route>
         </Route>
 

@@ -6,11 +6,11 @@ export const paymentStats = [
   { label: 'Thất bại', value: 26, note: 'Số liệu minh họa', icon: 'failed' },
   { label: 'Đã hoàn tiền', value: 18450000, currency: true, note: 'Lịch sử hoàn tiền minh họa', icon: 'refunded' },
 ]
-export const statusLabels = { Successful: 'Thành công', Pending: 'Đang xử lý', Failed: 'Thất bại', Refunded: 'Đã hoàn tiền' }
+export const statusLabels = { Successful: 'Thành công', Pending: 'Đang chờ xử lý', Failed: 'Thất bại', Refunded: 'Đã hoàn tiền' }
 export const typeLabels = { Booking: 'Thanh toán đặt sân', Split: 'Chia tiền thanh toán', Tournament: 'Phí tham gia giải đấu', Topup: 'Nạp ví SportNexus', Refund: 'Hoàn tiền và điều chỉnh' }
 export const methodLabels = { Wallet: 'Ví SportNexus', QR: 'Mã QR minh họa', Bank: 'Chuyển khoản minh họa' }
 export const number = value => value.toLocaleString('vi-VN')
-export const money = value => `${number(value)} đ`
+export const money = value => `${number(value)} ₫`
 export const date = value => value.split('-').reverse().join('/')
 export const normalize = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
 export function parseDate(value) {
