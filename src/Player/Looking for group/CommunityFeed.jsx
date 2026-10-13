@@ -478,43 +478,8 @@ function CommunityFeed() {
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
           >
-          {/* Bóng Đá */}
-          <button
-            onClick={() => setActiveSportFilter('football')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeSportFilter === 'football'
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">⚽</span>
-            <span>Bóng Đá</span>
-          </button>
-
-          {/* Bóng Rổ */}
-          <button
-            onClick={() => setActiveSportFilter('basketball')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeSportFilter === 'basketball'
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🏀</span>
-            <span>Bóng Rổ</span>
-          </button>
-
-          {/* Tennis */}
-          <button
-            onClick={() => setActiveSportFilter('tennis')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeSportFilter === 'tennis'
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🎾</span>
-            <span>Tennis</span>
+            <span className="text-[15px] leading-none">🏸</span>
+            <span>Cầu Lông</span>
           </button>
 
           {/* Bóng Đá */}

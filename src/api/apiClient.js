@@ -30,8 +30,11 @@ export function normalizeApiError(error) {
   return Object.assign(new Error(message), { status, isNormalized: true })
 }
 
+const rawBaseURL = import.meta.env.VITE_API_BASE_URL || 'https://sep490-sportnexus-be.onrender.com'
+const normalizedBaseURL = rawBaseURL.replace(/\/api\/?$/, '')
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: normalizedBaseURL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })

@@ -1,7 +1,9 @@
 import './auth-pages.css'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { loginApi } from '../api/authApi'
+import { useAuth } from '../context/authContext.js'
 
 // Hàm chuẩn hóa số điện thoại Việt Nam (xóa ký tự đặc biệt, chuẩn hóa 0xxx hoặc +84xxx)
 export const normalizePhone = (phoneStr) => {
@@ -153,6 +155,7 @@ export const detectUserRole = (rawInput) => {
 }
 
 function Login() {
+  const { login: contextLogin } = useAuth() || {}
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
@@ -181,12 +184,16 @@ function Login() {
         // Chuẩn hóa role nhận từ API (Player -> player, CourtOwner -> court_owner, Admin -> admin)
         const normalizedRoleStr = String(role || '').toLowerCase()
         let finalRole = 'player'
+        let targetRoute = '/dashboard'
         if (normalizedRoleStr.includes('owner') || normalizedRoleStr.includes('chusan')) {
           finalRole = 'court_owner'
+          targetRoute = '/owner/dashboard'
         } else if (normalizedRoleStr.includes('admin')) {
           finalRole = 'admin'
+          targetRoute = '/owner/dashboard'
         } else {
           finalRole = 'player'
+          targetRoute = '/dashboard'
         }
 
         // Lưu thông tin phiên đăng nhập vào localStorage
@@ -206,22 +213,31 @@ function Login() {
           })
         )
 
-        setSuccessMessage(`Đăng nhập thành công! Chào mừng ${fullName || identifier}.`)
+        // Đồng bộ với AuthContext nếu có
+        try {
+          if (typeof contextLogin === 'function') {
+            contextLogin({ token, role: role || finalRole, userId, fullName })
+          }
+        } catch (authErr) {
+          console.warn('AuthContext sync warning:', authErr)
+        }
+
+        const successText = `Đăng nhập thành công! Chào mừng ${fullName || identifier}.`
+        setSuccessMessage(successText)
+        toast.success(successText)
 
         // Chuyển hướng theo đúng vai trò trả về từ API
         setTimeout(() => {
-          if (finalRole === 'court_owner' || finalRole === 'admin') {
-            navigate('/owner/dashboard')
-          } else {
-            navigate('/dashboard')
-          }
+          navigate(targetRoute, { replace: true })
         }, 500)
       } else {
         throw new Error(response?.message || 'Đăng nhập không thành công!')
       }
     } catch (err) {
       console.error('Login error:', err)
-      setErrorMessage(err.message || 'Tài khoản hoặc mật khẩu không chính xác!')
+      const msg = err.message || 'Tài khoản hoặc mật khẩu không chính xác!'
+      setErrorMessage(msg)
+      toast.error(msg)
     } finally {
       setIsLoading(false)
     }
@@ -397,10 +413,7 @@ function Login() {
                     <span>ĐANG ĐĂNG NHẬP...</span>
                   </>
                 ) : (
-                  <>
-                    <span>ĐĂNG NHẬP</span>
-                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                  </>
+                  <span>ĐĂNG NHẬP</span>
                 )}
               </button>
             </form>
