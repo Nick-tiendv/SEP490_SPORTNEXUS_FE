@@ -34,7 +34,7 @@ const INITIAL_TOURNAMENTS = [
     drawMethod: 'auto_seed',
     status: 'in_progress',
     statusLabel: 'Đang diễn ra',
-    description: 'Giải đấu cầu lông đôi chuyên nghiệp hệ thống SportNexus, tự động xếp hạt giống theo Elo và phân bổ sân thi đấu BWF tiêu chuẩn.',
+    description: 'Giải đấu cầu lông đôi chuyên nghiệp hệ thống SportNexus, tự động xếp hạt giống và phân bổ sân thi đấu BWF tiêu chuẩn.',
     teams: DEFAULT_TEAMS_8,
     bracket: null,
     isDrawn: false,
@@ -1292,7 +1292,7 @@ export default function CreateAutomatedTournament() {
                   <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Hạt Giống</th>
                   <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Tên Đội</th>
                   <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Đội Trưởng</th>
-                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Elo Rate</th>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Điểm Xếp Hạng</th>
                   <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Trạng Thái Cọc</th>
                 </tr>
               </thead>
@@ -2234,7 +2234,7 @@ export default function CreateAutomatedTournament() {
                       />
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                          ⚡ Tự Động Xếp Hạt Giống (Elo)
+                          ⚡ Tự Động Xếp Hạt Giống
                         </div>
                         <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                           Hạt giống #1 và #2 tách 2 nhánh đối diện

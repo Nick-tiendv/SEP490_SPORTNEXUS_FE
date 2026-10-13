@@ -130,7 +130,6 @@ export default function Profile() {
         id: 'basketball',
         name: 'Bóng rổ',
         icon: '🏀',
-        elo: 1100,
         level: 'Hậu vệ dẫn bóng',
         field: 'Sở trường',
         ranked: true,

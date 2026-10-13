@@ -23,7 +23,7 @@ export function parseDate(value) {
 export const facilities = ['Sunrise Riverside', 'CLB Phú Mỹ Hưng', 'Bình Thạnh Arena', 'CLB Thảo Điền']
 const names = ['Lê Hoàng Nam', 'Minh Minh Minh', 'Trần Đình Khang', 'Vũ Thị Mai Anh', 'Nguyễn Minh Trí', 'Nguyễn Văn An', 'Trần Quốc Bảo', 'Lê Thị Mỹ Hương']
 export function makeParticipants(count, prefix) {
-  return Array.from({ length: count }, (_, index) => ({ id: `${prefix}-P${index + 1}`, name: names[index] || `Vận động viên mẫu ${index + 1}`, seed: index + 1, paid: index < Math.ceil(count * .8), rating: `Elo ${number(1650 - index * 10)}`, registered: '2026-10-01' }))
+  return Array.from({ length: count }, (_, index) => ({ id: `${prefix}-P${index + 1}`, name: names[index] || `Vận động viên mẫu ${index + 1}`, seed: index + 1, paid: index < Math.ceil(count * .8), rating: `Hạng #${index + 1}`, registered: '2026-10-01' }))
 }
 
 // Bracket generation is pure and deterministic for the same ordered participant IDs.
