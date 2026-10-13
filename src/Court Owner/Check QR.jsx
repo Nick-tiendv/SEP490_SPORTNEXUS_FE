@@ -273,11 +273,18 @@ export default function CheckQR() {
       {/* Header section */}
       <div
         style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          padding: '24px 28px',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '16px',
+          gap: '20px',
           marginBottom: '28px',
         }}
       >
@@ -297,7 +304,7 @@ export default function CheckQR() {
             >
               Smart Escrow Check-in Terminal
             </span>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
+            <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
               Cơ chế giải ngân tự động tức thì
             </span>
           </div>
@@ -312,7 +319,7 @@ export default function CheckQR() {
           >
             Quét Mã QR & Kích Hoạt Giải Ngân Escrow
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '14px' }}>
+          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
             Quét mã QR của người chơi khi đến sân để xác nhận vào sân và mở khóa chuyển tiền ký quỹ vào ví của Chủ Sân.
           </p>
         </div>
@@ -320,11 +327,14 @@ export default function CheckQR() {
         {/* Available Balance Box */}
         <div
           style={{
-            background: 'linear-gradient(135deg, #064E3B 0%, #065F46 100%)',
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.94) 0%, rgba(6, 95, 70, 0.94) 100%)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
             color: '#FFFFFF',
             padding: '14px 22px',
             borderRadius: '16px',
-            boxShadow: '0 4px 15px rgba(6, 78, 59, 0.25)',
+            boxShadow: '0 8px 30px rgba(6, 78, 59, 0.25)',
             display: 'flex',
             alignItems: 'center',
             gap: '16px',
@@ -566,11 +576,13 @@ export default function CheckQR() {
           {scannedTicket ? (
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.90)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 borderRadius: '20px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid rgba(255, 255, 255, 0.8)',
                 padding: '24px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                boxShadow: '0 8px 32px rgba(45, 95, 63, 0.06)',
               }}
             >
               {/* Header of Ticket */}
@@ -667,10 +679,10 @@ export default function CheckQR() {
                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
                     {scannedTicket.playerName}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                     <span>📞 {scannedTicket.playerPhone}</span>
                     <span>•</span>
-                    <span style={{ color: '#059669', fontWeight: 700 }}>{scannedTicket.playerRank}</span>
+                    <span style={{ color: '#047857', fontWeight: 800 }}>{scannedTicket.playerRank}</span>
                   </div>
                 </div>
 
@@ -693,22 +705,22 @@ export default function CheckQR() {
 
               {/* Booking Details Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Cụm Sân & Khu Vực:</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>
+                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+                  <div style={{ fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Cụm Sân & Khu Vực:</div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
                     {scannedTicket.zoneName}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#10B981', fontWeight: 700, marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', color: '#047857', fontWeight: 800, marginTop: '2px' }}>
                     {scannedTicket.courtName}
                   </div>
                 </div>
 
-                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
-                  <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Khung Giờ Thi Đấu:</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>
+                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
+                  <div style={{ fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Khung Giờ Thi Đấu:</div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>
                     {scannedTicket.timeSlot}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#2563EB', fontWeight: 600, marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 700, marginTop: '2px' }}>
                     Ngày: {scannedTicket.date}
                   </div>
                 </div>
@@ -737,7 +749,7 @@ export default function CheckQR() {
                     <div style={{ fontSize: '28px', fontWeight: 800, color: '#78350F', margin: '4px 0' }}>
                       {formatVND(scannedTicket.escrowAmount)}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#92400E' }}>
+                    <div style={{ fontSize: '12px', color: '#92400E', fontWeight: 700 }}>
                       Phương thức: <strong>{scannedTicket.paymentMethod}</strong>
                     </div>
                   </div>
@@ -751,11 +763,11 @@ export default function CheckQR() {
                       textAlign: 'center',
                     }}
                   >
-                    <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 700 }}>HỢP ĐỒNG ESCROW</div>
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#059669', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11px', color: '#0F172A', fontWeight: 800 }}>HỢP ĐỒNG ESCROW</div>
+                    <div style={{ fontSize: '14px', fontWeight: 900, color: '#047857', marginTop: '2px' }}>
                       100% An Toàn
                     </div>
-                    <div style={{ fontSize: '11px', color: '#94A3B8' }}>Bảo chứng SportNexus</div>
+                    <div style={{ fontSize: '11px', color: '#1E293B', fontWeight: 700 }}>Bảo chứng SportNexus</div>
                   </div>
                 </div>
 
@@ -813,9 +825,11 @@ export default function CheckQR() {
           ) : (
             <div
               style={{
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.90)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 borderRadius: '20px',
-                border: '2px dashed #CBD5E1',
+                border: '2px dashed rgba(203, 213, 225, 0.8)',
                 padding: '60px 24px',
                 textAlign: 'center',
                 height: '100%',
@@ -823,6 +837,7 @@ export default function CheckQR() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
+                boxShadow: '0 8px 32px rgba(45, 95, 63, 0.04)',
               }}
             >
               <div
@@ -845,7 +860,7 @@ export default function CheckQR() {
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#334155', margin: '0 0 6px 0' }}>
                 Chưa Có Mã Vé Nào Được Quét
               </h3>
-              <p style={{ margin: 0, color: '#64748B', fontSize: '14px', maxWidth: '360px' }}>
+              <p style={{ margin: 0, color: '#1E293B', fontSize: '14px', maxWidth: '360px', fontWeight: 600 }}>
                 Hướng camera vào mã QR của người chơi hoặc nhấn các nút vé mẫu ở cột bên trái để thử nghiệm quy trình giải ngân.
               </p>
             </div>
@@ -856,11 +871,13 @@ export default function CheckQR() {
       {/* Recent Check-in Logs Table */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           borderRadius: '16px',
-          border: '1px solid #E2E8F0',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
           padding: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
         }}
       >
         <div
@@ -875,7 +892,7 @@ export default function CheckQR() {
             <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
               Nhật Ký Quét QR & Giải Ngân Escrow Trong Ngày
             </h3>
-            <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
+            <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
               Danh sách các lượt check-in đã hoàn tất giải ngân tiền cọc về ví chủ sân
             </p>
           </div>
@@ -883,9 +900,9 @@ export default function CheckQR() {
           <span
             style={{
               background: '#DCFCE7',
-              color: '#15803D',
+              color: '#047857',
               fontSize: '12px',
-              fontWeight: 700,
+              fontWeight: 800,
               padding: '6px 14px',
               borderRadius: '999px',
             }}
@@ -897,26 +914,26 @@ export default function CheckQR() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #CBD5E1' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Thời Gian
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Mã Vé
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Người Chơi
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Sân Thi Đấu
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Tiền Giải Ngân
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Mã Tham Chiếu Escrow
                 </th>
-                <th style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 700, color: '#64748B' }}>
+                <th style={{ padding: '12px 16px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
                   Trạng Thái
                 </th>
               </tr>
@@ -924,22 +941,22 @@ export default function CheckQR() {
             <tbody>
               {recentLogs.map((log) => (
                 <tr key={log.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                  <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 700, color: '#1E293B' }}>
                     {log.time}
                   </td>
-                  <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 800, color: '#2563EB' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 800, color: '#1D4ED8' }}>
                     {log.code}
                   </td>
-                  <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
                     {log.player}
                   </td>
-                  <td style={{ padding: '14px 16px', fontSize: '13px', color: '#334155' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
                     {log.court}
                   </td>
-                  <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: 800, color: '#16A34A' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: 900, color: '#047857' }}>
                     +{formatVND(log.amount)}
                   </td>
-                  <td style={{ padding: '14px 16px', fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
+                  <td style={{ padding: '14px 16px', fontSize: '12px', color: '#1E293B', fontWeight: 700, fontFamily: 'monospace' }}>
                     {log.escrowHash}
                   </td>
                   <td style={{ padding: '14px 16px' }}>
@@ -1016,7 +1033,7 @@ export default function CheckQR() {
             <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '0 0 6px 0' }}>
               Giải Ngân Escrow Thành Công!
             </h2>
-            <p style={{ margin: '0 0 20px 0', color: '#64748B', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 20px 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
               Hệ thống Smart Escrow đã chuyển tiền cọc của khách hàng vào tài khoản khả dụng của cơ sở.
             </p>
 
@@ -1025,31 +1042,31 @@ export default function CheckQR() {
                 background: '#F8FAFC',
                 borderRadius: '14px',
                 padding: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid #CBD5E1',
                 textAlign: 'left',
                 marginBottom: '20px',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số tiền giải ngân:</span>
-                <strong style={{ fontSize: '16px', color: '#16A34A' }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số tiền giải ngân:</span>
+                <strong style={{ fontSize: '16px', color: '#047857' }}>
                   +{formatVND(successDisbursedModal.escrowAmount)}
                 </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Khách hàng:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Khách hàng:</span>
                 <strong style={{ fontSize: '13px', color: '#0F172A' }}>
                   {successDisbursedModal.playerName}
                 </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Sân & Khung giờ:</span>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 600 }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Sân & Khung giờ:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>
                   {successDisbursedModal.courtName} • {successDisbursedModal.timeSlot}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số dư khả dụng mới:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số dư khả dụng mới:</span>
                 <strong style={{ fontSize: '15px', color: '#0F172A' }}>
                   {formatVND(successDisbursedModal.newBalance)}
                 </strong>

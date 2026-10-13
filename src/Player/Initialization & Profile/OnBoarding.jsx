@@ -86,21 +86,19 @@ function OnBoarding() {
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-bold text-sm">1</span>
               Select Your Disciplines
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {['badminton', 'pickleball', 'football', 'basketball', 'tennis'].map(sport => {
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { key: 'badminton', label: 'Cầu lông', icon: 'sports_tennis' },
+                { key: 'pickleball', label: 'Pickleball', icon: 'sports_baseball' },
+                { key: 'football', label: 'Bóng đá', icon: 'sports_soccer' },
+                { key: 'basketball', label: 'Bóng rổ', icon: 'sports_basketball' },
+                { key: 'tennis', label: 'Tennis', icon: 'sports_tennis' },
+              ].map(({ key: sport, label, icon }) => {
                 const isSelected = selectedSports.includes(sport)
-                const sportLabels = {
-                  badminton: { label: 'Cầu Lông', icon: '🏸' },
-                  pickleball: { label: 'Pickleball', icon: '🏓' },
-                  football: { label: 'Bóng Đá', icon: '⚽' },
-                  basketball: { label: 'Bóng Rổ', icon: '🏀' },
-                  tennis: { label: 'Tennis', icon: '🎾' },
-                }
-                const info = sportLabels[sport] || { label: sport, icon: '🎯' }
                 return (
                   <button key={sport} onClick={() => toggleSport(sport)} className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-all border ${isSelected ? 'bg-surface-container-high/80 border-primary-container text-primary-container shadow-[0_0_15px_rgba(0,229,255,0.2)]' : 'bg-surface-container border-transparent text-on-surface-variant hover:bg-surface-container-high'}`}>
-                    <span className="text-[28px] leading-none">{info.icon}</span>
-                    <span className="font-headline-sm text-sm font-bold">{info.label}</span>
+                    <span className="material-symbols-outlined text-[32px]">{icon}</span>
+                    <span className="font-headline-sm capitalize text-sm">{label}</span>
                   </button>
                 )
               })}

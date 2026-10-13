@@ -41,8 +41,7 @@ function SplitPayment() {
     return saved !== null ? Number(saved) : 2450000
   })
 
-  // Dynamic 30-second QR Pass state
-  const [qrSeconds, setQrSeconds] = useState(30)
+  // Mã QR Check-in Pass cố định sau khi đặt sân thành công
   const [qrToken, setQrToken] = useState('SNX-BWF-9982-A81F')
   const [qrVersion, setQrVersion] = useState(1)
 
@@ -59,23 +58,6 @@ function SplitPayment() {
     return () => clearInterval(timer)
   }, [step])
 
-  // Rolling 30-second Dynamic QR timer (Step: ticket_pass)
-  useEffect(() => {
-    if (step !== 'ticket_pass') return
-    const interval = setInterval(() => {
-      setQrSeconds((prev) => {
-        if (prev <= 1) {
-          // Generate new token every 30 seconds
-          const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase()
-          setQrToken(`SNX-BWF-9982-${randomHex}`)
-          setQrVersion((v) => v + 1)
-          return 30
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [step])
 
   const formatTimer = (secs) => {
     const m = Math.floor(secs / 60)
@@ -89,13 +71,6 @@ function SplitPayment() {
   const splitAmount = Math.round(totalAmount / 4)
   const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
 
-  // Handle manual QR Refresh
-  const handleManualQrRefresh = () => {
-    const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase()
-    setQrToken(`SNX-BWF-9982-${randomHex}`)
-    setQrVersion((v) => v + 1)
-    setQrSeconds(30)
-  }
 
   // Handle Copy to clipboard
   const handleCopy = (text, fieldName) => {
@@ -687,11 +662,11 @@ function SplitPayment() {
       )}
 
       {/* =====================================================================
-          PHẦN 3: GIAO DIỆN XUẤT MÃ QR ĐỘNG 30S & TOÀN BỘ THÔNG TIN ĐÃ ĐẶT
+          PHẦN 3: GIAO DIỆN XUẤT MÃ QR CỐ ĐỊNH & TOÀN BỘ THÔNG TIN ĐÃ ĐẶT
           ===================================================================== */}
       {step === 'ticket_pass' && (
         <div className="sp-pass-grid">
-          {/* CỘT TRÁI: THẺ MÃ QR CHECK-IN SÂN ĐỘNG (LÀM MỚI 30S) */}
+          {/* CỘT TRÁI: THẺ MÃ QR CHECK-IN CỐ ĐỊNH */}
           <div className="sp-ticket-card">
             <span className="sp-ticket-badge-ready">
               <span className="sp-ticket-pulse-dot" />
@@ -703,7 +678,7 @@ function SplitPayment() {
               Đưa mã QR này vào máy quét tại cổng hoặc quầy lễ tân để kích hoạt vào sân
             </p>
 
-            {/* Khung mã QR động với hiệu ứng laser */}
+            {/* Khung mã QR cố định với hiệu ứng laser */}
             <div className="sp-ticket-qr-box">
               <div className="sp-ticket-laser-line" />
 
@@ -738,32 +713,32 @@ function SplitPayment() {
               </div>
             </div>
 
-            {/* Thanh tiến trình đếm ngược 30 giây làm mới mã */}
+            {/* Thông tin mã QR check-in cố định sau khi đặt sân thành công */}
             <div className="sp-ticket-timer-bar">
               <div className="sp-timer-bar-left">
                 <div
-                  className="sp-timer-progress-ring"
-                  style={{ '--p-angle': `${(qrSeconds / 30) * 360}deg` }}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    background: '#DCFCE7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#15803D',
+                    flexShrink: 0,
+                  }}
                 >
-                  <div className="sp-timer-progress-inner">{qrSeconds}s</div>
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                    verified
+                  </span>
                 </div>
 
                 <div className="sp-timer-text-wrap">
-                  <strong>Tự động làm mới sau {qrSeconds}s</strong>
-                  <small>Bảo mật chống chụp màn hình / gian lận</small>
+                  <strong>Mã QR cố định sau khi đặt sân thành công</strong>
+                  <small>Mã vé cố định bảo chứng, quét tại cổng hoặc quầy lễ tân để vào sân</small>
                 </div>
               </div>
-
-              <button
-                type="button"
-                className="sp-btn-refresh-qr"
-                title="Làm mới mã ngay"
-                onClick={handleManualQrRefresh}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                  sync
-                </span>
-              </button>
             </div>
 
             <div className="sp-ticket-token-id">TOKEN: #{qrToken}</div>

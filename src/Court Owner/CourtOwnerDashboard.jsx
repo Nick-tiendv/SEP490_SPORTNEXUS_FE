@@ -175,7 +175,23 @@ export default function Profile() {
       )}
 
       {/* Header breadcrumb & title */}
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+      <div
+        style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          padding: '24px 28px',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
+        }}
+      >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <Link to="/owner/dashboard" style={{ color: '#15803D', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
@@ -258,10 +274,12 @@ export default function Profile() {
       {/* Main Profile Showcase Card */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.90)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '20px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.8)',
+          boxShadow: '0 8px 32px rgba(45, 95, 63, 0.06)',
           overflow: 'hidden',
           marginBottom: '28px',
         }}
@@ -403,7 +421,7 @@ export default function Profile() {
                   Chủ Cơ Sở
                 </span>
               </div>
-              <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '14px' }}>
+              <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
                 {formData.email} • {formData.phone}
               </p>
             </div>
@@ -412,19 +430,19 @@ export default function Profile() {
             <div
               style={{
                 background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
+                border: '1px solid #CBD5E1',
                 padding: '12px 18px',
                 borderRadius: '14px',
                 textAlign: 'right',
               }}
             >
-              <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '11px', color: '#0F172A', fontWeight: 800, textTransform: 'uppercase' }}>
                 CƠ SỞ TRỰC THUỘC
               </div>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#1C3524', marginTop: '2px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 900, color: '#0F172A', marginTop: '2px' }}>
                 SportNexus Arena Q.7
               </div>
-              <div style={{ fontSize: '11px', color: '#15803D', fontWeight: 600 }}>
+              <div style={{ fontSize: '11.5px', color: '#047857', fontWeight: 700 }}>
                 14 Sân thi đấu hoạt động
               </div>
             </div>
@@ -819,11 +837,13 @@ export default function Profile() {
       {/* DƯỚI CÙNG: KHU VỰC NGUY HIỂM & NÚT ĐĂNG XUẤT TÀI KHOẢN (LOGOUT) */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.90)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '18px',
-          border: '1px solid #FEE2E2',
+          border: '1px solid rgba(254, 226, 226, 0.8)',
           padding: '24px 32px',
-          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.04)',
+          boxShadow: '0 8px 32px rgba(239, 68, 68, 0.06)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
@@ -923,7 +943,7 @@ export default function Profile() {
             <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', margin: '0 0 8px 0' }}>
               Xác Nhận Đăng Xuất?
             </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#64748B', fontSize: '14px', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 24px 0', color: '#1E293B', fontSize: '14px', lineHeight: 1.5, fontWeight: 600 }}>
               Bạn có chắc chắn muốn đăng xuất tài khoản Chủ Cơ Sở khỏi thiết bị này? Bạn sẽ cần đăng nhập lại để tiếp tục quản lý sân.
             </p>
 
@@ -1045,7 +1065,7 @@ export default function Profile() {
               <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
                 Bấm Để Tải Lên Ảnh Cá Nhân Từ Thiết Bị
               </div>
-              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+              <div style={{ fontSize: '12.5px', color: '#1E293B', fontWeight: 600, marginTop: '4px' }}>
                 Hỗ trợ các định dạng PNG, JPG, JPEG, WEBP (Tối đa 10MB)
               </div>
               <div
