@@ -34,13 +34,13 @@ function Register() {
       return
     }
 
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const rawPhone = (phone || '').trim()
+    const normPhone = normalizePhone(rawPhone)
+
     try {
       localStorage.setItem('sportnexus_user_role', role)
       localStorage.setItem('sportnexus_registered_role', role)
-
-      const cleanEmail = (email || '').trim().toLowerCase()
-      const rawPhone = (phone || '').trim()
-      const normPhone = normalizePhone(rawPhone)
 
       const userData = {
         fullName: fullName.trim(),
@@ -92,11 +92,13 @@ function Register() {
       }
     } catch (e) {}
 
-    if (role === 'court_owner') {
-      navigate('/owner/dashboard')
-    } else {
-      navigate('/onboarding')
-    }
+    // Điều hướng ngay lập tức về trang Đăng nhập
+    navigate('/login', {
+      state: {
+        identifier: cleanEmail || rawPhone,
+        message: 'Đăng ký tài khoản thành công! Vui lòng đăng nhập để tiếp tục.'
+      }
+    })
   }
 
   const toggleSport = (sport) => {

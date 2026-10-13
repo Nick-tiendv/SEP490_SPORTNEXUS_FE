@@ -1,6 +1,6 @@
 import './auth-pages.css'
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { loginApi } from '../api/authApi'
 
 // Hàm chuẩn hóa số điện thoại Việt Nam (xóa ký tự đặc biệt, chuẩn hóa 0xxx hoặc +84xxx)
@@ -153,12 +153,13 @@ export const detectUserRole = (rawInput) => {
 }
 
 function Login() {
-  const [identifier, setIdentifier] = useState('')
+  const location = useLocation()
+  const [identifier, setIdentifier] = useState(() => location.state?.identifier || '')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState(() => location.state?.message || '')
   const navigate = useNavigate()
 
   // Xác định trước vai trò hiển thị trực tiếp khi người dùng gõ
