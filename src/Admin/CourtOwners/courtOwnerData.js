@@ -38,10 +38,10 @@ export const initialOwners = seeds.map(([name, username, verification, status, c
 })
 
 export const ownerStats = [
-  { label: 'Total Court Owners', value: '1,420', trend: '+8.1%', detail: 'so với tháng trước' },
-  { label: 'Active Court Owners', value: '1,356', trend: '95.5%', detail: 'đang hoạt động trên hệ thống' },
-  { label: 'Pending Verification', value: '18', trend: 'Action Needed', detail: 'Awaiting KYC & Facility Review', pending: true },
-  { label: 'Total Facilities', value: '3,890', trend: '+15.2%', detail: 'cơ sở thể thao trên toàn quốc' },
+  { label: "Tổng chủ sân", value: '1.420', trend: '+8,1%', detail: 'so với tháng trước' },
+  { label: "Chủ sân đang hoạt động", value: '1.356', trend: '95,5%', detail: 'đang hoạt động trên hệ thống' },
+  { label: "Chờ xác minh", value: '18', trend: "Cần xử lý", detail: "Chờ xác minh KYC và cơ sở", pending: true },
+  { label: "Tổng cơ sở thể thao", value: '3.890', trend: '+15,2%', detail: 'cơ sở thể thao trên toàn quốc' },
 ]
 export const emptyOwnerFilters = { search: '', verification: 'All', status: 'All', facilities: 'All' }
 
@@ -59,6 +59,6 @@ export function ownersCsv(owners) {
     if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`
     return `"${text.replaceAll('"', '""')}"`
   }
-  return '\uFEFF' + [['Owner ID', 'Name', 'Username', 'Email', 'Phone', 'Facilities', 'Verification', 'Account status'],
+  return '\uFEFF' + [["ID chủ sân", "Họ và tên", "Tên đăng nhập", 'Email', "Số điện thoại", "Số cơ sở", "Xác minh", "Trạng thái tài khoản"],
     ...owners.map(owner => [owner.id, owner.name, owner.username, owner.email, owner.phone, owner.facilities.length, owner.verification, owner.status])].map(row => row.map(escape).join(',')).join('\r\n')
 }

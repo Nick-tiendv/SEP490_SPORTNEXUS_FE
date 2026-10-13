@@ -9,7 +9,7 @@ export default function AdminLayout() {
   return (
     <div className="sn-admin">
       <AdminSidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
-      {menuOpen && <button className="admin-menu-overlay" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <button className="admin-menu-overlay" aria-label="Đóng điều hướng" onClick={() => setMenuOpen(false)} />}
       <div className="admin-workspace">
         <AdminHeader onMenuToggle={() => setMenuOpen(open => !open)} />
         <main className="admin-main"><Outlet /></main>

@@ -6,8 +6,8 @@ export const facilityStats = [
   { label: 'Tổng số sân', value: 28450, trend: '+10,4% so với tháng trước', icon: 'courts' },
 ]
 export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
-export const statusLabels = { Active: 'Hoạt động', Maintenance: 'Đang bảo trì', Disabled: 'Vô hiệu hóa' }
-export const courtStatusLabels = { Available: 'Sẵn sàng', InUse: 'Đang sử dụng', Maintenance: 'Bảo trì', Disabled: 'Tạm ngưng' }
+export const statusLabels = { Active: 'Đang hoạt động', Maintenance: 'Đang bảo trì', Disabled: 'Đã tắt' }
+export const courtStatusLabels = { Available: 'Sẵn sàng', InUse: 'Đang sử dụng', Maintenance: 'Bảo trì', Disabled: 'Đã tắt' }
 export const facilityOwners = [
   { id: 'OWN-7721', name: 'Nguyễn Văn A', verified: true },
   { id: 'OWN-7719', name: 'Trần Quốc Bảo', verified: true },

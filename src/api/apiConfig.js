@@ -1,5 +1,6 @@
 // Cấu hình tập trung đường dẫn API
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sep490-sportnexus-be.onrender.com/api';
+const serverURL = (import.meta.env.VITE_API_BASE_URL || 'https://sep490-sportnexus-be.onrender.com').trim().replace(/\/+$/, '').replace(/\/api$/, '');
+export const API_BASE_URL = `${serverURL}/api`;
 
 // Danh sách các endpoints thông dụng
 export const ENDPOINTS = {

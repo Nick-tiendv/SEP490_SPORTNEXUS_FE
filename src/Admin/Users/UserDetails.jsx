@@ -1,36 +1,53 @@
 import { X, UserRound, Activity, Wallet, History, TriangleAlert, Pencil, Ban, Check } from 'lucide-react'
 
-const money = value => value == null ? 'Not available' : `${value.toLocaleString('vi-VN')} đ`
+const adminDisplayLabels = {
+  "Admin": "Quản trị",
+  "Administrator": "Quản trị viên",
+  "Player": "Người chơi",
+  "Court Owner": "Chủ sân",
+  "CourtOwner": "Chủ sân",
+  "Active": "Đang hoạt động",
+  "Inactive": "Ngừng hoạt động",
+  "Suspended": "Đã tạm khóa",
+  "Verified": "Đã xác minh",
+  "Pending": "Đang chờ xử lý",
+  "Rejected": "Đã từ chối",
+  "Unverified": "Chưa xác minh",
+  "All": "Tất cả"
+}
+
+
+const money = value => value == null ? "Chưa có thông tin" : `${value.toLocaleString('vi-VN')} ₫`
 
 export function UserAvatar({ user }) {
   return <span className="users-avatar" aria-hidden="true">{user.name.split(' ').filter(Boolean).slice(-2).map(word => word[0]).join('')}</span>
 }
 
 export function AccountStatus({ status }) {
-  return <span className={`users-status ${status.toLowerCase()}`}><i />{status}</span>
+  return <span className={`users-status ${status.toLowerCase()}`}><i />{adminDisplayLabels[status] || status}</span>
 }
 
 export default function UserDetails({ user, onClose, onEdit, onSuspend }) {
   return (
-    <aside className="users-details" aria-label={`User details for ${user.name}`}>
-      <header className="users-details-heading"><h2>User Details <small>{user.id}</small></h2><button onClick={onClose} aria-label="Close user details"><X size={18} /></button></header>
+    <aside className="users-details" aria-label={`Chi tiết người dùng ${user.name}`}>
+      <header className="users-details-heading"><h2>Chi tiết người dùng <small>{user.id}</small></h2><button onClick={onClose} aria-label="Đóng chi tiết người dùng"><X size={18} /></button></header>
       <div className="users-details-body">
         <section className="users-profile">
-          <div className="users-profile-main"><UserAvatar user={user} /><div><h3>{user.name}</h3><p>@{user.username} • {user.role}</p><small>{user.phone || 'Phone not available'}</small><small>{user.email}</small></div><AccountStatus status={user.status} /></div>
-          <div className="users-profile-dates"><div><small>Member Since</small><strong>{user.joined}</strong></div><div><small>Last Active</small><strong>{user.lastActive || 'Not available'}</strong></div></div>
+          <div className="users-profile-main"><UserAvatar user={user} /><div><h3>{user.name}</h3><p>@{user.username} • {adminDisplayLabels[user.role] || user.role}</p><small>{user.phone || "Chưa có số điện thoại"}</small><small>{user.email}</small></div><AccountStatus status={user.status} /></div>
+          <div className="users-profile-dates"><div><small>Ngày tham gia</small><strong>{user.joined.split('-').reverse().join('/')}</strong></div><div><small>Hoạt động gần nhất</small><strong>{user.lastActive || "Chưa có thông tin"}</strong></div></div>
         </section>
-        <section><h3 className="users-section-title"><UserRound size={15} />Sport &amp; Skill Profile</h3><div className="users-skill-grid">
-          <div><small>DUPR Rating</small><strong className="users-rating">{user.dupr || '—'}</strong><p>{user.dupr ? 'Pickleball • Demo rating' : 'Not available'}</p></div>
-          <div><small>Elo Rating</small><strong>{user.elo?.toLocaleString() || '—'}</strong><p>{user.elo ? 'Local prototype data' : 'Not available'}</p></div>
-          <div><small>Fair-play Score</small><strong className="users-rating">{user.fairplay == null ? '—' : `${user.fairplay}%`}</strong><p>{user.fairplay == null ? 'Not available' : 'Demo sportsmanship score'}</p></div>
-          <div><small>Favorite Sports</small><strong className="users-sport-name">{user.sport || 'Not available'}</strong><p>Local profile information</p></div>
+        <section><h3 className="users-section-title"><UserRound size={15} />Hồ sơ thể thao và kỹ năng</h3><div className="users-skill-grid">
+          <div><small>Điểm DUPR</small><strong className="users-rating">{user.dupr || '—'}</strong><p>{user.dupr ? "Pickleball • Điểm mẫu" : "Chưa có thông tin"}</p></div>
+          <div><small>Điểm Elo</small><strong>{user.elo?.toLocaleString('vi-VN') || '—'}</strong><p>{user.elo ? "Dữ liệu mẫu trong phiên" : "Chưa có thông tin"}</p></div>
+          <div><small>Điểm tinh thần thể thao</small><strong className="users-rating">{user.fairplay == null ? '—' : `${user.fairplay}%`}</strong><p>{user.fairplay == null ? "Chưa có thông tin" : "Điểm tinh thần thể thao mẫu"}</p></div>
+          <div><small>Môn thể thao yêu thích</small><strong className="users-sport-name">{user.sport || "Chưa có thông tin"}</strong><p>Thông tin hồ sơ mẫu</p></div>
         </div></section>
-        <section><h3 className="users-section-title"><Activity size={15} />Platform Activity Summary</h3><div className="users-activity-stats">{[['Bookings', user.bookings], ['LFG Match', user.lfg], ['Tournaments', user.tournaments], ['Reviews', user.reviews]].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong><small>demo total</small></div>)}</div></section>
-        <section className="users-wallet"><h3 className="users-section-title"><Wallet size={15} />SportNexus Wallet <small>Demo balance</small></h3><div><span><small>Escrow / Số dư ký quỹ</small><strong>{money(user.wallet)}</strong></span><span><small>Total Spent</small><strong>{money(user.totalSpent)}</strong></span></div><p>Read-only mock wallet. No wallet operations.</p></section>
-        <section><h3 className="users-section-title"><History size={15} />Recent Activity Timeline</h3>{user.activities.length ? <ol className="users-timeline">{user.activities.map(item => <li key={item.title}><i /><strong>{item.title}</strong><p>{item.text}</p><small>{item.time}</small></li>)}</ol> : <p className="users-unavailable">No activity records available in this prototype.</p>}</section>
-        <section className="users-governance"><h3><TriangleAlert size={15} />Account Governance</h3><p>{user.status === 'Suspended' ? 'This demo account is suspended. Restore access with the action below.' : `Account has ${user.disputes} mock disputes${user.fairplay == null ? '' : ` and ${user.fairplay}% fair-play`}.`} Suspension changes local state only. No wallet or reservation changes are performed.</p></section>
+        <section><h3 className="users-section-title"><Activity size={15} />Tổng quan hoạt động trên nền tảng</h3><div className="users-activity-stats">{[["Lượt đặt sân", user.bookings], ["Trận tìm nhóm chơi", user.lfg], ["Giải đấu", user.tournaments], ["Đánh giá", user.reviews]].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong><small>tổng số mẫu</small></div>)}</div></section>
+        <section className="users-wallet"><h3 className="users-section-title"><Wallet size={15} />Ví SportNexus <small>Số dư mẫu</small></h3><div><span><small>Số dư ký quỹ</small><strong>{money(user.wallet)}</strong></span><span><small>Tổng chi tiêu</small><strong>{money(user.totalSpent)}</strong></span></div><p>Ví mẫu chỉ để xem. Không thực hiện giao dịch ví.</p></section>
+        <section><h3 className="users-section-title"><History size={15} />Lịch sử hoạt động gần đây</h3>{user.activities.length ? <ol className="users-timeline">{user.activities.map(item => <li key={item.title}><i /><strong>{item.title}</strong><p>{item.text}</p><small>{item.time}</small></li>)}</ol> : <p className="users-unavailable">Chưa có bản ghi hoạt động trong bản mẫu.</p>}</section>
+        <section className="users-governance"><h3><TriangleAlert size={15} />Quản lý tài khoản</h3><p>{user.status === 'Suspended' ? "Tài khoản mẫu này đã bị tạm khóa. Có thể khôi phục quyền truy cập bằng nút bên dưới." : `Tài khoản có ${user.disputes} tranh chấp mẫu${user.fairplay == null ? '' : ` và ${user.fairplay}% điểm tinh thần thể thao`}.`} Tạm khóa chỉ thay đổi trạng thái trong phiên. Không thay đổi ví hoặc đơn đặt sân.</p></section>
       </div>
-      <footer className="users-details-actions"><button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? 'Restore User' : 'Suspend'}</button><button className="users-button" onClick={onEdit}><Pencil size={15} />Edit User</button></footer>
+      <footer className="users-details-actions"><button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? "Khôi phục người dùng" : "Tạm khóa"}</button><button className="users-button" onClick={onEdit}><Pencil size={15} />Chỉnh sửa người dùng</button></footer>
     </aside>
   )
 }

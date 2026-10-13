@@ -6,11 +6,11 @@ export const lfgStats = [
   { label: 'Kèo đã hoàn thành', value: 1620, note: 'Theo dõi hoạt động mẫu', icon: 'completed' },
   { label: 'Kèo đã hủy', value: 64, note: 'Số liệu minh họa riêng', icon: 'cancelled' },
 ]
-export const statusLabels = { Open: 'Đang mở', Full: 'Đã đủ người', Completed: 'Hoàn thành', Cancelled: 'Đã hủy' }
+export const statusLabels = { Open: 'Đang mở', Full: 'Đã đủ người', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' }
 export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
-export const slotLabels = { Occupied: 'Đã xác nhận', Pending: 'Chờ xác nhận', Available: 'Còn trống' }
+export const slotLabels = { Occupied: 'Đã xác nhận', Pending: 'Đang chờ xử lý', Available: 'Còn trống' }
 export const number = value => value.toLocaleString('vi-VN')
-export const money = value => `${number(value)} đ`
+export const money = value => `${number(value)} ₫`
 export const date = value => value.split('-').reverse().join('/')
 export const normalize = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
 export function parseDate(value) {

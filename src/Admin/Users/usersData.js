@@ -21,7 +21,7 @@ export const initialUsers = profiles.map(([name, username, email, role, status],
   id: `USER-${94811 + index}`, name, username, email, role, status,
   joined: index === 0 ? '2024-01-14' : `2024-10-${String(index + 1).padStart(2, '0')}`,
   phone: index === 0 ? '0912 778 899' : null,
-  lastActive: status === 'Active' ? '10 mins ago (App iOS)' : null,
+  lastActive: status === 'Active' ? "10 phút trước (ứng dụng iOS)" : null,
   sport: role === 'Player' ? (index % 2 ? 'Tennis' : 'Pickleball & Cầu Lông') : null,
   dupr: role === 'Player' ? (3.8 + index * .05).toFixed(2) : null,
   elo: role === 'Player' ? 1650 + index * 20 : null,
@@ -33,19 +33,19 @@ export const initialUsers = profiles.map(([name, username, email, role, status],
   wallet: role === 'Player' ? 2450000 + index * 100000 : null,
   totalSpent: role === 'Player' ? 14200000 + index * 200000 : null,
   activities: index === 0 ? [
-    { title: 'Joined LFG match #BK-8820', text: 'Kèo Pickleball Đôi Nam 4.0 • Sunrise Court 2', time: '18 mins ago' },
-    { title: 'Booked Court Sunrise Riverside', text: '18:30–20:00 (Court 2B) • Đã thanh toán cọc', time: 'Yesterday at 15:42' },
-    { title: 'Completed check-in turnstile', text: 'Smart Turnstile Gate 3 • PB Center Q7', time: 'Oct 24, 2024' },
-    { title: 'Password updated', text: 'Security 2FA verified via SMS OTP', time: 'Oct 12, 2024' },
+    { title: "Đã tham gia trận tìm nhóm chơi #BK-8820", text: 'Kèo Pickleball Đôi Nam 4.0 • Sunrise Court 2', time: "18 phút trước" },
+    { title: "Đã đặt sân Sunrise Riverside", text: '18:30–20:00 (Court 2B) • Đã thanh toán cọc', time: "Hôm qua lúc 15:42" },
+    { title: "Đã hoàn tất điểm danh tại cổng", text: 'Smart Turnstile Gate 3 • PB Center Q7', time: "24/10/2024" },
+    { title: "Đã cập nhật mật khẩu", text: "Đã xác minh bảo mật 2FA bằng SMS OTP", time: "12/10/2024" },
   ] : [],
   disputes: status === 'Suspended' ? 1 : 0,
 }))
 
 export const userStats = [
-  { label: 'TOTAL USERS', value: '148,250', trend: '+12.4% vs last mo', tone: 'green' },
-  { label: 'ACTIVE USERS', value: '139,410', trend: '94.0% active rate', tone: 'green' },
-  { label: 'NEW USERS THIS MONTH', value: '4,820', trend: '+10.2% vs last mo', tone: 'green' },
-  { label: 'SUSPENDED / INACTIVE', value: '8,840', trend: '5.9% of platform', tone: 'red' },
+  { label: "TỔNG NGƯỜI DÙNG", value: '148.250', trend: "+12,4% so với tháng trước", tone: 'green' },
+  { label: "NGƯỜI DÙNG ĐANG HOẠT ĐỘNG", value: '139.410', trend: "94,0% đang hoạt động", tone: 'green' },
+  { label: "NGƯỜI DÙNG MỚI TRONG THÁNG", value: '4.820', trend: "+10,2% so với tháng trước", tone: 'green' },
+  { label: "ĐÃ TẠM KHÓA / NGỪNG HOẠT ĐỘNG", value: '8.840', trend: "5,9% toàn nền tảng", tone: 'red' },
 ]
 export const emptyFilters = { search: '', role: 'All', status: 'All', from: '', to: '' }
 
@@ -65,7 +65,7 @@ export function usersCsv(users) {
     if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`
     return `"${text.replaceAll('"', '""')}"`
   }
-  return '\uFEFF' + [['ID', 'Name', 'Username', 'Email', 'Role', 'Status', 'Member since'],
+  return '\uFEFF' + [['ID', "Họ và tên", "Tên đăng nhập", 'Email', 'Vai trò', "Trạng thái", "Ngày tham gia"],
     ...users.map(user => [user.id, user.name, user.username, user.email, user.role, user.status, user.joined])]
     .map(row => row.map(escape).join(',')).join('\r\n')
 }

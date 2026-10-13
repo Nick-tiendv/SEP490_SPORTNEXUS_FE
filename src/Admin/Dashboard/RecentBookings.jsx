@@ -3,6 +3,19 @@ import { ChevronDown } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { bookings } from './dashboardData.js'
 
+const adminDisplayLabels = {
+  "Confirmed": "Đã xác nhận",
+  "Completed": "Đã hoàn thành",
+  "Cancelled": "Đã hủy",
+  "Pending": "Đang chờ xử lý",
+  "Tennis": "Quần vợt",
+  "Badminton": "Cầu lông",
+  "Football": "Bóng đá",
+  "Basketball": "Bóng rổ",
+  "All": "Tất cả"
+}
+
+
 export default function RecentBookings() {
   const [status, setStatus] = useState('All')
   const [sport, setSport] = useState('All')
@@ -10,14 +23,14 @@ export default function RecentBookings() {
   return (
     <section className="admin-panel admin-bookings">
       <div className="admin-panel-heading">
-        <div><h2>Đơn đặt sân gần đây<br /><span>(Recent Bookings)</span></h2><p>Theo dõi các giao dịch đặt sân và tình trạng thanh toán trên nền tảng.</p></div>
+        <div><h2>Đơn đặt sân gần đây<br /><span>(Đơn đặt sân gần đây)</span></h2><p>Theo dõi các giao dịch đặt sân và tình trạng thanh toán trên nền tảng.</p></div>
         <div className="admin-table-filters">
-          <label><select aria-label="Filter booking status" value={status} onChange={event => setStatus(event.target.value)}><option value="All">Tất cả trạng thái</option>{['Confirmed', 'Pending', 'Cancelled', 'Completed'].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={12} /></label>
-          <label><select aria-label="Filter sport" value={sport} onChange={event => setSport(event.target.value)}><option value="All">Tất cả môn thể thao</option>{[...new Set(bookings.map(item => item.sport))].map(item => <option key={item}>{item}</option>)}</select><ChevronDown size={12} /></label>
+          <label><select aria-label="Lọc trạng thái đặt sân" value={status} onChange={event => setStatus(event.target.value)}><option value="All">Tất cả trạng thái</option>{['Confirmed', 'Pending', 'Cancelled', 'Completed'].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select><ChevronDown size={12} /></label>
+          <label><select aria-label="Lọc môn thể thao" value={sport} onChange={event => setSport(event.target.value)}><option value="All">Tất cả môn thể thao</option>{[...new Set(bookings.map(item => item.sport))].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select><ChevronDown size={12} /></label>
         </div>
       </div>
       <div className="admin-table-scroll">
-        <table><thead><tr><th>Mã booking</th><th>Người đặt</th><th>Cơ sở &amp; sân</th><th>Thời gian</th><th>Số tiền</th><th>Trạng thái</th><th>Thanh toán</th></tr></thead>
+        <table><thead><tr><th>Mã đặt sân</th><th>Người đặt</th><th>Cơ sở &amp; sân</th><th>Thời gian</th><th>Số tiền</th><th>Trạng thái</th><th>Thanh toán</th></tr></thead>
           <tbody>{visible.map(item => <tr key={item.id}>
             <td className="admin-booking-id">{item.id}</td>
             <td><div className="admin-user-cell"><span className="admin-avatar admin-avatar-small">{item.initials}</span><strong>{item.user}</strong></div></td>
@@ -26,7 +39,7 @@ export default function RecentBookings() {
             <td className="admin-amount">{item.amount}</td><td><StatusBadge status={item.status} /></td><td><span className={`admin-payment ${item.status === 'Pending' ? 'pending' : ''}`}>{item.payment}</span></td>
           </tr>)}</tbody>
         </table>
-        {!visible.length && <p className="admin-empty">Không có booking phù hợp với bộ lọc.</p>}
+        {!visible.length && <p className="admin-empty">Không có đơn đặt sân phù hợp với bộ lọc.</p>}
       </div>
       <div className="admin-table-footer"><span>Hiển thị {visible.length} đơn <span className="admin-footer-divider">•</span> Trang 1 / 24</span><div><button disabled>Trước</button><button disabled className="admin-button-primary">Sau</button></div></div>
     </section>
