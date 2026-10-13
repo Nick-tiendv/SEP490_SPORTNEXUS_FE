@@ -397,10 +397,7 @@ function Login() {
                     <span>ĐANG ĐĂNG NHẬP...</span>
                   </>
                 ) : (
-                  <>
-                    <span>ĐĂNG NHẬP</span>
-                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                  </>
+                  <span>ĐĂNG NHẬP</span>
                 )}
               </button>
             </form>
