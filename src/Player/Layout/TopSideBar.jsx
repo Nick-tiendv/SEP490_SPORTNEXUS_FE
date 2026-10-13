@@ -193,17 +193,21 @@ function TopSideBar() {
               gap: '4px',
             }}
           >
-            <span style={{ fontSize: '9px' }}>{isAllActive ? '✨' : '🎯'}</span>
+            <span style={{ fontSize: '9px' }}>
+              {isAllActive
+                ? '✨'
+                : SPORTS_LIST.find((s) => isSportActive(s.key))?.emoji || '🏅'}
+            </span>
             {isAllActive
               ? 'Tất cả 5 môn'
               : selectedSports.length === 1
-              ? `Chỉ ${SPORTS_LIST.find(s => s.key === selectedSports[0])?.label || ''}`
-              : `${selectedSports.length} môn`}
+              ? `Chỉ ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}`
+              : `${selectedSports.length} môn đang chọn`}
           </span>
         </div>
 
         {/* Sport Buttons Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
           {SPORTS_LIST.map((s) => {
             const isActive = isSportActive(s.key)
 
@@ -216,12 +220,12 @@ function TopSideBar() {
                   isAllActive
                     ? `Click để chỉ hiển thị ${s.label}`
                     : isActive
-                    ? `Đang hiển thị ${s.label} (Click để đổi)`
-                    : `Click để thêm/hiển thị ${s.label}`
+                    ? `Đang hiển thị ${s.label} (Click để xem tất cả)`
+                    : `Click để chọn ${s.label}`
                 }
                 style={{
-                  padding: '8px 2px',
-                  borderRadius: '10px',
+                  padding: '9px 4px',
+                  borderRadius: '12px',
                   border: isActive
                     ? '2px solid #2D5F3F'
                     : '1.5px solid rgba(45, 95, 63, 0.16)',
@@ -229,24 +233,66 @@ function TopSideBar() {
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '2px',
+                  gap: '3px',
                   background: isActive
                     ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
                     : 'rgba(255, 255, 255, 0.85)',
                   color: isActive ? '#ffffff' : '#374151',
                   fontWeight: isActive ? 700 : 600,
-                  fontSize: '9.5px',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  fontSize: '11px',
+                  transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
                   boxShadow: isActive
-                    ? '0 4px 10px rgba(45, 95, 63, 0.2)'
-                    : '0 1px 3px rgba(0, 0, 0, 0.03)',
+                    ? '0 4px 12px rgba(45, 95, 63, 0.24)'
+                    : '0 1px 4px rgba(0, 0, 0, 0.03)',
                   position: 'relative',
                   transform: isActive ? 'translateY(-1px)' : 'none',
                 }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = '#ECFDF5'
+                    e.currentTarget.style.borderColor = '#10B981'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.85)'
+                    e.currentTarget.style.borderColor = 'rgba(45, 95, 63, 0.16)'
+                  }
+                }}
               >
+                {/* Active Check Badge */}
+                {isActive && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '2px',
+                      right: '3px',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: '9px',
+                        color: '#2D5F3F',
+                        fontWeight: 900,
+                      }}
+                    >
+                      check
+                    </span>
+                  </span>
+                )}
+
                 <span
                   style={{
-                    fontSize: '18px',
+                    fontSize: '20px',
                     lineHeight: 1,
                     filter: isActive ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' : 'none',
                   }}
@@ -255,13 +301,13 @@ function TopSideBar() {
                 >
                   {s.emoji}
                 </span>
-                <span style={{ letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{s.label}</span>
+                <span style={{ letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{s.label}</span>
               </button>
             )
           })}
         </div>
 
-        {/* Quick helper / Show All button when not all active */}
+        {/* Quick helper / Show All button when not all is active */}
         {!isAllActive && (
           <button
             type="button"
@@ -291,7 +337,7 @@ function TopSideBar() {
             }}
           >
             <span>✨</span>
-            <span>Xem tất cả 5 môn thể thao</span>
+            <span>Xem tất cả môn thể thao</span>
           </button>
         )}
 
@@ -299,9 +345,7 @@ function TopSideBar() {
           <span style={{ fontSize: '10px', color: '#6B7280', fontStyle: 'italic' }}>
             {isAllActive
               ? 'Nhấp 1 môn để lọc riêng'
-              : selectedSports.length === 0
-              ? 'Chọn môn hoặc bấm Tất cả'
-              : 'Bấm lại môn đã chọn để hủy'}
+              : 'Nhấp thêm môn để xem kết hợp'}
           </span>
         </div>
       </div>

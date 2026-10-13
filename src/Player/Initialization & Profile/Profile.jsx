@@ -1,3 +1,4 @@
+import { useAuth } from '../../context/authContext.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -20,6 +21,7 @@ export const PRESET_SPORTS_CATALOG = [
 ]
 
 export default function Profile() {
+  const { logout } = useAuth()
   const navigate = useNavigate()
 
   // State thông tin người chơi - Đồng bộ tên & handle
@@ -123,6 +125,19 @@ export default function Profile() {
         winRate: '80%',
         color: '#EA580C',
         bgColor: '#FFF7ED',
+      },
+      {
+        id: 'basketball',
+        name: 'Bóng rổ',
+        icon: '🏀',
+        elo: 1100,
+        level: 'Hậu vệ dẫn bóng',
+        field: 'Sở trường',
+        ranked: true,
+        matches: 8,
+        winRate: '80%',
+        color: '#EA580C',
+        bgColor: '#FFEDD5',
       },
       {
         id: 'tennis',
@@ -4564,6 +4579,7 @@ export default function Profile() {
                     localStorage.removeItem('sportnexus_user_fullname')
                   } catch (e) {}
                   setShowLogoutModal(false)
+                  logout()
                   navigate('/login')
                 }}
                 style={{
