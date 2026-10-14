@@ -1,0 +1,558 @@
+/* =====================================================================
+   SportNexus Admin — Page patterns
+   One shared look for the recurring blocks of every management page.
+   Each page keeps its own class names and its own layout (grid, flex,
+   widths, breakpoints); this file only owns the visual layer: glass
+   surfaces, typography, controls, tables, badges and states.
+
+   Pages covered: users, owners, facilities, bookings, lfg, tournaments,
+   payments, rr (reviews & reports), nt (notifications), ss (settings).
+   All selectors start with .sn-admin so they outrank the page CSS
+   (single-class rules) without !important.
+   ===================================================================== */
+
+/* ---------- 1. Page roots: remove the old grey slabs so the background shows ---------- */
+.sn-admin :is(.rr-page, .ss-page, .nt-page) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--admin-text);
+}
+.sn-admin :is(.users-page, .owners-page, .facilities-page, .bookings-page, .lfg-page, .tournaments-page, .payments-page, .rr-page, .nt-page, .ss-page) {
+  max-width: var(--content-max);
+  animation: admin-rise-in var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* ---------- 2. Page header (elements carry .admin-page-header) ---------- */
+/* Legacy headings: title block grows, action block keeps its width */
+.sn-admin .admin-page-header { flex-wrap: wrap; }
+.sn-admin .admin-page-header > :first-child { flex: 1 1 360px; min-width: 0; }
+.sn-admin .admin-page-header > :last-child:not(:first-child) { flex: 0 0 auto; }
+.sn-admin .admin-page-header h1 {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: -.025em;
+  color: var(--sn-green-950);
+}
+.sn-admin .admin-page-header h1 > span,
+.sn-admin .admin-page-header .rr-badge,
+.sn-admin .admin-page-header .nt-overview-badge,
+.sn-admin .admin-page-header .ss-operational-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--sn-green-200);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .8);
+  color: var(--sn-green-700);
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.sn-admin .admin-page-header h1 > span { margin-left: var(--sp-3); }
+.sn-admin .admin-page-header p {
+  max-width: 620px;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--admin-text-secondary);
+}
+.sn-admin .admin-page-header > div:last-child:not(:first-child) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ---------- 3. KPI cards ---------- */
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) {
+  gap: var(--sp-4);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article {
+  --kpi-tone: var(--sn-green-600);
+  --kpi-gradient: var(--gradient-brand);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--sp-2);
+  min-height: 0;
+  min-width: 0;
+  padding: var(--sp-5);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(180px 120px at 100% 0%, rgba(74, 222, 128, .14), transparent 70%),
+    var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+  color: var(--admin-text);
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -34px;
+  z-index: -1;
+  width: 110px;
+  height: 110px;
+  border: 14px solid rgba(34, 160, 90, .07);
+  border-radius: 50%;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--glass-shadow-hover);
+  border-color: rgba(134, 239, 172, .8);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover::after { transform: scale(1.15); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 0;
+  margin: 0;
+  color: var(--admin-text-muted);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article small {
+  max-width: none;
+  min-height: 0;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--admin-text-muted);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article > div > svg {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 11px;
+  border-radius: 14px;
+  background: var(--kpi-gradient);
+  color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(12, 40, 24, .55), inset 0 1px 0 rgba(255, 255, 255, .3);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover > div > svg { transform: rotate(-6deg) scale(1.06); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  color: var(--admin-text);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article strong span {
+  display: inline;
+  max-width: none;
+  margin-left: 4px;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  color: var(--kpi-tone);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article p {
+  max-width: none;
+  margin-top: auto;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--kpi-tone);
+}
+
+/* Users KPI markup puts the icon beside the value: pin it to the corner instead */
+.sn-admin .users-kpis > article > small { display: block; padding-right: 56px; text-transform: lowercase; }
+/* Sample labels are stored in capitals: render them in sentence case like other pages */
+.sn-admin .users-kpis > article > small::first-letter { text-transform: uppercase; }
+.sn-admin .users-kpis > article > div { justify-content: flex-start; }
+.sn-admin .users-kpis > article > div > svg { position: absolute; top: var(--sp-5); right: var(--sp-5); }
+
+/* KPI tones (state carried by existing modifier classes) */
+.sn-admin :is(.users-kpi.red, .bookings-kpis .cancelled, .lfg-kpis .cancelled, .payments-kpis .failed) {
+  --kpi-tone: var(--sn-danger-text);
+  --kpi-gradient: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+}
+.sn-admin :is(.owners-kpis .pending, .payments-kpis .pending, .facilities-kpis .maintenance) {
+  --kpi-tone: var(--sn-warning-text);
+  --kpi-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+}
+.sn-admin :is(.bookings-kpis .total, .payments-kpis .refunded, .tournaments-kpis .total, .tournaments-kpis .upcoming) {
+  --kpi-tone: var(--sn-info-text);
+  --kpi-gradient: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+}
+.sn-admin :is(.users-kpi.red, .bookings-kpis .cancelled, .lfg-kpis .cancelled, .payments-kpis .failed,
+  .owners-kpis .pending, .payments-kpis .pending, .facilities-kpis .maintenance,
+  .bookings-kpis .total, .payments-kpis .refunded, .tournaments-kpis .total, .tournaments-kpis .upcoming) strong { color: var(--admin-text); }
+
+/* Featured KPI (revenue / volume): solid brand card, same as the Dashboard */
+.sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) {
+  border-color: rgba(134, 239, 172, .5);
+  background:
+    radial-gradient(220px 140px at 100% 0%, rgba(134, 239, 172, .35), transparent 70%),
+    linear-gradient(135deg, #1f8f4e 0%, #15803d 50%, #14532d 100%);
+  box-shadow: 0 18px 36px -16px rgba(20, 83, 45, .65), inset 0 1px 0 rgba(255, 255, 255, .2);
+}
+.sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume)::after { border-color: rgba(255, 255, 255, .1); }
+.sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) :is(small, p, strong span) { color: rgba(255, 255, 255, .85); }
+.sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) strong { color: #fff; }
+.sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) > div > svg { background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
+
+/* ---------- 4. Filter toolbars ---------- */
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar) {
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Form controls inside any filter area */
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar, .rr-toolbar, .rr-filters, .nt-filters) label:not(:is(.users-search, .rr-search, .nt-search)) {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--admin-text-muted);
+}
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar, .rr-toolbar, .rr-filters, .nt-filters) :is(select, label:not(:is(.users-search, .rr-search, .nt-search)) > input:not([type="checkbox"]):not([type="radio"])) {
+  min-height: 38px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar, .rr-toolbar, .rr-filters, .nt-filters, .users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7a75' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar, .rr-toolbar, .rr-filters, .nt-filters) :is(select, input:not([type="checkbox"]):not([type="radio"])):hover { border-color: var(--admin-border-strong); }
+.sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar, .rr-toolbar, .rr-filters, .nt-filters) :is(select, label:not(:is(.users-search, .rr-search, .nt-search)) > input:not([type="checkbox"]):not([type="radio"])):focus {
+  border-color: var(--admin-primary);
+  box-shadow: var(--ring);
+  outline: none;
+}
+
+/* ---------- 5. Table panels ---------- */
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-panel) {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) table {
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) th {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--admin-border-color);
+  background: rgba(240, 253, 244, .7);
+  color: var(--sn-gray-600);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) td {
+  height: auto;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 0;
+  border-bottom: 1px solid var(--admin-divider);
+  color: var(--admin-text);
+  font-size: var(--fs-sm);
+  vertical-align: middle;
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) td :is(small, td > small) {
+  font-size: var(--fs-xs);
+  color: var(--admin-text-muted);
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) td strong { color: var(--admin-text); font-weight: var(--fw-semibold); }
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) tbody tr {
+  transition: background-color var(--dur-fast);
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) tbody tr:hover { background: rgba(240, 253, 244, .8); }
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) tbody tr:is(.is-selected, .selected, [aria-selected="true"]) {
+  background: var(--sn-green-50);
+  box-shadow: inset 4px 0 0 var(--admin-primary);
+}
+.sn-admin :is(.users-table-panel, .owners-table-panel, .facilities-table-panel, .bookings-table-panel, .lfg-table-panel, .tournaments-table-panel, .payments-table-panel, .rr-list, .nt-list) input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--admin-primary); }
+
+/* ---------- 6. Details / inspector side panels ---------- */
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details, .rr-inspector) {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+  animation: admin-slide-in-right var(--dur-slow) var(--ease-out) backwards;
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details) > header {
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--admin-divider);
+  background: var(--gradient-mint);
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details, .rr-inspector) > header h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  color: var(--sn-green-950);
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details, .rr-inspector) > header h2 :is(small, span) {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details, .rr-inspector) > header > button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .7);
+  color: var(--admin-text-muted);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details, .rr-inspector) > header > button:hover { background: #fff; color: var(--admin-text); }
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details) > footer {
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--admin-divider);
+  background: rgba(246, 248, 247, .8);
+}
+.sn-admin :is(.users-details, .owners-details, .facilities-details, .bookings-details, .lfg-details, .tournaments-details, .payments-details) > footer :is(.users-button, .rr-button) {
+  font-size: var(--fs-sm);
+  padding-inline: var(--sp-3);
+}
+
+/* ---------- 7. Pagination ---------- */
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) {
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--admin-divider);
+  background: transparent;
+  color: var(--admin-text-muted);
+  font-size: var(--fs-sm);
+}
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) label { font-size: var(--fs-sm); }
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) select {
+  min-height: 32px;
+  padding-left: var(--sp-2);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: var(--fs-sm);
+}
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  box-shadow: none;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+}
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) button:hover:not(:disabled) {
+  border-color: var(--sn-green-300);
+  background: var(--sn-green-50);
+  color: var(--sn-green-800);
+}
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) button:is(.current, [aria-current="page"]) {
+  border-color: transparent;
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: 0 6px 12px -6px rgba(21, 128, 61, .6);
+}
+.sn-admin :is(.users-pagination, .owners-pagination, .facilities-pagination, .bookings-pagination, .lfg-pagination, .tournaments-pagination, .payments-pagination, .rr-pagination, .nt-pagination) button:disabled {
+  opacity: .45;
+  background: var(--admin-surface);
+  cursor: not-allowed;
+}
+
+/* ---------- 8. Page-level tabs (sit on the background image) ---------- */
+.sn-admin :is(.rr-tabs, .nt-tabs) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1);
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+.sn-admin :is(.rr-tabs, .nt-tabs) > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 38px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--admin-text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  transition: background-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.sn-admin :is(.rr-tabs, .nt-tabs) > button:hover:not(:is(.active, [aria-selected="true"])) { background: rgba(255, 255, 255, .8); color: var(--sn-green-800); }
+.sn-admin :is(.rr-tabs, .nt-tabs) > button:is(.active, [aria-selected="true"]) {
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: 0 6px 14px -6px rgba(21, 128, 61, .6);
+}
+.sn-admin :is(.rr-tabs, .nt-tabs) > button > span { border-radius: var(--radius-pill); padding: 1px 8px; font-size: 11px; font-weight: var(--fw-bold); }
+.sn-admin :is(.rr-tabs, .nt-tabs) > button:is(.active, [aria-selected="true"]) > span {
+  background: rgba(255, 255, 255, .25);
+  color: #fff;
+}
+.sn-admin :is(.rr-tabs, .nt-tabs) > small { padding: 0 var(--sp-3); color: var(--admin-text-muted); font-size: var(--fs-xs); }
+
+/* Tabs inside a panel (Tournaments details) keep an underline style */
+.sn-admin .tournaments-tabs button { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--admin-text-muted); }
+.sn-admin .tournaments-tabs button[aria-selected="true"] { color: var(--sn-green-700); border-bottom-color: var(--admin-primary); font-weight: var(--fw-semibold); }
+
+/* ---------- 9. Status badges ---------- */
+.sn-admin :is(.facilities-status, .payments-status, .rr-badge, .nt-badge, .ss-status) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* ---------- 10. Avatars ---------- */
+.sn-admin :is(.users-avatar, .rr-avatar, .nt-avatar, .ss-avatar, .facilities-owner-avatar) {
+  background: linear-gradient(135deg, var(--sn-green-600) 0%, var(--sn-green-800) 100%);
+  color: #fff;
+  font-weight: var(--fw-bold);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--sn-green-100);
+}
+
+/* ---------- 11. Banners and callouts ---------- */
+.sn-admin :is(.owners-pending-banner, .payments-warning, .payments-security, .rr-priority, .lfg-report-alert, .ss-demo-banner) {
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+  font-size: var(--fs-sm);
+}
+
+/* Sample-data labels that sit directly on the background image */
+.sn-admin :is(.users-prototype-label, .owners-demo-label, .facilities-demo-label, .bookings-demo-label, .lfg-demo-label, .tournaments-demo-label, .payments-demo-label, .nt-data-caption) {
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--admin-text-secondary);
+  font-size: var(--fs-xs);
+}
+
+/* ---------- 12. Settings ---------- */
+.sn-admin .ss-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--admin-text-muted);
+}
+.sn-admin .ss-section {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+.sn-admin .ss-navigation {
+  top: calc(var(--sp-3) + 64px + var(--sp-3));
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+.sn-admin .ss-save-bar {
+  border: 1px solid rgba(134, 239, 172, .35);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(20, 83, 45, .95) 0%, rgba(28, 53, 36, .95) 100%);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-lg);
+}
+
+/* ---------- 13. Responsive ---------- */
+@media (max-width: 768px) {
+  .sn-admin .admin-page-header h1 { font-size: var(--fs-2xl); }
+  /* Badge drops under the title on small screens: no stray indent */
+  .sn-admin .admin-page-header h1 > span { display: flex; width: fit-content; margin: var(--sp-2) 0 0; }
+  .sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article { padding: var(--sp-4); }
+  .sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article strong { font-size: var(--fs-xl); }
+  .sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar) { padding: var(--sp-3); }
+  .sn-admin :is(.rr-tabs, .nt-tabs) { width: 100%; }
+  .sn-admin :is(.rr-tabs, .nt-tabs) > button { flex: 1 1 auto; justify-content: center; }
+  .sn-admin .ss-navigation { top: calc(var(--sp-2) + 56px + var(--sp-2)); }
+}

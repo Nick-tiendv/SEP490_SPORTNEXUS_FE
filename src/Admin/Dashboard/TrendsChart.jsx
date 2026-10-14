@@ -16,7 +16,7 @@ export default function TrendsChart() {
     <section className="admin-panel admin-trends">
       <div className="admin-panel-heading">
         <div><h2>Xu hướng đặt sân và doanh thu</h2><p>Biểu đồ lượt đặt sân và doanh thu giúp theo dõi tăng trưởng nền tảng.</p></div>
-        <div className="admin-range-tabs" aria-label="Khoảng thời gian biểu đồ">{Object.keys(trends).map(item => <button key={item} aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}<small>{item === '7 ngày' ? "Ngày" : item === '30 ngày' ? "Ngày" : "Tháng"}</small></button>)}</div>
+        <div className="admin-segmented admin-range-tabs" role="group" aria-label="Khoảng thời gian biểu đồ">{Object.keys(trends).map(item => <button key={item} type="button" aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}<small>{item === '7 ngày' ? "Ngày" : item === '30 ngày' ? "Ngày" : "Tháng"}</small></button>)}</div>
       </div>
       <div className="admin-chart-summary">
         <div><i className="admin-legend-dot" /><span>Doanh thu nền tảng<small>(Triệu VNĐ)</small></span><strong>4.580<small>↑ 24,8%</small></strong></div>
@@ -30,7 +30,7 @@ export default function TrendsChart() {
           <path d={`${curve} L 702,275 L 52,275 Z`} fill="url(#admin-revenue-fill)" />
           <path d={curve} fill="none" stroke="#257148" strokeWidth="3" />
           <path d="M52,278 C105,254 110,243 145,237 S205,211 245,202 S310,211 352,206 S402,177 445,181 S501,164 535,143 S624,137 702,120" fill="none" stroke="#9dbfa5" strokeWidth="2" strokeDasharray="4 4" />
-          <rect x="316" y="53" width="250" height="28" rx="6" fill="#29353c" /><text x="331" y="71" fill="white" fontSize="10">● 776,0 triệu ₫ / 24.980 lượt đặt sân</text>
+          <rect x="316" y="53" width="250" height="28" rx="6" fill="#29353c" /><text x="331" y="71" fill="white" fontSize="11">● 776,0 triệu ₫ / 24.980 lượt đặt sân</text>
           {['01 TH03', '06 TH03', '11 TH03', '16 TH03', '21 TH03', '26 TH03', 'Hôm nay'].map((label, index) => <text key={label} x={52 + index * 108} y="309" textAnchor={index === 6 ? 'end' : 'start'} fill="#99a3ad" fontSize="11">{label}</text>)}
         </svg>
       </div>

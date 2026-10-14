@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { bookings } from './dashboardData.js'
 
@@ -23,25 +22,25 @@ export default function RecentBookings() {
   return (
     <section className="admin-panel admin-bookings">
       <div className="admin-panel-heading">
-        <div><h2>Đơn đặt sân gần đây<br /><span>(Đơn đặt sân gần đây)</span></h2><p>Theo dõi các giao dịch đặt sân và tình trạng thanh toán trên nền tảng.</p></div>
+        <div><h2>Đơn đặt sân gần đây</h2><p>Theo dõi các giao dịch đặt sân và tình trạng thanh toán trên nền tảng.</p></div>
         <div className="admin-table-filters">
-          <label><select aria-label="Lọc trạng thái đặt sân" value={status} onChange={event => setStatus(event.target.value)}><option value="All">Tất cả trạng thái</option>{['Confirmed', 'Pending', 'Cancelled', 'Completed'].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select><ChevronDown size={12} /></label>
-          <label><select aria-label="Lọc môn thể thao" value={sport} onChange={event => setSport(event.target.value)}><option value="All">Tất cả môn thể thao</option>{[...new Set(bookings.map(item => item.sport))].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select><ChevronDown size={12} /></label>
+          <select className="admin-select" aria-label="Lọc trạng thái đặt sân" value={status} onChange={event => setStatus(event.target.value)}><option value="All">Tất cả trạng thái</option>{['Confirmed', 'Pending', 'Cancelled', 'Completed'].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select>
+          <select className="admin-select" aria-label="Lọc môn thể thao" value={sport} onChange={event => setSport(event.target.value)}><option value="All">Tất cả môn thể thao</option>{[...new Set(bookings.map(item => item.sport))].map(item => <option key={item} value={item}>{adminDisplayLabels[item] || item}</option>)}</select>
         </div>
       </div>
-      <div className="admin-table-scroll">
-        <table><thead><tr><th>Mã đặt sân</th><th>Người đặt</th><th>Cơ sở &amp; sân</th><th>Thời gian</th><th>Số tiền</th><th>Trạng thái</th><th>Thanh toán</th></tr></thead>
+      <div className="admin-table-wrap">
+        <table className="admin-table"><thead><tr><th>Mã đặt sân</th><th>Người đặt</th><th>Cơ sở &amp; sân</th><th>Thời gian</th><th className="is-num">Số tiền</th><th>Trạng thái</th><th>Thanh toán</th></tr></thead>
           <tbody>{visible.map(item => <tr key={item.id}>
             <td className="admin-booking-id">{item.id}</td>
             <td><div className="admin-user-cell"><span className="admin-avatar admin-avatar-small">{item.initials}</span><strong>{item.user}</strong></div></td>
-            <td><strong>{item.facility}</strong><small>{item.court}</small><small>{item.location}</small></td>
-            <td><strong>{item.date}</strong><small>{item.time}</small><small>{item.sport}</small></td>
-            <td className="admin-amount">{item.amount}</td><td><StatusBadge status={item.status} /></td><td><span className={`admin-payment ${item.status === 'Pending' ? 'pending' : ''}`}>{item.payment}</span></td>
+            <td><strong>{item.facility}</strong><small>{item.court} · {item.location}</small></td>
+            <td><strong>{item.date}</strong><small>{item.time} · {adminDisplayLabels[item.sport] || item.sport}</small></td>
+            <td className="is-num admin-amount">{item.amount}</td><td><StatusBadge status={item.status} /></td><td><span className={`admin-payment ${item.status === 'Pending' ? 'pending' : ''}`}>{item.payment}</span></td>
           </tr>)}</tbody>
         </table>
         {!visible.length && <p className="admin-empty">Không có đơn đặt sân phù hợp với bộ lọc.</p>}
       </div>
-      <div className="admin-table-footer"><span>Hiển thị {visible.length} đơn <span className="admin-footer-divider">•</span> Trang 1 / 24</span><div><button disabled>Trước</button><button disabled className="admin-button-primary">Sau</button></div></div>
+      <div className="admin-table-footer"><span>Hiển thị {visible.length} đơn <span className="admin-footer-divider">•</span> Trang 1 / 24</span><div><button className="admin-btn admin-btn--sm" disabled>Trước</button><button className="admin-btn admin-btn--primary admin-btn--sm" disabled>Sau</button></div></div>
     </section>
   )
 }

@@ -1,0 +1,265 @@
+/* =====================================================================
+   SportNexus Admin — Design tokens
+   Every token is scoped to .sn-admin so Player and Court Owner pages
+   are never affected. Use these variables instead of hard-coded values.
+
+   Breakpoints (CSS variables cannot be used in media queries):
+     xl  ≤ 1280px   large tablet / small laptop
+     lg  ≤ 1024px   tablet landscape
+     md  ≤  768px   tablet portrait
+     sm  ≤  480px   phone
+   ===================================================================== */
+
+.sn-admin {
+  /* ---------- Brand green (unchanged SportNexus palette) ---------- */
+  --sn-green-950: #12261a;
+  --sn-green-900: #1c3524;
+  --sn-green-800: #2d5f3f;
+  --sn-green-700: #247348;
+  --sn-green-600: #15803d;
+  --sn-green-500: #22a05a;
+  --sn-green-400: #4ade80;
+  --sn-green-300: #86efac;
+  --sn-green-200: #bbf7d0;
+  --sn-green-100: #dcfce7;
+  --sn-green-50: #f0fdf4;
+
+  /* ---------- Neutrals (slate with a hint of green) ---------- */
+  --sn-gray-0: #ffffff;
+  --sn-gray-25: #fbfcfc;
+  --sn-gray-50: #f6f8f7;
+  --sn-gray-100: #eef2f1;
+  --sn-gray-200: #e2e8e6;
+  --sn-gray-300: #cfd8d5;
+  --sn-gray-400: #9aa8a3;
+  --sn-gray-500: #6b7a75;
+  --sn-gray-600: #4f5d59;
+  --sn-gray-700: #374541;
+  --sn-gray-800: #24302d;
+  --sn-gray-900: #16201d;
+
+  /* ---------- Semantic colours ---------- */
+  --sn-success-bg: #ecfdf3;
+  --sn-success-border: #bbf7d0;
+  --sn-success-text: #15803d;
+  --sn-success-solid: #16a34a;
+
+  --sn-warning-bg: #fffbeb;
+  --sn-warning-border: #fde68a;
+  --sn-warning-text: #b45309;
+  --sn-warning-solid: #d97706;
+
+  --sn-danger-bg: #fef2f2;
+  --sn-danger-border: #fecaca;
+  --sn-danger-text: #dc2626;
+  --sn-danger-solid: #dc2626;
+  --sn-danger-solid-hover: #b91c1c;
+
+  --sn-info-bg: #eff6ff;
+  --sn-info-border: #bfdbfe;
+  --sn-info-text: #2563eb;
+  --sn-info-solid: #2563eb;
+
+  /* ---------- Role aliases (use these in components) ---------- */
+  --admin-primary: var(--sn-green-600);
+  --admin-primary-hover: var(--sn-green-700);
+  --admin-primary-active: var(--sn-green-800);
+  --admin-primary-soft: var(--sn-green-50);
+  --admin-primary-soft-hover: var(--sn-green-100);
+  --admin-primary-contrast: #ffffff;
+
+  --admin-surface: var(--sn-gray-0);
+  --admin-surface-muted: var(--sn-gray-50);
+  --admin-surface-sunken: var(--sn-gray-100);
+  --admin-surface-hover: #f3f8f5;
+  --admin-surface-selected: var(--sn-green-50);
+
+  --admin-text: var(--sn-gray-900);
+  --admin-text-secondary: var(--sn-gray-600);
+  --admin-text-muted: var(--sn-gray-500);
+  --admin-text-disabled: var(--sn-gray-400);
+
+  --admin-border-color: var(--sn-gray-200);
+  --admin-border-strong: var(--sn-gray-300);
+  --admin-divider: var(--sn-gray-100);
+
+  /* Legacy variables already referenced by existing CSS */
+  --admin-green: var(--admin-primary);
+  --admin-ink: var(--admin-text);
+  --admin-muted: var(--admin-text-muted);
+  --admin-border: var(--admin-border-color);
+
+  /* ---------- Typography ---------- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 30px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-extrabold: 800;
+
+  --lh-tight: 1.25;
+  --lh-snug: 1.4;
+  --lh-base: 1.55;
+
+  /* ---------- Spacing (4px grid) ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --shadow-xs: 0 1px 2px rgba(16, 40, 28, .06);
+  --shadow-sm: 0 1px 3px rgba(16, 40, 28, .08), 0 1px 2px rgba(16, 40, 28, .04);
+  --shadow-md: 0 8px 20px -6px rgba(16, 40, 28, .14), 0 2px 6px rgba(16, 40, 28, .05);
+  --shadow-lg: 0 20px 48px -12px rgba(16, 40, 28, .24);
+  --shadow-brand: 0 6px 16px -4px rgba(21, 128, 61, .40);
+  --ring: 0 0 0 3px rgba(21, 128, 61, .22);
+  --ring-danger: 0 0 0 3px rgba(220, 38, 38, .18);
+
+  /* ---------- Motion ---------- */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+
+  /* ---------- Glass surfaces (over the sports background) ---------- */
+  --mint-50: #f2fbf5;
+  --mint-100: #e4f7ea;
+  --mint-200: #c9eed5;
+  --glass-bg: rgba(255, 255, 255, .84);
+  --glass-bg-strong: rgba(255, 255, 255, .92);
+  --glass-mint: rgba(240, 252, 244, .86);
+  --glass-border: rgba(255, 255, 255, .7);
+  --glass-blur: 18px;
+  --glass-shadow: 0 12px 32px -14px rgba(12, 40, 24, .35), inset 0 1px 0 rgba(255, 255, 255, .75);
+  --glass-shadow-hover: 0 20px 44px -16px rgba(12, 40, 24, .42), inset 0 1px 0 rgba(255, 255, 255, .8);
+  --gradient-brand: linear-gradient(135deg, #22a05a 0%, #15803d 55%, #166534 100%);
+  --gradient-mint: linear-gradient(135deg, rgba(220, 252, 231, .95) 0%, rgba(240, 253, 244, .92) 45%, rgba(255, 255, 255, .88) 100%);
+
+  /* ---------- Layers ---------- */
+  --z-header: 40;
+  --z-overlay: 55;
+  --z-sidebar: 60;
+  --z-modal: 200;
+  --z-toast: 300;
+
+  /* ---------- Layout metrics ---------- */
+  --sidebar-w: 264px;
+  --sidebar-w-rail: 76px;
+  --header-h: 68px;
+  --content-max: 1560px;
+  --control-h-sm: 32px;
+  --control-h: 40px;
+  --control-h-lg: 44px;
+
+  /* ---------- Base ---------- */
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--admin-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Reset (moved from admin.css; selectors kept identical so the
+   cascade behaves exactly as before) ---------- */
+.sn-admin * { box-sizing: border-box; }
+.sn-admin h1, .sn-admin h2, .sn-admin h3, .sn-admin p { margin: 0; }
+.sn-admin button, .sn-admin input, .sn-admin select { font: inherit; }
+.sn-admin button { cursor: pointer; }
+.sn-admin button:disabled { cursor: not-allowed; }
+.sn-admin button:focus-visible,
+.sn-admin a:focus-visible,
+.sn-admin input:focus-visible,
+.sn-admin select:focus-visible {
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+.sn-admin a { text-decoration: none; color: inherit; }
+.sn-admin button { border: 0; }
+/* Readable floor for <small> without an explicit size (browser default is 80% of the parent). */
+:where(.sn-admin) small { font-size: max(var(--fs-xs), .85em); }
+
+.sn-admin ::selection {
+  background: var(--sn-green-200);
+  color: var(--sn-green-950);
+}
+
+/* Global CSS hides every scrollbar for the Player app. Admin tables and
+   panels scroll horizontally, so restore a slim, visible scrollbar here. */
+.sn-admin * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sn-gray-300) transparent;
+}
+.sn-admin *::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+  height: 8px;
+}
+.sn-admin *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sn-admin *::-webkit-scrollbar-thumb {
+  background: var(--sn-gray-300);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.sn-admin *::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sn-gray-400);
+}
+
+/* ---------- Shared motion ---------- */
+@keyframes admin-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes admin-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes admin-scale-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes admin-slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sn-admin *,
+  .sn-admin *::before,
+  .sn-admin *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -78,7 +78,7 @@ export default function FacilityManagement() {
 
   return <div className={`facilities-page ${detail ? 'with-details' : ''}`}>
     <section className="facilities-main-content">
-      <header className="facilities-page-heading"><div><h1>Quản lý cơ sở sân <span>3.890 cơ sở</span></h1><p>Theo dõi và quản lý cơ sở thể thao, cấu trúc sân và hoạt động trên SportNexus.</p></div><div><button className="users-button" onClick={exportCsv}><Download size={13} />Xuất CSV</button><button className="users-button primary" onClick={() => setDialog({ type: 'form', facility: null })}><Plus size={14} />Thêm cơ sở</button></div></header>
+      <header className="facilities-page-heading admin-page-header"><div><h1>Quản lý cơ sở sân <span>3.890 cơ sở</span></h1><p>Theo dõi và quản lý cơ sở thể thao, cấu trúc sân và hoạt động trên SportNexus.</p></div><div><button className="users-button" onClick={exportCsv}><Download size={13} />Xuất CSV</button><button className="users-button primary" onClick={() => setDialog({ type: 'form', facility: null })}><Plus size={14} />Thêm cơ sở</button></div></header>
       <div className="facilities-kpis">{facilityStats.map(stat => { const Icon = statIcons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={26} /></div><strong>{formatNumber(stat.value)}</strong><p>{stat.trend}</p></article> })}</div>
       <p className="facilities-demo-label">Chỉ số và dữ liệu minh họa; chỉ số không tính từ {facilities.length} cơ sở mẫu. Thay đổi sẽ mất khi tải lại trang.</p>
       {notice && <div className="users-notice" role="status"><span>{notice}</span><button onClick={() => setNotice('')} aria-label="Đóng thông báo">×</button></div>}

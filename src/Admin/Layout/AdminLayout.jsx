@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import AdminSidebar from './AdminSidebar.jsx'
 import AdminHeader from './AdminHeader.jsx'
-import '../admin.css'
+// Shared Admin design system: tokens → shell & layout → components. Page CSS loads after these.
+import '../styles/admin-theme.css'
+import '../styles/admin-layout.css'
+import '../styles/admin-components.css'
+import '../styles/admin-patterns.css'
 
 export default function AdminLayout() {
   const [menuOpen, setMenuOpen] = useState(false)

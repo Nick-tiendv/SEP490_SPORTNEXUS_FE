@@ -1,0 +1,1011 @@
+/* =====================================================================
+   SportNexus Admin — Reusable components
+   Part A: canonical component classes (admin-*), for new and refactored JSX.
+   Part B: legacy bridge — maps the shared classes pages already use
+           (users-button, rr-button, nt-button, ss-button, users-search,
+           users-dialog, users-form, …) onto the same tokens so every page
+           looks consistent before its JSX is migrated.
+   Selectors are prefixed with .sn-admin so they outrank the
+   `.sn-admin button { border: 0 }` reset without needing !important.
+   ===================================================================== */
+
+/* =====================================================================
+   PART A — Canonical components
+   ===================================================================== */
+
+/* ---------- Button ---------- */
+.sn-admin .admin-btn {
+  --btn-bg: var(--admin-surface);
+  --btn-bg-hover: var(--admin-surface-hover);
+  --btn-color: var(--admin-text-secondary);
+  --btn-border: var(--admin-border-color);
+  --btn-border-hover: var(--admin-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--radius-sm);
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+.sn-admin .admin-btn > svg { flex-shrink: 0; }
+.sn-admin .admin-btn:hover:not(:disabled) {
+  background: var(--btn-bg-hover);
+  border-color: var(--btn-border-hover);
+}
+.sn-admin .admin-btn:active:not(:disabled) { transform: translateY(1px); }
+.sn-admin .admin-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.sn-admin .admin-btn:disabled,
+.sn-admin .admin-btn[aria-disabled="true"] {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-surface-sunken);
+  color: var(--admin-text-disabled);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.sn-admin .admin-btn--primary {
+  --btn-bg: var(--admin-primary);
+  --btn-bg-hover: var(--admin-primary-hover);
+  --btn-color: var(--admin-primary-contrast);
+  --btn-border: var(--admin-primary);
+  --btn-border-hover: var(--admin-primary-hover);
+  box-shadow: var(--shadow-brand);
+}
+.sn-admin .admin-btn--soft {
+  --btn-bg: var(--admin-primary-soft);
+  --btn-bg-hover: var(--admin-primary-soft-hover);
+  --btn-color: var(--sn-green-700);
+  --btn-border: var(--sn-green-200);
+  --btn-border-hover: var(--sn-green-300);
+  box-shadow: none;
+}
+.sn-admin .admin-btn--ghost {
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--admin-surface-sunken);
+  --btn-border: transparent;
+  --btn-border-hover: transparent;
+  box-shadow: none;
+}
+.sn-admin .admin-btn--danger {
+  --btn-bg: var(--sn-danger-solid);
+  --btn-bg-hover: var(--sn-danger-solid-hover);
+  --btn-color: #fff;
+  --btn-border: var(--sn-danger-solid);
+  --btn-border-hover: var(--sn-danger-solid-hover);
+}
+.sn-admin .admin-btn--danger-soft {
+  --btn-bg: var(--sn-danger-bg);
+  --btn-bg-hover: #fee2e2;
+  --btn-color: var(--sn-danger-text);
+  --btn-border: var(--sn-danger-border);
+  --btn-border-hover: #fca5a5;
+  box-shadow: none;
+}
+.sn-admin .admin-btn--danger:focus-visible,
+.sn-admin .admin-btn--danger-soft:focus-visible { box-shadow: var(--ring-danger); }
+
+.sn-admin .admin-btn--sm { min-height: var(--control-h-sm); padding: 0 var(--sp-3); font-size: var(--fs-xs); }
+.sn-admin .admin-btn--lg { min-height: var(--control-h-lg); padding: 0 var(--sp-5); font-size: var(--fs-base); }
+.sn-admin .admin-btn--block { width: 100%; }
+.sn-admin .admin-btn--icon { width: var(--control-h); padding: 0; }
+.sn-admin .admin-btn--icon.admin-btn--sm { width: var(--control-h-sm); }
+
+/* ---------- Card ---------- */
+.sn-admin .admin-card {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  min-width: 0;
+  overflow: hidden;
+}
+.sn-admin .admin-card--interactive {
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), border-color var(--dur-base);
+}
+.sn-admin .admin-card--interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--sn-green-200);
+}
+.sn-admin .admin-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+}
+.sn-admin .admin-card__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  color: var(--admin-text);
+}
+.sn-admin .admin-card__subtitle {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--admin-text-muted);
+}
+.sn-admin .admin-card__body { padding: 0 var(--sp-5) var(--sp-5); }
+.sn-admin .admin-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--admin-divider);
+  background: var(--admin-surface-muted);
+}
+
+/* ---------- KPI / stat card ---------- */
+.sn-admin .admin-kpi {
+  --kpi-tone: var(--admin-primary);
+  --kpi-tone-bg: var(--admin-primary-soft);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-5);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  min-width: 0;
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.sn-admin .admin-kpi__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.sn-admin .admin-kpi__label { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--admin-text-muted); }
+.sn-admin .admin-kpi__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--kpi-tone-bg);
+  color: var(--kpi-tone);
+}
+.sn-admin .admin-kpi__value {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: -.02em;
+  color: var(--admin-text);
+  overflow-wrap: anywhere;
+}
+.sn-admin .admin-kpi__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--admin-text-muted); }
+.sn-admin .admin-kpi__trend { display: inline-flex; align-items: center; gap: 2px; font-weight: var(--fw-semibold); color: var(--sn-success-text); }
+.sn-admin .admin-kpi__trend.is-down { color: var(--sn-danger-text); }
+.sn-admin .admin-kpi--danger { --kpi-tone: var(--sn-danger-text); --kpi-tone-bg: var(--sn-danger-bg); }
+.sn-admin .admin-kpi--warning { --kpi-tone: var(--sn-warning-text); --kpi-tone-bg: var(--sn-warning-bg); }
+.sn-admin .admin-kpi--info { --kpi-tone: var(--sn-info-text); --kpi-tone-bg: var(--sn-info-bg); }
+.sn-admin .admin-kpi--neutral { --kpi-tone: var(--admin-text-secondary); --kpi-tone-bg: var(--admin-surface-sunken); }
+
+/* ---------- StatCard component (components/StatCard.jsx) ----------
+   Shared by Dashboard, Reviews and Notifications. Page CSS may still tune
+   it with scoped selectors such as `.rr-stats .admin-stat-card`. */
+.sn-admin .admin-stat-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-5);
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(180px 120px at 100% 0%, rgba(74, 222, 128, .16), transparent 70%),
+    var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), border-color var(--dur-base);
+}
+/* Decorative ring in the corner */
+.sn-admin .admin-stat-card::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -34px;
+  z-index: -1;
+  width: 110px;
+  height: 110px;
+  border: 14px solid rgba(34, 160, 90, .07);
+  border-radius: 50%;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sn-admin .admin-stat-card:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-hover); border-color: rgba(134, 239, 172, .8); }
+.sn-admin .admin-stat-card:hover::after { transform: scale(1.15); }
+.sn-admin .admin-stat-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  color: var(--admin-text-muted);
+}
+.sn-admin .admin-stat-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: 0 8px 16px -8px rgba(21, 128, 61, .7), inset 0 1px 0 rgba(255, 255, 255, .3);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-stat-card:hover .admin-stat-icon { transform: rotate(-6deg) scale(1.06); }
+.sn-admin .admin-stat-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  letter-spacing: -.02em;
+  color: var(--admin-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.sn-admin .admin-stat-trend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+}
+.sn-admin .admin-stat-trend { flex-wrap: nowrap; align-items: flex-start; }
+.sn-admin .admin-stat-trend > svg {
+  flex-shrink: 0;
+  margin-top: -1px;
+  box-sizing: content-box;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--sn-success-bg);
+  color: var(--sn-success-text);
+}
+.sn-admin .admin-stat-trend > span { font-weight: var(--fw-bold); color: var(--sn-success-text); }
+.sn-admin .admin-stat-trend > small { font-size: var(--fs-xs); color: var(--admin-text-muted); }
+
+/* ---------- Avatar ---------- */
+.sn-admin .admin-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sn-green-600) 0%, var(--sn-green-800) 100%);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: .02em;
+  box-shadow: 0 0 0 2px var(--admin-surface), 0 0 0 3px var(--sn-green-100);
+}
+.sn-admin .admin-avatar-small { width: 30px; height: 30px; font-size: 11px; }
+
+/* ---------- Badge ---------- */
+.sn-admin .admin-badge {
+  --badge-bg: var(--admin-surface-sunken);
+  --badge-color: var(--admin-text-secondary);
+  --badge-border: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--badge-border);
+  border-radius: var(--radius-pill);
+  background: var(--badge-bg);
+  color: var(--badge-color);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.sn-admin .admin-badge--dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.sn-admin .admin-badge--success { --badge-bg: var(--sn-success-bg); --badge-color: var(--sn-success-text); --badge-border: var(--sn-success-border); }
+.sn-admin .admin-badge--warning { --badge-bg: var(--sn-warning-bg); --badge-color: var(--sn-warning-text); --badge-border: var(--sn-warning-border); }
+.sn-admin .admin-badge--danger  { --badge-bg: var(--sn-danger-bg);  --badge-color: var(--sn-danger-text);  --badge-border: var(--sn-danger-border); }
+.sn-admin .admin-badge--info    { --badge-bg: var(--sn-info-bg);    --badge-color: var(--sn-info-text);    --badge-border: var(--sn-info-border); }
+.sn-admin .admin-badge--brand   { --badge-bg: var(--admin-primary); --badge-color: #fff; --badge-border: var(--admin-primary); }
+.sn-admin .admin-badge--neutral { --badge-bg: var(--admin-surface-sunken); --badge-color: var(--admin-text-secondary); --badge-border: var(--admin-border-color); }
+
+/* ---------- Form controls ---------- */
+.sn-admin .admin-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sn-admin .admin-label { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--admin-text-secondary); }
+.sn-admin .admin-help { font-size: var(--fs-xs); color: var(--admin-text-muted); }
+.sn-admin .admin-error { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--sn-danger-text); }
+
+.sn-admin .admin-input,
+.sn-admin .admin-select,
+.sn-admin .admin-textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-snug);
+  outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), background-color var(--dur-fast);
+}
+.sn-admin .admin-textarea { min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
+.sn-admin .admin-select {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7a75' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+.sn-admin .admin-input::placeholder,
+.sn-admin .admin-textarea::placeholder { color: var(--admin-text-disabled); }
+.sn-admin .admin-input:hover:not(:disabled),
+.sn-admin .admin-select:hover:not(:disabled),
+.sn-admin .admin-textarea:hover:not(:disabled) { border-color: var(--admin-border-strong); }
+.sn-admin .admin-input:focus,
+.sn-admin .admin-select:focus,
+.sn-admin .admin-textarea:focus { border-color: var(--admin-primary); box-shadow: var(--ring); outline: none; }
+.sn-admin .admin-input[aria-invalid="true"],
+.sn-admin .admin-select[aria-invalid="true"],
+.sn-admin .admin-textarea[aria-invalid="true"] { border-color: var(--sn-danger-text); }
+.sn-admin .admin-input[aria-invalid="true"]:focus,
+.sn-admin .admin-textarea[aria-invalid="true"]:focus { box-shadow: var(--ring-danger); }
+.sn-admin .admin-input:disabled,
+.sn-admin .admin-select:disabled,
+.sn-admin .admin-textarea:disabled { background-color: var(--admin-surface-sunken); color: var(--admin-text-disabled); cursor: not-allowed; }
+
+.sn-admin input[type="checkbox"],
+.sn-admin input[type="radio"] { accent-color: var(--admin-primary); }
+
+/* ---------- Search ---------- */
+.sn-admin .admin-search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text-muted);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.sn-admin .admin-search-field:hover { border-color: var(--admin-border-strong); }
+.sn-admin .admin-search-field:focus-within { border-color: var(--admin-primary); box-shadow: var(--ring); color: var(--admin-primary); }
+.sn-admin .admin-search-field > svg { flex-shrink: 0; }
+.sn-admin .admin-search-field input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--admin-text);
+  font-size: var(--fs-base);
+}
+.sn-admin .admin-search-field input::placeholder { color: var(--admin-text-disabled); }
+
+/* ---------- Toolbar & filter chips ---------- */
+.sn-admin .admin-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+}
+.sn-admin .admin-toolbar__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+
+.sn-admin .admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--sn-green-200);
+  border-radius: var(--radius-pill);
+  background: var(--admin-primary-soft);
+  color: var(--sn-green-700);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.sn-admin button.admin-chip:hover { background: var(--admin-primary-soft-hover); border-color: var(--sn-green-300); }
+
+/* ---------- Tabs (underline) & segmented control ---------- */
+.sn-admin .admin-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--admin-border-color);
+  overflow-x: auto;
+}
+.sn-admin .admin-tabs > button,
+.sn-admin .admin-tabs > a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: none;
+  color: var(--admin-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: color var(--dur-fast);
+}
+.sn-admin .admin-tabs > :is(button, a)::after {
+  content: '';
+  position: absolute;
+  left: var(--sp-3);
+  right: var(--sp-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--admin-primary);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-tabs > :is(button, a):hover { color: var(--admin-text); }
+.sn-admin .admin-tabs > :is(.active, [aria-selected="true"]) { color: var(--admin-primary); }
+.sn-admin .admin-tabs > :is(.active, [aria-selected="true"])::after { transform: scaleX(1); }
+
+.sn-admin .admin-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface-muted);
+}
+.sn-admin .admin-segmented > button {
+  min-height: 30px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--admin-text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.sn-admin .admin-segmented > button:hover:not(:disabled) { color: var(--admin-text); }
+.sn-admin .admin-segmented > button:is(.selected, .active, [aria-pressed="true"], [aria-selected="true"]) {
+  background: var(--admin-surface);
+  color: var(--sn-green-700);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Table ---------- */
+.sn-admin .admin-table-wrap {
+  overflow-x: auto;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
+.sn-admin .admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: var(--fs-sm);
+}
+.sn-admin .admin-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--admin-surface-muted);
+  border-bottom: 1px solid var(--admin-border-color);
+  color: var(--admin-text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.sn-admin .admin-table td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--admin-divider);
+  color: var(--admin-text);
+  vertical-align: middle;
+}
+.sn-admin .admin-table tbody tr { transition: background-color var(--dur-fast); }
+.sn-admin .admin-table tbody tr:hover { background: var(--admin-surface-hover); }
+.sn-admin .admin-table tbody tr.is-selected { background: var(--admin-surface-selected); box-shadow: inset 3px 0 0 var(--admin-primary); }
+.sn-admin .admin-table tbody tr:last-child td { border-bottom: 0; }
+.sn-admin .admin-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sn-admin .admin-table .is-muted { color: var(--admin-text-muted); }
+
+/* ---------- Pagination ---------- */
+.sn-admin .admin-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--admin-divider);
+  color: var(--admin-text-muted);
+  font-size: var(--fs-sm);
+}
+.sn-admin .admin-pagination__pages { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.sn-admin .admin-pagination__pages > button {
+  min-width: var(--control-h-sm);
+  height: var(--control-h-sm);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.sn-admin .admin-pagination__pages > button:hover:not(:disabled) { border-color: var(--admin-border-strong); background: var(--admin-surface-hover); }
+.sn-admin .admin-pagination__pages > button:is(.current, [aria-current="page"]) { background: var(--admin-primary); border-color: var(--admin-primary); color: #fff; }
+.sn-admin .admin-pagination__pages > button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- Alert ---------- */
+.sn-admin .admin-alert {
+  --alert-bg: var(--sn-info-bg);
+  --alert-border: var(--sn-info-border);
+  --alert-color: var(--sn-info-text);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--alert-border);
+  border-radius: var(--radius-md);
+  background: var(--alert-bg);
+  color: var(--admin-text);
+  font-size: var(--fs-sm);
+  animation: admin-rise-in var(--dur-base) var(--ease-out) backwards;
+}
+.sn-admin .admin-alert > svg { flex-shrink: 0; margin-top: 2px; color: var(--alert-color); }
+.sn-admin .admin-alert--success { --alert-bg: var(--sn-success-bg); --alert-border: var(--sn-success-border); --alert-color: var(--sn-success-text); }
+.sn-admin .admin-alert--warning { --alert-bg: var(--sn-warning-bg); --alert-border: var(--sn-warning-border); --alert-color: var(--sn-warning-text); }
+.sn-admin .admin-alert--danger  { --alert-bg: var(--sn-danger-bg);  --alert-border: var(--sn-danger-border);  --alert-color: var(--sn-danger-text); }
+
+/* ---------- Modal ---------- */
+.sn-admin .admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+  overflow-y: auto;
+  background: rgba(18, 38, 26, .48);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: admin-fade-in var(--dur-base) var(--ease-out) backwards;
+}
+.sn-admin .admin-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: var(--sp-6);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: admin-scale-in var(--dur-slow) var(--ease-out) backwards;
+}
+.sn-admin .admin-modal--lg { max-width: 720px; }
+
+/* ---------- Details drawer (right-hand panel) ---------- */
+.sn-admin .admin-drawer {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-4));
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--header-h) - var(--sp-8));
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: admin-slide-in-right var(--dur-slow) var(--ease-out) backwards;
+}
+.sn-admin .admin-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--admin-divider);
+}
+.sn-admin .admin-drawer__body { flex: 1; overflow-y: auto; padding: var(--sp-5); }
+.sn-admin .admin-drawer__footer { display: flex; gap: var(--sp-2); padding: var(--sp-4) var(--sp-5); border-top: 1px solid var(--admin-divider); background: var(--admin-surface-muted); }
+
+/* ---------- Empty state ---------- */
+.sn-admin .admin-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-10) var(--sp-6);
+  text-align: center;
+  color: var(--admin-text-muted);
+}
+.sn-admin .admin-empty-state > svg { color: var(--sn-green-500); }
+.sn-admin .admin-empty-state h3 { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--admin-text); }
+
+/* ---------- Progress bar (width set via --value) ---------- */
+.sn-admin .admin-progress {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--admin-surface-sunken);
+  overflow: hidden;
+}
+.sn-admin .admin-progress > span {
+  display: block;
+  height: 100%;
+  width: var(--value, 0%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--sn-green-500), var(--sn-green-700));
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* ---------- Icon button ---------- */
+.sn-admin .admin-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--admin-text-muted);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.sn-admin .admin-icon-btn:hover:not(:disabled) { background: var(--admin-surface-sunken); color: var(--admin-text); }
+.sn-admin .admin-icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.sn-admin .admin-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+
+/* =====================================================================
+   PART B — Legacy bridge
+   Remove each block once no JSX references the legacy class.
+   ===================================================================== */
+
+/* ---------- Buttons: users-button / rr-button / nt-button / ss-button ---------- */
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: var(--shadow-xs);
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button) > svg { flex-shrink: 0; }
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button):hover:not(:disabled) {
+  background: var(--admin-surface-hover);
+  border-color: var(--admin-border-strong);
+  color: var(--admin-text);
+}
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button):active:not(:disabled) { transform: translateY(1px); }
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button):focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* Primary */
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button).primary {
+  background: var(--admin-primary);
+  border-color: var(--admin-primary);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button).primary:hover:not(:disabled) {
+  background: var(--admin-primary-hover);
+  border-color: var(--admin-primary-hover);
+  color: #fff;
+}
+
+/* Soft green ("mint") */
+.sn-admin .rr-button.mint {
+  background: var(--admin-primary-soft);
+  border-color: var(--sn-green-200);
+  color: var(--sn-green-700);
+  box-shadow: none;
+}
+.sn-admin .rr-button.mint:hover:not(:disabled) { background: var(--admin-primary-soft-hover); border-color: var(--sn-green-300); color: var(--sn-green-800); }
+
+/* Danger — soft for in-page actions, solid for Settings confirmations */
+.sn-admin :is(.users-button.users-danger, .rr-button.danger, .nt-button.danger) {
+  background: var(--sn-danger-bg);
+  border-color: var(--sn-danger-border);
+  color: var(--sn-danger-text);
+  box-shadow: none;
+}
+.sn-admin :is(.users-button.users-danger, .rr-button.danger, .nt-button.danger):hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: var(--sn-danger-solid-hover);
+}
+.sn-admin .ss-button.danger { background: var(--sn-danger-solid); border-color: var(--sn-danger-solid); color: #fff; }
+.sn-admin .ss-button.danger:hover:not(:disabled) { background: var(--sn-danger-solid-hover); border-color: var(--sn-danger-solid-hover); color: #fff; }
+.sn-admin :is(.users-button.users-danger, .rr-button.danger, .nt-button.danger, .ss-button.danger):focus-visible { box-shadow: var(--ring-danger); }
+
+/* Warning action inside the Reviews priority banner */
+.sn-admin .rr-priority .rr-button { background: var(--sn-warning-solid); border-color: var(--sn-warning-solid); color: #fff; box-shadow: none; }
+.sn-admin .rr-priority .rr-button:hover:not(:disabled) { background: var(--sn-warning-text); border-color: var(--sn-warning-text); color: #fff; }
+
+/* Compact size */
+.sn-admin .nt-button.compact { min-height: var(--control-h-sm); padding: 0 var(--sp-3); font-size: var(--fs-xs); }
+
+/* Disabled — always last so it wins over every variant */
+.sn-admin :is(.users-button, .rr-button, .nt-button, .ss-button):disabled {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-surface-sunken);
+  color: var(--admin-text-disabled);
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+/* ---------- Search field ---------- */
+.sn-admin :is(.users-search, .rr-search, .nt-search) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text-muted);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), color var(--dur-fast);
+}
+.sn-admin :is(.users-search, .rr-search, .nt-search):hover { border-color: var(--admin-border-strong); }
+.sn-admin :is(.users-search, .rr-search, .nt-search):focus-within { border-color: var(--admin-primary); box-shadow: var(--ring); color: var(--admin-primary); }
+.sn-admin :is(.users-search, .rr-search, .nt-search) > svg { flex-shrink: 0; }
+.sn-admin :is(.users-search, .rr-search, .nt-search) input { font-size: var(--fs-base); color: var(--admin-text); }
+.sn-admin :is(.users-search, .rr-search, .nt-search) input::placeholder { color: var(--admin-text-disabled); }
+
+/* ---------- Inline notice (dismissible) ---------- */
+.sn-admin .users-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--sn-success-border);
+  border-left: 4px solid var(--admin-primary);
+  border-radius: var(--radius-md);
+  background: var(--sn-success-bg);
+  color: var(--sn-green-800);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  box-shadow: var(--shadow-xs);
+  animation: admin-rise-in var(--dur-base) var(--ease-out) backwards;
+}
+.sn-admin .users-notice button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  transition: background-color var(--dur-fast);
+}
+.sn-admin .users-notice button:hover { background: rgba(21, 128, 61, .1); }
+
+/* ---------- Demo note (sample-data disclaimer) ---------- */
+.sn-admin .users-demo-note {
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--sn-info-border);
+  border-radius: var(--radius-md);
+  background: var(--sn-info-bg);
+  color: var(--sn-gray-700);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-base);
+}
+
+/* ---------- Forms ---------- */
+.sn-admin .users-form { display: flex; flex-direction: column; gap: var(--sp-4); }
+.sn-admin .users-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--admin-text-secondary);
+}
+.sn-admin .users-form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-regular);
+  outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.sn-admin .users-form textarea { min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
+.sn-admin .users-form :is(input, select, textarea):hover:not(:disabled) { border-color: var(--admin-border-strong); }
+.sn-admin .users-form :is(input, select, textarea):focus { border-color: var(--admin-primary); box-shadow: var(--ring); outline: none; }
+.sn-admin .users-form :is(input, select, textarea):disabled { background: var(--admin-surface-sunken); color: var(--admin-text-disabled); }
+.sn-admin .users-form-error {
+  margin: var(--sp-1) 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--sn-danger-bg);
+  color: var(--sn-danger-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+/* ---------- Modal (DemoDialog) ---------- */
+.sn-admin .users-dialog-backdrop {
+  z-index: var(--z-modal);
+  padding: var(--sp-5);
+  background: rgba(18, 38, 26, .48);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: admin-fade-in var(--dur-base) var(--ease-out) backwards;
+}
+.sn-admin .users-dialog {
+  max-width: 520px;
+  max-height: calc(100vh - 40px);
+  padding: var(--sp-6);
+  border: 1px solid var(--admin-border-color);
+  border-radius: var(--radius-xl);
+  background: var(--admin-surface);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-base);
+  color: var(--admin-text);
+  animation: admin-scale-in var(--dur-slow) var(--ease-out) backwards;
+}
+.sn-admin .users-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: calc(var(--sp-6) * -1) calc(var(--sp-6) * -1) var(--sp-5);
+  padding: var(--sp-5) var(--sp-6) var(--sp-4);
+  border-bottom: 1px solid var(--admin-divider);
+}
+.sn-admin .users-dialog > header h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  color: var(--admin-text);
+}
+.sn-admin .users-dialog > header button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  margin: -4px -8px 0 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--admin-text-muted);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+.sn-admin .users-dialog > header button:hover { background: var(--admin-surface-sunken); color: var(--admin-text); }
+.sn-admin .users-dialog > header button:focus-visible { outline: none; box-shadow: var(--ring); }
+.sn-admin .users-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-6);
+}
+
+/* ---------- Empty state ---------- */
+.sn-admin .users-empty { padding: var(--sp-10) var(--sp-6); color: var(--admin-text-muted); font-size: var(--fs-sm); }
+.sn-admin .users-empty svg { color: var(--sn-green-500); }
+.sn-admin .users-empty h3 { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--admin-text); }
+
+/* ---------- Status badges: admin-status (Dashboard) / users-status ---------- */
+.sn-admin :is(.admin-status, .users-status) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--sn-success-border);
+  border-radius: var(--radius-pill);
+  background: var(--sn-success-bg);
+  color: var(--sn-success-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.sn-admin :is(.admin-status, .users-status) i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.sn-admin .admin-status-pending { background: var(--sn-warning-bg); border-color: var(--sn-warning-border); color: var(--sn-warning-text); }
+.sn-admin :is(.admin-status-cancelled, .users-status.suspended) { background: var(--sn-danger-bg); border-color: var(--sn-danger-border); color: var(--sn-danger-text); }
+.sn-admin .admin-status-completed { background: var(--sn-info-bg); border-color: var(--sn-info-border); color: var(--sn-info-text); }
+.sn-admin .users-status.inactive { background: var(--admin-surface-sunken); border-color: var(--admin-border-color); color: var(--admin-text-muted); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 480px) {
+  .sn-admin :is(.users-dialog, .admin-modal) { padding: var(--sp-5); border-radius: var(--radius-lg); }
+  .sn-admin .users-dialog > header { margin: calc(var(--sp-5) * -1) calc(var(--sp-5) * -1) var(--sp-4); padding: var(--sp-4) var(--sp-5); }
+  .sn-admin .users-dialog footer > * { flex: 1 1 auto; }
+}
