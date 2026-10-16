@@ -435,16 +435,24 @@ function CreateMatch() {
         ? 'Mới tập chơi'
         : 'Bán chuyên / Nâng cao'
 
+    const sportMeta = {
+      badminton: { name: 'Cầu Lông', badge: 'CẦU LÔNG ĐÔI', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' },
+      pickleball: { name: 'Pickleball', badge: 'PICKLEBALL ĐÔI', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop' },
+      football: { name: 'Bóng Đá', badge: 'BÓNG ĐÁ SÂN 7', img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&h=600&fit=crop' },
+      basketball: { name: 'Bóng Rổ', badge: 'BÓNG RỔ 3x3', img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop' },
+      tennis: { name: 'Tennis', badge: 'QUẦN VỢT ĐÔI', img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop' },
+    }[sport] || { name: 'Cầu Lông', badge: 'GIAO LƯU THỂ THAO', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' }
+
     const createdMatch = {
       id: Date.now(),
       sport: sport,
-      sportBadge: sport === 'badminton' ? 'CẦU LÔNG ĐÔI' : 'PICKLEBALL ĐÔI',
+      sportBadge: sportMeta.badge,
       subBadge: '✓ Kèo Của Bạn (Host: Minh Minh Minh)',
       levelTag: levelText,
       slotTag: 'Cần 3 Người (Nam/Nữ)',
       time: `${preferredTimeRange} (${selectedDate === 'today' ? 'Hôm Nay' : 'Ngày Mai'})`,
       timeSlot: 'evening',
-      title: `[${sport === 'badminton' ? 'Cầu Lông' : 'Pickleball'} ${formatName}] Giao lưu tại ${currentCourt.name} (${currentDistrictData.name})`,
+      title: `[${sportMeta.name} ${formatName}] Giao lưu tại ${currentCourt.name} (${currentDistrictData.name})`,
       location: `${currentCourt.name}, ${currentCourt.address}`,
       groupDesc: 'Host: Minh Minh Minh (Chỉ số Fairplay 99.4)',
       roster: [
@@ -460,10 +468,7 @@ function CreateMatch() {
       priceDisplay: `${new Intl.NumberFormat('vi-VN').format(deposit)} đ`,
       buttonText: 'Chốt Slot Ngay',
       isFlashClaim: false,
-      image:
-        sport === 'badminton'
-          ? 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop'
-          : 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+      image: sportMeta.img,
     }
 
     try {
@@ -543,56 +548,45 @@ function CreateMatch() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                   {[
-                    { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', sub: 'Đơn / Đôi' },
-                    { key: 'pickleball', label: 'Pickleball', emoji: '🏓', sub: 'Giao Lưu & Đấu' },
-                    { key: 'football', label: 'Bóng Đá', emoji: '⚽', sub: 'Sân 5 / Sân 7' },
-                    { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', sub: '3x3 & 5x5' },
-                    { key: 'tennis', label: 'Tennis', emoji: '🎾', sub: 'Đơn / Đôi' },
-                  ].map((item) => {
-                    const isSelected = sport === item.key
-                    return (
+                    { key: 'badminton', name: 'Cầu Lông', emoji: '🏸', sub: 'BWF Pro' },
+                    { key: 'pickleball', name: 'Pickleball', emoji: '🏓', sub: 'Giao lưu & Đấu' },
+                    { key: 'football', name: 'Bóng Đá', emoji: '⚽', sub: 'Mini 5-7' },
+                    { key: 'basketball', name: 'Bóng Rổ', emoji: '🏀', sub: 'FIBA 3x3' },
+                    { key: 'tennis', name: 'Tennis', emoji: '🎾', sub: 'Hard Court' },
+                  ].map((s) => (
+                    <div
+                      key={s.key}
+                      onClick={() => setSport(s.key)}
+                      className={`relative p-3 rounded-2xl cursor-pointer transition-all flex flex-col items-center text-center gap-2 ${
+                        sport === s.key
+                          ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
+                          : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
                       <div
-                        key={item.key}
-                        onClick={() => setSport(item.key)}
-                        className={`relative p-3 rounded-2xl cursor-pointer transition-all flex flex-col items-center text-center gap-2 ${
-                          isSelected
-                            ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
-                            : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300'
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
+                          sport === s.key ? 'bg-white/20 text-white scale-105' : 'bg-gray-100'
                         }`}
                       >
-                        <div
-                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-                            isSelected
-                              ? 'bg-white/20 text-white scale-105'
-                              : 'bg-gray-100'
-                          }`}
-                        >
-                          <span
-                            className="text-[24px] leading-none select-none"
-                            role="img"
-                            aria-label={item.label}
-                          >
-                            {item.emoji}
-                          </span>
-                        </div>
-                        <div className="w-full">
-                          <h3 className="font-extrabold text-[13px] truncate">{item.label}</h3>
-                          <p
-                            className={`text-[10px] mt-0.5 truncate ${
-                              isSelected ? 'text-green-100' : 'text-gray-400'
-                            }`}
-                          >
-                            {item.sub}
-                          </p>
-                        </div>
-                        {isSelected && (
-                          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399]"></span>
-                        )}
+                        <span className="text-[22px] leading-none select-none" role="img" aria-label={s.name}>
+                          {s.emoji}
+                        </span>
                       </div>
-                    )
-                  })}
+                      <div className="w-full">
+                        <div className="flex items-center justify-center gap-1">
+                          <h3 className="font-extrabold text-[13px] truncate">{s.name}</h3>
+                          {sport === s.key && (
+                            <span className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399] shrink-0"></span>
+                          )}
+                        </div>
+                        <p className={`text-[10px] mt-0.5 truncate ${sport === s.key ? 'text-green-100' : 'text-gray-400'}`}>
+                          {s.sub}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

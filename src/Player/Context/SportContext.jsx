@@ -5,15 +5,14 @@ export const SportContext = createContext()
 export const SPORTS_LIST = [
   { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', color: '#2D5F3F' },
   { key: 'pickleball', label: 'Pickleball', emoji: '🏓', color: '#1B6A45' },
-  { key: 'football', label: 'Bóng Đá', emoji: '⚽', color: '#2563EB' },
-  { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', color: '#EA580C' },
+  { key: 'football', label: 'Bóng Đá', emoji: '⚽', color: '#1E5631' },
+  { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', color: '#C2410C' },
   { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#65A30D' },
 ]
 
-export const ALL_SPORTS_KEYS = SPORTS_LIST.map(s => s.key)
+export const ALL_SPORTS_KEYS = SPORTS_LIST.map((s) => s.key)
 
 export function SportProvider({ children }) {
-  // selectedSports: array of keys, e.g. ['badminton'], ['pickleball'], or all
   const [selectedSports, setSelectedSports] = useState(() => {
     try {
       const saved = localStorage.getItem('sportnexus_selected_sports')
@@ -41,14 +40,24 @@ export function SportProvider({ children }) {
 
   const toggleSport = (key) => {
     setSelectedSports((prev) => {
-      // Nếu đang chọn tất cả các môn: click vào 1 môn sẽ lọc DUY NHẤT môn đó (chọn 1 môn riêng)
+      // Nếu đang chọn toàn bộ các môn: click vào môn nào sẽ lọc DUY NHẤT môn đó
       if (prev.length === SPORTS_LIST.length) {
         return [key]
       }
 
-      // Nếu môn này đã được chọn: click lại chính môn đó sẽ HỦY CHỌN môn đó (không tự động nhảy sang tất cả)
+      // Nếu chỉ đang chọn 1 môn:
+      if (prev.length === 1 && prev.includes(key)) {
+        // Click lại chính môn đó: chuyển sang hiển thị tất cả các môn
+        return ALL_SPORTS_KEYS
+      }
+
+      // Nếu đang chọn nhiều môn hoặc môn khác:
       if (prev.includes(key)) {
-        return prev.filter((k) => k !== key)
+        const remaining = prev.filter((k) => k !== key)
+        return remaining.length > 0 ? remaining : ALL_SPORTS_KEYS
+      } else {
+        const next = [...prev, key]
+        return next.length === SPORTS_LIST.length ? ALL_SPORTS_KEYS : next
       }
 
       // Nếu môn này chưa có: thêm môn đó vào danh sách (cho phép chọn 2, 3, 4 môn riêng)
@@ -61,7 +70,7 @@ export function SportProvider({ children }) {
     setSelectedSports([key])
   }
 
-  // Chọn hiển thị tất cả các môn
+  // Chọn hiển thị tất cả môn
   const selectAllSports = () => {
     setSelectedSports(ALL_SPORTS_KEYS)
   }

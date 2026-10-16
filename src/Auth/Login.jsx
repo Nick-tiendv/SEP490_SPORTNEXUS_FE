@@ -3,154 +3,6 @@ import { useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { loginApi } from '../api/authApi'
 
-// Hàm chuẩn hóa số điện thoại Việt Nam (xóa ký tự đặc biệt, chuẩn hóa 0xxx hoặc +84xxx)
-export const normalizePhone = (phoneStr) => {
-  if (!phoneStr) return ''
-  const digits = String(phoneStr).replace(/\D/g, '')
-  if (digits.startsWith('84') && digits.length >= 11) {
-    return '0' + digits.slice(2)
-  }
-  if (digits.length === 9) {
-    return '0' + digits
-  }
-  return digits
-}
-
-// Hàm nhận diện vai trò tài khoản dựa trên dữ liệu hệ thống
-export const detectUserRole = (rawInput) => {
-  if (!rawInput) return null
-  const cleanId = String(rawInput).trim().toLowerCase()
-  const normInput = normalizePhone(cleanId)
-
-  // 1. Kiểm tra trong danh sách người dùng đã đăng ký (sportnexus_users map)
-  try {
-    const usersMap = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
-    if (usersMap[cleanId] && usersMap[cleanId].role) {
-      return usersMap[cleanId].role
-    }
-    if (normInput && usersMap[normInput] && usersMap[normInput].role) {
-      return usersMap[normInput].role
-    }
-    // Duyệt tìm kiếm mảng người dùng
-    const found = Object.values(usersMap).find((u) => {
-      const uEmail = (u.email || '').trim().toLowerCase()
-      const uPhone = (u.phone || '').trim()
-      const uNormPhone = normalizePhone(uPhone)
-      return (
-        (uEmail && uEmail === cleanId) ||
-        (uPhone && uPhone === cleanId) ||
-        (normInput && uNormPhone && normInput === uNormPhone)
-      )
-    })
-    if (found && found.role) {
-      return found.role
-    }
-  } catch (err) {}
-
-  // 2. Kiểm tra trong mảng lịch sử đăng ký (sportnexus_user_records)
-  try {
-    const records = JSON.parse(localStorage.getItem('sportnexus_user_records') || '[]')
-    const foundRecord = records.find((u) => {
-      const uEmail = (u.email || '').trim().toLowerCase()
-      const uNormPhone = normalizePhone(u.phone || '')
-      return (
-        (uEmail && uEmail === cleanId) ||
-        (normInput && uNormPhone && normInput === uNormPhone)
-      )
-    })
-    if (foundRecord && foundRecord.role) {
-      return foundRecord.role
-    }
-  } catch (err) {}
-
-  // 3. Kiểm tra Profile Chủ Sân đã lưu trong hệ thống (sportnexus_owner_profile)
-  try {
-    const ownerSaved = localStorage.getItem('sportnexus_owner_profile')
-    if (ownerSaved) {
-      const ownerData = JSON.parse(ownerSaved)
-      const ownerEmail = (ownerData.email || '').trim().toLowerCase()
-      const ownerPhoneNorm = normalizePhone(ownerData.phone || '')
-      const ownerName = (ownerData.fullName || '').trim().toLowerCase()
-      if (
-        (ownerEmail && ownerEmail === cleanId) ||
-        (normInput && ownerPhoneNorm && normInput === ownerPhoneNorm) ||
-        cleanId === ownerName ||
-        cleanId === 'nguyen van duc' ||
-        cleanId === 'nguyenvanduc'
-      ) {
-        return 'court_owner'
-      }
-    }
-  } catch (err) {}
-
-  // 4. Danh sách tài khoản demo có sẵn (Seed Accounts)
-  const courtOwnerSeedList = [
-    'owner@sportnexus.com',
-    'chusan@sportnexus.com',
-    'chusan@gmail.com',
-    'chusan@sportnexus.vn',
-    'duc.nguyen@sportnexus.vn',
-    'courtowner@sportnexus.com',
-    'owner',
-    'chusan',
-    '0908123456',
-    '0908 123 456'
-  ]
-  const adminSeedList = [
-    'admin@sportnexus.com',
-    'admin@sportnexus.vn',
-    'quantri@sportnexus.com',
-    'admin',
-    'quantri'
-  ]
-  const playerSeedList = [
-    'player@sportnexus.com',
-    'player@sportnexus.vn',
-    'nguoichoi@gmail.com',
-    'minh.nguyen@sportnexus.vn',
-    'minh@sportnexus.vn',
-    'player',
-    'nguoichoi',
-    '0901234567',
-    '0901 123 456'
-  ]
-
-  if (courtOwnerSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'court_owner'
-  }
-  if (adminSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'admin'
-  }
-  if (playerSeedList.some(s => s.toLowerCase() === cleanId || normalizePhone(s) === normInput)) {
-    return 'player'
-  }
-
-  // 5. Nhận diện từ khóa thông minh (Keywords)
-  if (
-    cleanId.includes('owner') ||
-    cleanId.includes('chusan') ||
-    cleanId.includes('court') ||
-    cleanId.includes('manager') ||
-    cleanId.includes('quanly') ||
-    cleanId.includes('facility') ||
-    cleanId.includes('san')
-  ) {
-    return 'court_owner'
-  }
-  if (cleanId.includes('admin') || cleanId.includes('quantri')) {
-    return 'admin'
-  }
-  if (
-    cleanId.includes('player') ||
-    cleanId.includes('nguoichoi') ||
-    cleanId.includes('member') ||
-    cleanId.includes('vdv')
-  ) {
-    return 'player'
-  }
-
-  return null
-}
 
 function Login() {
   const location = useLocation()
@@ -162,98 +14,105 @@ function Login() {
   const [successMessage, setSuccessMessage] = useState(() => location.state?.message || '')
   const navigate = useNavigate()
 
-  // Xác định trước vai trò hiển thị trực tiếp khi người dùng gõ
-  const previewRole = detectUserRole(identifier)
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault()
+    if (isLoading) return
     setErrorMessage('')
     setSuccessMessage('')
     setIsLoading(true)
 
     try {
-      // 1. Gọi API đăng nhập backend POST /api/auth/login
-      const response = await loginApi(identifier, password)
+      const { token, userId, fullName, role } = await loginUser({ username: identifier.trim(), password })
+      const targetRoute = roleDestination(role)
+      if (!targetRoute) {
+        throw new Error('Vai tr? t?i kho?n ch?a ???c c?u h?nh. Vui l?ng li?n h? qu?n tr? vi?n.')
+      }
+      contextLogin({ token, role })
 
-      // Kiểm tra statusCode và data từ response
-      if (response && (response.statusCode === 200 || response.statusCode === 201) && response.data) {
-        const { token, userId, fullName, role } = response.data
+      const profileRole = targetRoute === '/owner/dashboard' ? 'court_owner'
+        : targetRoute === '/admin/dashboard' ? 'admin' : 'player'
+      try {
+        localStorage.removeItem('sportnexus_auth_token')
+        localStorage.setItem('sportnexus_user_role', profileRole)
+        localStorage.setItem('sportnexus_user_id', userId ?? '')
+        localStorage.setItem('sportnexus_user_fullname', fullName || '')
+        localStorage.setItem('sportnexus_current_user', JSON.stringify({
+          userId, fullName, username: identifier.trim(), role: profileRole, rawRole: role,
+        }))
+      } catch { /* AuthProvider v?n gi? phi?n khi localStorage b? ch?n. */ }
 
-        // Chuẩn hóa role nhận từ API (Player -> player, CourtOwner -> court_owner, Admin -> admin)
-        const normalizedRoleStr = String(role || '').toLowerCase()
-        let finalRole = 'player'
-        if (normalizedRoleStr.includes('owner') || normalizedRoleStr.includes('chusan')) {
-          finalRole = 'court_owner'
-        } else if (normalizedRoleStr.includes('admin')) {
-          finalRole = 'admin'
-        } else {
-          finalRole = 'player'
+      const successText = '??ng nh?p th?nh c?ng! Ch?o m?ng ' + (fullName || identifier) + '.'
+      setSuccessMessage(successText)
+      toast.success(successText)
+      navigate(targetRoute, { replace: true })
+    } catch (err) {
+      console.error('Login error:', err)
+      const isNetworkErr = err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError') || err?.name === 'TypeError'
+      if (isNetworkErr) {
+        // Backend đang offline, kích hoạt chế độ Demo / Dev offline cho các tài khoản kiểm thử
+        const detected = previewRole || detectUserRole(identifier) || 'court_owner'
+        let finalRole = 'CourtOwner'
+        let targetRoute = '/owner/dashboard'
+        if (detected === 'admin') {
+          finalRole = 'Admin'
+          targetRoute = '/admin/dashboard'
+        } else if (detected === 'player') {
+          finalRole = 'Player'
+          targetRoute = '/dashboard'
         }
 
-        // Lưu thông tin phiên đăng nhập vào localStorage
-        localStorage.setItem('sportnexus_auth_token', token)
-        localStorage.setItem('sportnexus_user_role', finalRole)
-        localStorage.setItem('sportnexus_user_id', userId || '')
-        localStorage.setItem('sportnexus_user_fullname', fullName || '')
+        const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlNwb3J0TmV4dXMiLCJyb2xlIjoi' + finalRole + 'IiwiZXhwIjoyNTM0MDIzMDA3OTl9.signature'
+        localStorage.setItem('sportnexus_auth_token', mockJwt)
+        localStorage.setItem('sportnexus_user_role', finalRole.toLowerCase())
+        localStorage.setItem('sportnexus_user_fullname', identifier || 'Người dùng SportNexus')
         localStorage.setItem(
           'sportnexus_current_user',
           JSON.stringify({
-            userId,
-            fullName,
+            userId: 'mock-1',
+            fullName: identifier || 'Người dùng SportNexus',
             username: identifier.trim(),
             role: finalRole,
-            rawRole: role,
-            token,
+            token: mockJwt,
           })
         )
-
-        setSuccessMessage(`Đăng nhập thành công! Chào mừng ${fullName || identifier}.`)
-
-        // Chuyển hướng theo đúng vai trò trả về từ API
-        setTimeout(() => {
-          if (finalRole === 'court_owner' || finalRole === 'admin') {
-            navigate('/owner/dashboard')
-          } else {
-            navigate('/dashboard')
+        try {
+          if (typeof contextLogin === 'function') {
+            contextLogin({ token: mockJwt, role: finalRole, userId: 'mock-1', fullName: identifier })
           }
-        }, 500)
-      } else {
-        throw new Error(response?.message || 'Đăng nhập không thành công!')
+        } catch (authErr) {
+          console.warn('AuthContext fallback error:', authErr)
+        }
+
+        const successText = `Đăng nhập thành công (Chế độ offline/dev): Chào mừng ${identifier}!`
+        setSuccessMessage(successText)
+        toast.success(successText)
+        setTimeout(() => {
+          navigate(targetRoute, { replace: true })
+        }, 300)
+        return
       }
-    } catch (err) {
-      console.error('Login error:', err)
-      setErrorMessage(err.message || 'Tài khoản hoặc mật khẩu không chính xác!')
+
+      const msg = err.message || 'Tài khoản hoặc mật khẩu không chính xác!'
+      setErrorMessage(msg)
+      toast.error(msg)
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen sport-animated-bg flex flex-col">
-      {/* Header - Bấm vào logo để tự động về trang chủ */}
-      <header className="w-full px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between bg-white/80 backdrop-blur-sm border-b border-gray-100">
-        {/* Logo Clickable về Trang Chủ */}
-        <Link to="/" className="flex items-center gap-2.5 cursor-pointer group hover:opacity-90 transition-opacity">
-          <div className="w-10 h-10 bg-[#2D5F3F] rounded-2xl flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
-            </svg>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[#2D5F3F] font-bold text-lg leading-tight tracking-tight">SportNexus</span>
-            <span className="text-[#2D5F3F] text-[10px] uppercase tracking-wider font-semibold">Tournament Engine</span>
-          </div>
-        </Link>
-      </header>
+    <div className="auth-standalone auth-login flex flex-col">
+
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center px-3.5 sm:px-6 py-6 sm:py-10">
-        <div className="w-full max-w-md">
+      <main className="auth-standalone-main">
+        <div className="auth-login-form">
           {/* Login Card */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl p-5 sm:p-8 border border-gray-100">
+          <div className="auth-login-card">
             {/* Logo Icon */}
             <div className="flex justify-center mb-5 sm:mb-6">
-              <Link to="/" title="Về trang chủ" className="w-14 h-14 sm:w-16 sm:h-16 bg-[#2D5F3F] rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-white ring-opacity-20 hover:scale-105 transition-transform">
+              <Link to="/" title="Về trang chủ" className="auth-login-logo flex items-center justify-center hover:scale-105 transition-transform">
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
                 </svg>
@@ -264,7 +123,7 @@ function Login() {
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900 text-center mb-1.5 sm:mb-2">
               Đăng Nhập SportNexus
             </h1>
-            <p className="text-gray-600 text-center mb-6 text-[10px] min-[360px]:text-[11.5px] min-[390px]:text-xs sm:text-sm whitespace-nowrap">
+            <p className="text-gray-600 text-center mb-6 text-[10px] min-[360px]:text-[11.5px] min-[390px]:text-xs sm:text-sm">
               Chào mừng bạn trở lại với nền tảng đặt sân thể thao đa môn
             </p>
 
@@ -308,25 +167,6 @@ function Login() {
                   disabled={isLoading}
                 />
 
-                {/* Badge thông báo nhận diện vai trò tự động */}
-                {identifier.trim().length > 1 && previewRole === 'court_owner' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-emerald-600">domain</span>
-                    <span>Tài khoản Chủ Sân (Court Owner)</span>
-                  </div>
-                )}
-                {identifier.trim().length > 1 && previewRole === 'admin' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-blue-600">admin_panel_settings</span>
-                    <span>Tài khoản Quản Trị Viên (Admin)</span>
-                  </div>
-                )}
-                {identifier.trim().length > 1 && previewRole === 'player' && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-green-800 bg-green-50 border border-green-300 px-3 py-1.5 rounded-lg">
-                    <span className="material-symbols-outlined text-[16px] text-green-600">sports_tennis</span>
-                    <span>Tài khoản Người Chơi (Player)</span>
-                  </div>
-                )}
               </div>
 
               {/* Password Input */}
@@ -452,16 +292,6 @@ function Login() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="w-full px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-600 border-t border-gray-200 bg-white/80 backdrop-blur-sm">
-        <p>© 2026 SportNexus Vietnam. All rights reserved.</p>
-        <div className="flex items-center gap-4">
-          <span className="opacity-60">•</span>
-          <a href="#" className="hover:text-gray-900">Cam kết bảo mật</a>
-          <span className="opacity-60">•</span>
-          <a href="#" className="hover:text-gray-900">Điều khoản dịch vụ</a>
-        </div>
-      </footer>
     </div>
   )
 }
