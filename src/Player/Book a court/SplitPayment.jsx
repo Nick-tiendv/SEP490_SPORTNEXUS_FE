@@ -93,6 +93,43 @@ function SplitPayment() {
       localStorage.setItem('escrow_balance', newBalance)
       window.dispatchEvent(new Event('escrow_balance_updated'))
 
+      // Phát thông báo Đặt sân thành công & Giao dịch thành công
+      window.dispatchEvent(new CustomEvent('player_new_notification', {
+        detail: {
+          id: `book_${Date.now()}`,
+          type: 'booking',
+          icon: 'sports_tennis',
+          color: '#15803D',
+          bg: '#EAF7EE',
+          title: 'Đặt sân thành công!',
+          message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
+          details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${qrToken}`,
+          time: 'Vừa xong',
+          unread: true,
+          link: '/checkin',
+          linkText: 'Xem vé QR Pass',
+          meta: { court: courtName, timeSlot: slotTime, token: qrToken }
+        }
+      }))
+
+      window.dispatchEvent(new CustomEvent('player_new_notification', {
+        detail: {
+          id: `tx_${Date.now()}`,
+          type: 'transaction',
+          icon: 'receipt_long',
+          color: '#0284C7',
+          bg: '#E0F2FE',
+          title: 'Giao dịch thanh toán thành công!',
+          message: `Đã thanh toán trừ thẳng vào Ví Escrow cho lịch đặt sân ${courtName}.`,
+          details: `Số tiền: -${formatVnd(payableAmount)} • Số dư ví còn lại: ${formatVnd(newBalance)} • Ký quỹ bảo chứng 100%`,
+          time: 'Vừa xong',
+          unread: true,
+          link: '/wallet',
+          linkText: 'Xem số dư ví',
+          meta: { amount: payableAmount, method: 'escrow' }
+        }
+      }))
+
       setModalData({
         title: 'Thanh Toán Thành Công Qua Ví!',
         desc: `Đã tự động trừ ${formatVnd(payableAmount)} từ Ví Escrow của bạn. Số dư ví còn lại: ${formatVnd(newBalance)}. Đang xuất vé QR check-in...`,
@@ -114,6 +151,43 @@ function SplitPayment() {
 
   // Action: Completed Bank Transfer (Simulation)
   const handleBankPaymentSuccess = () => {
+    // Phát thông báo Đặt sân thành công & Giao dịch thành công qua Ngân hàng
+    window.dispatchEvent(new CustomEvent('player_new_notification', {
+      detail: {
+        id: `book_${Date.now()}`,
+        type: 'booking',
+        icon: 'sports_tennis',
+        color: '#15803D',
+        bg: '#EAF7EE',
+        title: 'Đặt sân thành công!',
+        message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
+        details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${qrToken}`,
+        time: 'Vừa xong',
+        unread: true,
+        link: '/checkin',
+        linkText: 'Xem vé QR Pass',
+        meta: { court: courtName, timeSlot: slotTime, token: qrToken }
+      }
+    }))
+
+    window.dispatchEvent(new CustomEvent('player_new_notification', {
+      detail: {
+        id: `tx_${Date.now()}`,
+        type: 'transaction',
+        icon: 'receipt_long',
+        color: '#0284C7',
+        bg: '#E0F2FE',
+        title: 'Giao dịch chuyển khoản thành công!',
+        message: `Hệ thống Napas 24/7 đã khớp giao dịch chuyển khoản cho cụm sân ${courtName}.`,
+        details: `Số tiền: -${formatVnd(payableAmount)} • Hợp đồng Escrow bảo chứng 100%`,
+        time: 'Vừa xong',
+        unread: true,
+        link: '/wallet',
+        linkText: 'Xem hợp đồng Escrow',
+        meta: { amount: payableAmount, method: 'bank' }
+      }
+    }))
+
     setModalData({
       title: 'Giao Dịch Chuyển Khoản Thành Công!',
       desc: `Hệ thống đã nhận được ${formatVnd(payableAmount)} qua Napas 24/7. Hợp đồng Ký quỹ Escrow đã bảo chứng toàn diện. Đang xuất vé QR...`,
@@ -127,6 +201,28 @@ function SplitPayment() {
       setModalData(null)
       setStep('ticket_pass')
     }, 1600)
+  }
+
+  // Action: Gửi mã check-in cho bạn chơi
+  const handleSendCodeToFriends = () => {
+    window.dispatchEvent(new CustomEvent('player_new_notification', {
+      detail: {
+        id: `friend_${Date.now()}`,
+        type: 'checkin',
+        icon: 'share',
+        color: '#7C3AED',
+        bg: '#F3E8FF',
+        title: 'Gửi mã cho bạn chơi thành công!',
+        message: `Đã gửi mã vé check-in và link định vị sân ${courtName} cho bạn chơi.`,
+        details: `Mã vé Token: #${qrToken} • Người nhận: Trần Bảo An, Lê Hoàng Nam, Phạm Quốc Thịnh`,
+        time: 'Vừa xong',
+        unread: true,
+        link: '/checkin',
+        linkText: 'Xem vé QR nhóm',
+        meta: { token: qrToken, recipients: ['Trần Bảo An', 'Lê Hoàng Nam', 'Phạm Quốc Thịnh'] }
+      }
+    }))
+    alert(`Đã gửi mã vé QR #${qrToken} thành công cho 3 bạn chơi! Thông báo đã được gửi vào chuông thông báo.`)
   }
 
   return (
@@ -666,90 +762,114 @@ function SplitPayment() {
           ===================================================================== */}
       {step === 'ticket_pass' && (
         <div className="sp-pass-grid">
-          {/* CỘT TRÁI: THẺ MÃ QR CHECK-IN CỐ ĐỊNH */}
-          <div className="sp-ticket-card">
-            <span className="sp-ticket-badge-ready">
-              <span className="sp-ticket-pulse-dot" />
-              Sẵn sàng check-in cổng sân
-            </span>
+          {/* CỘT TRÁI: THẺ MÃ QR CHECK-IN CỐ ĐỊNH & CÁC NÚT TƯƠNG TÁC QR */}
+          <div className="sp-ticket-col">
+            <div className="sp-ticket-card">
+              <span className="sp-ticket-badge-ready">
+                <span className="sp-ticket-pulse-dot" />
+                Sẵn sàng check-in cổng sân
+              </span>
 
-            <h2 className="sp-ticket-title">Mã QR Check-in Độc Quyền</h2>
-            <p className="sp-ticket-sub">
-              Đưa mã QR này vào máy quét tại cổng hoặc quầy lễ tân để kích hoạt vào sân
-            </p>
+              <h2 className="sp-ticket-title">Mã QR Check-in Độc Quyền</h2>
+              <p className="sp-ticket-sub">
+                Đưa mã QR này vào máy quét tại cổng hoặc quầy lễ tân để kích hoạt vào sân
+              </p>
 
-            {/* Khung mã QR cố định với hiệu ứng laser */}
-            <div className="sp-ticket-qr-box">
-              <div className="sp-ticket-laser-line" />
+              {/* Khung mã QR cố định với hiệu ứng laser */}
+              <div className="sp-ticket-qr-box">
+                <div className="sp-ticket-laser-line" />
 
-              <div className="sp-qr-svg-wrap" key={qrVersion}>
-                <svg
-                  className="w-full h-full text-green-900 drop-shadow-[0_0_12px_rgba(34,197,94,0.35)]"
-                  fill="currentColor"
-                  viewBox="0 0 100 100"
-                >
-                  {/* Outer corner finders */}
-                  <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="5" />
-                  <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="11" />
-                  <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="69" y="5" />
-                  <rect fill="#2e7d32" height="14" rx="2" width="14" x="75" y="11" />
-                  <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="69" />
-                  <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="75" />
+                <div className="sp-qr-svg-wrap" key={qrVersion}>
+                  <svg
+                    className="w-full h-full text-green-900 drop-shadow-[0_0_12px_rgba(34,197,94,0.35)]"
+                    fill="currentColor"
+                    viewBox="0 0 100 100"
+                  >
+                    {/* Outer corner finders */}
+                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="5" />
+                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="11" />
+                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="69" y="5" />
+                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="75" y="11" />
+                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="69" />
+                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="75" />
 
-                  {/* Inner dynamic matrix dots based on qrVersion */}
-                  <rect height="6" rx="1.5" width="6" x="38" y="8" fill="#1b5e20" />
-                  <rect height="6" rx="1.5" width="10" x="52" y={16 + (qrVersion % 4)} fill="#2e7d32" />
-                  <rect height="12" rx="1.5" width="6" x="42" y={48 + (qrVersion % 3)} fill="#1b5e20" />
-                  <rect height="6" rx="1.5" width="12" x="78" y="38" fill="#2e7d32" />
-                  <rect height="12" rx="1.5" width="6" x="86" y="68" fill="#1b5e20" />
-                  <rect height="6" rx="1.5" width="6" x="54" y="54" fill="#1b5e20" />
-                  <rect height="6" rx="1.5" width="8" x="68" y="54" fill="#2e7d32" />
-                  <rect height="8" rx="1.5" width="6" x="38" y="76" fill="#1b5e20" />
-                  <rect height="6" rx="1.5" width="10" x="50" y="76" fill="#2e7d32" />
-                  <circle cx="50" cy="38" r="4" fill="#15803d" />
-                  <circle cx="62" cy="70" r="3.5" fill="#15803d" />
-                  <circle cx="70" cy="85" r="3.5" fill="#2e7d32" />
-                </svg>
+                    {/* Inner dynamic matrix dots based on qrVersion */}
+                    <rect height="6" rx="1.5" width="6" x="38" y="8" fill="#1b5e20" />
+                    <rect height="6" rx="1.5" width="10" x="52" y={16 + (qrVersion % 4)} fill="#2e7d32" />
+                    <rect height="12" rx="1.5" width="6" x="42" y={48 + (qrVersion % 3)} fill="#1b5e20" />
+                    <rect height="6" rx="1.5" width="12" x="78" y="38" fill="#2e7d32" />
+                    <rect height="12" rx="1.5" width="6" x="86" y="68" fill="#1b5e20" />
+                    <rect height="6" rx="1.5" width="6" x="54" y="54" fill="#1b5e20" />
+                    <rect height="6" rx="1.5" width="8" x="68" y="54" fill="#2e7d32" />
+                    <rect height="8" rx="1.5" width="6" x="38" y="76" fill="#1b5e20" />
+                    <rect height="6" rx="1.5" width="10" x="50" y="76" fill="#2e7d32" />
+                    <circle cx="50" cy="38" r="4" fill="#15803d" />
+                    <circle cx="62" cy="70" r="3.5" fill="#15803d" />
+                    <circle cx="70" cy="85" r="3.5" fill="#2e7d32" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Thông tin mã QR check-in cố định sau khi đặt sân thành công */}
+              <div className="sp-ticket-timer-bar">
+                <div className="sp-timer-bar-left">
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: '#DCFCE7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#15803D',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                      verified
+                    </span>
+                  </div>
+
+                  <div className="sp-timer-text-wrap">
+                    <strong>Mã QR cố định sau khi đặt sân thành công</strong>
+                    <small>Mã vé cố định bảo chứng, quét tại cổng hoặc quầy lễ tân để vào sân</small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="sp-ticket-token-id">TOKEN: #{qrToken}</div>
+
+              <div className="sp-ticket-escrow-pledge">
+                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>
+                  shield
+                </span>
+                <span>
+                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công.
+                </span>
               </div>
             </div>
 
-            {/* Thông tin mã QR check-in cố định sau khi đặt sân thành công */}
-            <div className="sp-ticket-timer-bar">
-              <div className="sp-timer-bar-left">
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: '#DCFCE7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#15803D',
-                    flexShrink: 0,
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                    verified
-                  </span>
-                </div>
+            {/* Khung Tải ảnh vé QR về máy và Gửi mã cho bạn chơi - Dưới phần mã QR Check-in */}
+            <div className="sp-pass-qr-actions">
+              <button
+                type="button"
+                className="sp-btn-action-primary"
+                onClick={() => alert('Đã lưu mã vé QR vào thư viện ảnh của thiết bị!')}
+              >
+                <span className="material-symbols-outlined">download</span>
+                <span>Tải ảnh vé QR về máy</span>
+              </button>
 
-                <div className="sp-timer-text-wrap">
-                  <strong>Mã QR cố định sau khi đặt sân thành công</strong>
-                  <small>Mã vé cố định bảo chứng, quét tại cổng hoặc quầy lễ tân để vào sân</small>
-                </div>
-              </div>
-            </div>
-
-            <div className="sp-ticket-token-id">TOKEN: #{qrToken}</div>
-
-            <div className="sp-ticket-escrow-pledge">
-              <span className="material-symbols-outlined" style={{ fontSize: 17 }}>
-                shield
-              </span>
-              <span>
-                Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công.
-              </span>
+              <button
+                type="button"
+                className="sp-btn-action-secondary"
+                style={{ borderColor: '#16a34a', color: '#16a34a', background: '#f0fdf4' }}
+                onClick={handleSendCodeToFriends}
+              >
+                <span className="material-symbols-outlined">share</span>
+                <span>Gửi mã cho bạn chơi</span>
+              </button>
             </div>
           </div>
 
@@ -852,17 +972,8 @@ function SplitPayment() {
               </div>
             </div>
 
-            {/* Các nút hành động */}
-            <div className="sp-pass-action-buttons">
-              <button
-                type="button"
-                className="sp-btn-action-primary"
-                onClick={() => alert('Đã lưu mã vé QR vào thư viện ảnh của thiết bị!')}
-              >
-                <span className="material-symbols-outlined">download</span>
-                <span>Tải ảnh vé QR về máy</span>
-              </button>
-
+            {/* Khung Đặt thêm sân khác và Xem ví Escrow - Dưới phần Thông tin cụm sân */}
+            <div className="sp-pass-nav-actions">
               <button
                 type="button"
                 className="sp-btn-action-secondary"
@@ -885,52 +996,7 @@ function SplitPayment() {
         </div>
       )}
 
-      {/* ===================== FOOTER ===================== */}
-      <footer className="sp-footer">
-        <div className="sp-footer-top">
-          <div>
-            <div className="sp-footer-brand">
-              <span className="sp-footer-logo-sq">
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>
-                  bolt
-                </span>
-              </span>
-              <strong>SPORTNEXUS VIETNAM</strong>
-            </div>
-            <p>
-              Nền tảng vận hành thể thao thông minh &amp; bảo chứng giao dịch Escrow minh bạch toàn diện.
-            </p>
-          </div>
-
-          <div className="sp-footer-links">
-            <div className="sp-footer-links-row">
-              <span>
-                <span className="material-symbols-outlined">support_agent</span>
-                Hotline 24/7: 0968950913
-              </span>
-              <span>
-                <span className="material-symbols-outlined">verified_user</span>
-                Bảo vệ Ký Quỹ Escrow
-              </span>
-              <a href="#rules">Điều khoản dịch vụ</a>
-            </div>
-            <div className="sp-footer-links-row">
-              <a href="#fairplay">Chính sách Fairplay</a>
-            </div>
-          </div>
-        </div>
-
-        <div className="sp-footer-bottom">
-          <span>
-            © 2026 SportNexus Vietnam Joint Stock Company • Nền tảng chuyên biệt Pickleball &amp; Cầu Lông. Bảo
-            lưu mọi quyền.
-          </span>
-          <span className="sp-live-indicator">
-            <span className="sp-live-dot" />
-            Hệ thống bảo chứng Escrow thời gian thực
-          </span>
-        </div>
-      </footer>
+      {/* ===================== SUCCESS / NOTIFICATION MODAL ===================== */}
 
       {/* ===================== SUCCESS / NOTIFICATION MODAL ===================== */}
       {modalData && (

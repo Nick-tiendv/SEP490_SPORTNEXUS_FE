@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import TopBar from './TopBar.jsx'
 import TopSideBar from './TopSideBar.jsx'
+import PlayerFooter from './PlayerFooter.jsx'
 import { SportProvider } from '../Context/SportContext.jsx'
 import AIChatModal from '../Book a court/AIChatModal.jsx'
 
@@ -27,8 +28,20 @@ function PlayerLayout() {
         <TopBar />
 
         {/* Page content */}
-        <main style={{ width: '100%', paddingTop: '60px', minHeight: '100vh', boxSizing: 'border-box' }}>
-          <Outlet />
+        <main
+          style={{
+            width: '100%',
+            paddingTop: '60px',
+            minHeight: '100vh',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div style={{ flex: 1, width: '100%' }}>
+            <Outlet />
+          </div>
+          <PlayerFooter />
         </main>
       </div>
 

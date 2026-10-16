@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import AIChatModal from './AIChatModal.jsx'
@@ -1530,6 +1531,7 @@ function MapBooking() {
   }, [query, filteredCourts, selectedCourtId])
 
   const [selectedSlotId, setSelectedSlotId] = useState('s5')
+  const [detailSlot, setDetailSlot] = useState(null)
   const [holdLeft, setHoldLeft] = useState(8 * 60 + 42)
   const [mapType, setMapType] = useState('m')
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
@@ -1691,6 +1693,7 @@ function MapBooking() {
     if (court.id === selectedCourt?.id) return
     setSelectedCourtId(court.id)
     setSelectedSlotId(null)
+    setDetailSlot(null)
   }
 
   const handleSelectSlot = (slot) => {
@@ -1698,6 +1701,23 @@ function MapBooking() {
     setSelectedSlotId(slot.id)
     setHoldLeft(HOLD_SECONDS)
   }
+
+  const handleSlotClick = (slot) => {
+    if (slot.status === 'booked') return
+    handleSelectSlot(slot)
+    setDetailSlot(slot)
+  }
+
+  // Phím Esc đóng modal chi tiết khung giờ
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setDetailSlot(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleClearFilters = () => {
     setQuery('')
@@ -2021,7 +2041,7 @@ function MapBooking() {
                   </span>
                   {active ? (
                     <button type="button" className="mb-btn mb-btn--primary">
-                      Đang Chọn <span className="material-symbols-outlined">arrow_circle_right</span>
+                      Đang Chọn
                     </button>
                   ) : (
                     <button
@@ -2136,76 +2156,13 @@ function MapBooking() {
                 {slots.map((slot, i) => {
                   const delay = { animationDelay: `${i * 35}ms` }
 
-                  // Ô ĐANG CHỌN (Màu xanh lá lớn, chứa đầy đủ thông tin cần thiết)
-                  if (slot.id === selectedSlot?.id) {
-                    return (
-                      <div key={slot.id} className="mb-slot mb-slot--selected" style={delay}>
-                        <div className="mb-slot-selected-top">
-                          <div className="mb-slot-time-group">
-                            <span className="material-symbols-outlined mb-slot-time-ic">schedule</span>
-                            <strong>{slot.start} - {slot.end}</strong>
-                            <span className="mb-slot-duration">({String(slot.hours).replace('.', ',')} giờ)</span>
-                          </div>
-                          <div className="mb-slot-badges">
-                            <span className="mb-slot-badge">
-                              <span className="material-symbols-outlined">check_circle</span>
-                              Đang chọn khung giờ
-                            </span>
-                            {holdLeft > 0 && (
-                              <span className="mb-slot-timer" title="Thời gian hệ thống tạm khóa giữ chỗ cho bạn">
-                                <span className="material-symbols-outlined">timer</span>
-                                {formatTimer(holdLeft)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mb-slot-selected-body">
-                          <div className="mb-slot-court-name">
-                            <span className="material-symbols-outlined">sports_tennis</span>
-                            <span>
-                              {selectedCourt.name} • <strong>Đã chọn {courtQuantity} sân</strong>
-                            </span>
-                          </div>
-                          <div className="mb-slot-desc">
-                            {activeSubCourts.map((c) => c.name).join(', ')} ({selectedCourt.subCourtDesc})
-                          </div>
-                          {selectedCourt.address && (
-                            <div className="mb-slot-addr">
-                              <span className="material-symbols-outlined">location_on</span>
-                              <span>{selectedCourt.address}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mb-slot-selected-foot">
-                          <div className="mb-slot-price-wrap">
-                            <span className="mb-slot-price">{formatVnd(totalBookingPrice)}</span>
-                            <span className="mb-slot-rate">
-                              Đơn giá: {formatVnd(slot.price)}/sân ({courtQuantity} sân)
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            className="mb-btn mb-btn--white mb-btn--checkout"
-                            onClick={scrollToSummary}
-                            title="Xác nhận các sân này và tiến hành chốt sân"
-                          >
-                            <span>Chốt {courtQuantity} Sân</span>
-                            <span className="material-symbols-outlined">arrow_forward</span>
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  // Ô ĐÃ ĐẶT (Màu đỏ, kích thước nhỏ gọn)
+                  // Ô ĐÃ ĐẶT (Màu đỏ, kích thước nhỏ gọn — Không cho phép click)
                   if (slot.status === 'booked') {
                     return (
                       <div
                         key={slot.id}
                         className="mb-slot mb-slot--booked"
-                        style={delay}
+                        style={{ ...delay, pointerEvents: 'none', cursor: 'not-allowed' }}
                         aria-disabled="true"
                         title={`Khung giờ ${slot.start} - ${slot.end} đã được đặt kín (${slot.note || 'Đã kín lịch'})`}
                       >
@@ -2220,23 +2177,32 @@ function MapBooking() {
                     )
                   }
 
-                  // Ô ĐANG TRỐNG (Màu vàng, kích thước nhỏ gọn)
+                  const isSelected = slot.id === selectedSlot?.id
+
+                  // Ô ĐANG CHỌN hoặc ĐANG TRỐNG (Kích thước nhỏ gọn đồng nhất 52px, click để xem popup chi tiết)
                   return (
                     <button
                       key={slot.id}
                       id={`mb-slot-${slot.id}`}
                       type="button"
-                      className="mb-slot mb-slot--available"
+                      className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'}`}
                       style={delay}
-                      onClick={() => handleSelectSlot(slot)}
-                      title={`Bấm để chọn khung giờ trống: ${slot.start} - ${slot.end} (${formatVnd(slot.price)})`}
+                      onClick={() => handleSlotClick(slot)}
+                      title={`Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để xem chi tiết`}
                     >
                       <div className="mb-slot-compact-head">
                         <span className="mb-slot-time">{slot.start} - {slot.end}</span>
-                        <span className="mb-slot-chip-avail">Trống</span>
+                        {isSelected ? (
+                          <span className="material-symbols-outlined mb-slot-check-ic">check</span>
+                        ) : (
+                          <span className="mb-slot-chip-avail">Trống</span>
+                        )}
                       </div>
                       <div className="mb-slot-compact-sub">
                         <span className="mb-slot-price">{formatVnd(slot.price)}</span>
+                        {isSelected && (
+                          <span className="mb-slot-chip-selected">Đang chọn</span>
+                        )}
                       </div>
                     </button>
                   )
@@ -2311,7 +2277,7 @@ function MapBooking() {
                             : `Bấm để chọn ${court.name} (+${formatVnd(selectedSlot.price)})`
                         }
                       >
-                        <div className="mb-subcourt-card-top">
+                        <div className="mb-subcourt-row-top">
                           <div className="mb-subcourt-checkbox">
                             {isSelected ? (
                               <span className="material-symbols-outlined">check_circle</span>
@@ -2321,7 +2287,10 @@ function MapBooking() {
                               <span className="material-symbols-outlined">radio_button_unchecked</span>
                             )}
                           </div>
-                          <strong className="mb-subcourt-name">{court.name}</strong>
+                          <strong className="mb-subcourt-name" title={court.name}>{court.name}</strong>
+                        </div>
+
+                        <div className="mb-subcourt-row-bottom">
                           <span
                             className={`mb-subcourt-status ${
                               isBooked ? 'status-booked' : isSelected ? 'status-selected' : 'status-avail'
@@ -2329,21 +2298,7 @@ function MapBooking() {
                           >
                             {isBooked ? 'Đã kín' : isSelected ? 'Đang chọn' : 'Trống'}
                           </span>
-                        </div>
-
-                        <div className="mb-subcourt-card-body">
-                          <span className="mb-subcourt-type">{court.type}</span>
                           <span className="mb-subcourt-rate">{formatVnd(selectedSlot.price)}/sân</span>
-                        </div>
-
-                        <div className="mb-subcourt-card-foot">
-                          <small>
-                            {isBooked
-                              ? 'Đã có người đặt'
-                              : isSelected
-                              ? '✓ Đã đưa vào danh sách'
-                              : '+ Nhấn để chọn thêm'}
-                          </small>
                         </div>
                       </div>
                     )
@@ -2403,9 +2358,7 @@ function MapBooking() {
               disabled={!selectedSlot || activeSubCourts.length === 0}
               onClick={handleConfirm}
             >
-              <span className="material-symbols-outlined">check_circle</span>
               Xác Nhận Đặt {courtQuantity} Sân
-              <span className="material-symbols-outlined">arrow_forward</span>
             </button>
             <p className="mb-secure-note">
               <span className="material-symbols-outlined">verified_user</span>
@@ -2415,43 +2368,132 @@ function MapBooking() {
         </div>
       </div>
 
-      {/* ===================== FOOTER ===================== */}
-      <footer className="mb-footer">
-        <div className="mb-footer-top">
-          <div>
-            <div className="mb-footer-brand">
-              <span className="mb-footer-logo">
-                <span className="material-symbols-outlined">bolt</span>
-              </span>
-              <strong>SPORTNEXUS VIETNAM</strong>
+      {/* ===================== POPUP CHI TIẾT KHUNG GIỜ ===================== */}
+      {detailSlot && selectedCourt && typeof document !== 'undefined' && createPortal(
+        <div
+          className="mb-slot-modal-backdrop"
+          onClick={() => setDetailSlot(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="slot-modal-title"
+        >
+          <div className="mb-slot-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-slot-modal-head">
+              <div className="mb-slot-modal-head-left">
+                <div className="mb-slot-modal-head-icon">
+                  <span className="material-symbols-outlined">schedule</span>
+                </div>
+                <div>
+                  <h3 id="slot-modal-title" className="mb-slot-modal-title">
+                    Chi Tiết Khung Giờ: {detailSlot.start} - {detailSlot.end}
+                  </h3>
+                  <p className="mb-slot-modal-sub">
+                    {selectedCourt.name} • {String(detailSlot.hours).replace('.', ',')} giờ thi đấu
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="mb-slot-modal-close"
+                onClick={() => setDetailSlot(null)}
+                title="Đóng popup"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <p>Nền tảng vận hành thể thao thông minh &amp; bảo chứng giao dịch Escrow minh bạch toàn diện.</p>
+
+            <div className="mb-slot-modal-body">
+              <div className="mb-slot-modal-badges">
+                <span className="mb-slot-modal-badge-status">
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                    check_circle
+                  </span>
+                  Đang chọn khung giờ này
+                </span>
+                {holdLeft > 0 && (
+                  <span className="mb-slot-modal-badge-timer">
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                      timer
+                    </span>
+                    Tạm khóa giữ chỗ: {formatTimer(holdLeft)}
+                  </span>
+                )}
+              </div>
+
+              <div className="mb-slot-modal-info-grid">
+                <div className="mb-slot-modal-info-row">
+                  <span className="material-symbols-outlined">stadium</span>
+                  <div>
+                    <strong>Cụm sân:</strong> {selectedCourt.name}
+                  </div>
+                </div>
+                {selectedCourt.address && (
+                  <div className="mb-slot-modal-info-row">
+                    <span className="material-symbols-outlined">location_on</span>
+                    <div>
+                      <strong>Địa chỉ:</strong> {selectedCourt.address}
+                    </div>
+                  </div>
+                )}
+                {selectedCourt.subCourtDesc && (
+                  <div className="mb-slot-modal-info-row">
+                    <span className="material-symbols-outlined">sports_tennis</span>
+                    <div>
+                      <strong>Mô tả sân:</strong> {selectedCourt.subCourtDesc}
+                    </div>
+                  </div>
+                )}
+                <div className="mb-slot-modal-info-row">
+                  <span className="material-symbols-outlined">group</span>
+                  <div>
+                    <strong>Sân áp dụng ({courtQuantity} sân):</strong>{' '}
+                    {activeSubCourts.map((c) => c.name).join(', ')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-slot-modal-price-card">
+                <div>
+                  <span className="mb-slot-modal-price-label">
+                    Đơn giá: {formatVnd(detailSlot.price)}/sân ({courtQuantity} sân)
+                  </span>
+                  <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
+                    Đã bao gồm thuế và phí dịch vụ Escrow
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="mb-slot-modal-price-val">
+                    {formatVnd(detailSlot.price * courtQuantity)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-slot-modal-foot">
+              <button
+                type="button"
+                className="mb-slot-modal-btn-close"
+                onClick={() => setDetailSlot(null)}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="mb-slot-modal-btn-confirm"
+                onClick={() => {
+                  setDetailSlot(null)
+                  setTimeout(() => {
+                    summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }, 120)
+                }}
+              >
+                Chốt sân
+              </button>
+            </div>
           </div>
-          <div className="mb-footer-links">
-            <div>
-              <span>
-                <span className="material-symbols-outlined">support_agent</span> Hotline 24/7: 0968950913
-              </span>
-              <span>
-                <span className="material-symbols-outlined">verified_user</span> Bảo vệ Ký Quỹ Escrow
-              </span>
-            </div>
-            <div>
-              <a href="#">Điều khoản dịch vụ</a>
-              <a href="#">Chính sách Fairplay</a>
-            </div>
-          </div>
-        </div>
-        <div className="mb-footer-bottom">
-          <span>
-            © 2026 SportNexus Vietnam Joint Stock Company • Nền tảng chuyên biệt Pickleball &amp; Cầu Lông. Bảo lưu
-            mọi quyền.
-          </span>
-          <span className="mb-live">
-            <i /> Hệ thống bảo chứng Escrow thời gian thực
-          </span>
-        </div>
-      </footer>
+        </div>,
+        document.body
+      )}
 
       {/* ===================== AI CHAT ASSISTANT MODAL ===================== */}
       <AIChatModal

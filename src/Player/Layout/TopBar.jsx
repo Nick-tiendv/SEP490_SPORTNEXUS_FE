@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import NotificationBell from './NotificationBell.jsx'
 
 function TopBar() {
   const location = useLocation()
@@ -159,24 +160,17 @@ function TopBar() {
           </h1>
         ) : (
           <>
-            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
-              home
-            </span>
-            <Link
-              to="/dashboard"
+            <h1
               style={{
-                fontSize: '13px',
-                color: '#4B5563',
-                textDecoration: 'none',
-                fontWeight: 600,
+                fontSize: '16px',
+                fontWeight: 800,
+                color: '#1C3524',
+                margin: 0,
+                letterSpacing: '-0.3px',
               }}
             >
-              Trang Chủ SportNexus
-            </Link>
-            <span style={{ color: '#9CA3AF', fontSize: '13px' }}>›</span>
-            <span style={{ fontSize: '13px', color: '#1C3524', fontWeight: 700 }}>
               Khu Vực Thi Đấu &amp; Đặt Sân
-            </span>
+            </h1>
 
             {/* Current Active Sport Pill */}
             <div
@@ -250,6 +244,9 @@ function TopBar() {
             {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
           </span>
         </Link>
+
+        {/* Chuông Thông Báo Tương Tác */}
+        <NotificationBell />
 
         {/* User Avatar + Info */}
         <Link

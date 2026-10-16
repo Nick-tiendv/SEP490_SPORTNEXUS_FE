@@ -91,6 +91,21 @@ export default function WalletEscrow() {
       localStorage.setItem('escrow_balance', newBal.toString())
       setWalletBalance(newBal)
       window.dispatchEvent(new Event('escrow_balance_updated'))
+      window.dispatchEvent(
+        new CustomEvent('player_new_notification', {
+          detail: {
+            type: 'wallet',
+            icon: 'account_balance_wallet',
+            color: '#16A34A',
+            bg: '#DCFCE7',
+            title: 'Nạp tiền vào ví thành công!',
+            message: `Bạn vừa nạp thành công +${formatVND(amount)} đ vào Ví Escrow qua ${getSourceName()}.`,
+            details: `Số dư khả dụng: ${formatVND(newBal)} đ • Mã GD: #TOPUP-${Date.now().toString().slice(-5)}`,
+            link: '/wallet',
+            linkText: 'Xem số dư ví',
+          },
+        })
+      )
       setIsVerifying(false)
       setShowPaymentModal(false)
       setSuccessToast(`Nạp thành công +${formatVND(amount)} đ vào Ví Escrow!`)
@@ -442,60 +457,6 @@ export default function WalletEscrow() {
           </div>
         </div>
 
-        {/* ==================== 3. PAGE FOOTER ==================== */}
-        <footer className="mt-16 pt-8 border-t border-[#E5E7EB]">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6">
-            {/* Left Brand */}
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-md bg-[#15803D] flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[15px]">bolt</span>
-                </div>
-                <span className="text-xs font-black uppercase tracking-wider text-[#111827]">
-                  SPORTNEXUS VIETNAM
-                </span>
-              </div>
-              <p className="text-xs text-[#6B7280] max-w-lg leading-relaxed font-medium">
-                Nền tảng vận hành thể thao thông minh &amp; bảo chứng giao dịch Escrow minh bạch toàn diện.
-              </p>
-            </div>
-
-            {/* Right Links */}
-            <div className="flex flex-col sm:items-end gap-2 text-xs">
-              <div className="flex flex-wrap items-center gap-4 text-[#4B5563] font-medium">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px] text-[#15803D]">
-                    support_agent
-                  </span>
-                  Hotline 24/7: <strong className="text-[#111827] font-bold">0968950913</strong>
-                </span>
-                <span className="flex items-center gap-1 text-[#4B5563] hover:text-[#15803D] cursor-pointer">
-                  <span className="material-symbols-outlined text-[16px] text-[#15803D]">
-                    verified_user
-                  </span>
-                  Bảo vệ Ký Quỹ Escrow
-                </span>
-                <span className="hover:text-[#15803D] cursor-pointer">
-                  Điều khoản dịch vụ
-                </span>
-              </div>
-              <div className="text-[#4B5563] hover:text-[#15803D] cursor-pointer font-medium">
-                Chính sách Fairplay
-              </div>
-            </div>
-          </div>
-
-          {/* Copyright Line */}
-          <div className="pt-4 border-t border-[#F1F5F9] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-[#9CA3AF]">
-            <span>
-              © 2026 SportNexus Vietnam Joint Stock Company. Bảo lưu mọi quyền.
-            </span>
-            <span className="flex items-center gap-1.5 font-semibold text-[#15803D]">
-              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-              Hệ thống bảo chứng Escrow thời gian thực
-            </span>
-          </div>
-        </footer>
       </div>
 
       {/* ==================== 4. PAYMENT MODAL (POPUP QR / GATEWAY) ==================== */}

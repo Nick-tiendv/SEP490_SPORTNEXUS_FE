@@ -1630,48 +1630,90 @@
   font-size: 16px;
 }
 
-/* Nút hành động ở cuối vé */
-.sp-pass-action-buttons {
+/* Cột thẻ vé QR và các nút QR */
+.sp-ticket-col {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
-.sp-btn-action-primary {
+/* Nhóm nút dưới thẻ QR Check-in */
+.sp-pass-qr-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.sp-pass-qr-actions .sp-btn-action-primary,
+.sp-pass-qr-actions .sp-btn-action-secondary {
   flex: 1;
+}
+
+/* Nhóm nút điều hướng dưới khung Thông tin cụm sân */
+.sp-pass-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.sp-pass-nav-actions .sp-btn-action-secondary {
+  flex: 1;
+}
+
+/* Nút chung */
+.sp-btn-action-primary {
+  height: 40px;
   background: var(--sp-green);
   color: #ffffff;
   border: none;
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-size: 14px;
-  font-weight: 750;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(47, 93, 18, 0.2);
+  box-shadow: 0 2px 8px rgba(47, 93, 18, 0.18);
+}
+
+.sp-btn-action-primary span,
+.sp-btn-action-secondary span {
+  white-space: nowrap;
+}
+
+.sp-btn-action-primary .material-symbols-outlined,
+.sp-btn-action-secondary .material-symbols-outlined {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sp-btn-action-primary:hover {
   background: var(--sp-green-dark);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(47, 93, 18, 0.25);
 }
 
 .sp-btn-action-secondary {
+  height: 40px;
   background: #ffffff;
   border: 1.5px solid #d1d5db;
   color: var(--sp-ink);
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-size: 14px;
-  font-weight: 750;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1679,6 +1721,7 @@
 .sp-btn-action-secondary:hover {
   background: #f3f4f6;
   border-color: #9ca3af;
+  transform: translateY(-1px);
 }
 
 /* ===================== FOOTER ===================== */
