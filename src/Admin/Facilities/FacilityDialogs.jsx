@@ -1,52 +1,78 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
-import { facilityOwners, sportLabels, statusLabels } from './facilityData.js'
+import { getAmenityOptions, setFacilityStatus, updateFacility } from '../../api/admin/facilityApi.js'
+import { statusLabels } from './facilityData.js'
 
-export function FacilityFormDialog({ facility, facilities, onClose, onSave }) {
-  const [values, setValues] = useState({ name: facility?.name || '', ownerId: facility?.owner.id || facilityOwners[0].id,
-    location: facility?.location || '', address: facility?.address || '', sports: facility?.sports.join(',') || 'Badminton',
-    count: String(facility?.courts.length || 6), opens: facility?.opens || '05:30', closes: facility?.closes || '23:00',
-    category: facility?.category || 'Cơ sở thể thao tổng hợp',
-  })
+const noop = () => {}
+
+// PUT /api/v1/facilities/{id} — admin chỉnh sửa thông tin cơ sở.
+export function FacilityFormDialog({ facility, onClose, onDone }) {
+  const [values, setValues] = useState({ name: facility.name, address: facility.address, latitude: facility.latitude ?? '', longitude: facility.longitude ?? '', images: facility.images.join('\n') })
+  const [amenityIds, setAmenityIds] = useState(() => new Set(facility.amenityIds.length ? facility.amenityIds : facility.amenities.map(item => item.id).filter(Boolean)))
+  const [amenities, setAmenities] = useState([])
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getAmenityOptions().then(items => !cancelled && setAmenities(items)).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const change = event => setValues({ ...values, [event.target.name]: event.target.value })
-  const submit = event => {
+  const toggleAmenity = id => setAmenityIds(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  const submit = async event => {
     event.preventDefault()
-    const clean = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
-    if (clean.name.length < 3) return setError('Tên cơ sở phải có ít nhất 3 ký tự.')
-    if (facilities.some(item => item.id !== facility?.id && item.name.toLocaleLowerCase('vi') === clean.name.toLocaleLowerCase('vi'))) return setError('Tên cơ sở đã có trong danh sách minh họa.')
-    if (!clean.location || !clean.address || !clean.category) return setError('Vui lòng nhập đầy đủ khu vực, địa chỉ và loại cơ sở.')
-    const count = Number(clean.count)
-    if (!Number.isInteger(count) || count < 1 || count > 30) return setError('Số sân phải là số nguyên từ 1 đến 30.')
-    if (!clean.opens || !clean.closes || clean.opens >= clean.closes) return setError('Giờ đóng cửa phải sau giờ mở cửa trong cùng ngày.')
-    onSave({ ...clean, count, sports: clean.sports.split(','), owner: facilityOwners.find(owner => owner.id === clean.ownerId) })
+    const name = values.name.trim(), address = values.address.trim()
+    const latitude = values.latitude === '' ? null : Number(values.latitude)
+    const longitude = values.longitude === '' ? null : Number(values.longitude)
+    const imageUrls = values.images.split('\n').map(line => line.trim()).filter(Boolean)
+    if (name.length < 3) return setError('Tên cơ sở phải có ít nhất 3 ký tự.')
+    if (!address) return setError('Vui lòng nhập địa chỉ.')
+    if ((latitude != null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) || (longitude != null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))) return setError('Vĩ độ phải trong khoảng -90..90 và kinh độ trong khoảng -180..180.')
+    if (imageUrls.some(url => !/^https?:\/\//i.test(url))) return setError('Mỗi dòng ảnh phải là một đường dẫn http(s).')
+    setSubmitting(true); setError('')
+    try {
+      await updateFacility(facility.id, { name, address, latitude, longitude, imageUrls, amenityIds: amenities.length ? [...amenityIds] : null })
+      onDone(`Đã cập nhật cơ sở ${name}.`)
+    } catch (err) {
+      setError(err.message); setSubmitting(false)
+    }
   }
-  const sportChoices = [...new Set([values.sports, ...Object.keys(sportLabels), 'Badminton,Pickleball', 'Badminton,Tennis', 'Tennis,Pickleball', 'Badminton,Football'])]
-  return <DemoDialog title={facility ? 'Chỉnh sửa cơ sở — Bản mẫu' : 'Thêm cơ sở — Bản mẫu'} closeLabel="Đóng hộp thoại" onClose={onClose}>
-    <p className="users-demo-note">Chỉ cập nhật dữ liệu minh họa trong phiên hiện tại. Tải lại trang sẽ khôi phục dữ liệu; không lưu lên máy chủ.</p>
+  return <DemoDialog title="Chỉnh sửa cơ sở" onClose={submitting ? noop : onClose}>
     <form className="users-form" onSubmit={submit} noValidate>
       <label>Tên cơ sở<input name="name" value={values.name} onChange={change} maxLength={100} required /></label>
-      <label>Chủ sân<select name="ownerId" value={values.ownerId} onChange={change}>{facilityOwners.map(owner => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label>
-      {[['location', 'Khu vực'], ['address', 'Địa chỉ'], ['category', 'Loại cơ sở']].map(([name, label]) => <label key={name}>{label}<input name={name} value={values[name]} onChange={change} required maxLength={180} /></label>)}
-      <label>Môn thể thao<select name="sports" value={values.sports} onChange={change}>{sportChoices.map(choice => <option key={choice} value={choice}>{choice.split(',').map(sport => sportLabels[sport]).join(' & ')}</option>)}</select></label>
-      <label>Số sân<input name="count" type="number" min="1" max="30" step="1" value={values.count} onChange={change} required /></label>
-      <div className="facilities-form-hours"><label>Giờ mở cửa<input name="opens" type="time" value={values.opens} onChange={change} required /></label><label>Giờ đóng cửa<input name="closes" type="time" value={values.closes} onChange={change} required /></label></div>
+      <label>Địa chỉ<input name="address" value={values.address} onChange={change} maxLength={250} required /></label>
+      <div className="facilities-form-hours"><label>Vĩ độ<input name="latitude" type="number" step="any" value={values.latitude} onChange={change} /></label><label>Kinh độ<input name="longitude" type="number" step="any" value={values.longitude} onChange={change} /></label></div>
+      {amenities.length > 0 && <fieldset style={{ border: 0, padding: 0, margin: 0 }}><legend>Tiện ích</legend><div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>{amenities.map(item => <label key={item.id} style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={amenityIds.has(item.id)} onChange={() => toggleAmenity(item.id)} />{item.name}</label>)}</div></fieldset>}
+      <label>Ảnh cơ sở (mỗi dòng một đường dẫn)<textarea name="images" rows={3} value={values.images} onChange={change} /></label>
       {error && <p className="users-form-error" role="alert">{error}</p>}
-      <footer><button type="button" className="users-button" onClick={onClose}>Hủy</button><button className="users-button primary">{facility ? 'Lưu thay đổi minh họa' : 'Thêm cơ sở minh họa'}</button></footer>
+      <footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" disabled={submitting}>{submitting ? 'Đang lưu…' : 'Lưu thay đổi'}</button></footer>
     </form>
   </DemoDialog>
 }
 
-export function FacilityStatusDialog({ facilities, status, onClose, onConfirm }) {
-  return <DemoDialog title="Xác nhận thay đổi trạng thái — Bản mẫu" closeLabel="Đóng hộp thoại" onClose={onClose}>
-    <p className="users-demo-note">Thao tác chỉ thay đổi trạng thái minh họa trong phiên hiện tại. Không tác động đến cơ sở thật, sân, tài khoản hoặc đơn đặt sân trên máy chủ.</p>
-    <p>{status === 'Disabled' ? 'Vô hiệu hóa' : status === 'Maintenance' ? 'Chuyển sang bảo trì' : 'Kích hoạt lại'} {facilities.length} cơ sở?</p>
-    <ul className="facilities-confirm-list">{facilities.map(facility => <li key={facility.id}>{facility.name}</li>)}</ul>
-    <p className="facilities-confirm-hint">Trạng thái mới: {statusLabels[status]}. {status === 'Active' && 'Các sân giữ trạng thái minh họa riêng trước đó.'}</p>
-    <footer><button className="users-button" onClick={onClose}>Hủy</button><button className={`users-button ${status === 'Disabled' ? 'users-danger' : 'primary'}`} onClick={onConfirm}>Xác nhận thay đổi minh họa</button></footer>
+const actionLabel = status => ({ Active: 'Kích hoạt / duyệt', Inactive: 'Vô hiệu hóa', Maintenance: 'Chuyển sang bảo trì', Rejected: 'Từ chối' }[status] || `Chuyển sang ${statusLabels[status] || status}`)
+
+// PUT /api/v1/facilities/{id} { status } cho từng cơ sở.
+export function FacilityStatusDialog({ facilities, status, onClose, onDone }) {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const targets = facilities.filter(facility => facility.status !== status)
+  const confirm = async () => {
+    setSubmitting(true); setError('')
+    const results = await Promise.allSettled(targets.map(facility => setFacilityStatus(facility.id, status)))
+    const failed = results.map((result, index) => result.status === 'rejected' && `${targets[index].name}: ${result.reason?.message}`).filter(Boolean)
+    if (failed.length) { setError(`Thành công ${targets.length - failed.length}/${targets.length}. Lỗi — ${failed.join(' · ')}`); setSubmitting(false); if (failed.length < targets.length) onDone(null, true); return }
+    onDone(`Đã cập nhật ${targets.length} cơ sở sang “${statusLabels[status] || status}”.`)
+  }
+  const danger = /inactive|reject/i.test(status)
+  return <DemoDialog title="Xác nhận thay đổi trạng thái" onClose={submitting ? noop : onClose}>
+    {targets.length ? <p>{actionLabel(status)} {targets.length} cơ sở?</p> : <p>Các cơ sở đã chọn đều đang ở trạng thái “{statusLabels[status] || status}”.</p>}
+    <ul className="facilities-confirm-list">{targets.map(facility => <li key={facility.id}>{facility.name}</li>)}</ul>
+    {error && <p className="users-form-error" role="alert">{error}</p>}
+    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`users-button ${danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting || !targets.length}>{submitting ? 'Đang cập nhật…' : 'Xác nhận'}</button></footer>
   </DemoDialog>
 }
 
 export function FacilityPhotoDialog({ photo, onClose }) {
-  return <DemoDialog title="Xem hình ảnh minh họa" closeLabel="Đóng hình ảnh" onClose={onClose}><img className="facilities-lightbox" src={photo.src} style={{ objectPosition: photo.position }} alt={photo.label} /><p className="users-demo-note">Ảnh minh họa dùng tài sản có sẵn của SportNexus; không phải ảnh chụp cơ sở thực tế.</p></DemoDialog>
+  return <DemoDialog title={photo.label || 'Hình ảnh cơ sở'} closeLabel="Đóng hình ảnh" onClose={onClose}><img className="facilities-lightbox" src={photo.src} alt={photo.label || 'Hình ảnh cơ sở'} /></DemoDialog>
 }

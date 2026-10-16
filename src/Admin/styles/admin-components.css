@@ -1009,3 +1009,7 @@
   .sn-admin .users-dialog > header { margin: calc(var(--sp-5) * -1) calc(var(--sp-5) * -1) var(--sp-4); padding: var(--sp-4) var(--sp-5); }
   .sn-admin .users-dialog footer > * { flex: 1 1 auto; }
 }
+
+/* Stat card dạng link (StatCard có prop `to`) */
+.sn-admin a.admin-stat-card--link { color: inherit; text-decoration: none; cursor: pointer; }
+.sn-admin a.admin-stat-card--link:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
