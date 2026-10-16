@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 function CheckInQR() {
-  const [seconds, setSeconds] = useState(29)
   const [copied, setCopied] = useState(false)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
   
@@ -56,18 +55,6 @@ function CheckInQR() {
   const [emailInput, setEmailInput] = useState('')
   const [toastMessage, setToastMessage] = useState(null)
 
-  // Countdown timer for rolling QR code
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSeconds((prev) => {
-        if (prev <= 1) {
-          return 30
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
 
   // Copy OTP handler
   const handleCopyOTP = () => {
@@ -332,10 +319,6 @@ function CheckInQR() {
     }, 3500)
   }
 
-  // Calculate circular progress for 30s countdown
-  const progressPercent = ((30 - seconds) / 30) * 100
-  const circumference = 2 * Math.PI * 16 // radius 16 -> ~100.53
-  const strokeDashoffset = circumference - (circumference * seconds) / 30
 
   // Mock check-in history data exactly as shown in screenshot
   const historyList = [
@@ -792,57 +775,6 @@ function CheckInQR() {
               alignItems: 'center',
             }}
           >
-            {/* Top-Right Circular Countdown Timer */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                width: '40px',
-                height: '40px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title="Mã QR làm mới định kỳ bảo vệ tài khoản"
-            >
-              <svg width="40" height="40" viewBox="0 0 38 38" style={{ transform: 'rotate(-90deg)' }}>
-                {/* Background Ring */}
-                <circle
-                  cx="19"
-                  cy="19"
-                  r="16"
-                  fill="none"
-                  stroke="#E5E7EB"
-                  strokeWidth="3"
-                />
-                {/* Animated Green Progress Ring */}
-                <circle
-                  cx="19"
-                  cy="19"
-                  r="16"
-                  fill="none"
-                  stroke="#16A34A"
-                  strokeWidth="3"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  style={{
-                    transition: 'stroke-dashoffset 0.9s linear',
-                  }}
-                />
-              </svg>
-              <span
-                style={{
-                  position: 'absolute',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  color: '#111827',
-                }}
-              >
-                {seconds}s
-              </span>
-            </div>
 
             {/* Stylized QR Code Graphic matching screenshot */}
             <div
@@ -936,7 +868,7 @@ function CheckInQR() {
               </svg>
             </div>
 
-            {/* Auto refresh caption */}
+            {/* Fixed QR code info */}
             <div
               style={{
                 marginTop: '16px',
@@ -944,7 +876,7 @@ function CheckInQR() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: '3px',
+                gap: '4px',
               }}
             >
               <div
@@ -953,29 +885,29 @@ function CheckInQR() {
                   alignItems: 'center',
                   gap: '6px',
                   color: '#15803D',
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   fontWeight: 700,
                 }}
               >
                 <span
                   className="material-symbols-outlined"
                   style={{
-                    fontSize: '15px',
-                    animation: 'spinSlow 6s linear infinite',
+                    fontSize: '16px',
+                    color: '#16A34A',
                   }}
                 >
-                  sync
+                  verified
                 </span>
-                <span>Mã tự động làm mới sau: {seconds} giây</span>
+                <span>Mã QR cố định sau khi đặt sân thành công</span>
               </div>
               <div
                 style={{
-                  fontSize: '11px',
-                  color: '#9CA3AF',
+                  fontSize: '11.5px',
+                  color: '#6B7280',
                   fontWeight: 500,
                 }}
               >
-                SportNexus Arena Q.7 • 19:30, 24/02/2026
+                SportNexus Arena Q.7 • 19:30, 24/02/2026 • Vé #TK-8849
               </div>
             </div>
 

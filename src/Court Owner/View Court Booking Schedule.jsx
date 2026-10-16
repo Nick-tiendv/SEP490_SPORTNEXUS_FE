@@ -214,6 +214,13 @@ export default function ViewCourtBookingSchedule() {
       {/* Header section */}
       <div
         style={{
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
+          padding: '24px 28px',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
@@ -238,7 +245,7 @@ export default function ViewCourtBookingSchedule() {
             >
               Unified Multi-Sport Scheduler
             </span>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
+            <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
               Lưới lịch trực quan đồng bộ thời gian thực
             </span>
           </div>
@@ -253,11 +260,36 @@ export default function ViewCourtBookingSchedule() {
           >
             Lịch Đặt Sân Tích Hợp Toàn Bộ Cụm Thể Thao
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '14px' }}>
+          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
             Xem toàn bộ {COURTS_LIST.length} sân (Cầu lông, Bóng đá, Pickleball, Tennis) trên một bảng lưới trực quan duy nhất.
           </p>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              background: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: '12px',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ color: '#16A34A', fontSize: '20px' }}>
+              calendar_view_week
+            </span>
+            <div>
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase' }}>
+                Tổng Quy Mô Lưới
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                {COURTS_LIST.length} Sân Đang Vận Hành
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Analytics KPI Bar */}
@@ -269,42 +301,42 @@ export default function ViewCourtBookingSchedule() {
           marginBottom: '24px',
         }}
       >
-        <div style={{ background: '#FFFFFF', borderRadius: '14px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Tỷ Lệ Lấp Đầy Trong Ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', margin: '4px 0' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Tỷ Lệ Lấp Đầy Trong Ngày</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>
             {occupancyRate}%
           </div>
-          <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>
             {bookedCount}/{totalSlotsCount} khung giờ đã có khách
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '14px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Đã Check-in & Vào Sân</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#10B981', margin: '4px 0' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Đã Check-in & Vào Sân</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>
             {checkedInCount} Trận Đấu
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B' }}>
+          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
             {bookedCount - checkedInCount} trận đang chờ tới giờ
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '14px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Doanh Thu Escrow Dự Kiến</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563EB', margin: '4px 0' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Doanh Thu Escrow Dự Kiến</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#1D4ED8', margin: '4px 0' }}>
             {formatVND(totalEscrowRevenue)}
           </div>
-          <div style={{ fontSize: '12px', color: '#2563EB', fontWeight: 600 }}>
+          <div style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700 }}>
             Tiền cọc an toàn bảo chứng 100%
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', borderRadius: '14px', padding: '16px 20px', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Sân Sẵn Sàng Phục Vụ</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: '#059669', margin: '4px 0' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Sân Sẵn Sàng Phục Vụ</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>
             {filteredCourts.length} Sân Đấu
           </div>
-          <div style={{ fontSize: '12px', color: '#64748B' }}>
+          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
             Áp dụng định giá động tự động
           </div>
         </div>
@@ -313,9 +345,11 @@ export default function ViewCourtBookingSchedule() {
       {/* Filter and Legend Controls */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           borderRadius: '16px',
-          border: '1px solid #E2E8F0',
+          border: '1px solid rgba(255, 255, 255, 0.90)',
           padding: '16px 20px',
           marginBottom: '20px',
           display: 'flex',
@@ -323,13 +357,14 @@ export default function ViewCourtBookingSchedule() {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '16px',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
         }}
       >
         {/* Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
           {/* Sport Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>Bộ môn:</span>
+            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Bộ môn:</span>
             <select
               value={filterSport}
               onChange={(e) => setFilterSport(e.target.value)}
@@ -338,7 +373,7 @@ export default function ViewCourtBookingSchedule() {
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 fontSize: '13px',
-                fontWeight: 600,
+                fontWeight: 700,
                 color: '#0F172A',
               }}
             >
@@ -352,7 +387,7 @@ export default function ViewCourtBookingSchedule() {
 
           {/* Zone Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>Khu vực:</span>
+            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Khu vực:</span>
             <select
               value={filterZone}
               onChange={(e) => setFilterZone(e.target.value)}
@@ -361,7 +396,7 @@ export default function ViewCourtBookingSchedule() {
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 fontSize: '13px',
-                fontWeight: 600,
+                fontWeight: 700,
                 color: '#0F172A',
               }}
             >
@@ -396,10 +431,12 @@ export default function ViewCourtBookingSchedule() {
       {/* Main Grid Schedule Viewport */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.90)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '16px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.8)',
+          boxShadow: '0 8px 32px rgba(45, 95, 63, 0.06)',
           overflowX: 'auto',
           position: 'relative',
         }}
@@ -481,7 +518,7 @@ export default function ViewCourtBookingSchedule() {
                       <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                         {court.name}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>
+                      <div style={{ fontSize: '11.5px', color: '#1E293B', fontWeight: 700 }}>
                         {court.zoneName.split('—')[0]} • {formatVND(court.price)}/h
                       </div>
                     </div>
@@ -619,28 +656,28 @@ export default function ViewCourtBookingSchedule() {
               Chi Tiết Đặt Sân: {selectedSlot.court.name}
             </h3>
 
-            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', border: '1px solid #E2E8F0', marginBottom: '20px' }}>
+            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', border: '1px solid #CBD5E1', marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Người đặt:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Người đặt:</span>
                 <strong style={{ fontSize: '14px', color: '#0F172A' }}>{selectedSlot.customer}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số điện thoại:</span>
-                <span style={{ fontSize: '13px', color: '#2563EB', fontWeight: 700 }}>{selectedSlot.phone}</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số điện thoại:</span>
+                <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 800 }}>{selectedSlot.phone}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Khung giờ:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Khung giờ:</span>
                 <strong style={{ fontSize: '14px', color: '#0F172A' }}>
                   {selectedSlot.time} (60 phút) • {selectedDate}
                 </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Tiền cọc Escrow:</span>
-                <strong style={{ fontSize: '15px', color: '#16A34A' }}>{formatVND(selectedSlot.escrow)}</strong>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Tiền cọc Escrow:</span>
+                <strong style={{ fontSize: '15px', color: '#047857' }}>{formatVND(selectedSlot.escrow)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Mã vé đặt sân:</span>
-                <span style={{ fontSize: '13px', color: '#64748B', fontFamily: 'monospace' }}>{selectedSlot.code}</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Mã vé đặt sân:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700, fontFamily: 'monospace' }}>{selectedSlot.code}</span>
               </div>
             </div>
 
@@ -728,18 +765,18 @@ export default function ViewCourtBookingSchedule() {
               </button>
             </div>
 
-            <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+            <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                 {walkinSlotData.court.name}
               </div>
-              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+              <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                 Khung giờ: <strong>{walkinSlotData.time}</strong> • Giá: <strong>{formatVND(walkinSlotData.court.price)}</strong>
               </div>
             </div>
 
             <form onSubmit={handleCreateWalkinBooking}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                   Tên Khách Hàng / Đội Bóng:
                 </label>
                 <input

@@ -719,7 +719,7 @@ export default function Settlement() {
                   </span>
                   Biểu Đồ Doanh Thu 7 Ngày Gần Nhất
                 </h3>
-                <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
+                <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
                   Cuối tuần doanh thu bứt phá nhờ cơ chế Định giá động (Dynamic Pricing)
                 </p>
               </div>
@@ -809,7 +809,7 @@ export default function Settlement() {
                     style={{
                       fontSize: '12px',
                       fontWeight: item.peak ? 800 : 700,
-                      color: item.peak ? '#C2410C' : '#475569',
+                      color: item.peak ? '#C2410C' : '#1E293B',
                       marginTop: '4px',
                     }}
                   >
@@ -830,9 +830,9 @@ export default function Settlement() {
               paddingTop: '12px',
             }}
           >
-            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '10px 14px', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Tổng 7 Ngày</div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>144.7 Triệu đ</div>
+            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '10px 14px', border: '1px solid #CBD5E1' }}>
+              <div style={{ fontSize: '11px', color: '#0F172A', fontWeight: 800 }}>Tổng 7 Ngày</div>
+              <div style={{ fontSize: '15px', fontWeight: 900, color: '#0F172A', marginTop: '2px' }}>144.7 Triệu đ</div>
             </div>
             <div style={{ background: '#FFF7ED', borderRadius: '12px', padding: '10px 14px', border: '1px solid #FED7AA' }}>
               <div style={{ fontSize: '11px', color: '#9A3412', fontWeight: 700 }}>Đỉnh Thứ 7 🔥</div>
@@ -868,7 +868,7 @@ export default function Settlement() {
                 </span>
                 Phân Bổ Doanh Thu Theo Bộ Môn
               </h3>
-              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>4 Bộ Môn Hoạt Động</span>
+              <span style={{ fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>4 Bộ Môn Hoạt Động</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -971,7 +971,7 @@ export default function Settlement() {
               </span>
               Lịch Sử Quyết Toán &amp; Biến Động Số Dư Escrow
             </h3>
-            <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13.5px' }}>
+            <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
               Mọi dòng tiền đều được ghi nhận phân rã minh bạch theo mã tham chiếu Napas và Smart Escrow
             </p>
           </div>
@@ -995,8 +995,8 @@ export default function Settlement() {
                     style={{
                       border: 'none',
                       background: isActive ? '#FFFFFF' : 'transparent',
-                      color: isActive ? '#15803D' : '#64748B',
-                      fontWeight: isActive ? 800 : 600,
+                      color: isActive ? '#047857' : '#1E293B',
+                      fontWeight: isActive ? 800 : 700,
                       fontSize: '12px',
                       padding: '6px 12px',
                       borderRadius: '8px',
@@ -1086,18 +1086,18 @@ export default function Settlement() {
                           className="material-symbols-outlined"
                           style={{
                             fontSize: '18px',
-                            color: isPositive ? '#16A34A' : txn.type === 'withdrawal' ? '#DC2626' : '#64748B',
+                            color: isPositive ? '#16A34A' : txn.type === 'withdrawal' ? '#DC2626' : '#1E293B',
                           }}
                         >
                           {isPositive ? 'qr_code_scanner' : txn.type === 'withdrawal' ? 'arrow_upward' : 'receipt'}
                         </span>
                         <div>
-                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>{txn.title}</div>
-                          <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>{txn.zone}</div>
+                          <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>{txn.title}</div>
+                          <div style={{ fontSize: '11.5px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>{txn.zone}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569' }}>
+                    <td style={{ padding: '14px 18px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
                       {txn.timestamp}
                     </td>
                     <td
@@ -1171,7 +1171,7 @@ export default function Settlement() {
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
                   Tạo Yêu Cầu Rút Tiền Về Ngân Hàng
                 </h3>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>
+                <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
                   Chuyển tiền nhanh 24/7 qua cổng Napas liên ngân hàng
                 </span>
               </div>
@@ -1287,7 +1287,7 @@ export default function Settlement() {
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                            <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                               {acc.accountHolder} • {acc.branch}
                             </div>
                           </div>
@@ -1307,10 +1307,10 @@ export default function Settlement() {
               {/* Enter Amount */}
               <div style={{ marginBottom: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
                     Số Tiền Cần Rút:
                   </label>
-                  <span style={{ fontSize: '12px', color: '#64748B' }}>
+                  <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
                     Tối thiểu 100.000 đ
                   </span>
                 </div>
@@ -1482,7 +1482,7 @@ export default function Settlement() {
             <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: '0 0 6px 0' }}>
               Rút Tiền Thành Công!
             </h2>
-            <p style={{ margin: '0 0 20px 0', color: '#64748B', fontSize: '13px' }}>
+            <p style={{ margin: '0 0 20px 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
               Tiền đã được chuyển khoản tới tài khoản ngân hàng thụ hưởng qua cổng Napas 24/7.
             </p>
 
@@ -1491,37 +1491,37 @@ export default function Settlement() {
                 background: '#F8FAFC',
                 borderRadius: '12px',
                 padding: '16px',
-                border: '1px solid #E2E8F0',
+                border: '1px solid #CBD5E1',
                 textAlign: 'left',
                 marginBottom: '20px',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số tiền rút:</span>
-                <strong style={{ fontSize: '16px', color: '#16A34A' }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số tiền rút:</span>
+                <strong style={{ fontSize: '16px', color: '#047857' }}>
                   {formatVND(successWithdrawReceipt.amount)}
                 </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Ngân hàng thụ hưởng:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Ngân hàng thụ hưởng:</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                   {successWithdrawReceipt.bank.bankName}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số tài khoản:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số tài khoản:</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                   {successWithdrawReceipt.bank.accountNumber}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Mã tham chiếu Napas:</span>
-                <span style={{ fontSize: '12px', color: '#2563EB', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Mã tham chiếu Napas:</span>
+                <span style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700, fontFamily: 'monospace' }}>
                   {successWithdrawReceipt.refCode}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', color: '#64748B' }}>Số dư khả dụng còn lại:</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số dư khả dụng còn lại:</span>
                 <strong style={{ fontSize: '14px', color: '#0F172A' }}>
                   {formatVND(successWithdrawReceipt.remainingBalance)}
                 </strong>

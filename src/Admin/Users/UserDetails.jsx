@@ -37,10 +37,10 @@ export default function UserDetails({ user, onClose, onEdit, onSuspend }) {
           <div className="users-profile-dates"><div><small>Ngày tham gia</small><strong>{user.joined.split('-').reverse().join('/')}</strong></div><div><small>Hoạt động gần nhất</small><strong>{user.lastActive || "Chưa có thông tin"}</strong></div></div>
         </section>
         <section><h3 className="users-section-title"><UserRound size={15} />Hồ sơ thể thao và kỹ năng</h3><div className="users-skill-grid">
-          <div><small>Điểm DUPR</small><strong className="users-rating">{user.dupr || '—'}</strong><p>{user.dupr ? "Pickleball • Điểm mẫu" : "Chưa có thông tin"}</p></div>
-          <div><small>Điểm Elo</small><strong>{user.elo?.toLocaleString('vi-VN') || '—'}</strong><p>{user.elo ? "Dữ liệu mẫu trong phiên" : "Chưa có thông tin"}</p></div>
+          <div><small>Trình độ kỹ năng</small><strong className="users-rating">{user.skillLevel || 'Trung bình - Khá'}</strong><p>Đánh giá kỹ năng phong trào</p></div>
           <div><small>Điểm tinh thần thể thao</small><strong className="users-rating">{user.fairplay == null ? '—' : `${user.fairplay}%`}</strong><p>{user.fairplay == null ? "Chưa có thông tin" : "Điểm tinh thần thể thao mẫu"}</p></div>
           <div><small>Môn thể thao yêu thích</small><strong className="users-sport-name">{user.sport || "Chưa có thông tin"}</strong><p>Thông tin hồ sơ mẫu</p></div>
+          <div><small>Tổng số trận đã đấu</small><strong>{(user.bookings || 0) + (user.lfg || 0)} trận</strong><p>Hoạt động thi đấu &amp; giao lưu</p></div>
         </div></section>
         <section><h3 className="users-section-title"><Activity size={15} />Tổng quan hoạt động trên nền tảng</h3><div className="users-activity-stats">{[["Lượt đặt sân", user.bookings], ["Trận tìm nhóm chơi", user.lfg], ["Giải đấu", user.tournaments], ["Đánh giá", user.reviews]].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong><small>tổng số mẫu</small></div>)}</div></section>
         <section className="users-wallet"><h3 className="users-section-title"><Wallet size={15} />Ví SportNexus <small>Số dư mẫu</small></h3><div><span><small>Số dư ký quỹ</small><strong>{money(user.wallet)}</strong></span><span><small>Tổng chi tiêu</small><strong>{money(user.totalSpent)}</strong></span></div><p>Ví mẫu chỉ để xem. Không thực hiện giao dịch ví.</p></section>

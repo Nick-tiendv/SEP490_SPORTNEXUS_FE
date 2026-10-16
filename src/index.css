@@ -45,6 +45,36 @@ body {
 }
 
 /* =====================================================================
+   GLASSMORPHISM - Khung thông tin tính năng nền trong suốt nhìn thấu ảnh nền
+   Đảm bảo chữ sắc nét 100%, không bị che, không mờ hay mất chữ khi cuộn trang
+   ===================================================================== */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.90) !important;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+  color: #0F172A;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.93) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  color: #0F172A;
+}
+
+/* Đảm bảo toàn bộ chữ hiển thị trên nền thể thao luôn sắc nét, tương phản cao, không bị mờ hay mất chữ khi kéo trang */
+.sport-animated-bg {
+  color: #0F172A;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* =====================================================================
    RESPONSIVE LAYOUT & MOBILE FRAME SYNC (ĐỒNG BỘ KHUNG & CHỮ TRÊN MOBILE)
    ===================================================================== */
 .responsive-page-container {
@@ -69,11 +99,11 @@ body {
   left: 260px;
   right: 0;
   z-index: 40;
-  background: rgba(255, 255, 255, 0.90);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-bottom: 1px solid rgba(45, 95, 63, 0.12);
-  box-shadow: 0 4px 20px rgba(45, 95, 63, 0.04);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.90);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
   height: 60px;
   display: flex;
   align-items: center;

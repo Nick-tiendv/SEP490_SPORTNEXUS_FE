@@ -34,7 +34,7 @@ const INITIAL_TOURNAMENTS = [
     drawMethod: 'auto_seed',
     status: 'in_progress',
     statusLabel: 'Đang diễn ra',
-    description: 'Giải đấu cầu lông đôi chuyên nghiệp hệ thống SportNexus, tự động xếp hạt giống theo Elo và phân bổ sân thi đấu BWF tiêu chuẩn.',
+    description: 'Giải đấu cầu lông đôi chuyên nghiệp hệ thống SportNexus, tự động xếp hạt giống và phân bổ sân thi đấu BWF tiêu chuẩn.',
     teams: DEFAULT_TEAMS_8,
     bracket: null,
     isDrawn: false,
@@ -132,6 +132,16 @@ export default function CreateAutomatedTournament() {
   const [courtZone, setCourtZone] = useState(currentTournament?.courtZone || 'Khu A — Sân Cầu Lông Quốc Tế BWF')
   const [entryFee, setEntryFee] = useState(currentTournament?.entryFee || 500000)
   const [totalPrize, setTotalPrize] = useState(currentTournament?.totalPrize || 15000000)
+  const [entryFeeText, setEntryFeeText] = useState(() =>
+    currentTournament?.entryFee != null
+      ? new Intl.NumberFormat('vi-VN').format(currentTournament.entryFee) + 'đ'
+      : '0đ'
+  )
+  const [totalPrizeText, setTotalPrizeText] = useState(() =>
+    currentTournament?.totalPrize != null
+      ? new Intl.NumberFormat('vi-VN').format(currentTournament.totalPrize) + 'đ'
+      : '0đ'
+  )
 
   // Danh sách đội của giải hiện hành
   const [teams, setTeams] = useState(currentTournament?.teams || DEFAULT_TEAMS_8)
@@ -154,6 +164,16 @@ export default function CreateAutomatedTournament() {
       setCourtZone(currentTournament.courtZone)
       setEntryFee(currentTournament.entryFee)
       setTotalPrize(currentTournament.totalPrize)
+      setEntryFeeText(
+        currentTournament.entryFee != null
+          ? new Intl.NumberFormat('vi-VN').format(currentTournament.entryFee) + 'đ'
+          : '0đ'
+      )
+      setTotalPrizeText(
+        currentTournament.totalPrize != null
+          ? new Intl.NumberFormat('vi-VN').format(currentTournament.totalPrize) + 'đ'
+          : '0đ'
+      )
       setTeams(currentTournament.teams?.length > 0 ? currentTournament.teams : DEFAULT_TEAMS_8)
       setBracket(currentTournament.bracket || null)
       setIsDrawn(currentTournament.isDrawn || false)
@@ -236,6 +256,81 @@ export default function CreateAutomatedTournament() {
         setDisplay('')
         setNewTourForm((prev) => ({ ...prev, [formKey]: 0 }))
       }
+    }
+  }
+
+  // Xử lý nhập tiền tệ tự do cho form cấu hình chính: tự động định dạng dấu chấm và đơn vị đ
+  const handleMainCurrencyChange = (val, setText, setNumber, fieldKey) => {
+    const rawDigits = val.replace(/\D/g, '')
+    if (!rawDigits) {
+      setText('')
+      setNumber(0)
+      setTournaments((prev) =>
+        prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: 0 } : t))
+      )
+      return
+    }
+    const num = parseInt(rawDigits, 10)
+    const formatted = new Intl.NumberFormat('vi-VN').format(num) + 'đ'
+    setText(formatted)
+    setNumber(num)
+    setTournaments((prev) =>
+      prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: num } : t))
+    )
+  }
+
+  const handleMainCurrencyKeyDown = (e, setText, setNumber, fieldKey) => {
+    const input = e.target
+    const { selectionStart, selectionEnd, value } = input
+
+    if (e.key === 'Backspace') {
+      // Nếu bôi đen toàn bộ rồi bấm xóa -> Xóa sạch
+      if (selectionStart === 0 && selectionEnd === value.length) {
+        e.preventDefault()
+        setText('')
+        setNumber(0)
+        setTournaments((prev) =>
+          prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: 0 } : t))
+        )
+        return
+      }
+
+      // Nếu con trỏ ở cuối chuỗi (trước hoặc sau chữ 'đ')
+      if (selectionStart === selectionEnd && selectionStart >= value.length - 1) {
+        e.preventDefault()
+        const rawDigits = value.replace(/\D/g, '')
+        if (rawDigits.length <= 1) {
+          setText('')
+          setNumber(0)
+          setTournaments((prev) =>
+            prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: 0 } : t))
+          )
+        } else {
+          const remainingDigits = rawDigits.slice(0, -1)
+          const num = parseInt(remainingDigits, 10)
+          const formatted = new Intl.NumberFormat('vi-VN').format(num) + 'đ'
+          setText(formatted)
+          setNumber(num)
+          setTournaments((prev) =>
+            prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: num } : t))
+          )
+        }
+      }
+    } else if (e.key === 'Delete') {
+      if (selectionStart === 0 && selectionEnd === value.length) {
+        e.preventDefault()
+        setText('')
+        setNumber(0)
+        setTournaments((prev) =>
+          prev.map((t) => (t.id === activeTournamentId ? { ...t, [fieldKey]: 0 } : t))
+        )
+      }
+    }
+  }
+
+  const handleMainCurrencyBlur = (text, setText) => {
+    if (!text || text.trim() === '') {
+      setText('0đ')
     }
   }
 
@@ -514,10 +609,10 @@ export default function CreateAutomatedTournament() {
     }
   }
 
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + '\u00A0đ'
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: '#F8FAFC' }}>
+    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -552,16 +647,16 @@ export default function CreateAutomatedTournament() {
       {/* ========================================================================= */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           borderRadius: '20px',
           padding: '26px 32px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           marginBottom: '24px',
           display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
           gap: '20px',
         }}
       >
@@ -574,14 +669,14 @@ export default function CreateAutomatedTournament() {
                 padding: '4px 10px',
                 borderRadius: '8px',
                 fontSize: '12px',
-                fontWeight: 700,
+                fontWeight: 800,
                 letterSpacing: '0.5px',
                 textTransform: 'uppercase',
               }}
             >
               AI Automated Tournament Engine
             </span>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>
+            <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
               Tự động bốc thăm, xếp sân & tạo sơ đồ nhánh đấu
             </span>
           </div>
@@ -589,7 +684,7 @@ export default function CreateAutomatedTournament() {
           <h1
             style={{
               fontSize: '26px',
-              fontWeight: 800,
+              fontWeight: 900,
               color: '#0F172A',
               margin: 0,
               letterSpacing: '-0.5px',
@@ -597,45 +692,23 @@ export default function CreateAutomatedTournament() {
           >
             Tạo Giải Đấu Tự Động & Sơ Đồ Nhánh Đấu (Bracket)
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '14px' }}>
+          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
             Hệ thống tự động xếp hạt giống, bốc thăm ngẫu nhiên công bằng và gán khung giờ sân thi đấu trong cụm cơ sở.
           </p>
         </div>
 
-        {/* Action Buttons: Nút Tạo Giải Đấu Mới & Nút Kích Hoạt Bốc Thăm Tự Động */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* NÚT TẠO GIẢI ĐẤU - MỞ POPUP MODAL ĐIỀN THÔNG TIN */}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            style={{
-              background: '#FFFFFF',
-              color: '#D97706',
-              border: '2px solid #F59E0B',
-              borderRadius: '14px',
-              padding: '13px 22px',
-              fontSize: '14px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#FFFBEB'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#FFFFFF'
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-              add_circle
-            </span>
-            TẠO GIẢI ĐẤU MỚI
-          </button>
-
-          {/* NÚT KÍCH HOẠT BỐC THĂM TỰ ĐỘNG */}
+        {/* Action Buttons: Kích Hoạt Bốc Thăm (bên trái) & Tạo Giải Đấu Mới (bên phải) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+            width: '100%',
+          }}
+        >
+          {/* NÚT KÍCH HOẠT BỐC THĂM TỰ ĐỘNG - NGOÀI CÙNG BÊN TRÁI */}
           <button
             onClick={handleAutoDraw}
             disabled={isDrawing}
@@ -662,6 +735,37 @@ export default function CreateAutomatedTournament() {
             </span>
             {isDrawing ? 'Đang Tự Động Bốc Thăm...' : 'KÍCH HOẠT BỐC THĂM TỰ ĐỘNG'}
           </button>
+
+          {/* NÚT TẠO GIẢI ĐẤU - MỞ POPUP MODAL ĐIỀN THÔNG TIN - NGOÀI CÙNG BÊN PHẢI */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              background: 'rgba(255, 255, 255, 0.95)',
+              color: '#D97706',
+              border: '2px solid #F59E0B',
+              borderRadius: '14px',
+              padding: '13px 22px',
+              fontSize: '14px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FFFBEB'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+              add_circle
+            </span>
+            TẠO GIẢI ĐẤU MỚI
+          </button>
         </div>
       </div>
 
@@ -670,11 +774,13 @@ export default function CreateAutomatedTournament() {
       {/* ========================================================================= */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           borderRadius: '16px',
           padding: '16px 20px',
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           marginBottom: '28px',
         }}
       >
@@ -686,7 +792,7 @@ export default function CreateAutomatedTournament() {
             <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
               Danh Sách Giải Đấu Của Cơ Sở ({tournaments.length})
             </span>
-            <span style={{ fontSize: '12px', color: '#64748B' }}>
+            <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
               (Bấm vào giải để xem cấu hình & sơ đồ nhánh đấu)
             </span>
           </div>
@@ -699,8 +805,8 @@ export default function CreateAutomatedTournament() {
               borderRadius: '8px',
               padding: '5px 12px',
               fontSize: '12px',
-              fontWeight: 700,
-              color: '#334155',
+              fontWeight: 800,
+              color: '#0F172A',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -715,7 +821,15 @@ export default function CreateAutomatedTournament() {
         </div>
 
         {/* Thanh cuộn ngang các giải đấu */}
-        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '6px' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            overflowX: 'auto',
+            paddingBottom: '8px',
+            scrollbarWidth: 'thin',
+          }}
+        >
           {tournaments.map((tour) => {
             const isSelected = tour.id === activeTournamentId
             const isJustCreated = tour.isJustCreated
@@ -725,35 +839,40 @@ export default function CreateAutomatedTournament() {
                 key={tour.id}
                 onClick={() => setActiveTournamentId(tour.id)}
                 style={{
-                  minWidth: '280px',
-                  maxWidth: '320px',
-                  padding: '12px 14px',
+                  flex: '0 0 auto',
+                  width: 'max-content',
+                  minWidth: '170px',
+                  maxWidth: '520px',
+                  padding: '10px 14px',
                   borderRadius: '12px',
                   border: isSelected
                     ? '2px solid #F59E0B'
                     : isJustCreated
                     ? '2px solid #38BDF8'
-                    : '1px solid #E2E8F0',
-                  background: isSelected ? '#FFFBEB' : '#FFFFFF',
+                    : '1px solid #CBD5E1',
+                  background: isSelected ? 'rgba(254, 243, 199, 0.96)' : 'rgba(255, 255, 255, 0.92)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
                   cursor: 'pointer',
                   position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px',
-                  boxShadow: isSelected ? '0 4px 12px rgba(245, 158, 11, 0.15)' : 'none',
+                  boxShadow: isSelected ? '0 4px 12px rgba(245, 158, 11, 0.2)' : 'none',
                   transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
                     <span
                       style={{
                         background: isSelected ? '#FEF3C7' : '#F1F5F9',
-                        color: isSelected ? '#B45309' : '#475569',
+                        color: isSelected ? '#9A3412' : '#0F172A',
                         fontSize: '11px',
                         fontWeight: 800,
                         padding: '2px 6px',
                         borderRadius: '4px',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {tour.sportLabel || tour.sport}
@@ -768,6 +887,7 @@ export default function CreateAutomatedTournament() {
                           fontWeight: 800,
                           padding: '2px 6px',
                           borderRadius: '4px',
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         MỚI TẠO ✨
@@ -778,8 +898,10 @@ export default function CreateAutomatedTournament() {
                   <span
                     style={{
                       fontSize: '11px',
-                      fontWeight: 700,
-                      color: tour.status === 'open' ? '#10B981' : tour.status === 'in_progress' ? '#F59E0B' : '#64748B',
+                      fontWeight: 800,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      color: tour.status === 'open' ? '#047857' : tour.status === 'in_progress' ? '#B45309' : '#1E293B',
                     }}
                   >
                     {tour.status === 'open' ? '● Mở ĐK' : tour.status === 'in_progress' ? '⚡ Thi đấu' : '✓ Xong'}
@@ -790,18 +912,47 @@ export default function CreateAutomatedTournament() {
                   style={{
                     fontSize: '13px',
                     fontWeight: 800,
-                    color: isSelected ? '#B45309' : '#0F172A',
+                    color: isSelected ? '#9A3412' : '#0F172A',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
+                  title={tour.name}
                 >
                   {tour.name}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#64748B' }}>
-                  <span>{tour.courtZone?.split('(')[0] || 'SportNexus'}</span>
-                  <span style={{ fontWeight: 700, color: '#D97706' }}>{formatVND(tour.totalPrize)}</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '11px',
+                    color: '#1E293B',
+                    fontWeight: 700,
+                    gap: '12px',
+                  }}
+                >
+                  <span
+                    style={{
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={tour.courtZone?.split('(')[0]?.trim()}
+                  >
+                    {tour.courtZone?.split('(')[0]?.trim() || 'SportNexus'}
+                  </span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      color: '#B45309',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatVND(tour.totalPrize)}
+                  </span>
                 </div>
               </div>
             )
@@ -815,7 +966,9 @@ export default function CreateAutomatedTournament() {
       {bracket?.champion && (
         <div
           style={{
-            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%)',
+            background: 'linear-gradient(135deg, rgba(254, 243, 199, 0.92) 0%, rgba(253, 230, 138, 0.92) 50%, rgba(252, 211, 77, 0.92) 100%)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
             borderRadius: '16px',
             padding: '24px 32px',
             border: '2px solid #F59E0B',
@@ -843,14 +996,14 @@ export default function CreateAutomatedTournament() {
 
           <div
             style={{
-              background: '#FFFFFF',
+              background: 'rgba(255, 255, 255, 0.95)',
               borderRadius: '12px',
               padding: '12px 20px',
               textAlign: 'center',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
             }}
           >
-            <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 700 }}>HẠNG MỤC</span>
+            <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>HẠNG MỤC</span>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#D97706' }}>CHAMPION #1</div>
           </div>
         </div>
@@ -863,11 +1016,13 @@ export default function CreateAutomatedTournament() {
         {/* Tournament Parameters Card */}
         <div
           style={{
-            background: '#FFFFFF',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             borderRadius: '16px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid rgba(255, 255, 255, 0.9)',
             padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -875,7 +1030,7 @@ export default function CreateAutomatedTournament() {
               <span className="material-symbols-outlined" style={{ color: '#F59E0B', fontSize: '22px' }}>
                 settings
               </span>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#0F172A' }}>
                 Cấu Hình Giải Đấu
               </h3>
             </div>
@@ -888,7 +1043,7 @@ export default function CreateAutomatedTournament() {
                 border: 'none',
                 color: '#EF4444',
                 fontSize: '12px',
-                fontWeight: 700,
+                fontWeight: 800,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -904,7 +1059,7 @@ export default function CreateAutomatedTournament() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                 Tên Giải Đấu
               </label>
               <input
@@ -918,18 +1073,20 @@ export default function CreateAutomatedTournament() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
+                  border: '1.5px solid #CBD5E1',
                   fontSize: '13px',
-                  fontWeight: 600,
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#FFFFFF',
                 }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                   Bộ Môn
                 </label>
                 <select
@@ -944,8 +1101,11 @@ export default function CreateAutomatedTournament() {
                     width: '100%',
                     padding: '8px 10px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
+                    border: '1.5px solid #CBD5E1',
                     fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    background: '#FFFFFF',
                   }}
                 >
                   <option value="badminton">Cầu lông Đôi</option>
@@ -957,7 +1117,7 @@ export default function CreateAutomatedTournament() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                   Quy Mô
                 </label>
                 <select
@@ -973,8 +1133,11 @@ export default function CreateAutomatedTournament() {
                     width: '100%',
                     padding: '8px 10px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
+                    border: '1.5px solid #CBD5E1',
                     fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    background: '#FFFFFF',
                   }}
                 >
                   <option value={4}>4 Đội (Bán kết)</option>
@@ -985,7 +1148,7 @@ export default function CreateAutomatedTournament() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                 Sân Phân Bổ Trong Cụm
               </label>
               <input
@@ -999,70 +1162,84 @@ export default function CreateAutomatedTournament() {
                 }}
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '9px 12px',
                   borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
+                  border: '1.5px solid #CBD5E1',
                   fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#FFFFFF',
                 }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                   Lệ Phí / Đội
                 </label>
                 <input
-                  type="number"
-                  step="50000"
-                  value={entryFee}
-                  onChange={(e) => {
-                    const fee = Number(e.target.value)
-                    setEntryFee(fee)
-                    setTournaments((prev) =>
-                      prev.map((t) => (t.id === activeTournamentId ? { ...t, entryFee: fee } : t))
-                    )
-                  }}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0đ"
+                  value={entryFeeText}
+                  onChange={(e) =>
+                    handleMainCurrencyChange(e.target.value, setEntryFeeText, setEntryFee, 'entryFee')
+                  }
+                  onKeyDown={(e) =>
+                    handleMainCurrencyKeyDown(e, setEntryFeeText, setEntryFee, 'entryFee')
+                  }
+                  onBlur={() => handleMainCurrencyBlur(entryFeeText, setEntryFeeText)}
                   style={{
                     width: '100%',
                     padding: '8px 10px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
+                    border: '1.5px solid #CBD5E1',
                     fontSize: '13px',
-                    fontWeight: 700,
+                    fontWeight: 800,
+                    outline: 'none',
+                    color: '#0F172A',
+                    background: '#FFFFFF',
                   }}
+                  onFocus={(e) => (e.target.style.borderColor = '#F59E0B')}
+                  onBlurCapture={(e) => (e.target.style.borderColor = '#CBD5E1')}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '5px' }}>
                   Tổng Giải Thưởng
                 </label>
                 <input
-                  type="number"
-                  step="1000000"
-                  value={totalPrize}
-                  onChange={(e) => {
-                    const pz = Number(e.target.value)
-                    setTotalPrize(pz)
-                    setTournaments((prev) =>
-                      prev.map((t) => (t.id === activeTournamentId ? { ...t, totalPrize: pz } : t))
-                    )
-                  }}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0đ"
+                  value={totalPrizeText}
+                  onChange={(e) =>
+                    handleMainCurrencyChange(e.target.value, setTotalPrizeText, setTotalPrize, 'totalPrize')
+                  }
+                  onKeyDown={(e) =>
+                    handleMainCurrencyKeyDown(e, setTotalPrizeText, setTotalPrize, 'totalPrize')
+                  }
+                  onBlur={() => handleMainCurrencyBlur(totalPrizeText, setTotalPrizeText)}
                   style={{
                     width: '100%',
                     padding: '8px 10px',
                     borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
+                    border: '1.5px solid #CBD5E1',
                     fontSize: '13px',
-                    fontWeight: 700,
-                    color: '#D97706',
+                    fontWeight: 800,
+                    color: '#B45309',
+                    outline: 'none',
+                    background: '#FFFFFF',
                   }}
+                  onFocus={(e) => (e.target.style.borderColor = '#F59E0B')}
+                  onBlurCapture={(e) => (e.target.style.borderColor = '#CBD5E1')}
                 />
               </div>
             </div>
 
-            <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', fontSize: '12px', color: '#64748B' }}>
+            <div style={{ background: 'rgba(241, 245, 249, 0.95)', padding: '12px', borderRadius: '10px', fontSize: '12px', color: '#0F172A', fontWeight: 700 }}>
               💡 Hệ thống sẽ tự động gán hạt giống #1 và #2 vào 2 nhánh đối diện để gặp nhau ở chung kết.
             </div>
           </div>
@@ -1071,15 +1248,17 @@ export default function CreateAutomatedTournament() {
         {/* Registered Teams Table Card */}
         <div
           style={{
-            background: '#FFFFFF',
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             borderRadius: '16px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid rgba(255, 255, 255, 0.9)',
             padding: '20px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#0F172A' }}>
               Danh Sách Đội Tham Gia ({teams.length}/{teamCount})
             </h3>
 
@@ -1093,12 +1272,12 @@ export default function CreateAutomatedTournament() {
               }}
               style={{
                 background: '#F1F5F9',
-                border: 'none',
+                border: '1px solid #CBD5E1',
                 borderRadius: '8px',
                 padding: '6px 12px',
                 fontSize: '12px',
-                fontWeight: 700,
-                color: '#475569',
+                fontWeight: 800,
+                color: '#0F172A',
                 cursor: 'pointer',
               }}
             >
@@ -1109,23 +1288,23 @@ export default function CreateAutomatedTournament() {
           <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  <th style={{ padding: '8px 12px', fontSize: '12px', color: '#64748B' }}>Hạt Giống</th>
-                  <th style={{ padding: '8px 12px', fontSize: '12px', color: '#64748B' }}>Tên Đội</th>
-                  <th style={{ padding: '8px 12px', fontSize: '12px', color: '#64748B' }}>Đội Trưởng</th>
-                  <th style={{ padding: '8px 12px', fontSize: '12px', color: '#64748B' }}>Elo Rate</th>
-                  <th style={{ padding: '8px 12px', fontSize: '12px', color: '#64748B' }}>Trạng Thái Cọc</th>
+                <tr style={{ background: 'rgba(241, 245, 249, 0.95)', borderBottom: '1.5px solid #CBD5E1' }}>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Hạt Giống</th>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Tên Đội</th>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Đội Trưởng</th>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Điểm Xếp Hạng</th>
+                  <th style={{ padding: '9px 12px', fontSize: '12px', color: '#0F172A', fontWeight: 800 }}>Trạng Thái Cọc</th>
                 </tr>
               </thead>
               <tbody>
                 {teams.map((t) => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  <tr key={t.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <td style={{ padding: '10px 12px' }}>
                       {t.seed ? (
                         <span
                           style={{
                             background: '#FEF3C7',
-                            color: '#B45309',
+                            color: '#9A3412',
                             fontSize: '11px',
                             fontWeight: 800,
                             padding: '2px 8px',
@@ -1135,16 +1314,16 @@ export default function CreateAutomatedTournament() {
                           #{t.seed}
                         </span>
                       ) : (
-                        <span style={{ fontSize: '12px', color: '#94A3B8' }}>Bốc ngẫu nhiên</span>
+                        <span style={{ fontSize: '12px', color: '#475569', fontWeight: 700, fontStyle: 'italic' }}>Bốc ngẫu nhiên</span>
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                    <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                       {t.logo || '🏅'} {t.name}
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: '13px', color: '#475569' }}>
+                    <td style={{ padding: '10px 12px', fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
                       {t.captain}
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 600, color: '#2563EB' }}>
+                    <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: 800, color: '#1D4ED8' }}>
                       {t.elo}
                     </td>
                     <td style={{ padding: '10px 12px' }}>
@@ -1153,9 +1332,9 @@ export default function CreateAutomatedTournament() {
                           background: '#DCFCE7',
                           color: '#15803D',
                           fontSize: '11px',
-                          fontWeight: 700,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
                         }}
                       >
                         Đã Đóng Escrow
@@ -1219,11 +1398,13 @@ export default function CreateAutomatedTournament() {
       {/* ========================================================================= */}
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
           borderRadius: '20px',
-          border: '1px solid #E2E8F0',
+          border: '1px solid rgba(255, 255, 255, 0.9)',
           padding: '28px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
         }}
       >
         <div
@@ -1232,15 +1413,15 @@ export default function CreateAutomatedTournament() {
             alignItems: 'center',
             justifyContent: 'space-between',
             marginBottom: '24px',
-            borderBottom: '1px solid #F1F5F9',
+            borderBottom: '1.5px solid #E2E8F0',
             paddingBottom: '16px',
           }}
         >
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
               Sơ Đồ Nhánh Đấu Trực Quan (Tournament Bracket Diagram)
             </h2>
-            <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '13px' }}>
+            <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13px', fontWeight: 700 }}>
               Nhập tỷ số tại các trận để tự động đẩy đội chiến thắng vào các vòng tiếp theo
             </p>
           </div>
@@ -1254,8 +1435,8 @@ export default function CreateAutomatedTournament() {
                 borderRadius: '8px',
                 padding: '8px 14px',
                 fontSize: '13px',
-                fontWeight: 700,
-                color: '#334155',
+                fontWeight: 800,
+                color: '#0F172A',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -1285,7 +1466,7 @@ export default function CreateAutomatedTournament() {
           >
             {/* ROUND 1: QUARTER FINALS (4 Matches) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#1E293B', textAlign: 'center', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '14px', fontWeight: 900, color: '#0F172A', textAlign: 'center', textTransform: 'uppercase' }}>
                 Vòng Tứ Kết (Quarter-Finals)
               </div>
 
@@ -1293,17 +1474,19 @@ export default function CreateAutomatedTournament() {
                 <div
                   key={match.id}
                   style={{
-                    background: '#FFFFFF',
-                    border: '1px solid #CBD5E1',
+                    background: 'rgba(255, 255, 255, 0.96)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1.5px solid #CBD5E1',
                     borderRadius: '12px',
                     padding: '12px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
                     position: 'relative',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 800, color: '#2563EB' }}>{match.id}</span>
-                    <span>{match.court} • {match.time}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#1E293B', fontWeight: 800, marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 900, color: '#1D4ED8' }}>{match.id}</span>
+                    <span style={{ color: '#0F172A' }}>{match.court} • {match.time}</span>
                   </div>
 
                   {/* Team 1 */}
@@ -1315,10 +1498,11 @@ export default function CreateAutomatedTournament() {
                       padding: '6px 8px',
                       borderRadius: '6px',
                       background: match.score1 !== null && match.score2 !== null && match.score1 > match.score2 ? '#DCFCE7' : '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       marginBottom: '6px',
                     }}
                   >
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
                       {match.team1?.name || 'TBD'}
                     </span>
                     <input
@@ -1331,11 +1515,13 @@ export default function CreateAutomatedTournament() {
                         width: '38px',
                         padding: '2px 4px',
                         borderRadius: '4px',
-                        border: '1px solid #CBD5E1',
+                        border: '1.5px solid #CBD5E1',
                         textAlign: 'center',
-                        fontWeight: 800,
+                        fontWeight: 900,
                         fontSize: '13px',
                         outline: 'none',
+                        color: '#0F172A',
+                        background: '#FFFFFF',
                       }}
                     />
                   </div>
@@ -1349,9 +1535,10 @@ export default function CreateAutomatedTournament() {
                       padding: '6px 8px',
                       borderRadius: '6px',
                       background: match.score1 !== null && match.score2 !== null && match.score2 > match.score1 ? '#DCFCE7' : '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                     }}
                   >
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
                       {match.team2?.name || 'TBD'}
                     </span>
                     <input
@@ -1364,11 +1551,13 @@ export default function CreateAutomatedTournament() {
                         width: '38px',
                         padding: '2px 4px',
                         borderRadius: '4px',
-                        border: '1px solid #CBD5E1',
+                        border: '1.5px solid #CBD5E1',
                         textAlign: 'center',
-                        fontWeight: 800,
+                        fontWeight: 900,
                         fontSize: '13px',
                         outline: 'none',
+                        color: '#0F172A',
+                        background: '#FFFFFF',
                       }}
                     />
                   </div>
@@ -1378,7 +1567,7 @@ export default function CreateAutomatedTournament() {
 
             {/* ROUND 2: SEMI FINALS (2 Matches) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '90px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#1E293B', textAlign: 'center', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '14px', fontWeight: 900, color: '#0F172A', textAlign: 'center', textTransform: 'uppercase' }}>
                 Vòng Bán Kết (Semi-Finals)
               </div>
 
@@ -1386,16 +1575,18 @@ export default function CreateAutomatedTournament() {
                 <div
                   key={match.id}
                   style={{
-                    background: '#FFFFFF',
-                    border: '2px solid #93C5FD',
+                    background: 'rgba(255, 255, 255, 0.96)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '2px solid #60A5FA',
                     borderRadius: '12px',
                     padding: '12px',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.08)',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.1)',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 800, color: '#2563EB' }}>{match.id}</span>
-                    <span>{match.court} • {match.time}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#1E293B', fontWeight: 800, marginBottom: '8px' }}>
+                    <span style={{ fontWeight: 900, color: '#1D4ED8' }}>{match.id}</span>
+                    <span style={{ color: '#0F172A' }}>{match.court} • {match.time}</span>
                   </div>
 
                   {/* Team 1 */}
@@ -1407,10 +1598,11 @@ export default function CreateAutomatedTournament() {
                       padding: '6px 8px',
                       borderRadius: '6px',
                       background: match.score1 !== null && match.score2 !== null && match.score1 > match.score2 ? '#DCFCE7' : '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                       marginBottom: '6px',
                     }}
                   >
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: match.team1 ? '#0F172A' : '#94A3B8' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: match.team1 ? '#0F172A' : '#475569', fontStyle: match.team1 ? 'normal' : 'italic' }}>
                       {match.team1?.name || '(Chờ thắng QF)'}
                     </span>
                     <input
@@ -1424,11 +1616,13 @@ export default function CreateAutomatedTournament() {
                         width: '38px',
                         padding: '2px 4px',
                         borderRadius: '4px',
-                        border: '1px solid #CBD5E1',
+                        border: '1.5px solid #CBD5E1',
                         textAlign: 'center',
-                        fontWeight: 800,
+                        fontWeight: 900,
                         fontSize: '13px',
                         outline: 'none',
+                        color: '#0F172A',
+                        background: '#FFFFFF',
                       }}
                     />
                   </div>
@@ -1442,9 +1636,10 @@ export default function CreateAutomatedTournament() {
                       padding: '6px 8px',
                       borderRadius: '6px',
                       background: match.score1 !== null && match.score2 !== null && match.score2 > match.score1 ? '#DCFCE7' : '#F8FAFC',
+                      border: '1px solid #E2E8F0',
                     }}
                   >
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: match.team2 ? '#0F172A' : '#94A3B8' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: match.team2 ? '#0F172A' : '#475569', fontStyle: match.team2 ? 'normal' : 'italic' }}>
                       {match.team2?.name || '(Chờ thắng QF)'}
                     </span>
                     <input
@@ -1458,11 +1653,13 @@ export default function CreateAutomatedTournament() {
                         width: '38px',
                         padding: '2px 4px',
                         borderRadius: '4px',
-                        border: '1px solid #CBD5E1',
+                        border: '1.5px solid #CBD5E1',
                         textAlign: 'center',
-                        fontWeight: 800,
+                        fontWeight: 900,
                         fontSize: '13px',
                         outline: 'none',
+                        color: '#0F172A',
+                        background: '#FFFFFF',
                       }}
                     />
                   </div>
@@ -1472,21 +1669,23 @@ export default function CreateAutomatedTournament() {
 
             {/* ROUND 3: GRAND FINAL */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: '#D97706', textAlign: 'center', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: '14px', fontWeight: 900, color: '#B45309', textAlign: 'center', textTransform: 'uppercase' }}>
                 Trận Chung Kết (Grand Final 🏆)
               </div>
 
               <div
                 style={{
-                  background: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
-                  border: '2px solid #F59E0B',
+                  background: 'linear-gradient(135deg, rgba(255, 251, 235, 0.98) 0%, rgba(254, 243, 199, 0.98) 100%)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: '2.5px solid #F59E0B',
                   borderRadius: '14px',
                   padding: '16px',
-                  boxShadow: '0 6px 18px rgba(245, 158, 11, 0.15)',
+                  boxShadow: '0 6px 18px rgba(245, 158, 11, 0.2)',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#92400E', marginBottom: '10px' }}>
-                  <span style={{ fontWeight: 800 }}>CHUNG KẾT VÔ ĐỊCH</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#78350F', fontWeight: 900, marginBottom: '10px' }}>
+                  <span style={{ fontWeight: 900 }}>CHUNG KẾT VÔ ĐỊCH</span>
                   <span>{bracket.final.court}</span>
                 </div>
 
@@ -1499,10 +1698,11 @@ export default function CreateAutomatedTournament() {
                     padding: '8px 10px',
                     borderRadius: '8px',
                     background: bracket.final.score1 !== null && bracket.final.score2 !== null && bracket.final.score1 > bracket.final.score2 ? '#DCFCE7' : '#FFFFFF',
+                    border: '1px solid #FDE68A',
                     marginBottom: '8px',
                   }}
                 >
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: bracket.final.team1 ? '#0F172A' : '#94A3B8' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 900, color: bracket.final.team1 ? '#0F172A' : '#475569', fontStyle: bracket.final.team1 ? 'normal' : 'italic' }}>
                     {bracket.final.team1?.name || '(Chờ thắng Bán kết 1)'}
                   </span>
                   <input
@@ -1518,9 +1718,11 @@ export default function CreateAutomatedTournament() {
                       borderRadius: '6px',
                       border: '2px solid #F59E0B',
                       textAlign: 'center',
-                      fontWeight: 800,
+                      fontWeight: 900,
                       fontSize: '15px',
                       outline: 'none',
+                      color: '#0F172A',
+                      background: '#FFFFFF',
                     }}
                   />
                 </div>
@@ -1534,9 +1736,10 @@ export default function CreateAutomatedTournament() {
                     padding: '8px 10px',
                     borderRadius: '8px',
                     background: bracket.final.score1 !== null && bracket.final.score2 !== null && bracket.final.score2 > bracket.final.score1 ? '#DCFCE7' : '#FFFFFF',
+                    border: '1px solid #FDE68A',
                   }}
                 >
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: bracket.final.team2 ? '#0F172A' : '#94A3B8' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 900, color: bracket.final.team2 ? '#0F172A' : '#475569', fontStyle: bracket.final.team2 ? 'normal' : 'italic' }}>
                     {bracket.final.team2?.name || '(Chờ thắng Bán kết 2)'}
                   </span>
                   <input
@@ -1552,9 +1755,11 @@ export default function CreateAutomatedTournament() {
                       borderRadius: '6px',
                       border: '2px solid #F59E0B',
                       textAlign: 'center',
-                      fontWeight: 800,
+                      fontWeight: 900,
                       fontSize: '15px',
                       outline: 'none',
+                      color: '#0F172A',
+                      background: '#FFFFFF',
                     }}
                   />
                 </div>
@@ -1562,14 +1767,14 @@ export default function CreateAutomatedTournament() {
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748B' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#CBD5E1', marginBottom: '12px' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#1E293B' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#94A3B8', marginBottom: '12px' }}>
               account_tree
             </span>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>
+            <div style={{ fontSize: '17px', fontWeight: 900, color: '#0F172A' }}>
               Chưa Bốc Thăm Nhánh Đấu
             </div>
-            <p style={{ margin: '6px 0 16px 0', fontSize: '13px' }}>
+            <p style={{ margin: '6px 0 16px 0', fontSize: '14px', fontWeight: 600, color: '#1E293B' }}>
               Hãy nhấn nút <strong>"KÍCH HOẠT BỐC THĂM TỰ ĐỘNG"</strong> ở góc trên để tạo sơ đồ bracket thi đấu ngay lập tức.
             </p>
             <button
@@ -1616,14 +1821,16 @@ export default function CreateAutomatedTournament() {
         >
           <div
             style={{
-              background: '#FFFFFF',
+              background: 'rgba(255, 255, 255, 0.96)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
               borderRadius: '24px',
               maxWidth: '820px',
               width: '100%',
               maxHeight: '92vh',
               overflowY: 'auto',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-              border: '1px solid #E2E8F0',
+              border: '1px solid rgba(255, 255, 255, 0.8)',
             }}
           >
             {/* Modal Header */}
@@ -1636,7 +1843,7 @@ export default function CreateAutomatedTournament() {
                 justifyContent: 'space-between',
                 position: 'sticky',
                 top: 0,
-                background: '#FFFFFF',
+                background: 'rgba(255, 255, 255, 0.96)',
                 zIndex: 10,
               }}
             >
@@ -1658,10 +1865,10 @@ export default function CreateAutomatedTournament() {
                   </span>
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
                     Tạo Giải Đấu Tự Động Mới
                   </h2>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#64748B' }}>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
                     Điền đầy đủ thông tin để khởi tạo giải đấu và kích hoạt hệ thống bốc thăm tự động
                   </p>
                 </div>
@@ -1679,7 +1886,8 @@ export default function CreateAutomatedTournament() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#64748B',
+                  color: '#1E293B',
+                  fontWeight: 800,
                 }}
               >
                 ✕
@@ -1691,7 +1899,7 @@ export default function CreateAutomatedTournament() {
               <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {/* 1. Tên Giải Đấu */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                     Tên Giải Đấu <span style={{ color: '#EF4444' }}>*</span>
                   </label>
                   <input
@@ -1706,7 +1914,8 @@ export default function CreateAutomatedTournament() {
                       borderRadius: '10px',
                       border: '1.5px solid #CBD5E1',
                       fontSize: '14px',
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      color: '#0F172A',
                       outline: 'none',
                     }}
                     onFocus={(e) => (e.target.style.borderColor = '#F59E0B')}
@@ -1718,7 +1927,7 @@ export default function CreateAutomatedTournament() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                   {/* Bộ môn */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Bộ Môn Thể Thao <span style={{ color: '#EF4444' }}>*</span>
                     </label>
                     <select
@@ -1730,7 +1939,8 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
-                        fontWeight: 600,
+                        fontWeight: 700,
+                        color: '#0F172A',
                         background: '#FFFFFF',
                         cursor: 'pointer',
                       }}
@@ -1745,7 +1955,7 @@ export default function CreateAutomatedTournament() {
 
                   {/* Thể thức */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Thể Thức Thi Đấu
                     </label>
                     <select
@@ -1757,7 +1967,8 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
-                        fontWeight: 600,
+                        fontWeight: 700,
+                        color: '#0F172A',
                         background: '#FFFFFF',
                         cursor: 'pointer',
                       }}
@@ -1770,7 +1981,7 @@ export default function CreateAutomatedTournament() {
 
                   {/* Quy mô đội */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Quy Mô Số Đội Tham Gia
                     </label>
                     <select
@@ -1782,7 +1993,8 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
-                        fontWeight: 600,
+                        fontWeight: 700,
+                        color: '#0F172A',
                         background: '#FFFFFF',
                         cursor: 'pointer',
                       }}
@@ -1797,7 +2009,7 @@ export default function CreateAutomatedTournament() {
 
                 {/* 3. Cụm Sân & Sân Phân Bổ */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                     Sân Thi Đấu / Cụm Sân Phân Bổ
                   </label>
                   <input
@@ -1811,6 +2023,8 @@ export default function CreateAutomatedTournament() {
                       borderRadius: '10px',
                       border: '1.5px solid #CBD5E1',
                       fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#0F172A',
                     }}
                   />
                 </div>
@@ -1818,7 +2032,7 @@ export default function CreateAutomatedTournament() {
                 {/* 4. Thời Gian Tổ Chức */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Ngày Bắt Đầu
                     </label>
                     <input
@@ -1831,12 +2045,14 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#0F172A',
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Ngày Kết Thúc
                     </label>
                     <input
@@ -1849,12 +2065,14 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#0F172A',
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                       Hạn Chót Đăng Ký
                     </label>
                     <input
@@ -1867,6 +2085,8 @@ export default function CreateAutomatedTournament() {
                         borderRadius: '10px',
                         border: '1.5px solid #CBD5E1',
                         fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#0F172A',
                       }}
                     />
                   </div>
@@ -1877,7 +2097,7 @@ export default function CreateAutomatedTournament() {
                   {/* Lệ phí tham gia */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
                         Lệ Phí Tham Gia / Đội <span style={{ color: '#EF4444' }}>*</span>
                       </label>
                       {entryFeeDisplay && (
@@ -1890,8 +2110,9 @@ export default function CreateAutomatedTournament() {
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#94A3B8',
+                            color: '#475569',
                             fontSize: '12px',
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -1918,7 +2139,7 @@ export default function CreateAutomatedTournament() {
                           borderRadius: '10px',
                           border: '1.5px solid #CBD5E1',
                           fontSize: '15px',
-                          fontWeight: 700,
+                          fontWeight: 800,
                           color: '#0F172A',
                           outline: 'none',
                           background: '#FFFFFF',
@@ -1932,7 +2153,7 @@ export default function CreateAutomatedTournament() {
                   {/* Tổng giá trị giải thưởng */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
                         Tổng Giá Trị Giải Thưởng
                       </label>
                       {totalPrizeDisplay && (
@@ -1945,8 +2166,9 @@ export default function CreateAutomatedTournament() {
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#94A3B8',
+                            color: '#475569',
                             fontSize: '12px',
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -1973,8 +2195,8 @@ export default function CreateAutomatedTournament() {
                           borderRadius: '10px',
                           border: '1.5px solid #CBD5E1',
                           fontSize: '15px',
-                          fontWeight: 700,
-                          color: '#D97706',
+                          fontWeight: 800,
+                          color: '#B45309',
                           outline: 'none',
                           background: '#FFFFFF',
                         }}
@@ -1987,7 +2209,7 @@ export default function CreateAutomatedTournament() {
 
                 {/* 6. Thuật toán bốc thăm */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                     Thuật Toán Bốc Thăm & Nhánh Đấu (AI Engine)
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -2011,10 +2233,10 @@ export default function CreateAutomatedTournament() {
                         style={{ marginTop: '2px' }}
                       />
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                          ⚡ Tự Động Xếp Hạt Giống (Elo)
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                          ⚡ Tự Động Xếp Hạt Giống
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                        <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                           Hạt giống #1 và #2 tách 2 nhánh đối diện
                         </div>
                       </div>
@@ -2040,10 +2262,10 @@ export default function CreateAutomatedTournament() {
                         style={{ marginTop: '2px' }}
                       />
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                           🎲 Bốc Thăm Hoàn Toàn Ngẫu Nhiên
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                        <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                           Xáo trộn ngẫu nhiên tất cả các đội
                         </div>
                       </div>
@@ -2053,7 +2275,7 @@ export default function CreateAutomatedTournament() {
 
                 {/* 7. Mô tả ngắn */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
                     Quy Định & Mô Tả Giải Đấu
                   </label>
                   <textarea
@@ -2067,6 +2289,8 @@ export default function CreateAutomatedTournament() {
                       borderRadius: '10px',
                       border: '1.5px solid #CBD5E1',
                       fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#0F172A',
                       outline: 'none',
                     }}
                   />
@@ -2078,7 +2302,7 @@ export default function CreateAutomatedTournament() {
                 style={{
                   padding: '18px 28px',
                   borderTop: '1px solid #F1F5F9',
-                  background: '#F8FAFC',
+                  background: 'rgba(248, 250, 252, 0.96)',
                   borderRadius: '0 0 24px 24px',
                   display: 'flex',
                   alignItems: 'center',
@@ -2094,9 +2318,9 @@ export default function CreateAutomatedTournament() {
                     borderRadius: '10px',
                     border: '1px solid #CBD5E1',
                     background: '#FFFFFF',
-                    color: '#475569',
+                    color: '#1E293B',
                     fontSize: '14px',
-                    fontWeight: 700,
+                    fontWeight: 800,
                     cursor: 'pointer',
                   }}
                 >

@@ -23,11 +23,11 @@ export const paidAmount = activity => activity.slots.reduce((sum, slot) => sum +
 export const escrowLabel = activity => activity.status === 'Cancelled' ? 'Chờ rà soát minh họa; chưa xử lý tiền' : activity.status === 'Completed' ? 'Đã đối soát minh họa' : 'Đang giữ ký quỹ minh họa'
 
 const players = [
-  { id: 'DEMO-LFG-P1', name: 'Lê Hoàng Nam', username: 'nam_le', rating: 'Elo 1.650', reliability: '99,4%' },
-  { id: 'DEMO-LFG-P2', name: 'Minh Minh Minh', username: 'minhminh', rating: 'Elo 1.420', reliability: '98,1%' },
-  { id: 'DEMO-LFG-P3', name: 'Trần Đình Khang', username: 'khang_tran', rating: 'Elo 1.380', reliability: '97,5%' },
-  { id: 'DEMO-LFG-P4', name: 'Vũ Thị Mai Anh', username: 'maianh_vu', rating: 'Elo 1.510', reliability: '98,7%' },
-  { id: 'DEMO-LFG-P5', name: 'Nguyễn Văn An', username: 'an_nguyen', rating: 'Elo 1.350', reliability: '96,2%' },
+  { id: 'DEMO-LFG-P1', name: 'Lê Hoàng Nam', username: 'nam_le', rating: 'Khá - Nâng cao', reliability: '99,4%' },
+  { id: 'DEMO-LFG-P2', name: 'Minh Minh Minh', username: 'minhminh', rating: 'Trung bình - Khá', reliability: '98,1%' },
+  { id: 'DEMO-LFG-P3', name: 'Trần Đình Khang', username: 'khang_tran', rating: 'Trung bình', reliability: '97,5%' },
+  { id: 'DEMO-LFG-P4', name: 'Vũ Thị Mai Anh', username: 'maianh_vu', rating: 'Khá', reliability: '98,7%' },
+  { id: 'DEMO-LFG-P5', name: 'Nguyễn Văn An', username: 'an_nguyen', rating: 'Phong trào', reliability: '96,2%' },
 ]
 const venues = [
   { id: 'LFG-VENUE-01', name: 'Sunrise Riverside Sport Hub', court: 'Sân cầu lông 04', sport: 'Badminton', address: 'Nguyễn Hữu Thọ, Nhà Bè, TP. Hồ Chí Minh' },
@@ -50,12 +50,12 @@ export const initialActivities = samples.map(([hostIndex, venueIndex, status, bo
   const slots = Array.from({ length: capacity }, (_, slotIndex) => {
     const filled = status === 'Full' || status === 'Completed'
     const slotStatus = filled || slotIndex < 2 ? 'Occupied' : slotIndex === 2 ? 'Pending' : 'Available'
-    const player = slotStatus === 'Available' ? null : members[slotIndex] || { id: `DEMO-LFG-GUEST-${index}-${slotIndex}`, name: `Người chơi mẫu ${slotIndex + 1}`, username: `nguoi_choi_${slotIndex + 1}`, rating: 'Elo 1.300', reliability: '97,0%' }
+    const player = slotStatus === 'Available' ? null : members[slotIndex] || { id: `DEMO-LFG-GUEST-${index}-${slotIndex}`, name: `Người chơi mẫu ${slotIndex + 1}`, username: `nguoi_choi_${slotIndex + 1}`, rating: 'Trung bình', reliability: '97,0%' }
     return { id: slotIndex + 1, status: slotStatus, player, paid: slotStatus === 'Occupied' && (status === 'Completed' || slotIndex < 2), claimTime: player ? `18:${String(30 + slotIndex * 2).padStart(2, '0')}` : null }
   })
   const reports = [0, 4, 7].includes(index) ? [{ id: `DEMO-REPORT-${index + 1}`, reason: 'Người chơi báo thông tin trình độ chưa rõ ràng.', description: 'Nội dung báo cáo minh họa để kiểm tra giao diện rà soát; chưa kết luận vi phạm.', time: '18:50', reviewed: false }] : []
   return { id: `LFG-${1842 - index}`, title: `${sportLabels[venue.sport]} ${index === 0 ? 'buổi tối' : 'giao lưu'} · ${venue.name}`, host, venue, status, date: bookedDate,
-    start: '19:00', end: '21:00', skill: venue.sport === 'Pickleball' ? 'DUPR 3,0 – 4,0' : 'Trình độ trung bình', courtFee: venue.sport === 'Football' ? 600000 : 240000,
+    start: '19:00', end: '21:00', skill: venue.sport === 'Pickleball' ? 'Trình độ trung bình - khá' : 'Trình độ trung bình', courtFee: venue.sport === 'Football' ? 600000 : 240000,
     slots, reports, bookingId: index === 0 ? 'SN-2026-001245' : null,
     history: [{ id: 'created', time: '18:30', text: `${host.name} tạo kèo minh họa.` }, ...slots.filter(slot => slot.player).map(slot => ({ id: `claim-${slot.id}`, time: slot.claimTime, text: `${slot.player.name} ${slot.status === 'Pending' ? 'yêu cầu vị trí' : 'nhận vị trí'} ${slot.id}.` })),
       ...slots.filter(slot => slot.paid).map(slot => ({ id: `paid-${slot.id}`, time: '18:48', text: `Ghi nhận thanh toán minh họa của ${slot.player.name}.` })),

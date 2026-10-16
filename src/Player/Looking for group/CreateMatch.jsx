@@ -551,7 +551,7 @@ function CreateMatch() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                   {[
                     { key: 'badminton', name: 'Cầu Lông', emoji: '🏸', sub: 'BWF Pro' },
-                    { key: 'pickleball', name: 'Pickleball', emoji: '🏓', sub: 'DUPR Arena' },
+                    { key: 'pickleball', name: 'Pickleball', emoji: '🏓', sub: 'Giao lưu & Đấu' },
                     { key: 'football', name: 'Bóng Đá', emoji: '⚽', sub: 'Mini 5-7' },
                     { key: 'basketball', name: 'Bóng Rổ', emoji: '🏀', sub: 'FIBA 3x3' },
                     { key: 'tennis', name: 'Tennis', emoji: '🎾', sub: 'Hard Court' },
