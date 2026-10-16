@@ -1,20 +1,17 @@
 import './auth-pages.css'
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { toast } from 'sonner'
-import { loginUser } from '../api/auth/authApi.js'
-import { roleDestination } from './roleRoutes.js'
-import { useAuth } from '../context/authContext.js'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { loginApi } from '../api/authApi'
 
 
 function Login() {
-  const { login: contextLogin } = useAuth()
-  const [identifier, setIdentifier] = useState('')
+  const location = useLocation()
+  const [identifier, setIdentifier] = useState(() => location.state?.identifier || '')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
+  const [successMessage, setSuccessMessage] = useState(() => location.state?.message || '')
   const navigate = useNavigate()
 
 

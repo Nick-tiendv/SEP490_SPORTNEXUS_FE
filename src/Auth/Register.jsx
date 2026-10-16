@@ -35,40 +35,60 @@ function Register() {
       sports: selectedSports,
     }
 
-    const nextErrors = {}
-    for (const key of ['username', 'fullName', 'phone', 'email']) {
-      if (!payload[key]) nextErrors[key] = 'Vui lòng điền thông tin này.'
-    }
-    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
-      nextErrors.email = 'Email không hợp lệ.'
-    }
-    if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
-    if (!confirmPassword || password !== confirmPassword) {
-      nextErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
-    }
-    if (!event.currentTarget.elements.terms?.checked) {
-      nextErrors.terms = 'Vui lòng đồng ý với điều khoản dịch vụ.'
-    }
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const rawPhone = (phone || '').trim()
+    const normPhone = normalizePhone(rawPhone)
+
+    try {
+      localStorage.setItem('sportnexus_user_role', role)
+      localStorage.setItem('sportnexus_registered_role', role)
+
+      const userData = {
+        fullName: fullName.trim(),
+        email: cleanEmail,
+        phone: rawPhone,
+        normalizedPhone: normPhone,
+        role,
+        sports: selectedSports,
+        createdAt: new Date().toISOString()
+      }
+
+      // Lưu vào map sportnexus_users với tất cả các khóa tra cứu (email, phone gốc, phone chuẩn hóa, +84, 9 số)
+      const users = JSON.parse(localStorage.getItem('sportnexus_users') || '{}')
+      if (cleanEmail) users[cleanEmail] = userData
+      if (rawPhone) users[rawPhone] = userData
+      if (normPhone) {
+        users[normPhone] = userData
+        users['+84' + normPhone.replace(/^0/, '')] = userData
+        users[normPhone.replace(/^0/, '')] = userData
+      }
+      localStorage.setItem('sportnexus_users', JSON.stringify(users))
+
+      // Lưu vào mảng sportnexus_user_records
+      const userList = JSON.parse(localStorage.getItem('sportnexus_user_records') || '[]')
+      const filteredList = userList.filter((u) => {
+        const uEmail = (u.email || '').trim().toLowerCase()
+        const uPhoneNorm = normalizePhone(u.phone || '')
+        const matchEmail = cleanEmail && uEmail === cleanEmail
+        const matchPhone = normPhone && uPhoneNorm === normPhone
+        return !matchEmail && !matchPhone
+      })
+      filteredList.push(userData)
+      localStorage.setItem('sportnexus_user_records', JSON.stringify(filteredList))
+
+      // Lưu user phiên làm việc
+      localStorage.setItem('sportnexus_current_user', JSON.stringify(userData))
 
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length) return
 
-    submitting.current = true
-    setLoading(true)
-    try {
-      await registerUser(payload)
-      try {
-        localStorage.setItem('sportnexus_user_role', role)
-        localStorage.setItem('sportnexus_registered_role', role)
-      } catch {}
-      toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.')
-      navigate('/login', { replace: true })
-    } catch (error) {
-      toast.error(error?.message || 'Đăng ký thất bại. Vui lòng thử lại.')
-    } finally {
-      submitting.current = false
-      setLoading(false)
-    }
+    // Điều hướng ngay lập tức về trang Đăng nhập
+    navigate('/login', {
+      state: {
+        identifier: cleanEmail || rawPhone,
+        message: 'Đăng ký tài khoản thành công! Vui lòng đăng nhập để tiếp tục.'
+      }
+    })
   }
 
   const toggleSport = (sport) => {
