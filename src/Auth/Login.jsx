@@ -1,17 +1,20 @@
 import './auth-pages.css'
 import { useState } from 'react'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { loginApi } from '../api/authApi'
+import { useNavigate, Link } from 'react-router-dom'
+import { toast } from 'sonner'
+import { loginUser } from '../api/auth/authApi.js'
+import { roleDestination } from './roleRoutes.js'
+import { useAuth } from '../context/authContext.js'
 
 
 function Login() {
-  const location = useLocation()
-  const [identifier, setIdentifier] = useState(() => location.state?.identifier || '')
+  const { login: contextLogin } = useAuth()
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState(() => location.state?.message || '')
+  const [successMessage, setSuccessMessage] = useState('')
   const navigate = useNavigate()
 
 
@@ -26,7 +29,7 @@ function Login() {
       const { token, userId, fullName, role } = await loginUser({ username: identifier.trim(), password })
       const targetRoute = roleDestination(role)
       if (!targetRoute) {
-        throw new Error('Vai tr? t?i kho?n ch?a ???c c?u h?nh. Vui l?ng li?n h? qu?n tr? vi?n.')
+        throw new Error('Vai trò tài khoản chưa được cấu hình. Vui lòng liên hệ quản trị viên.')
       }
       contextLogin({ token, role })
 
@@ -40,59 +43,14 @@ function Login() {
         localStorage.setItem('sportnexus_current_user', JSON.stringify({
           userId, fullName, username: identifier.trim(), role: profileRole, rawRole: role,
         }))
-      } catch { /* AuthProvider v?n gi? phi?n khi localStorage b? ch?n. */ }
+      } catch { /* AuthProvider vẫn giữ phiên khi localStorage bị chặn. */ }
 
-      const successText = '??ng nh?p th?nh c?ng! Ch?o m?ng ' + (fullName || identifier) + '.'
+      const successText = 'Đăng nhập thành công! Chào mừng ' + (fullName || identifier) + '.'
       setSuccessMessage(successText)
       toast.success(successText)
       navigate(targetRoute, { replace: true })
     } catch (err) {
       console.error('Login error:', err)
-      const isNetworkErr = err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError') || err?.name === 'TypeError'
-      if (isNetworkErr) {
-        // Backend đang offline, kích hoạt chế độ Demo / Dev offline cho các tài khoản kiểm thử
-        const detected = previewRole || detectUserRole(identifier) || 'court_owner'
-        let finalRole = 'CourtOwner'
-        let targetRoute = '/owner/dashboard'
-        if (detected === 'admin') {
-          finalRole = 'Admin'
-          targetRoute = '/admin/dashboard'
-        } else if (detected === 'player') {
-          finalRole = 'Player'
-          targetRoute = '/dashboard'
-        }
-
-        const mockJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlNwb3J0TmV4dXMiLCJyb2xlIjoi' + finalRole + 'IiwiZXhwIjoyNTM0MDIzMDA3OTl9.signature'
-        localStorage.setItem('sportnexus_auth_token', mockJwt)
-        localStorage.setItem('sportnexus_user_role', finalRole.toLowerCase())
-        localStorage.setItem('sportnexus_user_fullname', identifier || 'Người dùng SportNexus')
-        localStorage.setItem(
-          'sportnexus_current_user',
-          JSON.stringify({
-            userId: 'mock-1',
-            fullName: identifier || 'Người dùng SportNexus',
-            username: identifier.trim(),
-            role: finalRole,
-            token: mockJwt,
-          })
-        )
-        try {
-          if (typeof contextLogin === 'function') {
-            contextLogin({ token: mockJwt, role: finalRole, userId: 'mock-1', fullName: identifier })
-          }
-        } catch (authErr) {
-          console.warn('AuthContext fallback error:', authErr)
-        }
-
-        const successText = `Đăng nhập thành công (Chế độ offline/dev): Chào mừng ${identifier}!`
-        setSuccessMessage(successText)
-        toast.success(successText)
-        setTimeout(() => {
-          navigate(targetRoute, { replace: true })
-        }, 300)
-        return
-      }
-
       const msg = err.message || 'Tài khoản hoặc mật khẩu không chính xác!'
       setErrorMessage(msg)
       toast.error(msg)
