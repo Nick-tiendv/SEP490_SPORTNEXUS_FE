@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import { getFacilities, transformFacilityToCourt } from '../../api/facilityApi.js'
 import AIChatModal from './AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
 import './MapBooking.css'
@@ -1397,13 +1398,50 @@ function MapBooking() {
     }
   }, [])
 
-  // Danh sách sân với khoảng cách được tính theo vị trí người chơi
+  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
+  const [apiFacilities, setApiFacilities] = useState([])
+  const [isLoadingApi, setIsLoadingApi] = useState(true)
+  const [apiStatus, setApiStatus] = useState('connecting')
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadBackendFacilities() {
+      try {
+        setIsLoadingApi(true)
+        const rawFacilities = await getFacilities()
+        if (isMounted && Array.isArray(rawFacilities) && rawFacilities.length > 0) {
+          const transformed = rawFacilities.map(transformFacilityToCourt).filter(Boolean)
+          setApiFacilities(transformed)
+          setApiStatus('connected')
+          if (transformed.length > 0) {
+            setSelectedCourtId((prev) => {
+              const exists = transformed.some((fac) => fac.id === prev)
+              return exists ? prev : transformed[0].id
+            })
+          }
+        } else {
+          if (isMounted) setApiStatus('fallback')
+        }
+      } catch (err) {
+        console.warn('API /api/v1/facilities không phản hồi, dùng dữ liệu dự phòng:', err)
+        if (isMounted) setApiStatus('fallback')
+      } finally {
+        if (isMounted) setIsLoadingApi(false)
+      }
+    }
+    loadBackendFacilities()
+    return () => { isMounted = false }
+  }, [])
+
+  // Danh sách cụm sân trực tiếp từ Backend API GET /api/v1/facilities (fallback sang COURTS nếu API chưa tải xong hoặc rỗng)
   const localizedCourts = useMemo(() => {
-    return COURTS.map((c) => ({
+    const list = apiFacilities.length > 0 ? apiFacilities : COURTS
+
+    return list.map((c) => ({
       ...c,
       distance: getDistanceForCourt(c, effectiveOrigin, gpsCoords),
     }))
-  }, [effectiveOrigin, gpsCoords])
+  }, [apiFacilities, effectiveOrigin, gpsCoords])
 
   const [query, setQuery] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
@@ -1436,19 +1474,27 @@ function MapBooking() {
   useEffect(() => {
     if (query.trim()) return
     const key = detectDistrictKey(effectiveOrigin)
-    if (key === 'thuduc') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'thuduc') ? prev : 'ddink-td'))
-    else if (key === 'binhthanh') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'binhthanh') ? prev : 'yonex-bt'))
-    else if (key === 'q7') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q7') ? prev : 'trexanh-q7'))
-    else if (key === 'q1') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q1') ? prev : 'taodan-q1'))
-    else if (key === 'q10') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q10') ? prev : 'lananh-q10'))
-    else if (key === 'phunhuan') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'phunhuan') ? prev : 'rachmieu-pn'))
-    else if (key === 'tanbinh') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'tanbinh') ? prev : 'viettel-tb'))
-    else if (key === 'quan8') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'quan8') ? prev : 'chanhhung-q8'))
-    else if (key === 'tanphu') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'tanphu') ? prev : 'celadon-tp'))
-    else if (key === 'govap') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'govap') ? prev : 'quangtrung-gv'))
-    else if (key === 'q3') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q3') ? prev : 'hoxuanhuong-q3'))
-    else if (key === 'q11') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q11') ? prev : 'phutho-q11'))
-  }, [effectiveOrigin, query])
+    const courtList = apiFacilities.length > 0 ? apiFacilities : COURTS
+    if (key === 'thuduc') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'thuduc') ? prev : courtList.find((c) => c.district === 'thuduc')?.id || prev))
+    else if (key === 'binhthanh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'binhthanh') ? prev : courtList.find((c) => c.district === 'binhthanh')?.id || prev))
+    else if (key === 'q7') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q7') ? prev : courtList.find((c) => c.district === 'q7')?.id || prev))
+    else if (key === 'q1') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q1') ? prev : courtList.find((c) => c.district === 'q1')?.id || prev))
+    else if (key === 'q10') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q10') ? prev : courtList.find((c) => c.district === 'q10')?.id || prev))
+    else if (key === 'phunhuan') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'phunhuan') ? prev : courtList.find((c) => c.district === 'phunhuan')?.id || prev))
+    else if (key === 'tanbinh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanbinh') ? prev : courtList.find((c) => c.district === 'tanbinh')?.id || prev))
+    else if (key === 'quan8') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'quan8') ? prev : courtList.find((c) => c.district === 'quan8')?.id || prev))
+    else if (key === 'tanphu') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanphu') ? prev : courtList.find((c) => c.district === 'tanphu')?.id || prev))
+    else if (key === 'govap') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'govap') ? prev : courtList.find((c) => c.district === 'govap')?.id || prev))
+    else if (key === 'q3') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q3') ? prev : courtList.find((c) => c.district === 'q3')?.id || prev))
+    else if (key === 'q11') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q11') ? prev : courtList.find((c) => c.district === 'q11')?.id || prev))
+  }, [effectiveOrigin, query, apiFacilities])
+
+  const courtMatchesSport = (c) => {
+    if (Array.isArray(c.sports) && c.sports.length > 0) {
+      return c.sports.some((s) => isSportActive(s))
+    }
+    return isSportActive(c.sport)
+  }
 
   // Lọc cụm sân:
   // - Khi không gõ tìm kiếm: lọc theo môn và khoảng giá (sắp xếp theo khoảng cách từ người chơi)
@@ -1462,7 +1508,7 @@ function MapBooking() {
       return localizedCourts
         .filter(
           (c) =>
-            isSportActive(c.sport) &&
+            courtMatchesSport(c) &&
             c.price >= priceRange[0] &&
             c.price <= priceRange[1]
         )
@@ -1474,8 +1520,8 @@ function MapBooking() {
     if (matched.length > 0) {
       return matched.sort((a, b) => {
         // Ưu tiên sân đúng môn thể thao đang chọn lên trước
-        const aFitSport = isSportActive(a.sport) ? 1 : 0
-        const bFitSport = isSportActive(b.sport) ? 1 : 0
+        const aFitSport = courtMatchesSport(a) ? 1 : 0
+        const bFitSport = courtMatchesSport(b) ? 1 : 0
         if (aFitSport !== bFitSport) return bFitSport - aFitSport
         return a.distance - b.distance
       })
@@ -1582,6 +1628,24 @@ function MapBooking() {
   // Danh sách các sân con trong cụm sân hiện tại
   const venueSubCourts = useMemo(() => {
     if (!selectedCourt) return []
+
+    // Nếu cơ sở từ API có danh sách sân con thật (courts), ưu tiên hiển thị đúng danh sách sân thật
+    if (Array.isArray(selectedCourt.courts) && selectedCourt.courts.length > 0) {
+      return selectedCourt.courts.map((child, idx) => {
+        const isBooked = child.status !== 'ACTIVE'
+        return {
+          id: child.id,
+          number: String(idx + 1).padStart(2, '0'),
+          name: child.name,
+          type: `${child.categoryName} • ${Number(child.defaultPrice || 100000).toLocaleString('vi-VN')} đ/h`,
+          isBooked,
+          note: isBooked ? (child.status === 'MAINTENANCE' ? 'Đang bảo trì' : 'Tạm ngưng') : 'Đang trống',
+          price: child.defaultPrice,
+          categoryName: child.categoryName,
+        }
+      })
+    }
+
     const count = selectedCourt.courtCount || 6
     const basePrefix = selectedCourt.subCourt
       ? selectedCourt.subCourt.replace(/\s*\d+$/, '').trim()
@@ -1978,8 +2042,29 @@ function MapBooking() {
           </section>
 
           {/* Court list */}
-          <div className="mb-section-head">
-            <h2>Cụm Sân Gần Bạn</h2>
+          <div className="mb-section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2>Cụm Sân Gần Bạn</h2>
+              {apiStatus === 'connected' && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                  }}
+                  title="Dữ liệu kết nối trực tiếp từ Backend API GET /api/v1/facilities"
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                  Live API ({apiFacilities.length} cụm sân)
+                </span>
+              )}
+            </div>
             <small>{filteredCourts.length} cụm sân khả dụng</small>
           </div>
 
@@ -2015,7 +2100,12 @@ function MapBooking() {
                       <span className="material-symbols-outlined">location_on</span>
                       {court.address}
                     </p>
-                    <div className="mb-court-meta">
+                    <div className="mb-court-meta" style={{ flexWrap: 'wrap', gap: 5 }}>
+                      {court.isFromApi && (
+                        <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 700 }}>
+                          ✦ Cụm sân hệ thống
+                        </span>
+                      )}
                       {query.trim() && (() => {
                         const badge = getMatchBadge(court, query)
                         return badge ? (
@@ -2028,6 +2118,11 @@ function MapBooking() {
                       <span className="mb-tag">
                         {sport?.emoji} {sport?.label}
                       </span>
+                      {Array.isArray(court.amenities) && court.amenities.slice(0, 2).map((a) => (
+                        <span key={a.id || a.name} className="mb-tag" style={{ background: '#f1f5f9', color: '#475569' }}>
+                          {a.name}
+                        </span>
+                      ))}
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                         <span className="material-symbols-outlined">directions_car</span>
                         {court.distance} km
@@ -2039,22 +2134,36 @@ function MapBooking() {
                   <span className="mb-price">
                     {court.price.toLocaleString('vi-VN')} đ<small>/h</small>
                   </span>
-                  {active ? (
-                    <button type="button" className="mb-btn mb-btn--primary">
-                      Đang Chọn
-                    </button>
-                  ) : (
+                  <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       type="button"
                       className="mb-btn mb-btn--ghost"
+                      style={{ fontSize: '11px', padding: '5px 10px' }}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleSelectCourt(court)
+                        navigate('/court', { state: { facility: court.rawFacility || court, facilityId: court.id } })
                       }}
+                      title="Xem trang chi tiết cụm sân, hình ảnh và sân con"
                     >
-                      Chọn Sân Nhanh
+                      Chi Tiết
                     </button>
-                  )}
+                    {active ? (
+                      <button type="button" className="mb-btn mb-btn--primary">
+                        Đang Chọn
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mb-btn mb-btn--ghost"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSelectCourt(court)
+                        }}
+                      >
+                        Chọn Nhanh
+                      </button>
+                    )}
+                  </div>
                 </div>
               </article>
             )
