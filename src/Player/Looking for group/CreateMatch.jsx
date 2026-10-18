@@ -1367,53 +1367,6 @@ function CreateMatch() {
           </div>
         </div>
 
-        {/* Standard Footer */}
-        <footer className="mt-14 pt-8 border-t border-gray-200 text-xs text-gray-500">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-lg bg-[#2D5F3F] flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[15px]">bolt</span>
-                </div>
-                <span className="font-extrabold text-sm text-[#111827] tracking-tight">
-                  SPORTNEXUS VIETNAM
-                </span>
-              </div>
-              <p className="max-w-md text-gray-600 leading-relaxed">
-                Nền tảng vận hành thể thao thông minh &amp; bảo chứng giao dịch Escrow minh bạch toàn
-                diện.
-              </p>
-              <p className="mt-2 text-gray-400 text-[11px]">
-                © 2026 SportNexus Vietnam Joint Stock Company. Bảo lưu mọi quyền.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start md:items-end gap-2.5">
-              <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-700">
-                <span className="flex items-center gap-1.5">
-                  Hotline 24/7: <strong>0968950913</strong>
-                </span>
-                <span>•</span>
-                <span>Bảo vệ Ký Quỹ Escrow</span>
-                <span>•</span>
-                <Link to="#terms" className="hover:text-[#15803D]">
-                  Điều khoản dịch vụ
-                </Link>
-              </div>
-
-              <div className="flex items-center gap-4 text-gray-500 text-xs">
-                <Link to="#fairplay" className="hover:text-[#15803D]">
-                  Chính sách Fairplay
-                </Link>
-              </div>
-
-              <div className="flex items-center gap-2 text-[11px] text-[#15803D] font-bold mt-1">
-                <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                <span>Hệ thống bảo chứng Escrow thời gian thực</span>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
     </div>
   )

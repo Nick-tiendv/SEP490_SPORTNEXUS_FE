@@ -419,22 +419,12 @@ function CheckInQR() {
               fontWeight: 800,
               color: '#111827',
               letterSpacing: '-0.5px',
-              margin: '0 0 6px 0',
+              margin: 0,
               lineHeight: 1.2,
             }}
           >
             Check-in QR
           </h1>
-          <p
-            style={{
-              fontSize: '14px',
-              color: '#4B5563',
-              margin: 0,
-              fontWeight: 500,
-            }}
-          >
-            Tiền sân được bảo vệ 100% trong ví ký quỹ trung gian, chỉ giải ngân khi quét mã QR vào sân.
-          </p>
         </div>
 
         {/* Right: Trạng thái sân hiện tại Card */}

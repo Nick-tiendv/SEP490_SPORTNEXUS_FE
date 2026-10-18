@@ -1,6 +1,32 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+// Helper to remove any leftover Elo or DUPR/DURP references from match data
+const sanitizeMatch = (m) => {
+  if (!m) return m
+  const clean = (str) => {
+    if (!str || typeof str !== 'string') return str
+    return str
+      .replace(/\s*\((?:Elo|DUPR|DURP)[^)]*\)/gi, '')
+      .replace(/\b(?:Elo|DUPR|DURP)\s*[:•\-]?\s*[\d.><+\s-]+/gi, '')
+      .replace(/\b(?:Elo|DUPR|DURP)\b/gi, '')
+      .replace(/•\s*•/g, '•')
+      .replace(/\s*•\s*$/g, '')
+      .replace(/^\s*•\s*/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  }
+
+  const cleanedLevel = clean(m.levelTag)
+  return {
+    ...m,
+    title: clean(m.title) || m.title,
+    levelTag: cleanedLevel || 'Trung bình - Khá',
+    subBadge: clean(m.subBadge) || m.subBadge,
+    groupDesc: clean(m.groupDesc) || m.groupDesc,
+  }
+}
+
 function CommunityFeed() {
   const navigate = useNavigate()
   // Sports filter state: 'all' | 'pickleball' | 'badminton'
@@ -147,9 +173,13 @@ function CommunityFeed() {
     try {
       const custom = localStorage.getItem('lfg_custom_matches')
       const customList = custom ? JSON.parse(custom) : []
-      return [...customList, ...defaultList]
+      const sanitizedCustom = customList.map(sanitizeMatch)
+      if (custom) {
+        localStorage.setItem('lfg_custom_matches', JSON.stringify(sanitizedCustom))
+      }
+      return [...sanitizedCustom, ...defaultList.map(sanitizeMatch)]
     } catch {
-      return defaultList
+      return defaultList.map(sanitizeMatch)
     }
   })
 
@@ -239,6 +269,21 @@ function CommunityFeed() {
     setWalletBalance(newBal)
     localStorage.setItem('escrow_balance', newBal.toString())
     window.dispatchEvent(new Event('escrow_balance_updated'))
+    window.dispatchEvent(
+      new CustomEvent('player_new_notification', {
+        detail: {
+          type: 'transaction',
+          icon: 'receipt_long',
+          color: '#0284C7',
+          bg: '#E0F2FE',
+          title: 'Giao dịch ký quỹ Escrow thành công',
+          message: `Chốt slot thành công: ${bookingModal.title}`,
+          details: `Tiền cọc giữ slot: ${bookingModal.priceDisplay} • Bảo chứng 100% Escrow • Mã GD: #ESC-${Date.now().toString().slice(-5)}`,
+          link: '/community',
+          linkText: 'Xem chi tiết kèo',
+        },
+      })
+    )
 
     // Update match slot
     setMatches((prev) =>
@@ -408,23 +453,19 @@ function CommunityFeed() {
           </span>
         </div>
 
-        {/* Title & Description & Actions */}
+        {/* Title & Actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl sm:text-[36px] font-black text-[#111827] tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-[36px] font-black text-[#111827] tracking-tight leading-tight whitespace-nowrap">
               Sàn Ghép Trận &amp; Tranh Slot
             </h1>
-            <p className="text-gray-600 text-sm mt-1 max-w-2xl leading-relaxed">
-              Chốt slot thể thao tức thì qua giao thức ký quỹ Escrow bảo chứng 100%. Không lo bùng
-              kèo, ghép đúng trình độ của người chơi.
-            </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             {/* Bộ Lọc Nâng Cao Button */}
             <button
               onClick={() => setFilterDrawerOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#EEF2F6] hover:bg-[#E2E8F0] text-[#334155] font-semibold text-sm transition-all shadow-sm border border-gray-200/60"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#EEF2F6] hover:bg-[#E2E8F0] text-[#334155] font-semibold text-sm transition-all shadow-sm border border-gray-200/60 whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-[18px] text-[#475569]">tune</span>
               <span>Bộ Lọc Nâng Cao</span>
@@ -433,7 +474,7 @@ function CommunityFeed() {
             {/* Đăng Kèo Ghép Mới Button */}
             <button
               onClick={() => navigate('/create-match')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-sm transition-all shadow-[0_4px_16px_rgba(59,104,23,0.35)] cursor-pointer active:scale-95"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-sm transition-all shadow-[0_4px_16px_rgba(59,104,23,0.35)] cursor-pointer active:scale-95 whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-[20px]">add_circle</span>
               <span>Đăng Kèo Ghép Mới</span>
@@ -442,11 +483,11 @@ function CommunityFeed() {
         </div>
 
         {/* Filter Bar Chips */}
-        <div className="flex flex-wrap items-center gap-2.5 p-2 rounded-2xl bg-white border border-gray-200/80 shadow-sm mb-7">
+        <div className="flex items-center gap-2.5 p-2 rounded-2xl bg-white border border-gray-200/80 shadow-sm mb-7 overflow-x-auto scrollbar-none flex-wrap">
           {/* Tất Cả Thể Thao */}
           <button
             onClick={() => setActiveSportFilter('all')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'all'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -459,7 +500,7 @@ function CommunityFeed() {
           {/* Pickleball */}
           <button
             onClick={() => setActiveSportFilter('pickleball')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'pickleball'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -472,7 +513,7 @@ function CommunityFeed() {
           {/* Cầu Lông */}
           <button
             onClick={() => setActiveSportFilter('badminton')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'badminton'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -485,7 +526,7 @@ function CommunityFeed() {
           {/* Bóng Đá */}
           <button
             onClick={() => setActiveSportFilter('football')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'football'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -498,7 +539,7 @@ function CommunityFeed() {
           {/* Bóng Rổ */}
           <button
             onClick={() => setActiveSportFilter('basketball')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'basketball'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -511,7 +552,7 @@ function CommunityFeed() {
           {/* Tennis */}
           <button
             onClick={() => setActiveSportFilter('tennis')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'tennis'
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
@@ -522,11 +563,11 @@ function CommunityFeed() {
           </button>
 
           {/* Dropdown Trình độ */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <select
               value={levelFilter}
               onChange={(e) => setLevelFilter(e.target.value)}
-              className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none"
+              className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
               <option value="all">Trình độ: Tất Cả Trình Độ</option>
               <option value="beginner">Mới chơi / Nhập môn</option>
@@ -539,11 +580,11 @@ function CommunityFeed() {
           </div>
 
           {/* Dropdown Khoảng cách */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <select
               value={distanceFilter}
               onChange={(e) => setDistanceFilter(e.target.value)}
-              className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none"
+              className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
               <option value="all">Khoảng cách: Toàn TP</option>
               <option value="5km">Dưới 5 km</option>
@@ -652,10 +693,10 @@ function CommunityFeed() {
                   <div className="sm:w-[60%] p-5 sm:p-6 flex flex-col justify-between gap-4">
                     <div>
                       {/* Top Badges & Time */}
-                      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                           <span
-                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
                               match.sport === 'badminton'
                                 ? 'bg-[#EFF6FF] text-[#1E40AF]'
                                 : 'bg-[#EEF2FF] text-[#4338CA]'
@@ -664,7 +705,7 @@ function CommunityFeed() {
                             {match.levelTag}
                           </span>
                           <span
-                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
                               match.isFlashClaim
                                 ? 'bg-[#FEE2E2] text-[#DC2626]'
                                 : 'bg-[#E0F2FE] text-[#0369A1]'
@@ -673,13 +714,13 @@ function CommunityFeed() {
                             {match.slotTag}
                           </span>
                           {isMatchNearUser(match.location, userProfileLocation) && (
-                            <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs">
+                            <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                               <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
                               Gần bạn ({userProfileLocation})
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 text-gray-600 text-xs font-semibold">
+                        <div className="flex items-center gap-1 text-gray-600 text-xs font-semibold whitespace-nowrap shrink-0 ml-auto">
                           <span className="material-symbols-outlined text-[14px] text-gray-500">
                             schedule
                           </span>
@@ -688,29 +729,32 @@ function CommunityFeed() {
                       </div>
 
                       {/* Title */}
-                      <h2 className="text-[16px] font-bold text-[#111827] leading-snug hover:text-[#3B6817] transition-colors cursor-pointer">
+                      <h2
+                        className="text-[16px] font-bold text-[#111827] leading-snug hover:text-[#3B6817] transition-colors cursor-pointer truncate"
+                        title={match.title}
+                      >
                         {match.title}
                       </h2>
 
                       {/* Location & Group Info */}
                       <div className="flex flex-col gap-1 mt-2.5 text-xs text-gray-600">
-                        <div className="flex items-start gap-1.5">
-                          <span className="material-symbols-outlined text-[15px] text-gray-400 shrink-0 mt-0.5">
+                        <div className="flex items-center gap-1.5 min-w-0" title={match.location}>
+                          <span className="material-symbols-outlined text-[15px] text-gray-400 shrink-0">
                             location_on
                           </span>
-                          <span>{match.location}</span>
+                          <span className="truncate">{match.location}</span>
                         </div>
-                        <div className="flex items-start gap-1.5">
-                          <span className="material-symbols-outlined text-[15px] text-gray-400 shrink-0 mt-0.5">
+                        <div className="flex items-center gap-1.5 min-w-0" title={match.groupDesc}>
+                          <span className="material-symbols-outlined text-[15px] text-gray-400 shrink-0">
                             group
                           </span>
-                          <span>{match.groupDesc}</span>
+                          <span className="truncate">{match.groupDesc}</span>
                         </div>
                       </div>
 
                       {/* Rosters / Slots Row */}
-                      <div className="flex items-center gap-2.5 mt-3 pt-2">
-                        <div className="flex items-center -space-x-1.5">
+                      <div className="flex items-center justify-between gap-2.5 mt-3 pt-2">
+                        <div className="flex items-center -space-x-1.5 shrink-0">
                           {match.roster.map((player, idx) => (
                             <div
                               key={idx}
@@ -731,12 +775,12 @@ function CommunityFeed() {
                         </div>
 
                         {match.urgencyText ? (
-                          <span className="text-xs text-[#B45309] font-medium flex items-center gap-1">
+                          <span className="text-xs text-[#B45309] font-medium flex items-center gap-1 whitespace-nowrap shrink-0">
                             <span className="material-symbols-outlined text-[14px]">timer</span>
                             {match.urgencyText}
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-500 font-medium">
+                          <span className="text-xs text-gray-500 font-medium whitespace-nowrap shrink-0">
                             Đã ghép: {match.currentSlots}/{match.totalSlots} vị trí
                           </span>
                         )}
@@ -744,8 +788,8 @@ function CommunityFeed() {
                     </div>
 
                     {/* Bottom Row: Price & Action */}
-                    <div className="flex items-end justify-between gap-4 pt-3 border-t border-gray-100">
-                      <div>
+                    <div className="flex items-center justify-between gap-4 pt-3 border-t border-gray-100">
+                      <div className="whitespace-nowrap shrink-0">
                         <span className="text-[11px] text-gray-500 block">
                           {match.priceLabel}
                         </span>
@@ -759,7 +803,7 @@ function CommunityFeed() {
 
                       <button
                         onClick={() => setBookingModal(match)}
-                        className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all shadow-md active:scale-95 ${
+                        className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0 ${
                           match.isFlashClaim
                             ? 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
                             : 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
@@ -788,14 +832,14 @@ function CommunityFeed() {
               </div>
 
               {/* Header Badge */}
-              <div className="flex items-center justify-between mb-4 relative z-10">
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-between mb-4 relative z-10 gap-2">
+                <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px]">badge</span>
                   <span className="text-[11px] font-black uppercase tracking-wider text-[#1F2937]">
                     Hồ Sơ Ghép Trận Cá Nhân
                   </span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#DCFCE7] to-[#BBF7D0] text-[#15803D] border border-[#86EFAC] text-[11px] font-black shadow-xs tracking-wide">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#DCFCE7] to-[#BBF7D0] text-[#15803D] border border-[#86EFAC] text-[11px] font-black shadow-xs tracking-wide whitespace-nowrap shrink-0">
                   <span className="material-symbols-outlined text-[14px] text-[#15803D] animate-spin" style={{ animationDuration: '6s' }}>diamond</span>
                   Hạng Kim Cương
                 </span>
@@ -814,26 +858,26 @@ function CommunityFeed() {
 
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight">
+                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight whitespace-nowrap">
                       Minh Minh Minh
                     </h4>
-                    <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px]">
+                    <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
                       Trình: Trung bình - Khá
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 mt-1">
+                  <p className="text-[11px] text-gray-500 mt-1 whitespace-nowrap">
                     Thành viên từ T10/2025 • Niên khoá 2026
                   </p>
 
-                  <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold">
-                    <span className="material-symbols-outlined text-[15px] text-[#15803D]">location_on</span>
+                  <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold whitespace-nowrap">
+                    <span className="material-symbols-outlined text-[15px] text-[#15803D] shrink-0">location_on</span>
                     <span>Vị trí thi đấu: <strong className="text-[#15803D]">{userProfileLocation}</strong></span>
-                    <span className="text-[9.5px] text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.5 rounded font-extrabold border border-[#86EFAC]/70">Đã đồng bộ</span>
+                    <span className="text-[9.5px] text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.5 rounded font-extrabold border border-[#86EFAC]/70 shrink-0">Đã đồng bộ</span>
                   </div>
 
-                  <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-[#EAF7EE] border border-[#86EFAC] text-[#15803D] text-[11px] font-bold self-start shadow-2xs">
-                    <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-ping"></span>
-                    <span>Đang Online Sẵn Sàng (Pickleball &amp; Cầu Lông)</span>
+                  <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-[#EAF7EE] border border-[#86EFAC] text-[#15803D] text-[11px] font-bold self-start shadow-2xs whitespace-nowrap">
+                    <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-ping shrink-0"></span>
+                    <span>Đang Online Sẵn Sàng</span>
                   </div>
                 </div>
               </div>
@@ -841,14 +885,14 @@ function CommunityFeed() {
               {/* Fair Play Score Highlight Box */}
               <div className="mb-4 p-3.5 rounded-2xl bg-white border border-[#D1EBD0] shadow-2xs relative z-10">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-800">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-800 whitespace-nowrap shrink-0">
                     <span className="material-symbols-outlined text-[17px] text-red-500">
                       flag
                     </span>
                     <span>Chỉ Số Fair Play</span>
                     <span className="px-1.5 py-0.2 rounded bg-[#DCFCE7] text-[#15803D] text-[9.5px] font-extrabold">Top 1%</span>
                   </div>
-                  <div className="text-right flex items-baseline gap-1">
+                  <div className="text-right flex items-baseline gap-1 whitespace-nowrap shrink-0">
                     <span className="text-[22px] font-black text-[#15803D] tracking-tight">99.4</span>
                     <span className="text-xs text-gray-400 font-bold">/100</span>
                   </div>
@@ -862,43 +906,43 @@ function CommunityFeed() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium">
-                  <span className="flex items-center gap-1 text-[#15803D]">
+                <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium whitespace-nowrap">
+                  <span className="flex items-center gap-1 text-[#15803D] shrink-0">
                     <span className="material-symbols-outlined text-[13px]">verified</span>
                     100% Hoàn thành trận
                   </span>
-                  <span className="text-gray-400">0 Lần huỷ kèo trễ</span>
+                  <span className="text-gray-400 shrink-0">0 Lần huỷ kèo trễ</span>
                 </div>
               </div>
 
               {/* 2 Stats Mini Cards */}
               <div className="grid grid-cols-2 gap-3 relative z-10">
                 <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
                     Trận đã ghép:
                   </span>
-                  <div className="flex items-center gap-1 text-[16px] font-black text-[#111827]">
+                  <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
                     <span>14 Trận</span>
                     <span className="material-symbols-outlined text-[16px] text-[#15803D]">
                       verified_user
                     </span>
                   </div>
-                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1">
+                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1 whitespace-nowrap">
                     100% không bùng kèo
                   </span>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
                     Đánh giá cộng đồng:
                   </span>
-                  <div className="flex items-center gap-1 text-[16px] font-black text-[#111827]">
+                  <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
                     <span>4.95 / 5.0</span>
                     <span className="material-symbols-outlined text-[16px] text-amber-500">
                       star
                     </span>
                   </div>
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1 whitespace-nowrap">
                     28 lượt vote uy tín
                   </span>
                 </div>
@@ -914,74 +958,27 @@ function CommunityFeed() {
               </div>
             </div>
 
-            {/* Card 2: Cam Kết Chống Bùng Cọc 100% */}
+            {/* Card 2: Cam Kết Chống Bùng Cọc & Quy Chế LFG */}
             <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 rounded-lg bg-[#DCFCE7] flex items-center justify-center text-[#15803D]">
                   <span className="material-symbols-outlined text-[18px]">verified_user</span>
                 </div>
                 <h3 className="font-bold text-[15px] text-[#111827]">
-                  Cam Kết Chống Bùng Cọc 100%
+                  Cam Kết Chống Bùng Cọc &amp; Quy Chế LFG
                 </h3>
               </div>
-              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                Cơ chế bảo vệ vận động viên minh bạch áp dụng toàn bộ hệ sinh thái SportNexus:
-              </p>
 
-              {/* 4 Rules */}
-              <div className="flex flex-col gap-3 text-xs">
-                {/* Rule 1 */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-[#DCFCE7] text-[#16A34A] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                    +
-                  </div>
-                  <p className="text-gray-700 leading-snug">
-                    <strong className="text-gray-900">+1.5 Điểm Fair Play</strong> mỗi khi đến
-                    đúng giờ và hoàn tất xác thực QR Check-in.
-                  </p>
-                </div>
-
-                {/* Rule 2 */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-[#FEE2E2] text-[#DC2626] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                    -
-                  </div>
-                  <p className="text-gray-700 leading-snug">
-                    <strong className="text-red-700">Trừ 100% tiền cọc</strong> nếu huỷ slot dưới
-                    60 phút trước giờ thi đấu hoặc không đến (No-show).
-                  </p>
-                </div>
-
-                {/* Rule 3 */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-[#FEF3C7] text-[#D97706] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                    !
-                  </div>
-                  <p className="text-gray-700 leading-snug">
-                    <strong className="text-gray-900">Tài khoản &lt; 80 Điểm</strong> sẽ bị hạn
-                    chế quyền Flash Claim và bắt buộc cọc x2 giá trị thông thường.
-                  </p>
-                </div>
-
-                {/* Rule 4 */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full bg-[#DCFCE7] text-[#16A34A] font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
-                    ✓
-                  </div>
-                  <p className="text-gray-700 leading-snug">
-                    <strong className="text-[#15803D]">Hoàn 100% tức thì</strong> vào ví Escrow
-                    nếu kèo bị host giải tán hoặc sân bị ảnh hưởng do thời tiết mưa to.
-                  </p>
-                </div>
-              </div>
-
-              {/* Link */}
-              <div className="mt-4 pt-3 border-t border-gray-100">
+              <div className="mt-3">
                 <button
+                  type="button"
                   onClick={() => setRulesModalOpen(true)}
-                  className="w-full flex items-center justify-between text-xs font-bold text-[#15803D] hover:text-[#0F5A29] group transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#EAF7EE] hover:bg-[#DCFCE7] text-[#15803D] font-bold text-xs transition-all border border-[#86EFAC]/70 flex items-center justify-between group active:scale-[0.98]"
                 >
-                  <span>Xem quy chế trọng tài số &amp; phân giải tranh chấp</span>
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">gavel</span>
+                    <span>Xem quy chế</span>
+                  </span>
                   <span className="material-symbols-outlined text-[16px] group-hover:translate-x-1 transition-transform">
                     arrow_forward
                   </span>
@@ -1000,91 +997,35 @@ function CommunityFeed() {
 
               <div className="flex flex-col gap-3">
                 {/* Activity 1 */}
-                <div className="flex items-center justify-between text-xs py-1.5 border-b border-gray-50">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[15px] text-[#3B6817]">
+                <div className="flex items-center justify-between text-xs py-1.5 border-b border-gray-50 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-[15px] text-[#3B6817] shrink-0">
                       bolt
                     </span>
-                    <span className="text-gray-700 font-medium">
+                    <span className="text-gray-700 font-medium truncate">
                       <strong className="text-gray-900">Tuấn Kiệt</strong> vừa chốt slot Pickleball
                     </span>
                   </div>
-                  <span className="text-gray-400 text-[11px]">12s trước</span>
+                  <span className="text-gray-400 text-[11px] whitespace-nowrap shrink-0">12s trước</span>
                 </div>
 
                 {/* Activity 2 */}
-                <div className="flex items-center justify-between text-xs py-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[15px] text-green-600">
+                <div className="flex items-center justify-between text-xs py-1.5 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-[15px] text-green-600 shrink-0">
                       verified_user
                     </span>
-                    <span className="text-gray-700 font-medium">
+                    <span className="text-gray-700 font-medium truncate">
                       <strong className="text-gray-900">Bình An</strong> vừa check-in sân Tre Xanh
                     </span>
                   </div>
-                  <span className="text-gray-400 text-[11px]">22m trước</span>
+                  <span className="text-gray-400 text-[11px] whitespace-nowrap shrink-0">22m trước</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ================= FOOTER ================= */}
-        <footer className="mt-16 pt-8 border-t border-gray-200/80 text-xs text-gray-500">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-lg bg-[#3B6817] flex items-center justify-center text-white">
-                  <span className="material-symbols-outlined text-[15px]">bolt</span>
-                </div>
-                <span className="font-extrabold text-sm text-[#111827] tracking-tight">
-                  SPORTNEXUS VIETNAM
-                </span>
-              </div>
-              <p className="max-w-md text-gray-600 leading-relaxed">
-                Hệ thống kết nối thi đấu Pickleball &amp; Cầu Lông hàng đầu cùng giao thức ký quỹ
-                Escrow minh bạch 2026.
-              </p>
-              <p className="mt-2 text-gray-400 text-[11px]">
-                © 2026 SportNexus Vietnam Joint Stock Company. Bảo lưu mọi quyền.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-start md:items-end gap-2.5">
-              <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px] text-blue-600">
-                    support_agent
-                  </span>
-                  Hotline 24/7: <strong>0968950913</strong>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px] text-[#15803D]">
-                    verified_user
-                  </span>
-                  Bảo vệ Ký Quỹ Escrow
-                </span>
-              </div>
-
-              <div className="flex items-center gap-4 text-gray-500 text-xs">
-                <a href="#terms" className="hover:text-[#15803D] transition-colors">
-                  Điều khoản dịch vụ
-                </a>
-                <span>•</span>
-                <a href="#fairplay" className="hover:text-[#15803D] transition-colors">
-                  Chính sách Fairplay
-                </a>
-              </div>
-
-              <div className="flex items-center gap-2 text-[11px] text-[#15803D] font-bold mt-1">
-                <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                <span>
-                  HỆ THỐNG BẢO CHỨNG ESCROW THỜI GIAN THỰC • PICKLEBALL &amp; CẦU LÔNG
-                </span>
-              </div>
-            </div>
-          </div>
-        </footer>
       </div>
 
       {/* ================= MODAL: XÁC NHẬN CHỌN SLOT NHANH ================= */}
@@ -1830,6 +1771,161 @@ function CommunityFeed() {
                   <span>Áp Dụng Bộ Lọc ({filteredMatches.length} Kèo)</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: QUY CHẾ TRỌNG TÀI SỐ & PHÂN GIẢI TRANH CHẤP ================= */}
+      {rulesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#EAF7EE] flex items-center justify-center text-[#15803D]">
+                  <span className="material-symbols-outlined text-[24px]">gavel</span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-[#111827] leading-tight">
+                    Quy Chế Trọng Tài Số &amp; Bảo Chứng Ghép Trận LFG
+                  </h3>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Hệ thống điều phối minh bạch, chống bùng kèo và tính điểm Fair Play thể thao
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRulesModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
+
+            {/* Nội Dung Quy Chế Chi Tiết */}
+            <div className="flex flex-col gap-3.5 text-xs text-gray-700">
+              {/* Mục 1: Thang Điểm Fair Play & Chế Tài */}
+              <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
+                  <span className="material-symbols-outlined text-[#15803D] text-[18px]">verified</span>
+                  <h4>1. Thang Điểm Fair Play &amp; Chế Tài Kỷ Luật</h4>
+                </div>
+                <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
+                  <li>
+                    <strong className="text-red-700 font-bold">Dưới 30 điểm:</strong> Tài khoản bị cấm tham gia ghép trận (LFG) và không thể tạo kèo mới.
+                  </li>
+                  <li>
+                    <strong className="text-gray-900 font-bold">Cơ chế tự hồi điểm:</strong> Điểm số sẽ tự động phục hồi dần theo thời gian cho đến khi đạt đủ <strong>40 điểm</strong>.
+                  </li>
+                  <li>
+                    <strong className="text-[#15803D] font-bold">Tích lũy trên 40 điểm:</strong> Muốn cộng điểm vượt mốc 40 điểm, bắt buộc người chơi phải tham gia thi đấu thực tế và được người chơi khác đánh giá tốt.
+                  </li>
+                  <li>
+                    <strong className="text-red-700 font-bold">Vắng mặt hoặc trễ giờ:</strong> Không có mặt check-in hoặc đến trễ quá <strong>15 phút</strong> sẽ bị <strong>trừ 10 điểm</strong>.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Mục 2: Điểm Đánh Giá Rating Sau Trận */}
+              <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
+                  <span className="material-symbols-outlined text-amber-500 text-[18px]">star</span>
+                  <h4>2. Thang Điểm Đánh Giá Chất Lượng Sau Trận (Rating)</h4>
+                </div>
+                <p className="text-gray-500 mb-2.5">
+                  Điểm Fair Play được điều chỉnh theo điểm đánh giá trung bình từ các người chơi cùng trận:
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-bold">
+                  <div className="p-2.5 rounded-xl bg-white border border-red-200">
+                    <span className="text-[11px] text-gray-500 block">Trung bình &lt; 1.5★</span>
+                    <span className="text-sm font-black text-red-600">-5 Điểm</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-gray-200">
+                    <span className="text-[11px] text-gray-500 block">Trung bình &lt; 2.5★</span>
+                    <span className="text-sm font-black text-gray-500">0 Điểm</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-200">
+                    <span className="text-[11px] text-gray-500 block">Trung bình &gt; 4.0★</span>
+                    <span className="text-sm font-black text-[#15803D]">+3 Điểm</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white border border-emerald-300 bg-[#EAF7EE]/50">
+                    <span className="text-[11px] text-gray-500 block">Trung bình &gt; 4.5★</span>
+                    <span className="text-sm font-black text-[#15803D]">+5 Điểm</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mục 3: Cơ Chế Chia Tiền Cọc Sân */}
+              <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
+                  <span className="material-symbols-outlined text-[#0284C7] text-[18px]">payments</span>
+                  <h4>3. Cơ Chế Chia Tiền &amp; Đặt Cọc Sân</h4>
+                </div>
+                <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
+                  <li>
+                    Người đầu tạo kèo (Host) đóng <strong className="text-gray-900 font-bold">1/4 tiền sân</strong> làm tiền cọc giữ sân ngay từ đầu.
+                  </li>
+                  <li>
+                    Chi phí còn lại được chia đều cho <strong className="text-gray-900 font-bold">3 người chơi khác</strong>. Các thành viên nhận slot phải hoàn tất thanh toán phần chia trong vòng <strong className="text-[#0284C7] font-bold">30 phút</strong>.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Mục 4: Chính Sách Hủy Kèo & Hoàn Cọc Escrow */}
+              <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
+                  <span className="material-symbols-outlined text-[#15803D] text-[18px]">assignment_return</span>
+                  <h4>4. Chính Sách Hủy Kèo &amp; Hoàn Tiền Ký Quỹ Escrow</h4>
+                </div>
+                <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
+                  <li>
+                    <strong className="text-gray-900 font-bold">Kèo chưa đủ người:</strong> Hủy bên LFG trước <strong>48 giờ</strong> nếu không đủ người tham gia thì được <strong>hoàn 100%</strong> tiền cọc.
+                  </li>
+                  <li>
+                    <strong className="text-gray-900 font-bold">Kèo đã chốt đủ người:</strong>
+                    <ul className="list-circle pl-5 mt-1 space-y-1">
+                      <li>Hủy trước <strong>24 giờ</strong> (khi có sự đồng ý của tất cả người tham gia LFG): <strong>Được hoàn tiền cọc</strong>.</li>
+                      <li>Hủy sau <strong>24 giờ</strong> trước giờ chơi: <strong>Mất tiền cọc</strong> (100% tiền cọc bị trừ theo điều khoản hợp đồng).</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong className="text-red-700 font-bold">Phạt hủy kèo người tạo:</strong> Nếu kèo LFG đã tạo mà bị hủy trong vòng <strong>sau 24h trước giờ chơi</strong>: <strong>trừ 10 điểm</strong> Fair Play.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Mục 5: Thể Thức Bóng Đá & Bóng Rổ */}
+              <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
+                <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
+                  <span className="material-symbols-outlined text-purple-600 text-[18px]">groups</span>
+                  <h4>5. Thể Thức Thi Đấu Bóng Đá &amp; Bóng Rổ (Team vs Team)</h4>
+                </div>
+                <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
+                  <li>
+                    <strong className="text-gray-900 font-bold">Bóng đá:</strong> Hỗ trợ ghép theo định dạng <strong>team 5, team 7, team 11</strong> (5v5, 7v7, 11v11).
+                  </li>
+                  <li>
+                    <strong className="text-gray-900 font-bold">Bóng rổ:</strong> Ghép theo thể thức <strong>team vs team</strong> với các quy mô <strong>team 3, team 5, team 7</strong>.
+                  </li>
+                  <li>
+                    <strong className="text-purple-700 font-bold">Quy chế Fair Play đội:</strong> Đối với thể thức ghép team vs team, việc cộng hoặc trừ điểm Fair Play sẽ áp dụng trực tiếp cho <strong>người đại diện ghép đội</strong>.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setRulesModalOpen(false)}
+                className="px-6 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md shadow-[#3B6817]/30 transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">check</span>
+                <span>Đã hiểu &amp; Đồng ý quy chế</span>
+              </button>
             </div>
           </div>
         </div>

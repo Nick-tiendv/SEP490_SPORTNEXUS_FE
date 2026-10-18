@@ -455,58 +455,6 @@ function TopSideBar() {
           )
         })}
       </nav>
-
-      {/* Footer: Escrow Status Card */}
-      <div style={{ padding: '12px 14px' }}>
-        <div
-          style={{
-            padding: '12px 14px',
-            background: 'linear-gradient(135deg, #EAF7EE 0%, #E0F5E6 100%)',
-            borderRadius: '14px',
-            border: '1px solid rgba(45, 95, 63, 0.16)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            boxShadow: '0 2px 10px rgba(45, 95, 63, 0.05)',
-          }}
-        >
-          <div
-            style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '10px',
-              background: '#2D5F3F',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(45, 95, 63, 0.25)',
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: '19px' }}>
-              verified_user
-            </span>
-          </div>
-          <div style={{ lineHeight: 1.3, flex: 1 }}>
-            <p style={{ fontSize: '11.5px', fontWeight: 800, color: '#1C3524', margin: 0 }}>
-              Bảo chứng Escrow 24/7
-            </p>
-            <p style={{ fontSize: '10px', color: '#2D5F3F', margin: 0, fontWeight: 500, lineHeight: 1.35, marginTop: '2px' }}>
-              Giao dịch tức thì minh bạch với cơ chế giữ quỹ thông minh
-            </p>
-          </div>
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#10B981',
-              flexShrink: 0,
-              boxShadow: '0 0 8px #10B981',
-            }}
-          />
-        </div>
-      </div>
     </aside>
     </>
   )
