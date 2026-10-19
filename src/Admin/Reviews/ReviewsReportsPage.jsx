@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX, Star } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import '../Users/users.css'
 import './reviews.css'
+import ReviewsTab from './ReviewsTab.jsx'
 import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport } from '../../api/admin/reportApi.js'
 import { decisionOptions, emptyFilters, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv } from './reviewsData.js'
 
@@ -80,7 +82,9 @@ function Inspector({ report, loading, error, onResolve }) {
 
 export default function ReviewsReportsPage() {
   const [tab, setTab] = useState('reports')
-  const [filters, setFilters] = useState({ ...emptyFilters })
+  // ?status=Pending (từ Dashboard) → mở sẵn bộ lọc trạng thái.
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, status: reportStatusLabels[searchParams.get('status')] ? searchParams.get('status') : '' }))
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
@@ -148,16 +152,16 @@ export default function ReviewsReportsPage() {
   const selectFilter = (key, title, options) => <label>{title}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả</option>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
 
   return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
-    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Chưa có API']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
-    <div className="rr-stats">{[
+    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
+    {tab === 'reports' && <div className="rr-stats">{[
       ['Tổng báo cáo', number(stats.total), TriangleAlert, 'Toàn nền tảng'],
       ['Đang chờ xử lý', number(stats.pending), MessageSquare, 'Cần quản trị viên xem xét'],
       ['Đã giải quyết', number(stats.resolved), CheckCircle2, 'Báo cáo được chấp nhận'],
       ['Đã bác bỏ', number(stats.rejected), CircleX, closedRate == null ? '' : `Tỷ lệ đóng: ${closedRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`],
-    ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={statsLoading ? '…' : value} icon={icon} supporting={supporting} />)}</div>
-    {!statsLoading && stats.pending > 0 && <div className="rr-priority"><TriangleAlert size={20} /><p><strong>{number(stats.pending)} báo cáo</strong> đang chờ xử lý</p><button className="rr-button" onClick={showPending}>Xử lý ngay <ArrowRight size={14} /></button></div>}
+    ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={statsLoading ? '…' : value} icon={icon} supporting={supporting} />)}</div>}
+    {tab === 'reports' && !statsLoading && stats.pending > 0 && <div className="rr-priority"><TriangleAlert size={20} /><p><strong>{number(stats.pending)} báo cáo</strong> đang chờ xử lý</p><button className="rr-button" onClick={showPending}>Xử lý ngay <ArrowRight size={14} /></button></div>}
 
-    {tab === 'reviews' ? <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><section className="rr-list"><div className="rr-empty"><Star size={28} /><h3>Chưa có API danh sách đánh giá</h3><p>Backend hiện chỉ có POST /api/v1/reviews/fair-play và /api/v1/reviews/facility để người chơi gửi đánh giá. Cần BE bổ sung API cho admin xem và kiểm duyệt đánh giá (ví dụ GET /api/v1/reviews/admin).</p></div></section></div>
+    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
       : <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
         <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do', 'Chủ sân', 'Trạng thái', 'Ngày tạo'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.uuid} className={selected === item.uuid ? 'selected' : ''} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.targetType} /></td><td className="rr-excerpt" title={item.reason}>{item.reason}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td></tr>)}</tbody></table></div>
         {loading && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Đang tải báo cáo…</h3></div>}

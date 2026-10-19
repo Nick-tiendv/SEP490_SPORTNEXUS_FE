@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { UserAvatar } from '../Users/UserDetails.jsx'
-import { addParticipant, cancelTournament, checkInParticipant, createTournament, generateBracket, randomPairing, removeParticipant, updateMatchScore } from '../../api/admin/tournamentApi.js'
+import { addParticipant, cancelTournament, checkInParticipant, createTournament, generateBracket, lockTournament, randomPairing, removeParticipant, unlockTournament, updateMatchScore } from '../../api/admin/tournamentApi.js'
 import { categoryTypeLabels, sportLabels, date } from './tournamentData.js'
 
 const noop = () => {}
@@ -58,19 +58,37 @@ export function TournamentForm({ facilities, sports, onClose, onDone }) {
   </form></DemoDialog>
 }
 
-// generate-bracket / execute-random-pairing / cancel.
+const actions = {
+  generate: { title: 'Tạo nhánh đấu', button: 'Xác nhận', task: context => generateBracket(context.targetId), message: () => 'Đã tạo nhánh đấu.' },
+  pair: { title: 'Bốc thăm ngẫu nhiên', button: 'Xác nhận', task: context => randomPairing(context.targetId), message: () => 'Đã bốc thăm ngẫu nhiên.' },
+  cancel: { title: 'Xác nhận hủy giải', button: 'Xác nhận hủy giải', danger: true, reason: true, task: (context, reason) => cancelTournament(context.tournament.id, reason), message: context => `Đã hủy giải ${context.tournament.name}.` },
+  lock: { title: 'Khóa giải đấu', button: 'Khóa giải', danger: true, reason: true, task: (context, reason) => lockTournament(context.tournament.id, reason), message: context => `Đã khóa giải ${context.tournament.name}.` },
+  unlock: { title: 'Mở khóa giải đấu', button: 'Mở khóa', task: context => unlockTournament(context.tournament.id), message: context => `Đã mở khóa giải ${context.tournament.name}.` },
+}
+const explanation = (type, context) => ({
+  generate: context.hasBracket ? 'Đã có nhánh đấu. Tạo lại có thể thay thế nhánh đấu và kết quả hiện tại.' : `Tạo nhánh đấu từ ${context.participants.length} người tham gia hiện có.`,
+  pair: `Xáo trộn ngẫu nhiên thứ tự ${context.participants.length} người tham gia để xếp cặp.`,
+  cancel: 'Hủy toàn bộ giải đấu. Việc hoàn phí cho người đã đăng ký do backend xử lý theo chính sách hiện hành.',
+  lock: 'Khóa giải để tạm dừng hoạt động (ví dụ nội dung chưa rõ ràng, có báo cáo vi phạm). Ban tổ chức sẽ thấy lý do khóa.',
+  unlock: context.tournament.lockReason ? `Lý do khóa trước đó: ${context.tournament.lockReason}` : 'Cho phép giải hoạt động trở lại.',
+}[type])
+
+// generate-bracket / execute-random-pairing (API giải đấu) · cancel / lock / unlock (PATCH /api/v1/admin/tournaments/{id}/…).
 export function TournamentActionDialog({ type, context, onClose, onDone }) {
-  const { submitting, error, run } = useSubmit(onDone)
-  const cancel = type === 'cancel', pair = type === 'pair'
-  const confirm = () => run(
-    () => (cancel ? cancelTournament(context.tournament.id) : pair ? randomPairing(context.targetId) : generateBracket(context.targetId)),
-    cancel ? `Đã hủy giải ${context.tournament.name}.` : pair ? 'Đã bốc thăm ngẫu nhiên.' : 'Đã tạo nhánh đấu.',
-  )
-  return <DemoDialog title={cancel ? 'Xác nhận hủy giải' : pair ? 'Bốc thăm ngẫu nhiên' : 'Tạo nhánh đấu'} onClose={submitting ? noop : onClose}>
-    <p><strong>{cancel ? context.tournament.name : context.targetName}</strong></p>
-    <p className="tournaments-dialog-explanation">{cancel ? 'Hủy toàn bộ giải đấu. Việc hoàn phí cho người đã đăng ký do backend xử lý theo chính sách hiện hành.' : pair ? `Xáo trộn ngẫu nhiên thứ tự ${context.participants.length} người tham gia để xếp cặp.` : context.hasBracket ? 'Đã có nhánh đấu. Tạo lại có thể thay thế nhánh đấu và kết quả hiện tại.' : `Tạo nhánh đấu từ ${context.participants.length} người tham gia hiện có.`}</p>
+  const action = actions[type]
+  const [reason, setReason] = useState('')
+  const { submitting, error, setError, run } = useSubmit(onDone)
+  const name = ['cancel', 'lock', 'unlock'].includes(type) ? context.tournament.name : context.targetName
+  const confirm = () => {
+    if (action.reason && !reason.trim()) return setError('Vui lòng nhập lý do.')
+    run(() => action.task(context, reason.trim()), action.message(context))
+  }
+  return <DemoDialog title={action.title} onClose={submitting ? noop : onClose}>
+    <p><strong>{name}</strong></p>
+    <p className="tournaments-dialog-explanation">{explanation(type, context)}</p>
+    {action.reason && <div className="users-form"><label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder={type === 'lock' ? 'Ví dụ: Nội dung giới thiệu giải chưa rõ ràng…' : 'Ví dụ: Không đủ người đăng ký…'} /></label></div>}
     {error && <p className="users-form-error" role="alert">{error}</p>}
-    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Giữ nguyên</button><button className={`users-button ${cancel ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting}>{submitting ? 'Đang xử lý…' : cancel ? 'Xác nhận hủy giải' : 'Xác nhận'}</button></footer>
+    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Giữ nguyên</button><button className={`users-button ${action.danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting}>{submitting ? 'Đang xử lý…' : action.button}</button></footer>
   </DemoDialog>
 }
 

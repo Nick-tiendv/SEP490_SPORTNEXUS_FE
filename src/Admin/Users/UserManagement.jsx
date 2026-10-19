@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, Download, UserPlus, Filter, Users, UserRoundCheck, UserRoundPlus, UserRoundX, RefreshCw } from 'lucide-react'
 import { emptyFilters, filterUsers, usersCsv, userStats, roleOptions, roleLabel, roleTone, statusLabels } from './usersData.js'
 import UserDetails, { UserAvatar, AccountStatus } from './UserDetails.jsx'
 import { UserFormDialog, SuspensionDialog, DeleteUserDialog } from './UserDialogs.jsx'
 import { getAccount, getMyAccount, listAccounts } from '../../api/admin/accountApi.js'
+import FairPlayTab from './FairPlayTab.jsx'
 import './users.css'
 
 const statIcons = [Users, UserRoundCheck, UserRoundPlus, UserRoundX]
@@ -14,6 +16,9 @@ function RowSelection({ checked, mixed, onChange }) {
 }
 
 export default function UserManagement() {
+  // ?tab=fairplay → mở thẳng tab Fair Play.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => (searchParams.get('tab') === 'fairplay' ? 'fairplay' : 'users'))
   const [reload, setReload] = useState(0)
   const [data, setData] = useState({ key: -1, users: [], error: '' })
   const [meId, setMeId] = useState('')
@@ -85,11 +90,13 @@ export default function UserManagement() {
     if (message) setNotice(message)
   }
   const afterDelete = message => { setDetailId(null); done(message) }
+  const tabs = <div className="admin-segmented" role="tablist" aria-label="Chế độ xem người dùng">{[['users', 'Tài khoản'], ['fairplay', 'Fair Play']].map(([value, text]) => <button key={value} type="button" role="tab" aria-selected={tab === value} className={tab === value ? 'selected' : ''} onClick={() => setTab(value)}>{text}</button>)}</div>
+  if (tab === 'fairplay') return <FairPlayTab tabs={tabs} />
 
   return (
     <div className={`users-page ${detailUser ? 'with-details' : ''}`}>
       <div className="users-main-content">
-        <header className="users-page-heading admin-page-header"><div><h1>Quản lý người dùng <span>Tổng cộng {users.length.toLocaleString('vi-VN')}</span></h1><p>Quản lý người dùng đã đăng ký, vai trò và trạng thái tài khoản trên SportNexus.</p></div><div className="users-heading-actions"><button className="users-button" onClick={() => setReload(value => value + 1)} disabled={loading}><RefreshCw size={16} /><span>Làm mới</span></button><button className="users-button" onClick={() => exportCsv(filtered)} disabled={!filtered.length}><Download size={16} /><span>Xuất CSV</span></button><button className="users-button primary" onClick={() => setDialog({ type: 'add' })} disabled={!roles.length}><UserPlus size={18} /><span>Thêm người dùng</span></button></div></header>
+        <header className="users-page-heading admin-page-header"><div><h1>Quản lý người dùng <span>Tổng cộng {users.length.toLocaleString('vi-VN')}</span></h1><p>Quản lý người dùng đã đăng ký, vai trò và trạng thái tài khoản trên SportNexus.</p></div><div className="users-heading-actions">{tabs}<button className="users-button" onClick={() => setReload(value => value + 1)} disabled={loading}><RefreshCw size={16} /><span>Làm mới</span></button><button className="users-button" onClick={() => exportCsv(filtered)} disabled={!filtered.length}><Download size={16} /><span>Xuất CSV</span></button><button className="users-button primary" onClick={() => setDialog({ type: 'add' })} disabled={!roles.length}><UserPlus size={18} /><span>Thêm người dùng</span></button></div></header>
         <div className="users-kpis">{userStats(users).map((stat, index) => { const Icon = statIcons[index]; return <article key={stat.label} className={`users-kpi ${stat.tone}`}><small>{stat.label}</small><div><strong>{loading && !users.length ? '…' : stat.value.toLocaleString('vi-VN')}</strong><Icon size={23} /></div><p>{stat.trend}</p></article> })}</div>
         {data.error && <div className="users-notice" role="alert">Không tải được danh sách người dùng: {data.error}<button onClick={() => setReload(value => value + 1)} aria-label="Thử lại">↻</button></div>}
         <section className="users-toolbar" aria-label="Bộ lọc người dùng">

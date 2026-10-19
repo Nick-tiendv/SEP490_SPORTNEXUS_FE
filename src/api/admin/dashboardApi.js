@@ -71,24 +71,30 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
   }
 }
 
-// ---------- Accounts / Facilities / Reports / Master data ----------
-const isOwner = account => /owner|chủ sân/i.test(String(pick(account, 'role', 'roleName', 'role.name') ?? ''))
-const isActive = account => {
-  const flag = pick(account, 'isActive', 'active')
-  if (typeof flag === 'boolean') return flag
-  const status = String(pick(account, 'status', 'accountStatus') ?? 'active')
-  return !/inactive|lock|ban|suspend|disable|deleted/i.test(status)
+// ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------
+const numbers = (source, keys) => Object.fromEntries(keys.map(key => [key, toNumber(source?.[key])]))
+export async function getAdminDashboard({ fromDate, toDate } = {}) {
+  const data = await get('/api/v1/admin/dashboard', { fromDate, toDate }) || {}
+  return {
+    from: data.from,
+    to: data.to,
+    users: numbers(data.users, ['total', 'players', 'owners', 'admins', 'locked', 'newInRange', 'claimBanned', 'belowFairPlayThreshold']),
+    facilities: numbers(data.facilities, ['total', 'approved', 'pending', 'rejected', 'courts']),
+    bookings: numbers(data.bookings, ['inRange', 'paid', 'checkedIn', 'cancelled', 'pending', 'cancelRate']),
+    revenue: numbers(data.revenue, ['bookingGrossValue', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerBookingEarnings', 'totalDeposits', 'withdrawalsCompleted', 'totalWalletBalance', 'totalFrozenBalance', 'currentBookingFeePercent']),
+    tournaments: numbers(data.tournaments, ['total', 'open', 'inProgress', 'finished', 'cancelled', 'locked']),
+    lfg: numbers(data.lfg, ['createdInRange', 'open', 'filled', 'cancelled']),
+    pending: numbers(data.pending, ['facilityApprovals', 'ownerVerifications', 'withdrawals', 'withdrawalAmount', 'openReports']),
+    byDay: (Array.isArray(data.byDay) ? data.byDay : []).map(day => ({
+      date: day.date,
+      newUsers: toNumber(day.newUsers) ?? 0,
+      bookings: toNumber(day.bookings) ?? 0,
+      bookingGrossValue: toNumber(day.bookingGrossValue) ?? 0,
+    })),
+  }
 }
-export async function getAccountSummary() {
-  const { items, total } = toList(await get('/api/accounts'))
-  return { totalUsers: total, activeOwners: items.filter(account => isOwner(account) && isActive(account)).length }
-}
-export async function getFacilityCount(status) {
-  return toList(await get('/api/v1/facilities', { status })).total
-}
-export async function getPendingReportCount() {
-  return toList(await get('/api/v1/reports/admin', { Status: 'Pending', PageIndex: 1, PageSize: 1 })).total
-}
+
+// ---------- Master data / current user ----------
 export async function getSports() {
   return toList(await get('/api/v1/master-data/sports')).items
     .map(sport => ({ id: pick(sport, 'id', 'sportId'), name: pick(sport, 'name', 'sportName', 'title') }))
