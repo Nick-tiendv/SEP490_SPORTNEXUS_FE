@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
-import { getAmenityOptions, setFacilityStatus, updateFacility } from '../../api/admin/facilityApi.js'
-import { statusLabels } from './facilityData.js'
+import { approveFacility, getAmenityOptions, lockFacility, rejectFacility, unlockFacility, updateFacility } from '../../api/admin/facilityApi.js'
+import { facilityActions } from './facilityData.js'
 
 const noop = () => {}
 
@@ -50,26 +50,38 @@ export function FacilityFormDialog({ facility, onClose, onDone }) {
   </DemoDialog>
 }
 
-const actionLabel = status => ({ Active: 'Kích hoạt / duyệt', Inactive: 'Vô hiệu hóa', Maintenance: 'Chuyển sang bảo trì', Rejected: 'Từ chối' }[status] || `Chuyển sang ${statusLabels[status] || status}`)
+const runAction = {
+  approve: id => approveFacility(id),
+  reject: (id, { reason }) => rejectFacility(id, reason),
+  lock: (id, options) => lockFacility(id, options),
+  unlock: id => unlockFacility(id),
+}
 
-// PUT /api/v1/facilities/{id} { status } cho từng cơ sở.
-export function FacilityStatusDialog({ facilities, status, onClose, onDone }) {
+// PATCH /api/v1/admin/facilities/{id}/approve | reject { reason } | lock { reason, cancelUpcomingBookings } | unlock.
+export function FacilityActionDialog({ facilities, action: actionKey, onClose, onDone }) {
+  const action = facilityActions[actionKey]
+  const [reason, setReason] = useState('')
+  const [cancelUpcomingBookings, setCancelUpcomingBookings] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const targets = facilities.filter(facility => facility.status !== status)
+  const targets = facilities.filter(action.allowed)
+  const skipped = facilities.length - targets.length
   const confirm = async () => {
+    if (action.reason && !reason.trim()) return setError('Vui lòng nhập lý do.')
     setSubmitting(true); setError('')
-    const results = await Promise.allSettled(targets.map(facility => setFacilityStatus(facility.id, status)))
+    const results = await Promise.allSettled(targets.map(facility => runAction[actionKey](facility.id, { reason: reason.trim(), cancelUpcomingBookings })))
     const failed = results.map((result, index) => result.status === 'rejected' && `${targets[index].name}: ${result.reason?.message}`).filter(Boolean)
     if (failed.length) { setError(`Thành công ${targets.length - failed.length}/${targets.length}. Lỗi — ${failed.join(' · ')}`); setSubmitting(false); if (failed.length < targets.length) onDone(null, true); return }
-    onDone(`Đã cập nhật ${targets.length} cơ sở sang “${statusLabels[status] || status}”.`)
+    onDone(`Đã ${action.done} ${targets.length} cơ sở.`)
   }
-  const danger = /inactive|reject/i.test(status)
-  return <DemoDialog title="Xác nhận thay đổi trạng thái" onClose={submitting ? noop : onClose}>
-    {targets.length ? <p>{actionLabel(status)} {targets.length} cơ sở?</p> : <p>Các cơ sở đã chọn đều đang ở trạng thái “{statusLabels[status] || status}”.</p>}
+  return <DemoDialog title={action.label} onClose={submitting ? noop : onClose}>
+    {targets.length ? <p>{action.label} cho {targets.length} cơ sở sau?</p> : <p>Không có cơ sở nào trong danh sách đã chọn có thể {action.done}.</p>}
     <ul className="facilities-confirm-list">{targets.map(facility => <li key={facility.id}>{facility.name}</li>)}</ul>
+    {skipped > 0 && targets.length > 0 && <p className="facilities-detail-muted">Bỏ qua {skipped} cơ sở không phù hợp với thao tác này.</p>}
+    {action.reason && targets.length > 0 && <div className="users-form"><label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder={actionKey === 'reject' ? 'Ví dụ: Thông tin địa chỉ chưa chính xác…' : 'Ví dụ: Nhiều báo cáo vi phạm…'} /></label>
+      {actionKey === 'lock' && <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={cancelUpcomingBookings} onChange={event => setCancelUpcomingBookings(event.target.checked)} />Hủy các lượt đặt sân sắp tới</label>}</div>}
     {error && <p className="users-form-error" role="alert">{error}</p>}
-    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`users-button ${danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting || !targets.length}>{submitting ? 'Đang cập nhật…' : 'Xác nhận'}</button></footer>
+    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`users-button ${action.danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting || !targets.length}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
   </DemoDialog>
 }
 

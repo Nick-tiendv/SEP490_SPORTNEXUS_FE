@@ -40,7 +40,16 @@ export function toTournament(raw) {
     sport: pick(raw, 'categoryName', 'sportName', 'category.name', 'sport.name') || '',
     facility: pick(raw, 'facilityName', 'facility.name') || '',
     facilityId: String(pick(raw, 'facilityId', 'facility.id') ?? ''),
-    organizer: pick(raw, 'organizerName', 'createdByName', 'owner.fullName', 'ownerName', 'hostName') || '',
+    organizer: pick(raw, 'ownerName', 'organizerName', 'createdByName', 'owner.fullName', 'hostName') || '',
+    ownerId: String(pick(raw, 'ownerId', 'owner.id') ?? ''),
+    categoryType: pick(raw, 'categoryType') ?? '',
+    subTournamentCount: num(pick(raw, 'subTournamentCount')) ?? (children.length || null),
+    // null khi response không có isLocked (API giải đấu công khai) để không ghi đè giá trị từ API admin.
+    locked: typeof pick(raw, 'isLocked') === 'boolean' ? pick(raw, 'isLocked') : null,
+    lockReason: pick(raw, 'lockReason', 'lockedReason') || '',
+    prizePaid: num(pick(raw, 'prizePaidAmount')),
+    cancelledAt: pick(raw, 'cancelledAt') || '',
+    settledAt: pick(raw, 'settledAt') || '',
     starts: toIsoDate(pick(raw, 'startDate', 'startTime', 'startsAt')),
     ends: toIsoDate(pick(raw, 'endDate', 'endTime', 'endsAt')),
     deadline: toIsoDate(pick(raw, 'registrationDeadline', 'registrationEndDate', 'deadline')),
@@ -48,7 +57,7 @@ export function toTournament(raw) {
     capacity: num(pick(raw, 'maxParticipants', 'capacity')) ?? sum('capacity'),
     registered: num(pick(raw, 'currentParticipants', 'participantCount', 'registeredCount', 'totalParticipants')) ?? sum('registered'),
     entryFee: num(pick(raw, 'entryFee', 'fee')) ?? (children.length === 1 ? children[0].entryFee : null),
-    prize: prizeTotal || num(pick(raw, 'totalPrize', 'prizePool')),
+    prize: prizeTotal || num(pick(raw, 'prizeFundAmount', 'totalPrize', 'prizePool')),
     format: pick(raw, 'format', 'bracketType', 'tournamentFormat') || '',
     cancellationReason: pick(raw, 'cancellationReason', 'cancelReason') || '',
     children,
@@ -113,10 +122,23 @@ export function toBracket(data) {
   })
 }
 
-// GET /api/v1/tournaments — tham số theo swagger: facilityId, categoryId, status.
-export async function listTournaments(params) {
-  return toList(unwrap((await apiClient.get('/api/v1/tournaments', { params: clean(params) })).data)).items.map(toTournament)
+// GET /api/v1/admin/tournaments — query: keyword, status, facilityId, ownerId, isLocked, page, pageSize.
+export async function listAdminTournaments(params) {
+  const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/admin/tournaments', { params: clean(params) })).data))
+  return { items: items.map(toTournament), total, totalPages }
 }
+export async function getTournamentStatistics() {
+  const data = unwrap((await apiClient.get('/api/v1/admin/tournaments/statistics')).data) || {}
+  const keys = ['totalTournaments', 'open', 'inProgress', 'finished', 'cancelled', 'locked', 'subTournaments', 'totalParticipants', 'entryFeesToOwners', 'entryFeesRefunded', 'prizeFundsHeld', 'prizesPaid']
+  return {
+    ...Object.fromEntries(keys.map(key => [key, num(data[key])])),
+    topFacilities: asArray(data.topFacilities).map(item => ({ id: String(item.facilityId ?? ''), name: item.facilityName || '—', count: num(item.tournamentCount) ?? 0 })),
+  }
+}
+// PATCH /api/v1/admin/tournaments/{id}/lock | unlock | cancel — ReasonRequest { reason }.
+export const lockTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/lock`, { reason: reason || null })).data)
+export const unlockTournament = async id => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/unlock`)).data)
+export const cancelTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/cancel`, { reason: reason || null })).data)
 export async function getTournament(id) {
   return toTournament(unwrap((await apiClient.get(`/api/v1/tournaments/${path(id)}`)).data))
 }
@@ -131,9 +153,6 @@ export async function generateBracket(id) {
 }
 export async function randomPairing(id) {
   return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/execute-random-pairing`)).data)
-}
-export async function cancelTournament(id) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/cancel`)).data)
 }
 // AddTournamentParticipantRequest: userId | phone | teamId.
 export async function addParticipant(id, { userId, phone, teamId }) {

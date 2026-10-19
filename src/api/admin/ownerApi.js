@@ -1,6 +1,6 @@
-import apiClient from '../apiClient.js'
-import { getBookingStatistics, pick, toList, unwrap } from './dashboardApi.js'
+import { getBookingStatistics } from './dashboardApi.js'
 import { listAccounts } from './accountApi.js'
+import { listAdminFacilities } from './facilityApi.js'
 
 export const isOwnerRole = role => /owner|chủ sân/i.test(role || '')
 
@@ -9,26 +9,20 @@ export async function listOwners() {
   return (await listAccounts()).filter(account => isOwnerRole(account.role))
 }
 
-const asArray = value => (Array.isArray(value) ? value : [])
-export function toFacility(raw) {
-  const courts = pick(raw, 'courtCount', 'numberOfCourts', 'totalCourts')
-  const rating = Number(pick(raw, 'averageRating', 'rating', 'ratingAverage'))
-  const reviews = Number(pick(raw, 'reviewCount', 'totalReviews', 'ratingCount'))
-  const statusRaw = pick(raw, 'status', 'facilityStatus')
-  const activeFlag = pick(raw, 'isActive')
-  return {
-    id: String(pick(raw, 'id', 'facilityId') ?? ''),
-    ownerId: String(pick(raw, 'ownerId', 'owner.id', 'accountId', 'createdBy') ?? ''),
-    name: pick(raw, 'name', 'facilityName') || '—',
-    location: pick(raw, 'address', 'location', 'fullAddress') || '',
-    courts: Number(courts ?? asArray(pick(raw, 'courts')).length) || 0,
-    sports: asArray(pick(raw, 'sports', 'categories')).map(item => (typeof item === 'string' ? item : pick(item, 'name', 'sportName'))).filter(Boolean).join(', ') || pick(raw, 'sportName', 'categoryName') || '',
-    status: statusRaw ? String(statusRaw) : activeFlag === false ? 'Inactive' : 'Active',
-    rating: Number.isFinite(rating) && rating > 0 ? `${rating.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}${Number.isFinite(reviews) && reviews ? ` (${reviews} đánh giá)` : ''}` : null,
-  }
-}
+// Cơ sở của chủ sân lấy từ GET /api/v1/admin/facilities (gồm cả cơ sở chờ duyệt / bị khóa).
+const FACILITY_PAGE_SIZE = 500
 export async function listFacilities() {
-  return toList(unwrap((await apiClient.get('/api/v1/facilities')).data)).items.map(toFacility)
+  const { items } = await listAdminFacilities({ Page: 1, PageSize: FACILITY_PAGE_SIZE })
+  return items.map(facility => ({
+    id: facility.id,
+    ownerId: facility.owner.id,
+    name: facility.name,
+    location: facility.address,
+    courts: facility.courtCount || 0,
+    sports: facility.sports.join(', '),
+    status: facility.status,
+    rating: facility.rating ? `${facility.rating.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}${facility.reviews ? ` (${facility.reviews} đánh giá)` : ''}` : null,
+  }))
 }
 
 // Lượt đặt sân và doanh thu tháng này của một chủ sân.

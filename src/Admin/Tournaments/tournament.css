@@ -118,3 +118,4 @@
 @media(max-width:1200px){.tournaments-content-grid.with-details{grid-template-columns:minmax(0,1fr) 340px;gap:14px}.tournaments-kpis{gap:8px}.tournaments-kpis article{padding:13px 10px}}
 @media(max-width:1000px){.tournaments-content-grid.with-details{grid-template-columns:minmax(0,1fr)}.tournaments-details{max-width:620px;width:100%;justify-self:center}.tournaments-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:500px){.tournaments-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.tournaments-kpis article:last-child{grid-column:1/-1}.tournaments-filter-row>.users-search{flex:1;min-width:100%}.tournaments-page-heading h1{font-size:21px}.tournaments-pagination{justify-content:flex-start}.tournaments-registration h3{flex-wrap:wrap}}
+.tournaments-locked-tag{display:block;margin-top:4px;font-size:11px;color:var(--sn-gray-400)}

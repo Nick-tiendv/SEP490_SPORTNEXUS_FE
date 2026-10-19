@@ -1,44 +1,38 @@
 // Nhãn hiển thị và hàm tiện ích cho trang Quản lý giải đấu (dữ liệu thật lấy qua src/api/admin/tournamentApi.js).
-// Các giá trị enum là phỏng đoán — cần đối chiếu với BE.
+// BE trả trạng thái chữ hoa (OPEN đã thấy trong response); IN_PROGRESS / FINISHED / CANCELLED suy ra từ thống kê.
 
-export const statusLabels = { Draft: 'Bản nháp', Registration: 'Đang mở đăng ký', Open: 'Đang mở đăng ký', Upcoming: 'Sắp diễn ra', Ongoing: 'Đang diễn ra', InProgress: 'Đang diễn ra', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' }
-// Bộ lọc trạng thái gửi lên GET /api/v1/tournaments?status=
-export const statusFilterOptions = ['Draft', 'Registration', 'Upcoming', 'Ongoing', 'Completed', 'Cancelled']
-// TournamentCategoryType (enum số 0, 1, 2 trong swagger).
-export const categoryTypeLabels = { 0: 'Đơn', 1: 'Đôi', 2: 'Đồng đội' }
+export const statusLabels = { DRAFT: 'Bản nháp', OPEN: 'Đang mở đăng ký', IN_PROGRESS: 'Đang diễn ra', INPROGRESS: 'Đang diễn ra', FINISHED: 'Đã kết thúc', COMPLETED: 'Đã kết thúc', CANCELLED: 'Đã hủy' }
+// Bộ lọc trạng thái gửi lên GET /api/v1/admin/tournaments?status=
+export const statusFilterOptions = ['OPEN', 'IN_PROGRESS', 'FINISHED', 'CANCELLED']
+// Loại hạng mục: khi tạo giải gửi số (0, 1, 2); response trả chữ (SINGLES…).
+export const categoryTypeLabels = { 0: 'Đơn', 1: 'Đôi', 2: 'Đồng đội', SINGLES: 'Đơn', DOUBLES: 'Đôi', TEAM: 'Đồng đội' }
+export const formatLabels = { Knockout: 'Loại trực tiếp', RoundRobin: 'Vòng tròn', DoubleElimination: 'Nhánh thắng – thua' }
 export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Football: 'Bóng đá', Basketball: 'Bóng rổ', Tennis: 'Quần vợt' }
 export const matchLabels = { Scheduled: 'Đã lên lịch', Pending: 'Chờ thi đấu', Ongoing: 'Đang thi đấu', InProgress: 'Đang thi đấu', Completed: 'Đã hoàn thành', Finished: 'Đã hoàn thành', Bye: 'Miễn vòng', Waiting: 'Chờ kết quả vòng trước' }
 
-export const isLocked = tournament => /complete|cancel|finish/i.test(tournament.status)
+// Giải đã kết thúc / đã hủy thì không thao tác nhánh đấu, người tham gia nữa.
+export const isClosed = tournament => /complete|cancel|finish/i.test(tournament.status)
 export const statusBadge = status => (/cancel/i.test(status) ? 'Cancelled' : /complete|finish/i.test(status) ? 'Completed' : /regist|open/i.test(status) ? 'Confirmed' : 'Pending')
 
 export const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
 export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
 export const date = value => (value ? value.split('-').reverse().join('/') : '—')
-export const normalize = value => String(value ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
-export function parseDate(value) {
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
-  if (!match) return null
-  const iso = `${match[3]}-${match[2]}-${match[1]}`, parsed = new Date(`${iso}T00:00:00Z`)
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === iso ? iso : null
-}
 
-export function tournamentStats(tournaments) {
-  const count = pattern => tournaments.filter(t => pattern.test(t.status)).length
-  const participants = tournaments.reduce((sum, t) => sum + (t.registered || 0), 0)
+// Thẻ KPI từ GET /api/v1/admin/tournaments/statistics.
+export function tournamentStats(stats) {
   return [
-    { label: 'Tổng giải đấu', value: tournaments.length, note: 'Theo bộ lọc hiện tại', icon: 'total' },
-    { label: 'Đang mở đăng ký', value: count(/regist|open/i), note: 'Đang nhận người tham gia', icon: 'open' },
-    { label: 'Sắp / đang diễn ra', value: count(/upcoming|ongoing|progress/i), note: 'Chuẩn bị hoặc đang thi đấu', icon: 'upcoming' },
-    { label: 'Đã hoàn thành', value: count(/complete|finish/i), note: 'Đã có kết quả', icon: 'completed' },
-    { label: 'Tổng người tham gia', value: tournaments.some(t => t.registered != null) ? participants : NaN, note: 'Cộng từ các giải', icon: 'participants' },
+    { label: 'Tổng giải đấu', value: stats.totalTournaments, note: `${number(stats.subTournaments)} hạng mục · ${number(stats.locked)} bị khóa`, icon: 'total' },
+    { label: 'Đang mở đăng ký', value: stats.open, note: 'Đang nhận người tham gia', icon: 'open' },
+    { label: 'Đang diễn ra', value: stats.inProgress, note: 'Đang thi đấu', icon: 'upcoming' },
+    { label: 'Đã kết thúc', value: stats.finished, note: `${number(stats.cancelled)} giải đã hủy`, icon: 'completed' },
+    { label: 'Tổng người tham gia', value: stats.totalParticipants, note: `Phí trả chủ sân ${money(stats.entryFeesToOwners)}`, icon: 'participants' },
   ]
 }
 
 export function exportTournaments(tournaments) {
   const escape = value => { const text = String(value ?? ''); return `"${(/^[\s]*[=+@-]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"` }
-  const rows = [['Mã giải', 'Tên giải', 'Môn thể thao', 'Cơ sở', 'Ban tổ chức', 'Ngày bắt đầu', 'Ngày kết thúc', 'Trạng thái', 'Đã đăng ký', 'Sức chứa', 'Phí tham gia (đ)', 'Giải thưởng (đ)'],
-    ...tournaments.map(t => [t.id, t.name, sportLabels[t.sport] || t.sport, t.facility, t.organizer, date(t.starts), date(t.ends), statusLabels[t.status] || t.status, t.registered ?? '', t.capacity ?? '', t.entryFee ?? '', t.prize ?? ''])]
+  const rows = [['Mã giải', 'Tên giải', 'Môn thể thao', 'Cơ sở', 'Ban tổ chức', 'Thể thức', 'Số hạng mục', 'Trạng thái', 'Đã khóa', 'Người tham gia', 'Quỹ giải thưởng (đ)', 'Đã trả thưởng (đ)'],
+    ...tournaments.map(t => [t.id, t.name, sportLabels[t.sport] || t.sport, t.facility, t.organizer, formatLabels[t.format] || t.format, t.subTournamentCount ?? '', statusLabels[t.status] || t.status, t.locked ? `Có — ${t.lockReason}` : 'Không', t.registered ?? '', t.prize ?? '', t.prizePaid ?? ''])]
   const url = URL.createObjectURL(new Blob(['﻿' + rows.map(row => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }))
   const link = document.createElement('a'); link.href = url; link.download = 'giai-dau.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

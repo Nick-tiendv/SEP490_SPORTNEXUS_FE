@@ -97,6 +97,13 @@
 .owners-review-fields dd{margin:0;text-align:right;font-weight:600}
 .owners-bulk-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
 .owners-bulk-list span{display:block;color:var(--sn-gray-400);font-size:12px;margin-top:3px}
+.owners-documents{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.owners-documents>*{display:flex;flex-direction:column;gap:5px;border:1px solid var(--sn-gray-200);border-radius:8px;padding:6px;font-size:11px;color:var(--sn-gray-500);text-decoration:none;min-width:0}
+.owners-documents img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;background:var(--sn-gray-50)}
+.owners-documents span{display:flex;align-items:center;gap:3px;font-weight:600}
+.owners-documents .missing{align-items:center;justify-content:center;aspect-ratio:4/3;background:var(--sn-gray-50);text-align:center}
+.owners-documents .missing small{color:var(--sn-gray-400)}
+.owners-tabs{margin-right:4px}
 @media(max-width:1300px){.owners-page.with-details{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)}.owners-kpis{gap:7px}.owners-kpis article{padding:13px 9px}.owners-kpis strong{font-size:21px}.owners-pending-banner{flex-wrap:wrap}.owners-pending-banner>span{margin-left:0}.owners-pending-banner button{margin-left:auto}.owners-filter-row .users-search{flex-basis:100%}}
 @media(max-width:1000px){.owners-page.with-details{grid-template-columns:minmax(0,1fr)}.owners-details-body{display:grid;grid-template-columns:1fr 1fr;align-items:start}.owners-details-actions{justify-content:flex-end}.owners-details-actions .users-button{flex:0 1 auto}}
 @media(max-width:640px){.owners-page-heading h1{font-size:22px}.owners-kpis{grid-template-columns:1fr 1fr;gap:10px}.owners-kpis strong{font-size:24px}.owners-pending-banner{gap:10px;padding:15px}.owners-pending-banner h2{font-size:13px}.owners-pending-banner>span{display:none}.owners-details-body{display:flex}.owners-filter-row select{max-width:100%;flex:1}.owners-filter-actions>div{margin-left:0}.owners-pagination nav{flex-wrap:wrap}.owners-details-actions .users-button{flex:1}}

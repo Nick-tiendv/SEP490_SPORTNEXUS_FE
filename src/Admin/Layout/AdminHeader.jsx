@@ -1,7 +1,8 @@
-import { Search, Bell, Grid2X2, ChevronDown, ChevronRight, Menu, MapPin } from 'lucide-react'
+import { Search, Bell, Grid2X2, ChevronRight, Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
+import { initialsOf } from './initials.js'
 
-export default function AdminHeader({ onMenuToggle }) {
+export default function AdminHeader({ onMenuToggle, profile }) {
   const { pathname } = useLocation()
   const pageTitles = {
     dashboard: 'Tổng quan', users: 'Quản lý người dùng', 'court-owners': 'Quản lý chủ sân',
@@ -19,12 +20,11 @@ export default function AdminHeader({ onMenuToggle }) {
         <strong aria-current="page">{title}</strong>
       </nav>
       <label className="admin-search"><Search size={16} /><input aria-label="Tìm kiếm trong trang quản trị" placeholder="Tìm kiếm trong trang quản trị…" /></label>
-      <span className="admin-platform"><MapPin size={14} /><span>Hệ thống Bình Thạnh<small>TP. HCM</small></span><ChevronDown size={14} /></span>
       <div className="admin-header-actions">
         <button className="admin-icon-button admin-notifications" disabled aria-label="Thông báo (chưa triển khai)" title="Thông báo (chưa triển khai)"><Bell size={18} /><i /></button>
         <button className="admin-icon-button" disabled aria-label="Ứng dụng (chưa triển khai)" title="Ứng dụng (chưa triển khai)"><Grid2X2 size={18} /></button>
       </div>
-      <div className="admin-header-profile"><span className="admin-avatar admin-avatar-small">AT</span><span className="admin-header-profile-copy"><strong>Alex Tran</strong><small>Quản trị viên cấp cao</small></span><ChevronDown size={14} /></div>
+      <div className="admin-header-profile"><span className="admin-avatar admin-avatar-small">{profile ? initialsOf(profile.name) : '…'}</span><span className="admin-header-profile-copy"><strong>{profile?.name || 'Đang tải…'}</strong><small>{profile?.username ? `@${profile.username} · Quản trị viên` : 'Quản trị viên'}</small></span></div>
     </header>
   )
 }

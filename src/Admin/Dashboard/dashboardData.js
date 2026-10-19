@@ -45,18 +45,19 @@ export function formatTime(value) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// Gom booking theo ngày (hoặc theo tuần khi khoảng dài) cho biểu đồ xu hướng.
-export function buildTrendSeries(bookings, days, now = new Date()) {
+// Gom dữ liệu byDay của API dashboard theo ngày (hoặc theo tuần khi khoảng dài) cho biểu đồ xu hướng.
+export function buildTrendSeries(byDay, days, now = new Date()) {
   const { from } = lastDaysRange(days, now)
   const bucketDays = days > 30 ? 7 : 1
-  const buckets = Array.from({ length: Math.ceil(days / bucketDays) }, (_, index) => ({ start: addDays(from, index * bucketDays), revenue: 0, bookings: 0 }))
-  for (const booking of bookings) {
-    const date = booking.date ? new Date(booking.date) : null
+  const buckets = Array.from({ length: Math.ceil(days / bucketDays) }, (_, index) => ({ start: addDays(from, index * bucketDays), revenue: 0, bookings: 0, newUsers: 0 }))
+  for (const day of byDay) {
+    const date = day.date ? new Date(day.date) : null
     if (!date || Number.isNaN(date.getTime())) continue
     const index = Math.floor(Math.round((startOfDay(date) - from) / 86400000) / bucketDays)
     if (index < 0 || index >= buckets.length) continue
-    buckets[index].bookings += 1
-    if (!/cancel/i.test(booking.status)) buckets[index].revenue += booking.amount
+    buckets[index].bookings += day.bookings
+    buckets[index].revenue += day.bookingGrossValue
+    buckets[index].newUsers += day.newUsers
   }
   return buckets.map(bucket => ({ ...bucket, label: bucket.start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) }))
 }
