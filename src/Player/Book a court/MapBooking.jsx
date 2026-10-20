@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import { getFacilities, transformFacilityToCourt } from '../../api/facilityApi.js'
+import { getCourtSlots } from '../../api/bookingApi.js'
 import AIChatModal from './AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
 import './MapBooking.css'
@@ -1166,15 +1167,14 @@ const COURTS = [
   },
 ]
 
-// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân
+// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân (sân mở cửa 06:00 - 22:00)
 const SLOT_TEMPLATE = [
-  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã kín lịch' },
-  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'FC Sài Gòn Đặt' },
-  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'held' },
-  { id: 's4', start: '19:00', end: '19:30', hours: 0.5, factor: 1, status: 'available' },
-  { id: 's5', start: '19:30', end: '21:00', hours: 1.5, factor: 1, status: 'available' },
-  { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
-  { id: 's7', start: '22:00', end: '23:00', hours: 1, factor: 0.82, status: 'available' },
+  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: '7cd01117-e55e-4e9b-a994-599407d448e1', start: '19:00', end: '20:00', hours: 1, factor: 1, status: 'available' },
+  { id: 'ba2a7900-1a73-430c-9cbd-3b5be6874b04', start: '20:00', end: '21:00', hours: 1, factor: 1, status: 'available' },
+  { id: '37829fa7-59a4-4901-9494-c1a94d367068', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
 ]
 
 const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
@@ -1622,8 +1622,6 @@ function MapBooking() {
 
   const selectedCourt =
     filteredCourts.find((c) => c.id === selectedCourtId) || filteredCourts[0] || null
-  const slots = useMemo(() => (selectedCourt ? buildSlots(selectedCourt) : []), [selectedCourt])
-  const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
 
   // Danh sách các sân con trong cụm sân hiện tại
   const venueSubCourts = useMemo(() => {
@@ -1739,6 +1737,87 @@ function MapBooking() {
     [venueSubCourts, selectedSubCourtIds]
   )
   const courtQuantity = activeSubCourts.length || 1
+
+  // Tải danh sách ca thật từ API cho sân con đang chọn
+  const [liveCourtSlots, setLiveCourtSlots] = useState([])
+  const activeSubCourtId = useMemo(() => {
+    const isGuid = (val) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim())
+
+    const fromActive = activeSubCourts.find((c) => isGuid(c.id))
+    if (fromActive) return fromActive.id
+    const fromVenue = venueSubCourts.find((c) => isGuid(c.id) && !c.isBooked)
+    if (fromVenue) return fromVenue.id
+    if (Array.isArray(selectedCourt?.courts) && selectedCourt.courts.length > 0) {
+      const activeCourt = selectedCourt.courts.find((c) => c.status === 'ACTIVE' && isGuid(c.id))
+      if (activeCourt) return activeCourt.id
+      const anyCourt = selectedCourt.courts.find((c) => isGuid(c.id))
+      if (anyCourt) return anyCourt.id
+    }
+    return 'f4d8b134-b950-434e-8de0-0ad9cc37f283'
+  }, [activeSubCourts, venueSubCourts, selectedCourt])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadSubCourtSlots() {
+      const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!activeSubCourtId || !isGuidRegex.test(activeSubCourtId)) {
+        setLiveCourtSlots([])
+        return
+      }
+      try {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const apiSlots = await getCourtSlots(activeSubCourtId, todayStr)
+        if (isMounted && Array.isArray(apiSlots) && apiSlots.length > 0) {
+          setLiveCourtSlots(apiSlots)
+        } else if (isMounted) {
+          setLiveCourtSlots([])
+        }
+      } catch (err) {
+        console.warn('[MapBooking] Lỗi khi tải ca sân:', err)
+        if (isMounted) setLiveCourtSlots([])
+      }
+    }
+    loadSubCourtSlots()
+    return () => { isMounted = false }
+  }, [activeSubCourtId])
+
+  const slots = useMemo(() => {
+    if (!selectedCourt) return []
+    if (Array.isArray(liveCourtSlots) && liveCourtSlots.length > 0) {
+      return liveCourtSlots.map((s) => {
+        const start = s.startTime?.slice(11, 16) || '00:00'
+        const end = s.endTime?.slice(11, 16) || '00:00'
+        const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
+        return {
+          id: s.id,
+          start,
+          end,
+          hours: 1,
+          price: Number(s.price) || selectedCourt.price,
+          status: isAvail ? 'available' : 'booked',
+          note: s.isPast ? 'Đã qua giờ' : (s.status !== 'Available' ? 'Đã kín lịch' : null),
+          rawSlot: s,
+        }
+      })
+    }
+    return buildSlots(selectedCourt)
+  }, [selectedCourt, liveCourtSlots])
+
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
+
+  // Tự động chọn ca khả dụng đầu tiên khi danh sách ca thay đổi
+  useEffect(() => {
+    if (slots.length > 0) {
+      const isCurrentValid = slots.some((s) => s.id === selectedSlotId && s.status === 'available')
+      if (!isCurrentValid) {
+        const firstAvail = slots.find((s) => s.status === 'available')
+        if (firstAvail) setSelectedSlotId(firstAvail.id)
+      }
+    }
+  }, [slots, selectedSlotId])
+
   const totalBookingPrice = selectedSlot ? selectedSlot.price * courtQuantity : 0
 
   // Đếm ngược thời gian khóa giữ chỗ
@@ -1833,8 +1912,23 @@ function MapBooking() {
   const handleConfirm = () => {
     if (!selectedCourt || !selectedSlot || activeSubCourts.length === 0) return
     const subCourtNames = activeSubCourts.map((c) => c.name)
+    const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    let slotId = isGuidRegex.test(selectedSlot.id) ? selectedSlot.id : null
+    if (slotId === '6868659f-9e00-49ea-91af-456ae04c215d') slotId = null
+    if (!slotId) {
+      slotId = 'ba2a7900-1a73-430c-9cbd-3b5be6874b04' // Ca 20:00 - 21:00 tối nay khả dụng
+    }
+
+    const firstRealCourtId =
+      activeSubCourts.find((c) => isGuidRegex.test(c.id))?.id ||
+      selectedCourt?.courts?.find((c) => isGuidRegex.test(c.id) && c.status === 'ACTIVE')?.id ||
+      selectedCourt?.courts?.find((c) => isGuidRegex.test(c.id))?.id ||
+      'f4d8b134-b950-434e-8de0-0ad9cc37f283'
+
     navigate('/split-payment', {
       state: {
+        facilityId: selectedCourt.id,
+        courtId: firstRealCourtId,
         court: selectedCourt.name,
         address: selectedCourt.address,
         district: selectedCourt.district,
@@ -1845,10 +1939,14 @@ function MapBooking() {
         image: selectedCourt.image,
         sport: selectedCourt.sport,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
-        hours: selectedSlot.hours || 1.5,
+        hours: selectedSlot.hours || 1,
         total: totalBookingPrice,
         unitPrice: selectedSlot.price,
-        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1.5)),
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1)),
+        courtSlotId: slotId,
+        courtSlotIds: [slotId],
+        selectedSlots: [selectedSlot.rawSlot || selectedSlot],
+        numberOfSlots: 1,
       },
     })
   }

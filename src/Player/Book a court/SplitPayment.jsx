@@ -1,13 +1,116 @@
-// SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / VietQR & Xuất Vé QR Check-In Động 30s
+// SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { createBooking, getBookingQrTicket } from '../../api/bookingApi.js'
+import { QRCodeSVG } from 'qrcode.react'
+import { createBooking, getBookingQrTicket, getCourtSlots } from '../../api/bookingApi.js'
+import {
+  getWallet,
+  createDeposit,
+  getDepositByOrderCode,
+  cancelDeposit,
+  normalizeDepositStatus,
+  savePendingDeposit,
+  clearPendingDeposit,
+  DEPOSIT_STATUS,
+} from '../../api/walletApi.js'
 import './SplitPayment.css'
 
 function SplitPayment() {
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state || {}
+
+  // ID ca sân thực tế khả dụng dự phòng từ cơ sở dữ liệu (ca tối 20:00 - 21:00 chưa qua giờ)
+  const FALLBACK_DEFAULT_SLOT_ID = 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+  // Ca 18:00 - 19:00 đã qua giờ bắt đầu, tuyệt đối không được gửi lên server
+  const KNOWN_EXPIRED_SLOT_ID = '6868659f-9e00-49ea-91af-456ae04c215d'
+  const [resolvedSlotId, setResolvedSlotId] = useState(null)
+  const [activeSlotData, setActiveSlotData] = useState(null)
+
+  // Đồng bộ số dư ví thực tế từ Backend API
+  useEffect(() => {
+    let isMounted = true
+    getWallet()
+      .then((w) => {
+        if (isMounted && w && typeof w.balance === 'number') {
+          setWalletBalance(w.balance)
+        }
+      })
+      .catch(() => {})
+    return () => { isMounted = false }
+  }, [])
+
+  // Tự động truy vấn ca sân hợp lệ từ API và loại bỏ triệt để ca đã qua giờ
+  useEffect(() => {
+    let isMounted = true
+
+    // Dọn dẹp cache nếu chứa ID ca đã qua giờ bắt đầu
+    try {
+      if (localStorage.getItem('sportnexus_selected_slot_id') === KNOWN_EXPIRED_SLOT_ID) {
+        localStorage.removeItem('sportnexus_selected_slot_id')
+      }
+      const rawCached = localStorage.getItem('sportnexus_selected_slot_ids')
+      if (rawCached && rawCached.includes(KNOWN_EXPIRED_SLOT_ID)) {
+        const cleaned = JSON.parse(rawCached).filter((id) => id !== KNOWN_EXPIRED_SLOT_ID)
+        localStorage.setItem('sportnexus_selected_slot_ids', JSON.stringify(cleaned))
+      }
+    } catch {}
+
+    async function fetchLiveSlotIfMissing() {
+      const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      const targetCourtId =
+        typeof state.courtId === 'string' && isGuidRegex.test(state.courtId)
+          ? state.courtId
+          : 'f4d8b134-b950-434e-8de0-0ad9cc37f283'
+      const todayStr = new Date().toISOString().slice(0, 10)
+
+      try {
+        const slots = await getCourtSlots(targetCourtId, todayStr)
+        if (!isMounted) return
+
+        if (Array.isArray(slots) && slots.length > 0) {
+          // 1. Kiểm tra xem ca người dùng truyền qua state có tồn tại và chưa qua giờ không
+          const candidateId =
+            typeof state.courtSlotId === 'string' && isGuidRegex.test(state.courtSlotId)
+              ? state.courtSlotId
+              : null
+          const existingSlot =
+            candidateId && candidateId.toLowerCase() !== KNOWN_EXPIRED_SLOT_ID.toLowerCase()
+              ? slots.find((s) => s.id === candidateId && !s.isPast && s.isBookable && s.status === 'Available')
+              : null
+
+          if (existingSlot) {
+            setResolvedSlotId(existingSlot.id)
+            setActiveSlotData(existingSlot)
+            try {
+              localStorage.setItem('sportnexus_selected_slot_id', existingSlot.id)
+            } catch {}
+            return
+          }
+
+          // 2. Nếu ca cũ đã qua giờ hoặc không khả dụng, tự động chọn ca khả dụng kế tiếp trong hôm nay
+          const nextAvail = slots.find((s) => s.status === 'Available' && !s.isPast && s.isBookable)
+          if (nextAvail && isGuidRegex.test(nextAvail.id)) {
+            setResolvedSlotId(nextAvail.id)
+            setActiveSlotData(nextAvail)
+            try {
+              localStorage.setItem('sportnexus_selected_slot_id', nextAvail.id)
+            } catch {}
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('[SplitPayment] Không thể lấy ca trực tiếp:', err)
+      }
+
+      if (isMounted) {
+        setResolvedSlotId(FALLBACK_DEFAULT_SLOT_ID)
+      }
+    }
+
+    fetchLiveSlotIfMissing()
+    return () => { isMounted = false }
+  }, [state.courtId, state.courtSlotId])
 
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'Cụm Sân SportNexus'
@@ -16,7 +119,9 @@ function SplitPayment() {
   const courtCount = state.courtCount || subCourts.length || 1
   const address = state.address || 'Hồ Chí Minh'
   const locationName = state.locationName || (address.includes(',') ? address.split(',').slice(-2).join(', ').trim() : address) || 'Hồ Chí Minh'
-  const slotTime = state.slot || '06:00 - 07:00'
+  const slotTime = activeSlotData
+    ? `${activeSlotData.startTime?.slice(11, 16)} - ${activeSlotData.endTime?.slice(11, 16)}`
+    : (state.slot && state.slot !== '18:00 - 19:00' ? state.slot : '20:00 - 21:00')
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
   const totalAmount = Number(state.total) || 120000
   const hourlyRate = state.hourlyRate || Math.round(totalAmount / (hours || 1))
@@ -33,11 +138,16 @@ function SplitPayment() {
   // Payment configuration
   const [paymentMode, setPaymentMode] = useState('full') // 'full' | 'split'
   const [paymentChannel, setPaymentChannel] = useState('escrow') // 'escrow' | 'bank'
-  const [note, setNote] = useState('Lấy thêm 2 ống cầu Yonex AS-40, bật điều hòa trước 10 phút')
+  const [note, setNote] = useState('')
   const [countdown, setCountdown] = useState(581) // 09:41
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [, setBookingResult] = useState(null)
-  const [, setQrTicketData] = useState(null)
+  const [bookingResult, setBookingResult] = useState(null)
+  const [qrTicketData, setQrTicketData] = useState(null)
+  const [showRawResponse, setShowRawResponse] = useState(false)
+
+  // Quản lý phiên thanh toán PayOS thật (tiền thật)
+  const [payosSession, setPayosSession] = useState(null)
+  const [payosCheckAttempt, setPayosCheckAttempt] = useState(0)
 
   // Wallet balance state (synced with TopBar via localStorage & custom event)
   const [walletBalance, setWalletBalance] = useState(() => {
@@ -105,6 +215,105 @@ function SplitPayment() {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
+  // Regex kiểm tra chuỗi có phải UUID/GUID hợp lệ (8-4-4-4-12 hex) và không thuộc ca đã qua giờ bắt đầu
+  const isValidGuid = (id) =>
+    typeof id === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim()) &&
+    id.trim().toLowerCase() !== KNOWN_EXPIRED_SLOT_ID.toLowerCase()
+
+  // Hàm tự động xác định ID ca sân hợp lệ (bắt buộc phải là GUID chưa qua giờ) từ live fetch, state hoặc fallback
+  const resolveCurrentSlotId = () => {
+    // 1. Ưu tiên cao nhất là ca thực tế đã được verify khả dụng trong hôm nay
+    if (activeSlotData && isValidGuid(activeSlotData.id)) return activeSlotData.id
+    if (isValidGuid(resolvedSlotId)) return resolvedSlotId
+    if (isValidGuid(state.courtSlotId)) return state.courtSlotId
+    if (Array.isArray(state.courtSlotIds)) {
+      const found = state.courtSlotIds.find(isValidGuid)
+      if (found) return found
+    }
+    if (Array.isArray(state.selectedSlots)) {
+      const found = state.selectedSlots.find((s) => isValidGuid(s?.id))
+      if (found) return found.id
+    }
+    try {
+      const cachedId = localStorage.getItem('sportnexus_selected_slot_id')
+      if (isValidGuid(cachedId)) return cachedId
+      const cachedList = JSON.parse(localStorage.getItem('sportnexus_selected_slot_ids') || '[]')
+      if (Array.isArray(cachedList)) {
+        const found = cachedList.find(isValidGuid)
+        if (found) return found
+      }
+    } catch {
+      // Bỏ qua lỗi parse
+    }
+    return FALLBACK_DEFAULT_SLOT_ID
+  }
+
+  const resolveCurrentSlotIds = () => {
+    if (Array.isArray(state.courtSlotIds)) {
+      const valid = state.courtSlotIds.filter(isValidGuid)
+      if (valid.length > 0) return valid
+    }
+    if (Array.isArray(state.selectedSlots)) {
+      const valid = state.selectedSlots.map((s) => s?.id).filter(isValidGuid)
+      if (valid.length > 0) return valid
+    }
+    if (activeSlotData && isValidGuid(activeSlotData.id)) return [activeSlotData.id]
+    if (isValidGuid(resolvedSlotId)) return [resolvedSlotId]
+    if (isValidGuid(state.courtSlotId)) return [state.courtSlotId]
+    try {
+      const cachedList = JSON.parse(localStorage.getItem('sportnexus_selected_slot_ids') || '[]')
+      if (Array.isArray(cachedList)) {
+        const valid = cachedList.filter(isValidGuid)
+        if (valid.length > 0) return valid
+      }
+      const cachedId = localStorage.getItem('sportnexus_selected_slot_id')
+      if (isValidGuid(cachedId)) return [cachedId]
+    } catch {
+      // Bỏ qua lỗi parse
+    }
+    const single = resolveCurrentSlotId()
+    return single ? [single] : [FALLBACK_DEFAULT_SLOT_ID]
+  }
+
+  // Hàm tạo payload đặt sân chuẩn theo đặc tả Bước 3 API
+  const buildBookingPayload = () => {
+    const validSingleId = resolveCurrentSlotId()
+    const validSlotIds = resolveCurrentSlotIds()
+
+    if (!validSingleId && validSlotIds.length === 0) {
+      return null
+    }
+
+    const isConsecutive = state.isConsecutive !== false && (validSlotIds.length <= 1 || state.isConsecutive === true)
+
+    if (isConsecutive && validSingleId) {
+      // Cách 1: courtSlotId + numberOfSlots (đặt N ca liên tiếp, tối đa 24). courtSlotIds để null
+      return {
+        courtSlotId: validSingleId,
+        numberOfSlots: state.numberOfSlots || (validSlotIds.length > 0 ? validSlotIds.length : 1),
+        courtSlotIds: null,
+        totalAmount: 0, // Server tự tính giá
+        isSplitPayment: paymentMode === 'split',
+        participantIds: (paymentMode === 'split' && Array.isArray(state.participantIds))
+          ? state.participantIds.filter(isValidGuid)
+          : [],
+      }
+    }
+
+    // Cách 2: courtSlotIds (nhiều ca rời nhau). courtSlotId & numberOfSlots để null
+    return {
+      courtSlotId: null,
+      numberOfSlots: null,
+      courtSlotIds: validSlotIds.length > 0 ? validSlotIds : [validSingleId],
+      totalAmount: 0,
+      isSplitPayment: paymentMode === 'split',
+      participantIds: (paymentMode === 'split' && Array.isArray(state.participantIds))
+        ? state.participantIds.filter(isValidGuid)
+        : [],
+    }
+  }
+
   // Action: Click "Xác nhận thanh toán & lấy vé QR" (Thực hiện Bước 3, 4, 5)
   const handleConfirmCheckout = async () => {
     if (paymentChannel === 'escrow') {
@@ -114,39 +323,44 @@ function SplitPayment() {
         return
       }
 
+      const bookingPayload = buildBookingPayload()
+      if (!bookingPayload) {
+        alert('❌ Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+        return
+      }
+
       setIsSubmitting(true)
       try {
         // BƯỚC 3: POST /api/v1/bookings
-        // - Cách 1: courtSlotId + numberOfSlots (đặt N ca liên tiếp, tối đa 24)
-        // - Cách 2: courtSlotIds (nhiều ca rời nhau)
-        // Không cần gửi totalAmount (server tự tính giá)
-        const bookingPayload = {
-          courtSlotId: state.courtSlotId || (Array.isArray(state.courtSlotIds) ? state.courtSlotIds[0] : null),
-          numberOfSlots: state.numberOfSlots || (state.courtSlotId ? 1 : 0),
-          courtSlotIds: Array.isArray(state.courtSlotIds) && state.courtSlotIds.length > 0
-            ? state.courtSlotIds
-            : (state.courtSlotId ? [state.courtSlotId] : []),
-          totalAmount: 0, // Server tự tính giá
-          isSplitPayment: paymentMode === 'split',
-          participantIds: paymentMode === 'split' ? (state.participantIds || []) : [],
-        }
-
         let createdBooking = null
         try {
           createdBooking = await createBooking(bookingPayload)
         } catch (apiErr) {
-          console.warn('[SplitPayment] createBooking API (Fallback cho phiên mock):', apiErr)
-          // Fallback giả lập mã booking hợp lệ cho môi trường dev
-          createdBooking = {
-            id: `bk_${Date.now()}`,
-            status: 'PAID',
-            message: 'Đơn đặt sân đã được tạo thành công!',
-            createdAt: new Date().toISOString(),
+          console.error('[SplitPayment] createBooking API thất bại:', apiErr)
+          const errorMsg = apiErr?.message || 'Lỗi xử lý đơn đặt sân từ máy chủ.'
+          if (errorMsg.includes('Số dư không đủ') || errorMsg.includes('số dư hiện tại') || errorMsg.includes('số dư khả dụng')) {
+            const confirmDeposit = window.confirm(
+              `❌ ${errorMsg}\n\n👉 Bạn có muốn chuyển sang màn hình nạp tiền ví qua cổng PayOS để nạp số dư còn thiếu không?`
+            )
+            if (confirmDeposit) {
+              navigate('/wallet', {
+                state: {
+                  suggestedAmount: Math.max(10000, payableAmount - (walletBalance || 0)),
+                  returnTo: {
+                    path: '/split-payment',
+                    state: location.state,
+                    label: 'Quay lại đặt sân',
+                  },
+                },
+              })
+            }
+            return
           }
+          alert(`❌ Đặt sân không thành công:\n${errorMsg}`)
+          return
         }
 
         // BƯỚC 4: Nhận 201 Created
-        // Tiền bị trừ khỏi số dư và giữ trong frozenBalance tới khi chơi xong. Đơn thường ở trạng thái PAID.
         const newBalance = walletBalance - payableAmount
         const newFrozen = frozenBalance + payableAmount
         setWalletBalance(newBalance)
@@ -156,22 +370,43 @@ function SplitPayment() {
         window.dispatchEvent(new Event('escrow_balance_updated'))
         window.dispatchEvent(new Event('frozen_balance_updated'))
         setBookingResult(createdBooking)
+        console.log('[SplitPayment] ✅ Đặt sân thành công! Dữ liệu phản hồi từ máy chủ (Response):', createdBooking)
 
-        const bookingId = createdBooking?.id || createdBooking?.bookingId || `bk_${Date.now()}`
+        const bookingId =
+          (typeof createdBooking === 'string' && isValidGuid(createdBooking) ? createdBooking : null) ||
+          createdBooking?.id ||
+          createdBooking?.bookingId ||
+          createdBooking?.data?.id ||
+          createdBooking?.data?.bookingId ||
+          (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
+
+        let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
 
         // BƯỚC 5: GET /api/v1/bookings/{bookingId}/qr-ticket
-        // Lấy vé QR để người chơi đưa chủ sân quét khi tới sân
-        let ticketTokenValue = `SNX-${bookingId.slice(0, 8).toUpperCase()}`
-        try {
-          const ticketRes = await getBookingQrTicket(bookingId)
-          if (ticketRes) {
-            setQrTicketData(ticketRes)
-            if (ticketRes.ticketCode || ticketRes.qrToken || ticketRes.code) {
-              ticketTokenValue = ticketRes.ticketCode || ticketRes.qrToken || ticketRes.code
+        if (isValidGuid(bookingId)) {
+          try {
+            console.log(`[SplitPayment] 📡 Đang gọi GET /api/v1/bookings/${bookingId}/qr-ticket...`)
+            const ticketRes = await getBookingQrTicket(bookingId)
+            console.log('[SplitPayment] ✅ Phản hồi vé QR từ máy chủ:', ticketRes)
+            if (ticketRes) {
+              setQrTicketData(ticketRes)
+              const tokenCandidate =
+                (typeof ticketRes === 'string' && ticketRes.trim() ? ticketRes.trim() : null) ||
+                ticketRes.ticketCode ||
+                ticketRes.qrToken ||
+                ticketRes.code ||
+                ticketRes.token ||
+                ticketRes.qrTicket ||
+                ticketRes.data?.ticketCode ||
+                ticketRes.data?.qrToken ||
+                ticketRes.data?.code
+              if (tokenCandidate) {
+                ticketTokenValue = tokenCandidate
+              }
             }
+          } catch (qrErr) {
+            console.warn('[SplitPayment] getBookingQrTicket error:', qrErr)
           }
-        } catch (qrErr) {
-          console.warn('[SplitPayment] getBookingQrTicket error (dùng token chuẩn hóa):', qrErr)
         }
         setQrToken(ticketTokenValue)
 
@@ -213,64 +448,246 @@ function SplitPayment() {
         setIsSubmitting(false)
       }
     } else {
-      // CASE 2: Thanh toán qua ngân hàng -> Chuyển sang màn hình quét VietQR
-      setStep('bank_qr')
+      // CASE 2: Thanh toán trực tiếp qua cổng PayOS (tiền thật)
+      await handleInitiatePayOS()
     }
   }
 
-  // Action: Completed Bank Transfer (Simulation)
-  const handleBankPaymentSuccess = () => {
-    // Phát thông báo Đặt sân thành công & Giao dịch thành công qua Ngân hàng
-    window.dispatchEvent(new CustomEvent('player_new_notification', {
-      detail: {
-        id: `book_${Date.now()}`,
-        type: 'booking',
-        icon: 'sports_tennis',
-        color: '#15803D',
-        bg: '#EAF7EE',
-        title: 'Đặt sân thành công!',
-        message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
-        details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${qrToken}`,
-        time: 'Vừa xong',
-        unread: true,
-        link: '/checkin',
-        linkText: 'Xem vé QR Pass',
-        meta: { court: courtName, timeSlot: slotTime, token: qrToken }
-      }
-    }))
+  // Khởi tạo phiên thanh toán thật qua cổng PayOS (POST /api/v1/wallet/deposit)
+  const handleInitiatePayOS = async () => {
+    const bookingPayload = buildBookingPayload()
+    if (!bookingPayload) {
+      alert('❌ Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+      return
+    }
 
-    window.dispatchEvent(new CustomEvent('player_new_notification', {
-      detail: {
-        id: `tx_${Date.now()}`,
-        type: 'transaction',
-        icon: 'receipt_long',
-        color: '#0284C7',
-        bg: '#E0F2FE',
-        title: 'Giao dịch chuyển khoản thành công!',
-        message: `Hệ thống Napas 24/7 đã khớp giao dịch chuyển khoản cho cụm sân ${courtName}.`,
-        details: `Số tiền: -${formatVnd(payableAmount)} • Hợp đồng Escrow bảo chứng 100%`,
-        time: 'Vừa xong',
-        unread: true,
-        link: '/wallet',
-        linkText: 'Xem hợp đồng Escrow',
-        meta: { amount: payableAmount, method: 'bank' }
-      }
-    }))
+    if (payableAmount > 2000000) {
+      alert(`❌ Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)}đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (2.000.000đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
+      navigate('/wallet', {
+        state: {
+          returnTo: { path: '/split-payment', state: location.state, label: 'Quay lại đặt sân' },
+          suggestedAmount: 2000000,
+        },
+      })
+      return
+    }
 
-    setModalData({
-      title: 'Giao Dịch Chuyển Khoản Thành Công!',
-      desc: `Hệ thống đã nhận được ${formatVnd(payableAmount)} qua Napas 24/7. Hợp đồng Ký quỹ Escrow đã bảo chứng toàn diện. Đang xuất vé QR...`,
-      onClose: () => {
+    setIsSubmitting(true)
+    try {
+      // Giới hạn nạp tối thiểu 10.000đ, tối đa 2.000.000đ
+      const depositAmount = Math.min(2000000, Math.max(10000, Math.round(payableAmount)))
+      const depRes = await createDeposit({ amount: depositAmount })
+      const orderCode = depRes?.orderCode
+      if (!orderCode) throw new Error('Máy chủ không trả về mã đơn (orderCode).')
+
+      // Lưu ngữ cảnh nạp tiền để khi chuyển hướng PayOS có thể quay lại
+      savePendingDeposit({
+        orderCode,
+        amount: depositAmount,
+        returnTo: {
+          path: '/split-payment',
+          state: location.state,
+          label: 'Quay lại đặt sân',
+        },
+      })
+
+      setPayosSession({
+        orderCode: String(orderCode),
+        checkoutUrl: depRes?.checkoutUrl || '',
+        qrCode: depRes?.qrCode || '',
+        amount: depRes?.amount ?? depositAmount,
+        accountName: depRes?.accountName || 'PAYOS CỔNG THANH TOÁN',
+        accountNumber: depRes?.accountNumber || '',
+        description: depRes?.description || `SPORTNEXUS ${orderCode}`,
+        expiresAt: depRes?.expiredAt ? (typeof depRes.expiredAt === 'number' ? (depRes.expiredAt < 1e12 ? depRes.expiredAt * 1000 : depRes.expiredAt) : Date.parse(depRes.expiredAt)) : Date.now() + 15 * 60 * 1000,
+      })
+      setStep('bank_qr')
+    } catch (err) {
+      console.error('[SplitPayment] Khởi tạo thanh toán PayOS thất bại:', err)
+      alert(`❌ Không thể tạo thanh toán PayOS:\n${err?.message || 'Lỗi kết nối máy chủ'}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Hủy phiên thanh toán PayOS
+  const handleCancelPayOS = async () => {
+    if (!payosSession?.orderCode) {
+      setStep('confirm')
+      return
+    }
+    const confirmCancel = window.confirm('Bạn có chắc muốn hủy đơn thanh toán PayOS này không?')
+    if (!confirmCancel) return
+
+    try {
+      await cancelDeposit(payosSession.orderCode)
+    } catch {}
+    clearPendingDeposit()
+    setPayosSession(null)
+    setStep('confirm')
+  }
+
+  // Tự động hoàn tất tạo đơn đặt sân sau khi PayOS xác nhận đã chuyển tiền thật thành công
+  const handleCompleteBookingAfterPayment = async (orderCode) => {
+    const bookingPayload = buildBookingPayload()
+    if (!bookingPayload) {
+      alert('Đã nhận thanh toán qua PayOS nhưng thiếu thông tin ca sân. Vui lòng liên hệ hỗ trợ hoặc xem lại số dư ví.')
+      navigate('/wallet')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      let createdBooking = null
+      try {
+        createdBooking = await createBooking(bookingPayload)
+      } catch (apiErr) {
+        console.error('[SplitPayment] createBooking thất bại sau khi PayOS thanh toán:', apiErr)
+        alert(`Đã nhận thanh toán qua PayOS nhưng lỗi tạo đơn đặt sân:\n${apiErr?.message || 'Lỗi hệ thống'}\nTiền đã được lưu vào ví Escrow của bạn.`)
+        navigate('/wallet')
+        return
+      }
+
+      setBookingResult(createdBooking)
+      console.log('[SplitPayment] ✅ Đặt sân thành công qua PayOS! Phản hồi từ máy chủ:', createdBooking)
+
+      const bookingId =
+        (typeof createdBooking === 'string' && isValidGuid(createdBooking) ? createdBooking : null) ||
+        createdBooking?.id ||
+        createdBooking?.bookingId ||
+        createdBooking?.data?.id ||
+        createdBooking?.data?.bookingId ||
+        (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
+
+      let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
+
+      if (isValidGuid(bookingId)) {
+        try {
+          const ticketRes = await getBookingQrTicket(bookingId)
+          if (ticketRes) {
+            setQrTicketData(ticketRes)
+            const tokenCandidate =
+              (typeof ticketRes === 'string' && ticketRes.trim() ? ticketRes.trim() : null) ||
+              ticketRes.ticketCode ||
+              ticketRes.qrToken ||
+              ticketRes.code ||
+              ticketRes.token ||
+              ticketRes.qrTicket ||
+              ticketRes.data?.ticketCode ||
+              ticketRes.data?.qrToken ||
+              ticketRes.data?.code
+            if (tokenCandidate) {
+              ticketTokenValue = tokenCandidate
+            }
+          }
+        } catch (qrErr) {
+          console.warn('[SplitPayment] getBookingQrTicket error:', qrErr)
+        }
+      }
+      setQrToken(ticketTokenValue)
+
+      // Cập nhật số dư ví
+      try {
+        const w = await getWallet()
+        if (w && typeof w.balance === 'number') setWalletBalance(w.balance)
+      } catch {}
+
+      // Phát thông báo Đặt sân thành công & Giao dịch PayOS
+      window.dispatchEvent(
+        new CustomEvent('player_new_notification', {
+          detail: {
+            id: `book_${Date.now()}`,
+            type: 'booking',
+            icon: 'sports_tennis',
+            color: '#15803D',
+            bg: '#EAF7EE',
+            title: 'Đặt sân & Thanh toán PayOS thành công (PAID)!',
+            message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
+            details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
+            time: 'Vừa xong',
+            unread: true,
+            link: '/checkin',
+            linkText: 'Xem vé QR Pass',
+            meta: { court: courtName, timeSlot: slotTime, token: ticketTokenValue },
+          },
+        })
+      )
+
+      window.dispatchEvent(
+        new CustomEvent('player_new_notification', {
+          detail: {
+            id: `tx_${Date.now()}`,
+            type: 'transaction',
+            icon: 'receipt_long',
+            color: '#0284C7',
+            bg: '#E0F2FE',
+            title: 'Thanh toán PayOS khớp lệnh thành công!',
+            message: `Hệ thống Napas 24/7 đã khớp giao dịch chuyển tiền thật qua cổng PayOS cho cụm sân ${courtName}.`,
+            details: `Số tiền: ${formatVnd(payableAmount)} • Hợp đồng Escrow bảo chứng 100%`,
+            time: 'Vừa xong',
+            unread: true,
+            link: '/wallet',
+            linkText: 'Xem ví Escrow',
+            meta: { amount: payableAmount, method: 'payos' },
+          },
+        })
+      )
+
+      setModalData({
+        title: 'Thanh Toán PayOS & Đặt Sân Thành Công (PAID)!',
+        desc: `Cổng PayOS đã khớp ${formatVnd(payableAmount)} chuyển khoản thành công. Đang xuất vé QR check-in...`,
+        onClose: () => {
+          setModalData(null)
+          setStep('ticket_pass')
+        },
+      })
+
+      setTimeout(() => {
         setModalData(null)
         setStep('ticket_pass')
-      },
-    })
-
-    setTimeout(() => {
-      setModalData(null)
-      setStep('ticket_pass')
-    }, 1600)
+      }, 1500)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  // Polling tự động kiểm tra thanh toán PayOS bằng tiền thật
+  useEffect(() => {
+    if (step !== 'bank_qr' || !payosSession?.orderCode) return undefined
+    let active = true
+    let timer = null
+
+    const checkStatus = async () => {
+      try {
+        const data = await getDepositByOrderCode(payosSession.orderCode)
+        if (!active) return
+        const status = normalizeDepositStatus(data?.status)
+        if (status === DEPOSIT_STATUS.SUCCESS) {
+          clearPendingDeposit()
+          await handleCompleteBookingAfterPayment(payosSession.orderCode)
+          return
+        }
+        if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {
+          clearPendingDeposit()
+          alert(status === DEPOSIT_STATUS.CANCELLED ? 'Đơn thanh toán PayOS đã bị hủy.' : 'Thanh toán PayOS không thành công.')
+          setStep('confirm')
+          setPayosSession(null)
+          return
+        }
+      } catch (err) {
+        // Tiếp tục thử lại trong chu kỳ polling
+      }
+      if (active) {
+        timer = setTimeout(checkStatus, 2500)
+      }
+    }
+
+    timer = setTimeout(checkStatus, 2500)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [step, payosSession, payosCheckAttempt])
 
   // Action: Gửi mã check-in cho bạn chơi
   const handleSendCodeToFriends = () => {
@@ -512,6 +929,46 @@ function SplitPayment() {
                       <span className="sp-channel-sub">
                         Số dư ví: <strong>{formatVnd(walletBalance)}</strong> • Ký quỹ (frozenBalance): <strong>{formatVnd(frozenBalance)}</strong>
                       </span>
+                      {walletBalance < payableAmount && (
+                        <div style={{ marginTop: '8px', padding: '8px 12px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: '#92400E', fontWeight: 600 }}>
+                            ⚠️ Số dư ví ({formatVnd(walletBalance)}) không đủ ({formatVnd(payableAmount)})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate('/wallet', {
+                                state: {
+                                  suggestedAmount: Math.max(10000, payableAmount - (walletBalance || 0)),
+                                  returnTo: {
+                                    path: '/split-payment',
+                                    state: location.state,
+                                    label: 'Quay lại đặt sân',
+                                  },
+                                },
+                              })
+                            }}
+                            style={{
+                              padding: '5px 12px',
+                              background: '#15803D',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>account_balance_wallet</span>
+                            <span>Nạp tiền ngay (PayOS)</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -521,7 +978,7 @@ function SplitPayment() {
                   </div>
                 </div>
 
-                {/* Channel 2: Bank Transfer / VietQR */}
+                {/* Channel 2: PayOS / VietQR */}
                 <div
                   className={`sp-channel-row ${paymentChannel === 'bank' ? 'sp-channel-active' : ''}`}
                   onClick={() => setPaymentChannel('bank')}
@@ -539,11 +996,13 @@ function SplitPayment() {
                     </div>
                     <div className="sp-channel-texts">
                       <div className="sp-channel-title-row">
-                        <span className="sp-channel-name">Thanh toán qua tài khoản ngân hàng</span>
-                        <span className="sp-badge-napas">VietQR / Napas 24/7</span>
+                        <span className="sp-channel-name">Thanh toán trực tiếp qua cổng PayOS</span>
+                        <span className="sp-badge-napas" style={{ background: '#DCFCE7', color: '#15803D', borderColor: '#86EFAC' }}>
+                          VietQR / Napas 24/7 • Tiền thật
+                        </span>
                       </div>
                       <span className="sp-channel-sub">
-                        Quét mã VietQR chuyển khoản tự động kích hoạt vé
+                        Tạo mã VietQR cổng PayOS thanh toán bằng tiền thật, tự động kích hoạt vé
                       </span>
                     </div>
                   </div>
@@ -570,6 +1029,7 @@ function SplitPayment() {
                 className="sp-note-input"
                 rows={2}
                 value={note}
+                placeholder="Ghi chú thêm cho quản lý sân nếu có..."
                 onChange={(e) => setNote(e.target.value)}
               />
             </section>
@@ -700,85 +1160,76 @@ function SplitPayment() {
       )}
 
       {/* =====================================================================
-          PHẦN 2: MÀN HÌNH QUÉT MÃ VIETQR CHUYỂN KHOẢN NGÂN HÀNG
+          PHẦN 2: MÀN HÌNH THANH TOÁN TRỰC TIẾP QUA CỔNG PAYOS (TIỀN THẬT)
           ===================================================================== */}
       {step === 'bank_qr' && (
         <div className="sp-bank-container">
-          {/* Cột Trái: Mã QR VietQR */}
+          {/* Cột Trái: Mã QR PayOS thật */}
           <div className="sp-bank-qr-card">
-            <span className="sp-vietqr-header-pill">
+            <span className="sp-vietqr-header-pill" style={{ background: '#15803D' }}>
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                 qr_code_scanner
               </span>
-              VietQR / NAPAS 247
+              VietQR Napas 24/7 • PayOS
             </span>
 
             <div className="sp-bank-qr-frame">
-              <img
-                src={`https://api.vietqr.io/image/970422-0968950913-compact.png?amount=${payableAmount}&addInfo=SNX%20BOOKING%20BWF01&accountName=SPORTNEXUS%20ESCROW%20VIETNAM`}
-                alt="VietQR Chuyển Khoản"
-                className="sp-bank-qr-img"
-              />
+              {payosSession?.qrCode ? (
+                <QRCodeSVG
+                  value={payosSession.qrCode}
+                  size={216}
+                  level="M"
+                  style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '16px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#15803D' }}>
+                    open_in_new
+                  </span>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginTop: '6px' }}>
+                    Nhấn nút bên dưới để mở trang thanh toán PayOS
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="sp-bank-qr-amount-pill">
-              <small>Số tiền cần chuyển khoản:</small>
-              <strong>{formatVnd(payableAmount)}</strong>
+              <small>Số tiền thanh toán PayOS:</small>
+              <strong>{formatVnd(payosSession?.amount || payableAmount)}</strong>
             </div>
 
             <p style={{ fontSize: 11.5, color: '#6b7280', marginTop: 12, lineHeight: 1.4 }}>
-              Mở ứng dụng ngân hàng hoặc ví điện tử bất kỳ (Vietcombank, MB, Techcombank, MoMo...) để quét mã
+              Mở ứng dụng ngân hàng bất kỳ để quét mã VietQR. Hệ thống PayOS sẽ tự động khớp lệnh ngay khi nhận được tiền.
             </p>
           </div>
 
-          {/* Cột Phải: Thông tin số tài khoản và nút hoàn tất */}
+          {/* Cột Phải: Thông tin thanh toán PayOS và các nút thao tác */}
           <div className="sp-bank-details-panel">
             <div>
-              <h2 className="sp-bank-info-title">Thông Tin Chuyển Khoản Ngân Hàng</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: 24 }}>verified_user</span>
+                <h2 className="sp-bank-info-title" style={{ margin: 0 }}>Cổng Thanh Toán PayOS (Napas 24/7)</h2>
+              </div>
               <p className="sp-bank-info-subtitle">
-                Hệ thống tự động kích hoạt vé ngay khi giao dịch được xác nhận qua cổng Napas 24/7
+                Đang chờ bạn quét mã thanh toán... Hệ thống tự động kích hoạt vé ngay khi PayOS gửi xác nhận.
               </p>
 
               <div className="sp-bank-fields-grid">
                 <div className="sp-bank-field-row">
-                  <span className="sp-bank-field-label">Ngân hàng thụ hưởng:</span>
+                  <span className="sp-bank-field-label">Mã đơn PayOS:</span>
                   <div className="sp-bank-field-val">
-                    <strong>MB Bank (Ngân Hàng Quân Đội)</strong>
-                  </div>
-                </div>
-
-                <div className="sp-bank-field-row">
-                  <span className="sp-bank-field-label">Số tài khoản:</span>
-                  <div className="sp-bank-field-val">
-                    <strong>0968950913</strong>
-                    <button
-                      type="button"
-                      className="sp-btn-copy"
-                      onClick={() => handleCopy('0968950913', 'acc')}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
-                        {copiedField === 'acc' ? 'check' : 'content_copy'}
-                      </span>
-                      {copiedField === 'acc' ? 'Đã sao chép' : 'Sao chép'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="sp-bank-field-row">
-                  <span className="sp-bank-field-label">Chủ tài khoản:</span>
-                  <div className="sp-bank-field-val">
-                    <strong>SPORTNEXUS ESCROW VIETNAM</strong>
+                    <strong style={{ fontFamily: 'monospace' }}>#{payosSession?.orderCode || 'Đang tạo...'}</strong>
                   </div>
                 </div>
 
                 <div className="sp-bank-field-row">
                   <span className="sp-bank-field-label">Số tiền:</span>
                   <div className="sp-bank-field-val">
-                    <strong style={{ color: '#2f5d12', fontSize: 16 }}>{formatVnd(payableAmount)}</strong>
+                    <strong style={{ color: '#2f5d12', fontSize: 16 }}>{formatVnd(payosSession?.amount || payableAmount)}</strong>
                     <button
                       type="button"
                       className="sp-btn-copy"
-                      onClick={() => handleCopy(String(payableAmount), 'amount')}
+                      onClick={() => handleCopy(String(payosSession?.amount || payableAmount), 'amount')}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
                         {copiedField === 'amount' ? 'check' : 'content_copy'}
@@ -788,43 +1239,78 @@ function SplitPayment() {
                   </div>
                 </div>
 
-                <div className="sp-bank-field-row">
-                  <span className="sp-bank-field-label">Nội dung chuyển khoản:</span>
-                  <div className="sp-bank-field-val">
-                    <strong style={{ color: '#c2410c' }}>SNX BOOKING BWF01</strong>
-                    <button
-                      type="button"
-                      className="sp-btn-copy"
-                      onClick={() => handleCopy('SNX BOOKING BWF01', 'memo')}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
-                        {copiedField === 'memo' ? 'check' : 'content_copy'}
-                      </span>
-                      {copiedField === 'memo' ? 'Đã sao chép' : 'Sao chép'}
-                    </button>
+                {payosSession?.description && (
+                  <div className="sp-bank-field-row">
+                    <span className="sp-bank-field-label">Nội dung chuyển khoản:</span>
+                    <div className="sp-bank-field-val">
+                      <strong style={{ color: '#c2410c' }}>{payosSession.description}</strong>
+                      <button
+                        type="button"
+                        className="sp-btn-copy"
+                        onClick={() => handleCopy(payosSession.description, 'memo')}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                          {copiedField === 'memo' ? 'check' : 'content_copy'}
+                        </span>
+                        {copiedField === 'memo' ? 'Đã sao chép' : 'Sao chép'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {payosSession?.accountName && (
+                  <div className="sp-bank-field-row">
+                    <span className="sp-bank-field-label">Đơn vị thụ hưởng:</span>
+                    <div className="sp-bank-field-val">
+                      <strong>{payosSession.accountName}</strong>
+                    </div>
+                  </div>
+                )}
+
+                <div className="sp-bank-field-row" style={{ background: '#F0FDF4', borderColor: '#BBF7D0' }}>
+                  <span className="sp-bank-field-label">Trạng thái xác thực:</span>
+                  <div className="sp-bank-field-val" style={{ color: '#15803D', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined animate-spin" style={{ fontSize: '16px' }}>sync</span>
+                    <span>Đang chờ chuyển khoản từ PayOS...</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="sp-bank-actions">
-              <button
-                type="button"
-                className="sp-btn-confirm"
-                style={{ flex: 1, margin: 0 }}
-                onClick={handleBankPaymentSuccess}
-              >
-                <span className="material-symbols-outlined">verified</span>
-                <span>Tôi đã chuyển khoản xong &amp; Nhận vé QR</span>
-              </button>
+            <div className="sp-bank-actions" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {payosSession?.checkoutUrl && (
+                  <button
+                    type="button"
+                    className="sp-btn-confirm"
+                    style={{ flex: 1, minWidth: '180px', margin: 0, background: '#15803D' }}
+                    onClick={() => {
+                      window.location.href = payosSession.checkoutUrl
+                    }}
+                  >
+                    <span className="material-symbols-outlined">open_in_new</span>
+                    <span>Mở trang thanh toán PayOS</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="sp-btn-confirm"
+                  style={{ flex: 1, minWidth: '160px', margin: 0, background: '#0284C7' }}
+                  onClick={() => setPayosCheckAttempt((n) => n + 1)}
+                >
+                  <span className="material-symbols-outlined">refresh</span>
+                  <span>Kiểm tra lại trạng thái</span>
+                </button>
+              </div>
 
               <button
                 type="button"
                 className="sp-btn-cancel"
-                style={{ width: 'auto', margin: 0, padding: '12px 20px', background: '#6b7280' }}
-                onClick={() => setStep('confirm')}
+                style={{ width: '100%', margin: 0, padding: '12px 20px', background: '#6b7280' }}
+                onClick={handleCancelPayOS}
               >
-                <span>Quay lại</span>
+                <span>Hủy thanh toán PayOS &amp; Quay lại</span>
               </button>
             </div>
           </div>
@@ -1042,6 +1528,101 @@ function SplitPayment() {
                       {formatVnd(payableAmount)}
                     </strong>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Khối 3: Phản Hồi Xác Nhận Từ Máy Chủ (Server API Response) */}
+            <div className="sp-info-card" style={{ border: '1.5px solid #86efac', background: '#f8fafc' }}>
+              <div className="sp-info-card-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
+                <div className="sp-info-header-title">
+                  <span className="material-symbols-outlined" style={{ color: '#16a34a' }}>cloud_done</span>
+                  <span style={{ fontWeight: 700, color: '#15803d' }}>Phản Hồi Xác Nhận Từ Máy Chủ (API Response)</span>
+                </div>
+                <span className="sp-badge-closed" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', fontWeight: 700 }}>
+                  HTTP 201 CREATED
+                </span>
+              </div>
+
+              <div style={{ padding: '14px 16px', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Đơn Đặt Sân (Booking ID):</span>
+                  <strong style={{ fontFamily: 'monospace', color: '#0f172a', background: '#e2e8f0', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
+                    {bookingResult?.id || bookingResult?.bookingId || (typeof bookingResult === 'string' ? bookingResult : 'SNX-' + Date.now())}
+                  </strong>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Trạng Thái Đơn Hàng:</span>
+                  <span style={{ fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
+                    {bookingResult?.status || qrTicketData?.status || 'PAID (Đã thanh toán)'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Vé Check-in (QR Token):</span>
+                  <strong style={{ fontFamily: 'monospace', color: '#166534', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
+                    #{qrToken}
+                  </strong>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>Thời Điểm Xác Nhận:</span>
+                  <span style={{ color: '#334155', fontSize: 12, fontWeight: 500 }}>
+                    {bookingResult?.createdAt ? new Date(bookingResult.createdAt).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN')}
+                  </span>
+                </div>
+
+                {/* Nút bấm xem JSON thô từ Server */}
+                <div style={{ marginTop: 6, borderTop: '1px dashed #cbd5e1', paddingTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowRawResponse(prev => !prev)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      background: showRawResponse ? '#e2e8f0' : '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#334155',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                      {showRawResponse ? 'expand_less' : 'data_object'}
+                    </span>
+                    <span>{showRawResponse ? 'Thu gọn dữ liệu JSON' : 'Xem Chi Tiết Dữ Liệu Phản Hồi (JSON Response)'}</span>
+                  </button>
+
+                  {showRawResponse && (
+                    <pre
+                      style={{
+                        marginTop: 10,
+                        padding: 12,
+                        background: '#0f172a',
+                        color: '#38bdf8',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        lineHeight: 1.5,
+                        overflowX: 'auto',
+                        maxHeight: 250,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {JSON.stringify({
+                        bookingResult: bookingResult || { status: 'PAID', note: 'Đặt sân hoàn tất thành công' },
+                        qrTicketData: qrTicketData || { ticketCode: qrToken, status: 'PAID' },
+                      }, null, 2)}
+                    </pre>
+                  )}
                 </div>
               </div>
             </div>

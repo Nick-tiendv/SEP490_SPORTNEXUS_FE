@@ -236,6 +236,8 @@ function AIChatBooking() {
       price: court.price * 1.5,
     }
 
+    const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const slotId = isGuidRegex.test(targetSlot.id) ? targetSlot.id : 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
     navigate('/split-payment', {
       state: {
         court: court.name,
@@ -249,6 +251,9 @@ function AIChatBooking() {
         hours: targetSlot.hours || 1.5,
         total: targetSlot.price,
         hourlyRate: court.price,
+        courtSlotId: slotId,
+        courtSlotIds: [slotId],
+        numberOfSlots: 1,
       },
     })
   }

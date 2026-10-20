@@ -25,15 +25,26 @@ export function validSession(session) {
 }
 export function readSession() {
   try {
-    const session = JSON.parse(sessionStorage.getItem(key))
-    if (validSession(session)) return session
-    sessionStorage.removeItem(key)
+    let raw = sessionStorage.getItem(key)
+    if (!raw) raw = localStorage.getItem(key)
+    if (raw) {
+      const session = JSON.parse(raw)
+      if (validSession(session)) return session
+      sessionStorage.removeItem(key)
+      localStorage.removeItem(key)
+    }
   } catch { /* Storage may be unavailable. */ }
   return null
 }
 export function saveSession(session) {
   try {
-    if (session) sessionStorage.setItem(key, JSON.stringify(session))
-    else sessionStorage.removeItem(key)
+    if (session) {
+      const serialized = JSON.stringify(session)
+      sessionStorage.setItem(key, serialized)
+      localStorage.setItem(key, serialized)
+    } else {
+      sessionStorage.removeItem(key)
+      localStorage.removeItem(key)
+    }
   } catch { /* In-memory authentication still works. */ }
 }

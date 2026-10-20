@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById } from '../../api/facilityApi.js'
-import { getFacilityAvailability } from '../../api/bookingApi.js'
+import { getCourtSlots, getFacilityAvailability } from '../../api/bookingApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
 function getNext7Days() {
@@ -38,18 +38,18 @@ function CourtDetails() {
   const [facility, setFacility] = useState(() => location.state?.facility || null)
   const [, setFacilityLoading] = useState(!facility)
 
-  // Bước 2: Dữ liệu ca trống (availability) theo ngày
-  const [availability, setAvailability] = useState(null)
-  const [availLoading, setAvailLoading] = useState(false)
-  const [availError, setAvailError] = useState(null)
-
   // Sân con đang chọn để xem lịch
   const [selectedCourtId, setSelectedCourtId] = useState(null)
+
+  // Dữ liệu lưới ca của sân con từ API GET /api/v1/courts/{courtId}/slots
+  const [courtSlots, setCourtSlots] = useState([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState(null)
 
   // Danh sách các ca thi đấu đã chọn để đặt: Array of slot objects
   const [selectedSlots, setSelectedSlots] = useState([])
 
-  // Tải chi tiết Cụm sân thể thao từ API (Bước 1)
+  // Tải chi tiết Cụm sân thể thao từ API (Bước 1: GET /api/v1/facilities/{id})
   useEffect(() => {
     let isMounted = true
     async function loadFacility() {
@@ -79,77 +79,63 @@ function CourtDetails() {
     return () => { isMounted = false }
   }, [searchParams])
 
-  // Bước 2: Gọi API availability khi có facilityId và selectedDateStr
-  useEffect(() => {
-    let isMounted = true
-    async function loadAvailability() {
-      if (!facility?.id || !selectedDateStr) return
-      try {
-        setAvailLoading(true)
-        setAvailError(null)
-        const data = await getFacilityAvailability(facility.id, selectedDateStr)
-        if (isMounted && data) {
-          setAvailability(data)
-          // Tự động chọn sân con đầu tiên nếu chưa chọn hoặc sân hiện tại không có trong danh sách
-          if (Array.isArray(data.courts) && data.courts.length > 0) {
-            setSelectedCourtId((prev) => {
-              const exists = data.courts.some((c) => c.courtId === prev)
-              return exists ? prev : data.courts[0].courtId
-            })
-          }
-          // Reset các slot đã chọn khi đổi ngày
-          setSelectedSlots([])
-        }
-      } catch (err) {
-        console.warn('Lỗi khi tải lịch ca trống của Cụm sân:', err)
-        if (isMounted) setAvailError('Không thể tải lịch ca trống. Vui lòng thử lại.')
-      } finally {
-        if (isMounted) setAvailLoading(false)
-      }
-    }
-    loadAvailability()
-    return () => { isMounted = false }
-  }, [facility?.id, selectedDateStr])
-
-  // Danh sách sân con từ availability hoặc facility
+  // Danh sách sân con từ facility.courts
   const courtsList = useMemo(() => {
-    if (availability?.courts?.length > 0) {
-      return availability.courts.map((c) => ({
-        id: c.courtId,
-        name: c.courtName,
-        sportName: c.sportName,
-        status: c.status,
-        defaultPrice: c.defaultPrice || 120000,
-        availableSlots: c.availableSlots || 0,
-        isBookable: c.isBookable !== false,
-        slots: c.slots || [],
-      }))
-    }
-    if (facility?.courts?.length > 0) {
+    if (Array.isArray(facility?.courts) && facility.courts.length > 0) {
       return facility.courts.map((c) => ({
         id: c.id,
         name: c.name,
         sportName: c.categoryName,
         status: c.status,
-        defaultPrice: c.defaultPrice || 120000,
-        availableSlots: 0,
+        defaultPrice: Number(c.defaultPrice) || 120000,
         isBookable: c.status === 'ACTIVE',
-        slots: [],
       }))
     }
     return []
-  }, [availability, facility])
+  }, [facility])
 
-  // Sân con hiện đang được xem
-  const activeCourt = useMemo(() => {
-    return courtsList.find((c) => c.id === selectedCourtId) || courtsList[0] || null
+  // Tự động chọn sân con đầu tiên (ưu tiên ACTIVE)
+  useEffect(() => {
+    if (courtsList.length > 0) {
+      if (!selectedCourtId || !courtsList.some((c) => c.id === selectedCourtId)) {
+        const firstActive = courtsList.find((c) => c.status === 'ACTIVE') || courtsList[0]
+        setSelectedCourtId(firstActive.id)
+      }
+    }
   }, [courtsList, selectedCourtId])
 
-  // Danh sách slots của sân con đang xem
-  const activeCourtSlots = useMemo(() => {
-    if (!activeCourt?.slots) return []
-    return activeCourt.slots
-  }, [activeCourt])
+  // Sân con hiện đang được xem (ưu tiên sân ACTIVE)
+  const activeCourt = useMemo(() => {
+    return (
+      courtsList.find((c) => c.id === selectedCourtId) ||
+      courtsList.find((c) => c.status === 'ACTIVE') ||
+      courtsList[0] ||
+      null
+    )
+  }, [courtsList, selectedCourtId])
+
+  // GỌI API GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD (Hình 2 & 3)
+  useEffect(() => {
+    let isMounted = true
+    async function loadSlots() {
+      if (!activeCourt?.id) return
+      try {
+        setSlotsLoading(true)
+        setSlotsError(null)
+        const slotsData = await getCourtSlots(activeCourt.id, selectedDateStr)
+        if (isMounted) {
+          setCourtSlots(Array.isArray(slotsData) ? slotsData : [])
+        }
+      } catch (err) {
+        console.warn(`[CourtDetails] Lỗi khi tải lưới ca sân ${activeCourt.id}:`, err)
+        if (isMounted) setSlotsError('Không thể tải lưới ca của sân con này. Vui lòng thử lại.')
+      } finally {
+        if (isMounted) setSlotsLoading(false)
+      }
+    }
+    loadSlots()
+    return () => { isMounted = false }
+  }, [activeCourt?.id, selectedDateStr])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
   const formatTimeSlot = (isoString) => {
@@ -162,10 +148,35 @@ function CourtDetails() {
     }
   }
 
-  // Toggle chọn một ca thi đấu (Bước 2: Chỉ ca trạng thái Available mới đặt được)
+  // Kiểm tra ca thi đấu có khả dụng hay không (case-insensitive)
+  const isSlotAvailable = (slot) => {
+    if (!slot) return false
+    const norm = String(slot.status || '').toLowerCase()
+    return norm === 'available' && slot.isBookable !== false && !slot.isPast
+  }
+
+  // Tự động chọn sẵn ca trống đầu tiên khi lưới ca được tải về
+  useEffect(() => {
+    if (courtSlots.length > 0 && selectedSlots.length === 0 && activeCourt) {
+      const firstAvail = courtSlots.find(isSlotAvailable)
+      if (firstAvail) {
+        setSelectedSlots([
+          {
+            ...firstAvail,
+            courtName: activeCourt.name,
+            courtId: activeCourt.id,
+            sportName: activeCourt.sportName,
+            formattedStart: formatTimeSlot(firstAvail.startTime),
+            formattedEnd: formatTimeSlot(firstAvail.endTime),
+          },
+        ])
+      }
+    }
+  }, [courtSlots, activeCourt, selectedSlots.length])
+
+  // Toggle chọn một ca thi đấu (Chỉ ca trạng thái Available mới đặt được)
   const handleToggleSlot = (slot, court) => {
-    // Ràng buộc Bước 2: Chỉ ca trạng thái Available mới đặt được
-    if (slot.status !== 'Available' || !slot.isBookable || slot.isPast) {
+    if (!isSlotAvailable(slot)) {
       return
     }
 
@@ -192,13 +203,10 @@ function CourtDetails() {
   // Chọn toàn bộ các ca trống còn lại trên sân hiện tại
   const handleSelectAllCourtAvailableSlots = () => {
     if (!activeCourt) return
-    const avail = activeCourtSlots.filter(
-      (s) => s.status === 'Available' && s.isBookable && !s.isPast
-    )
+    const avail = courtSlots.filter(isSlotAvailable)
     if (avail.length === 0) return
 
     setSelectedSlots((prev) => {
-      // Thêm các slot trống chưa có trong danh sách chọn
       const newItems = avail
         .filter((s) => !prev.some((p) => p.id === s.id))
         .map((slot) => ({
@@ -218,7 +226,7 @@ function CourtDetails() {
     setSelectedSlots([])
   }
 
-  // Tính toán số ca liên tiếp (Cách 1) và nhiều ca rời nhau (Cách 2)
+  // Tính toán payload đặt sân: courtSlotId + numberOfSlots (Cách 1) hoặc courtSlotIds (Cách 2)
   const bookingPayloadConfig = useMemo(() => {
     if (selectedSlots.length === 0) {
       return { courtSlotId: null, numberOfSlots: 0, courtSlotIds: [], isConsecutive: false }
@@ -244,10 +252,13 @@ function CourtDetails() {
       }
     }
 
+    const firstId = sorted[0].id
+    const allIds = sorted.map((s) => s.id)
+
     return {
-      courtSlotId: sorted[0].id,
+      courtSlotId: firstId,
       numberOfSlots: isConsecutive ? sorted.length : 1,
-      courtSlotIds: sorted.map((s) => s.id),
+      courtSlotIds: allIds,
       isConsecutive,
     }
   }, [selectedSlots])
@@ -270,7 +281,17 @@ function CourtDetails() {
 
   // Chuyển sang Bước 3 & Bước 4 tại SplitPayment
   const handleCheckout = () => {
-    if (selectedSlots.length === 0) return
+    if (selectedSlots.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
+      return
+    }
+
+    const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const validSlots = selectedSlots.filter((s) => GUID_REGEX.test(s.id))
+    if (validSlots.length === 0) {
+      alert('❌ Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
+      return
+    }
 
     const primarySport = activeCourt?.sportName?.toLowerCase().includes('pickleball')
       ? 'pickleball'
@@ -284,9 +305,24 @@ function CourtDetails() {
       .map((s) => `${s.formattedStart} - ${s.formattedEnd}`)
       .join(', ')
 
+    const firstId = bookingPayloadConfig.courtSlotId || validSlots[0]?.id
+    const allIds =
+      Array.isArray(bookingPayloadConfig.courtSlotIds) && bookingPayloadConfig.courtSlotIds.length > 0
+        ? bookingPayloadConfig.courtSlotIds.filter((id) => GUID_REGEX.test(id))
+        : validSlots.map((s) => s.id)
+
+    // Lưu cache để SplitPayment không bao giờ bị thiếu ID
+    try {
+      if (firstId) localStorage.setItem('sportnexus_selected_slot_id', firstId)
+      if (allIds && allIds.length > 0) localStorage.setItem('sportnexus_selected_slot_ids', JSON.stringify(allIds))
+    } catch {
+      // Bỏ qua lỗi quota storage nếu có
+    }
+
     navigate('/split-payment', {
       state: {
         facilityId: facility?.id,
+        courtId: activeCourt?.id,
         court: facility?.name || 'Cụm Sân Thể Thao',
         address: facility?.address || 'Hồ Chí Minh',
         subCourt: uniqueCourtNames.join(', ') || activeCourt?.name || 'Sân 1',
@@ -300,10 +336,10 @@ function CourtDetails() {
         slotCount: selectedSlots.length,
         hours: selectedSlots.length * 1.0,
         total: totalAmountVnd,
-        // Dữ liệu Bước 3: courtSlotId + numberOfSlots (Cách 1) hoặc courtSlotIds (Cách 2)
-        courtSlotId: bookingPayloadConfig.courtSlotId,
-        numberOfSlots: bookingPayloadConfig.numberOfSlots,
-        courtSlotIds: bookingPayloadConfig.courtSlotIds,
+        // Dữ liệu Bước 3: Đảm bảo luôn có ít nhất 1 ca sân
+        courtSlotId: firstId,
+        numberOfSlots: bookingPayloadConfig.numberOfSlots || allIds.length || 1,
+        courtSlotIds: allIds,
         isConsecutive: bookingPayloadConfig.isConsecutive,
         selectedSlots: selectedSlots,
       },
@@ -389,7 +425,7 @@ function CourtDetails() {
                 <button
                   type="button"
                   onClick={() => navigate('/court-finder')}
-                  className="px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold flex items-center gap-2 transition-all border border-outline-variant/20"
+                  className="px-4 py-2.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-md text-label-md font-semibold flex items-center gap-2 transition-all border border-outline-variant/20 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                   Đổi cụm sân khác
@@ -402,7 +438,7 @@ function CourtDetails() {
 
       {/* Main Content Area */}
       <section className="py-space-xl grid grid-cols-1 lg:grid-cols-12 gap-space-xl">
-        {/* Left Column: Calendar Date + Availability Matrix (Bước 2) */}
+        {/* Left Column: Calendar Date + Availability Matrix (Bước 2: GET /api/v1/courts/{courtId}/slots) */}
         <div className="lg:col-span-8 flex flex-col gap-space-xl">
           {/* BƯỚC 2: CHỌN NGÀY THI ĐẤU */}
           <div className="flex flex-col gap-space-md p-space-lg rounded-2xl bg-surface-container-low shadow-xl border border-outline-variant/15">
@@ -410,14 +446,14 @@ function CourtDetails() {
               <div>
                 <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">calendar_month</span>
-                  Bước 2: Chọn Ngày Để Lấy Ca Trống
+                  Bước 2: Chọn Ngày Để Lấy Lưới Ca Sân Con
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  Dữ liệu lịch trống được đồng bộ trực tiếp từ server theo ngày
+                  Đồng bộ trực tiếp qua API: <code>GET /api/v1/courts/{'{courtId}'}/slots?date={selectedDateStr}</code>
                 </p>
               </div>
               <span className="font-label-sm text-label-sm px-3 py-1 rounded-full bg-primary/10 text-primary font-bold border border-primary/20">
-                {availability?.availableSlots !== undefined ? `${availability.availableSlots} ca trống hôm nay` : 'Đang đồng bộ'}
+                {courtSlots.length > 0 ? `${courtSlots.filter(s => s.status === 'Available' && s.isBookable && !s.isPast).length} ca trống` : 'Đang tải lưới ca'}
               </span>
             </div>
 
@@ -465,10 +501,10 @@ function CourtDetails() {
               <div>
                 <h3 className="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">stadium</span>
-                  Danh Sách Sân Con Trong Cụm ({courtsList.length} sân)
+                  Chọn Sân Con Trong Cụm ({courtsList.length} sân)
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Chọn sân con để xem chi tiết các ca trống theo từng khung giờ
+                  Bấm vào từng sân con để gọi API <code>/api/v1/courts/{'{courtId}'}/slots</code> lấy lưới ca tương ứng
                 </p>
               </div>
 
@@ -517,7 +553,7 @@ function CourtDetails() {
                         )}
                       </span>
                       <span className="font-label-sm text-label-sm text-on-surface-variant">
-                        {court.sportName} • {court.availableSlots > 0 ? `${court.availableSlots} ca trống` : court.status === 'INACTIVE' ? 'Tạm ngưng' : 'Hết ca trống'}
+                        {court.sportName} • {court.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
                       </span>
                     </div>
                   </button>
@@ -526,16 +562,16 @@ function CourtDetails() {
             </div>
           </div>
 
-          {/* BƯỚC 2: BẢNG LỊCH CÁC CA TRỐNG (AVAILABILITY MATRIX) */}
+          {/* BƯỚC 2: BẢNG LƯỚI CA CỦA SÂN CON (GET /api/v1/courts/{courtId}/slots) */}
           <div className="flex flex-col gap-space-md p-space-lg rounded-2xl bg-surface-container-low shadow-xl border border-outline-variant/15">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
               <div>
                 <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">schedule</span>
-                  Ca Thi Đấu Trên {activeCourt?.name || 'Sân'} (Ngày {selectedDateStr})
+                  Lưới Ca Sân: {activeCourt?.name || 'Sân con'} (Ngày {selectedDateStr})
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> theo quy định hệ thống
+                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> (Quyền truy cập công khai không cần đăng nhập)
                 </p>
               </div>
 
@@ -563,40 +599,40 @@ function CourtDetails() {
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-red-400/60"></span>
-                <span>Booked (Đã kín lịch)</span>
+                <span>Booked / Maintenance</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-slate-500/60"></span>
-                <span>Đã qua giờ / Tạm khóa</span>
+                <span>Đã qua giờ (isPast)</span>
               </div>
             </div>
 
             {/* State Loading */}
-            {availLoading && (
+            {slotsLoading && (
               <div className="py-12 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
                 <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <span className="font-label-sm text-label-sm">Đang tải danh sách ca trống...</span>
+                <span className="font-label-sm text-label-sm">Đang gọi API GET /api/v1/courts/{'{courtId}'}/slots...</span>
               </div>
             )}
 
             {/* State Error */}
-            {availError && !availLoading && (
+            {slotsError && !slotsLoading && (
               <div className="p-4 rounded-xl bg-error-container/20 border border-error/40 text-error flex items-center gap-3">
                 <span className="material-symbols-outlined text-[20px]">error</span>
-                <span className="font-body-sm text-body-sm">{availError}</span>
+                <span className="font-body-sm text-body-sm">{slotsError}</span>
               </div>
             )}
 
             {/* Slots Grid */}
-            {!availLoading && !availError && activeCourtSlots.length === 0 && (
+            {!slotsLoading && !slotsError && courtSlots.length === 0 && (
               <div className="py-10 text-center text-on-surface-variant font-body-sm">
                 Không tìm thấy ca thi đấu nào cho sân này vào ngày {selectedDateStr}. Vui lòng chọn ngày khác.
               </div>
             )}
 
-            {!availLoading && !availError && activeCourtSlots.length > 0 && (
+            {!slotsLoading && !slotsError && courtSlots.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-space-sm pt-space-xs">
-                {activeCourtSlots.map((slot) => {
+                {courtSlots.map((slot) => {
                   const isAvailable = slot.status === 'Available' && slot.isBookable && !slot.isPast
                   const isSelected = selectedSlots.some((s) => s.id === slot.id)
                   const startStr = formatTimeSlot(slot.startTime)
@@ -639,6 +675,8 @@ function CourtDetails() {
                             'Có thể đặt'
                           ) : slot.isPast ? (
                             'Đã qua'
+                          ) : slot.status === 'Maintenance' ? (
+                            'Bảo trì'
                           ) : (
                             'Đã đặt'
                           )}
@@ -655,7 +693,7 @@ function CourtDetails() {
           </div>
         </div>
 
-        {/* Right Column: Checkout Summary (Bước 3 preview) */}
+        {/* Right Column: Checkout Summary */}
         <div className="lg:col-span-4 sticky top-24 flex flex-col gap-space-md">
           <div className="p-space-lg rounded-2xl bg-surface-container-low backdrop-blur-2xl shadow-[0_16px_40px_rgba(0,0,0,0.6)] flex flex-col gap-space-lg border border-outline-variant/10">
             <div className="flex items-center justify-between">
@@ -744,7 +782,11 @@ function CourtDetails() {
               className="w-full py-space-md rounded-xl bg-primary-container hover:bg-primary-fixed text-on-primary font-headline-sm text-headline-sm font-extrabold flex items-center justify-center gap-space-sm transition-all shadow-[0_0_28px_rgba(0,229,255,0.45)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               onClick={handleCheckout}
             >
-              <span>Xác Nhận &amp; Tiếp Tục Thanh Toán ({selectedSlots.length} Ca)</span>
+              <span>
+                {selectedSlots.length > 0
+                  ? `Xác Nhận & Tiếp Tục Thanh Toán (${selectedSlots.length} Ca)`
+                  : 'Vui Lòng Chọn Ít Nhất 1 Ca Sân'}
+              </span>
               <span className="material-symbols-outlined text-[22px]">arrow_forward</span>
             </button>
           </div>

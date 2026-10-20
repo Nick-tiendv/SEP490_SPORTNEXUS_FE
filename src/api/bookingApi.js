@@ -3,6 +3,35 @@ import apiClient, { normalizeApiError } from './apiClient.js'
 export const BOOKINGS_ENDPOINT = '/api/v1/bookings'
 
 /**
+ * Lấy lưới ca của sân con trong 1 ngày (không cần đăng nhập)
+ * GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD
+ * @param {string} courtId - UUID sân con
+ * @param {string} [dateStr] - Ngày theo định dạng YYYY-MM-DD (mặc định hôm nay theo giờ VN)
+ * @returns {Promise<Array>} Danh sách các ca sân
+ */
+export async function getCourtSlots(courtId, dateStr) {
+  if (!courtId) return []
+  try {
+    const params = {}
+    if (dateStr) params.date = dateStr
+    const response = await apiClient.get(`/api/v1/courts/${courtId}/slots`, {
+      params,
+      skipAuth: true,
+    })
+    const body = response.data
+    if (body?.statusCode === 200 && Array.isArray(body?.data)) {
+      return body.data
+    }
+    if (Array.isArray(body?.data)) return body.data
+    if (Array.isArray(body)) return body
+    return []
+  } catch (error) {
+    console.warn(`[bookingApi] Không thể lấy lưới ca cho sân con ${courtId}:`, error)
+    throw normalizeApiError(error)
+  }
+}
+
+/**
  * Bước 2: Lấy các ca trống theo ngày để vẽ lịch
  * GET /api/v1/facilities/{facilityId}/availability?date=YYYY-MM-DD
  * @param {string} facilityId - UUID cơ sở
@@ -42,7 +71,8 @@ export async function getFacilityAvailability(facilityId, dateStr) {
 export async function createBooking(payload) {
   try {
     const response = await apiClient.post(BOOKINGS_ENDPOINT, payload)
-    return response.data?.data || response.data
+    const body = response.data
+    return body?.data || body?.result || body
   } catch (error) {
     console.warn('[bookingApi] Lỗi khi tạo đơn đặt sân:', error)
     throw normalizeApiError(error)
@@ -59,7 +89,8 @@ export async function getBookingQrTicket(bookingId) {
   if (!bookingId) return null
   try {
     const response = await apiClient.get(`${BOOKINGS_ENDPOINT}/${bookingId}/qr-ticket`)
-    return response.data?.data || response.data
+    const body = response.data
+    return body?.data || body?.result || body
   } catch (error) {
     console.warn(`[bookingApi] Lỗi khi lấy vé QR cho booking ${bookingId}:`, error)
     throw normalizeApiError(error)
