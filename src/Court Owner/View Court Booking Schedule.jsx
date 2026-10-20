@@ -1,185 +1,274 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { cancelOwnerBooking, checkInBooking, createWalkInBooking, getCancellationReasons, getFacilitySlots, updateSlotStatus } from '../api/owner'
+import { useOwnerContext } from './ownerContext.js'
 
-// Danh sách các sân thuộc cụm thể thao phức hợp
-const COURTS_LIST = [
-  { id: 'a1', zone: 'Khu A', zoneName: 'Khu A — Cầu Lông BWF', name: 'Sân Cầu Lông A1 (VIP)', sport: 'badminton', sportLabel: 'Cầu lông', color: '#10B981', price: 260000 },
-  { id: 'a2', zone: 'Khu A', zoneName: 'Khu A — Cầu Lông BWF', name: 'Sân Cầu Lông A2 (VIP)', sport: 'badminton', sportLabel: 'Cầu lông', color: '#10B981', price: 260000 },
-  { id: 'a3', zone: 'Khu A', zoneName: 'Khu A — Cầu Lông BWF', name: 'Sân Cầu Lông A3', sport: 'badminton', sportLabel: 'Cầu lông', color: '#10B981', price: 220000 },
-  { id: 'a4', zone: 'Khu A', zoneName: 'Khu A — Cầu Lông BWF', name: 'Sân Cầu Lông A4', sport: 'badminton', sportLabel: 'Cầu lông', color: '#10B981', price: 220000 },
-  { id: 'b1', zone: 'Khu B', zoneName: 'Khu B — Bóng Đá Mini', name: 'Sân Bóng Đá B1 (Sân 5)', sport: 'football', sportLabel: 'Bóng đá', color: '#3B82F6', price: 450000 },
-  { id: 'b2', zone: 'Khu B', zoneName: 'Khu B — Bóng Đá Mini', name: 'Sân Bóng Đá B2 (Sân 5)', sport: 'football', sportLabel: 'Bóng đá', color: '#3B82F6', price: 450000 },
-  { id: 'b3', zone: 'Khu B', zoneName: 'Khu B — Bóng Đá Mini', name: 'Sân Bóng Đá B3 (Sân 7)', sport: 'football', sportLabel: 'Bóng đá', color: '#3B82F6', price: 650000 },
-  { id: 'c1', zone: 'Khu C', zoneName: 'Khu C — Pickleball Pro', name: 'Sân Pickleball C1 (Center VIP)', sport: 'pickleball', sportLabel: 'Pickleball', color: '#F59E0B', price: 280000 },
-  { id: 'c2', zone: 'Khu C', zoneName: 'Khu C — Pickleball Pro', name: 'Sân Pickleball C2 (Mái che)', sport: 'pickleball', sportLabel: 'Pickleball', color: '#F59E0B', price: 240000 },
-  { id: 'c3', zone: 'Khu C', zoneName: 'Khu C — Pickleball Pro', name: 'Sân Pickleball C3 (Mái che)', sport: 'pickleball', sportLabel: 'Pickleball', color: '#F59E0B', price: 240000 },
-  { id: 'd1', zone: 'Khu D', zoneName: 'Khu D — Quần Vợt Tennis', name: 'Sân Tennis D1 (Center)', sport: 'tennis', sportLabel: 'Tennis', color: '#EC4899', price: 380000 },
-  { id: 'd2', zone: 'Khu D', zoneName: 'Khu D — Quần Vợt Tennis', name: 'Sân Tennis D2 (Hardcourt)', sport: 'tennis', sportLabel: 'Tennis', color: '#EC4899', price: 340000 },
-]
+const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
+// Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
+const SLOT_STATUS_CODE = { AVAILABLE: 0, MAINTENANCE: 3 }
 
-// Các khung giờ từ 06:00 đến 23:00
-const TIME_SLOTS = [
-  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
-  '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
-  '18:00', '19:00', '20:00', '21:00', '22:00'
-]
+const SPORT_COLORS = {
+  'Cầu lông': '#10B981',
+  'Bóng đá': '#3B82F6',
+  Pickleball: '#F59E0B',
+  Tennis: '#EC4899',
+  'Bóng chuyền': '#8B5CF6',
+  'Bóng rổ': '#EF4444',
+}
+const sportColor = (sport) => SPORT_COLORS[sport] || '#64748B'
 
-// Mock dữ liệu đặt sân ban đầu cho các ô grid
-const INITIAL_BOOKINGS = {
-  // Sân A1
-  'a1-07:00': { customer: 'Phạm Tuấn Anh', phone: '0901234567', status: 'checked_in', escrow: 220000, code: 'SNX-1011-CHK', note: 'CLB Cầu lông Sáng' },
-  'a1-17:00': { customer: 'Nguyễn Văn An', phone: '0912345678', status: 'checked_in', escrow: 350000, code: 'SNX-89324-CHK', note: 'Đặt cặp đấu giao hữu' },
-  'a1-18:00': { customer: 'Trần Hoài Nam', phone: '0933888777', status: 'escrow_locked', escrow: 260000, code: 'SNX-5512-CHK', note: 'Đã cọc Escrow' },
-  'a1-19:00': { customer: 'Trần Hoài Nam', phone: '0933888777', status: 'escrow_locked', escrow: 260000, code: 'SNX-5513-CHK', note: 'Đã cọc Escrow' },
-  'a1-20:00': { customer: 'Lê Quốc Bảo', phone: '0987654321', status: 'escrow_locked', escrow: 260000, code: 'SNX-7711-CHK', note: 'Kèo đôi nam nữ' },
+const todayVN = () => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE }).format(new Date())
+const toClockVN = (value) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: VN_TIME_ZONE, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
+const shiftDate = (date, days) => {
+  const [y, m, d] = date.split('-').map(Number)
+  const next = new Date(Date.UTC(y, m - 1, d + days))
+  return next.toISOString().slice(0, 10)
+}
+const formatDateVN = (date) => {
+  const [y, m, d] = date.split('-')
+  return `${d}/${m}/${y}`
+}
 
-  // Sân A2
-  'a2-08:00': { customer: 'Vũ Minh Đức', phone: '0944112233', status: 'checked_in', escrow: 220000, code: 'SNX-3312-CHK', note: 'Đánh đơn' },
-  'a2-18:00': { customer: 'Đỗ Tiến Đạt', phone: '0908765432', status: 'escrow_locked', escrow: 260000, code: 'SNX-9981-CHK', note: 'Đã thanh toán Escrow' },
-  'a2-19:00': { customer: 'Đỗ Tiến Đạt', phone: '0908765432', status: 'escrow_locked', escrow: 260000, code: 'SNX-9982-CHK', note: 'Đã thanh toán Escrow' },
+// Trạng thái hiển thị của 1 ô lịch
+function cellState(slot) {
+  if (!slot) return 'none'
+  const status = String(slot.status || '').toUpperCase()
+  if (status === 'BOOKED') {
+    const booking = String(slot.bookingStatus || '').toUpperCase()
+    if (booking === 'CHECKED_IN') return 'checked_in'
+    if (booking === 'PENDING') return 'pending'
+    return 'paid'
+  }
+  if (status === 'MAINTENANCE') return 'maintenance'
+  if (status === 'RESERVED') return 'reserved'
+  return slot.isPast ? 'past' : 'available'
+}
 
-  // Sân A3
-  'a3-15:00': { customer: 'Phạm Đức Trọng', phone: '0934999888', status: 'checked_in', escrow: 300000, code: 'SNX-99001-USED', note: 'Đã giải ngân' },
-  'a3-17:00': { customer: 'Nguyễn Hải Đăng', phone: '0977223344', status: 'escrow_locked', escrow: 220000, code: 'SNX-6612-CHK', note: 'Khách quen tuần' },
+const CELL_STYLES = {
+  checked_in: { bg: '#ECFDF5', chip: '#10B981', label: 'Đã Vào Sân' },
+  paid: { bg: '#FEF3C7', chip: '#F59E0B', label: 'Đã Thanh Toán' },
+  pending: { bg: '#EFF6FF', chip: '#3B82F6', label: 'Chờ Góp Tiền' },
+  reserved: { bg: '#F5F3FF', chip: '#8B5CF6', label: 'Giữ Cho Giải' },
+}
 
-  // Sân B1 (Bóng đá)
-  'b1-17:00': { customer: 'FC Thanh Niên Q7', phone: '0918273645', status: 'checked_in', escrow: 450000, code: 'SNX-4421-CHK', note: 'Trận bóng 5v5' },
-  'b1-19:00': { customer: 'Trần Minh Quân', phone: '0988765432', status: 'escrow_locked', escrow: 600000, code: 'SNX-44219-CHK', note: 'FC Saigon All-Stars' },
-  'b1-20:00': { customer: 'Trần Minh Quân', phone: '0988765432', status: 'escrow_locked', escrow: 600000, code: 'SNX-44220-CHK', note: 'FC Saigon All-Stars' },
-
-  // Sân B2
-  'b2-18:00': { customer: 'FC Techcombank', phone: '0922334455', status: 'escrow_locked', escrow: 450000, code: 'SNX-7761-CHK', note: 'Giao hữu nội bộ' },
-  'b2-19:00': { customer: 'FC Brotherhood', phone: '0933445566', status: 'escrow_locked', escrow: 450000, code: 'SNX-7762-CHK', note: 'Trận 60 phút' },
-
-  // Sân B3 (Sân 7)
-  'b3-18:00': { customer: 'FC Đại Học Tôn Đức Thắng', phone: '0966778899', status: 'escrow_locked', escrow: 650000, code: 'SNX-8811-CHK', note: 'Sân 7 người' },
-  'b3-19:00': { customer: 'FC Đại Học Tôn Đức Thắng', phone: '0966778899', status: 'escrow_locked', escrow: 650000, code: 'SNX-8812-CHK', note: 'Sân 7 người' },
-
-  // Sân C1 (Pickleball)
-  'c1-16:00': { customer: 'Lê Hoàng Yến', phone: '0903111222', status: 'checked_in', escrow: 240000, code: 'SNX-77102-CHK', note: 'Đã check-in' },
-  'c1-17:00': { customer: 'Ngô Thanh Vân', phone: '0912998877', status: 'escrow_locked', escrow: 280000, code: 'SNX-3341-CHK', note: 'Tập huấn đôi nam nữ' },
-  'c1-18:00': { customer: 'Ngô Thanh Vân', phone: '0912998877', status: 'escrow_locked', escrow: 280000, code: 'SNX-3342-CHK', note: 'Tập huấn đôi nam nữ' },
-
-  // Sân D1 (Tennis)
-  'd1-17:00': { customer: 'Lâm Chí Hào', phone: '0909554433', status: 'escrow_locked', escrow: 380000, code: 'SNX-9911-CHK', note: 'Đánh đơn 2 set' },
-  'd1-18:00': { customer: 'Lâm Chí Hào', phone: '0909554433', status: 'escrow_locked', escrow: 380000, code: 'SNX-9912-CHK', note: 'Đánh đơn 2 set' },
+const BOOKING_STATUS_LABEL = {
+  checked_in: 'ĐÃ CHECK-IN (ĐANG CHƠI)',
+  paid: 'ĐÃ THANH TOÁN (CHỜ CHECK-IN)',
+  pending: 'ĐƠN CHIA TIỀN (CHỜ GÓP ĐỦ)',
 }
 
 export default function ViewCourtBookingSchedule() {
-  const [selectedDate, setSelectedDate] = useState('2026-10-10')
-  const [filterSport, setFilterSport] = useState('all') // 'all' | 'badminton' | 'football' | 'pickleball' | 'tennis'
-  const [filterZone, setFilterZone] = useState('all') // 'all' | 'Khu A' | 'Khu B' | 'Khu C' | 'Khu D'
-  const [filterStatus, setFilterStatus] = useState('all') // 'all' | 'checked_in' | 'escrow_locked' | 'available'
+  const { facilityId, facility, loading: layoutLoading, error: layoutError, refreshWallet } = useOwnerContext()
+  const [selectedDate, setSelectedDate] = useState(todayVN)
+  const [filterSport, setFilterSport] = useState('all')
+  const [reloadKey, setReloadKey] = useState(0)
 
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [showWalkinModal, setShowWalkinModal] = useState(false)
-  const [walkinSlotData, setWalkinSlotData] = useState(null)
+  // Lịch gắn với khóa (cơ sở + ngày + lần tải) để không hiện nhầm dữ liệu cũ khi đổi ngày.
+  const calendarKey = `${facilityId}|${selectedDate}|${reloadKey}`
+  const [calendar, setCalendar] = useState(null) // { key, data }
+  const [calendarError, setCalendarError] = useState(null) // { key, message }
+  const [cancelReasons, setCancelReasons] = useState([])
+
+  const [selectedSlot, setSelectedSlot] = useState(null) // { court, slot }
+  const [walkinSlot, setWalkinSlot] = useState(null) // { court, slot }
   const [walkinName, setWalkinName] = useState('')
   const [walkinPhone, setWalkinPhone] = useState('')
+  const [walkinSlots, setWalkinSlots] = useState(1)
+  const [walkinNote, setWalkinNote] = useState('')
+  const [walkinAutoCheckIn, setWalkinAutoCheckIn] = useState(false)
+  const [cancelMode, setCancelMode] = useState(false)
+  const [cancelReasonCode, setCancelReasonCode] = useState('')
+  const [cancelReasonText, setCancelReasonText] = useState('')
+  const [lockAfterCancel, setLockAfterCancel] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
 
-  const showToast = (msg) => {
-    setToastMessage(msg)
+  const showToast = (msg, type = 'success') => {
+    setToastMessage({ msg, type })
     setTimeout(() => setToastMessage(null), 3500)
   }
 
-  // Lọc danh sách sân hiển thị
-  const filteredCourts = COURTS_LIST.filter((c) => {
-    if (filterSport !== 'all' && c.sport !== filterSport) return false
-    if (filterZone !== 'all' && c.zone !== filterZone) return false
-    return true
-  })
+  useEffect(() => {
+    if (!facilityId) return
+    let cancelled = false
+    const key = `${facilityId}|${selectedDate}|${reloadKey}`
+    getFacilitySlots(facilityId, selectedDate)
+      .then((data) => !cancelled && setCalendar({ key, data }))
+      .catch((error) => !cancelled && setCalendarError({ key, message: error.message }))
+    return () => { cancelled = true }
+  }, [facilityId, selectedDate, reloadKey])
 
-  // Thống kê tổng số slot trong ngày
-  const totalSlotsCount = filteredCourts.length * TIME_SLOTS.length
+  useEffect(() => {
+    getCancellationReasons().then(setCancelReasons).catch(() => {})
+  }, [])
+
+  const reload = () => setReloadKey((value) => value + 1)
+  // Giữ dữ liệu lần tải trước của cùng cơ sở + ngày trong lúc tải lại để lưới không nháy.
+  const sameView = (key) => key?.split('|').slice(0, 2).join('|') === `${facilityId}|${selectedDate}`
+  const data = calendar && sameView(calendar.key) ? calendar.data : null
+  const loadError = layoutError || (calendarError?.key === calendarKey ? calendarError.message : '')
+  const loading = layoutLoading || (!!facilityId && !data && !loadError)
+
+  const courts = useMemo(
+    () =>
+      (data?.courts || []).map((court) => ({
+        id: String(court.courtId),
+        name: court.courtName || '—',
+        sport: court.sportName || 'Khác',
+        status: String(court.status || '').toUpperCase(),
+        // Ca theo giờ bắt đầu (giờ Việt Nam) để tra ô lưới.
+        slots: new Map((court.slots || []).map((slot) => [toClockVN(slot.startTime), slot])),
+      })),
+    [data],
+  )
+
+  const sports = [...new Set(courts.map((court) => court.sport))]
+  const filteredCourts = courts.filter((court) => filterSport === 'all' || court.sport === filterSport)
+  const timeSlots = useMemo(() => [...new Set(courts.flatMap((court) => [...court.slots.keys()]))].sort(), [courts])
+
+  // Thống kê trong ngày (theo bộ lọc)
+  let totalSlotsCount = 0
   let bookedCount = 0
   let checkedInCount = 0
-  let totalEscrowRevenue = 0
-
-  filteredCourts.forEach((c) => {
-    TIME_SLOTS.forEach((t) => {
-      const key = `${c.id}-${t}`
-      const b = bookings[key]
-      if (b) {
+  let expectedRevenue = 0
+  filteredCourts.forEach((court) => {
+    court.slots.forEach((slot) => {
+      totalSlotsCount++
+      const state = cellState(slot)
+      if (state === 'checked_in' || state === 'paid' || state === 'pending') {
         bookedCount++
-        totalEscrowRevenue += b.escrow
-        if (b.status === 'checked_in') checkedInCount++
+        expectedRevenue += Number(slot.price) || 0
+        if (state === 'checked_in') checkedInCount++
       }
     })
   })
+  const occupancyRate = totalSlotsCount ? Math.round((bookedCount / totalSlotsCount) * 100) : 0
+  const activeCourtCount = filteredCourts.filter((court) => court.status === 'ACTIVE').length
 
-  const occupancyRate = Math.round((bookedCount / totalSlotsCount) * 100) || 0
+  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ'
 
-  // Click vào ô slot
-  const handleSlotClick = (court, time) => {
-    const key = `${court.id}-${time}`
-    const booking = bookings[key]
+  // Số ca trống liên tiếp tính từ ca được chọn (để đặt nhiều giờ một lần)
+  const consecutiveFreeSlots = (court, slot) => {
+    const times = [...court.slots.keys()].sort()
+    let count = 0
+    for (let i = times.indexOf(toClockVN(slot.startTime)); i >= 0 && i < times.length; i++) {
+      if (cellState(court.slots.get(times[i])) !== 'available') break
+      if (count > 0 && court.slots.get(times[i - 1]).endTime !== court.slots.get(times[i]).startTime) break
+      count++
+    }
+    return Math.max(count, 1)
+  }
 
-    if (booking) {
-      setSelectedSlot({
-        key,
-        court,
-        time,
-        ...booking,
-      })
-    } else {
-      setWalkinSlotData({ court, time, key })
+  const handleSlotClick = (court, slot) => {
+    const state = cellState(slot)
+    if (state === 'none' || state === 'past' || state === 'reserved') return
+    if (state === 'available') {
+      setWalkinSlot({ court, slot })
       setWalkinName('')
       setWalkinPhone('')
-      setShowWalkinModal(true)
+      setWalkinSlots(1)
+      setWalkinNote('')
+      setWalkinAutoCheckIn(false)
+      return
+    }
+    setSelectedSlot({ court, slot })
+    setCancelMode(false)
+    setCancelReasonCode(String(cancelReasons[0]?.code ?? ''))
+    setCancelReasonText('')
+    setLockAfterCancel(false)
+  }
+
+  const runAction = async (action, successMessage, after) => {
+    setBusy(true)
+    try {
+      await action()
+      showToast(successMessage)
+      after?.()
+      reload()
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusy(false)
     }
   }
 
-  // Đặt sân nhanh cho khách vãng lai
+  // Đặt sân cho khách vãng lai: POST /bookings/owner/walk-in
   const handleCreateWalkinBooking = (e) => {
     e.preventDefault()
-    if (!walkinName.trim() || !walkinSlotData) return
+    if (!walkinName.trim() || !walkinSlot || busy) return
+    const { court, slot } = walkinSlot
+    runAction(
+      () =>
+        createWalkInBooking({
+          courtSlotId: slot.id,
+          numberOfSlots: Number(walkinSlots) || 1,
+          customerName: walkinName.trim(),
+          customerPhone: walkinPhone.trim() || null,
+          note: walkinNote.trim() || null,
+          autoCheckIn: walkinAutoCheckIn,
+        }),
+      `Đã nhận đặt sân cho "${walkinName.trim()}" tại ${court.name} lúc ${toClockVN(slot.startTime)}!`,
+      () => setWalkinSlot(null),
+    )
+  }
 
-    const newKey = walkinSlotData.key
-    const newBooking = {
-      customer: `${walkinName.trim()} (Khách Vãng Lai)`,
-      phone: walkinPhone.trim() || '0900 000 000',
-      status: 'checked_in', // Khách đến trực tiếp, coi như check-in ngay
-      escrow: walkinSlotData.court.price,
-      code: `WLK-${Math.floor(1000 + Math.random() * 9000)}-DIR`,
-      note: 'Thanh toán trực tiếp tại quầy lễ tân',
+  // Khóa / mở lại ca trống: PUT /slots/{id}/status
+  const handleToggleSlotLock = (slot, lock) => {
+    runAction(
+      () => updateSlotStatus(slot.id, { status: lock ? SLOT_STATUS_CODE.MAINTENANCE : SLOT_STATUS_CODE.AVAILABLE }),
+      lock ? 'Đã khóa ca để bảo trì.' : 'Đã mở lại ca cho khách đặt.',
+      () => { setWalkinSlot(null); setSelectedSlot(null) },
+    )
+  }
+
+  // Check-in thủ công: POST /bookings/owner/{id}/check-in
+  const handleQuickCheckIn = () => {
+    const { slot } = selectedSlot
+    runAction(
+      () => checkInBooking(slot.bookingId, { checkInAllParticipants: true }),
+      '✅ Đã check-in cho đơn đặt sân!',
+      () => { setSelectedSlot(null); refreshWallet().catch(() => {}) },
+    )
+  }
+
+  // Hủy đơn (người đặt luôn được hoàn tiền): POST /bookings/owner/{id}/cancel
+  const handleCancelBooking = (e) => {
+    e.preventDefault()
+    const { slot } = selectedSlot
+    const reason = cancelReasons.find((item) => String(item.code) === cancelReasonCode)
+    if (reason?.isCustom && !cancelReasonText.trim()) {
+      showToast('Vui lòng nhập lý do hủy.', 'error')
+      return
     }
-
-    setBookings((prev) => ({
-      ...prev,
-      [newKey]: newBooking,
-    }))
-
-    setShowWalkinModal(false)
-    showToast(`Đã nhận đặt sân trực tiếp cho "${newBooking.customer}" lúc ${walkinSlotData.time}!`)
+    runAction(
+      () =>
+        cancelOwnerBooking(slot.bookingId, {
+          reasonCode: reason ? reason.code : null,
+          reason: reason?.isCustom ? cancelReasonText.trim() : reason?.label || cancelReasonText.trim() || null,
+          lockSlotAfterCancel: lockAfterCancel,
+        }),
+      'Đã hủy đơn đặt sân và hoàn tiền cho người đặt.',
+      () => setSelectedSlot(null),
+    )
   }
 
-  // Hủy đặt sân
-  const handleCancelBooking = (key) => {
-    setBookings((prev) => {
-      const copy = { ...prev }
-      delete copy[key]
-      return copy
-    })
-    setSelectedSlot(null)
-    showToast('Đã hủy lịch đặt sân và hoàn trả trạng thái slot trống!')
-  }
+  const panelStyle = { background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }
+  const dateButtonStyle = { padding: '6px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', fontSize: '13px', fontWeight: 700, color: '#0F172A', cursor: 'pointer', display: 'flex', alignItems: 'center' }
+  const inputStyle = { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px' }
 
-  // Check-in nhanh từ Modal
-  const handleQuickCheckIn = (key) => {
-    setBookings((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        status: 'checked_in',
-      },
-    }))
-    setSelectedSlot((prev) => (prev ? { ...prev, status: 'checked_in' } : null))
-    showToast('✅ Đã xác nhận check-in nhanh & kích hoạt giải ngân Escrow!')
+  if (!layoutLoading && !layoutError && !facilityId) {
+    return (
+      <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)' }}>
+        <div style={{ ...panelStyle, padding: '48px 28px', textAlign: 'center' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '44px', color: '#10B981' }}>domain_add</span>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '12px 0 6px' }}>Bạn chưa có cơ sở nào</h2>
+          <p style={{ margin: 0, color: '#475569', fontSize: '14px', fontWeight: 600 }}>
+            Hãy đăng ký cơ sở thể thao và chờ quản trị viên phê duyệt để xem lịch đặt sân.
+          </p>
+        </div>
+      </div>
+    )
   }
-
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
   return (
     <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
@@ -191,36 +280,33 @@ export default function ViewCourtBookingSchedule() {
             top: '24px',
             right: '24px',
             zIndex: 9999,
-            background: '#10B981',
+            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
             color: '#FFFFFF',
             padding: '14px 22px',
             borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4)',
+            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
             fontWeight: 600,
             fontSize: '14px',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
+            maxWidth: '420px',
             animation: 'fadeInSlide 0.3s ease',
           }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            check_circle
+            {toastMessage.type === 'error' ? 'error' : 'check_circle'}
           </span>
-          {toastMessage}
+          {toastMessage.msg}
         </div>
       )}
 
       {/* Header section */}
       <div
         style={{
-          background: 'rgba(255, 255, 255, 0.94)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
+          ...panelStyle,
           borderRadius: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.90)',
           padding: '24px 28px',
-          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
@@ -246,22 +332,14 @@ export default function ViewCourtBookingSchedule() {
               Unified Multi-Sport Scheduler
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
-              Lưới lịch trực quan đồng bộ thời gian thực
+              {data?.facilityName || facility?.name || ''}
             </span>
           </div>
-          <h1
-            style={{
-              fontSize: '26px',
-              fontWeight: 800,
-              color: '#0F172A',
-              margin: 0,
-              letterSpacing: '-0.5px',
-            }}
-          >
-            Lịch Đặt Sân Tích Hợp Toàn Bộ Cụm Thể Thao
+          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
+            Lịch Đặt Sân Ngày {formatDateVN(selectedDate)}
           </h1>
           <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
-            Xem toàn bộ {COURTS_LIST.length} sân (Cầu lông, Bóng đá, Pickleball, Tennis) trên một bảng lưới trực quan duy nhất.
+            Xem toàn bộ {courts.length} sân{sports.length ? ` (${sports.join(', ')})` : ''} trên một bảng lưới duy nhất. Bấm ô trống để nhận khách vãng lai.
           </p>
         </div>
 
@@ -285,7 +363,7 @@ export default function ViewCourtBookingSchedule() {
                 Tổng Quy Mô Lưới
               </div>
               <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                {COURTS_LIST.length} Sân Đang Vận Hành
+                {data ? `${data.totalSlots} ca • ${data.availableSlots} trống • ${data.lockedSlots} khóa` : '—'}
               </div>
             </div>
           </div>
@@ -293,134 +371,103 @@ export default function ViewCourtBookingSchedule() {
       </div>
 
       {/* Analytics KPI Bar */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '16px',
-          marginBottom: '24px',
-        }}
-      >
-        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={panelStyle}>
           <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Tỷ Lệ Lấp Đầy Trong Ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>
-            {occupancyRate}%
-          </div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>{occupancyRate}%</div>
           <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>
-            {bookedCount}/{totalSlotsCount} khung giờ đã có khách
+            {bookedCount}/{totalSlotsCount} ca đã có khách
           </div>
         </div>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+        <div style={panelStyle}>
           <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Đã Check-in & Vào Sân</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>
-            {checkedInCount} Trận Đấu
-          </div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>{checkedInCount} Ca</div>
           <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
-            {bookedCount - checkedInCount} trận đang chờ tới giờ
+            {bookedCount - checkedInCount} ca đang chờ khách tới
           </div>
         </div>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Doanh Thu Escrow Dự Kiến</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#1D4ED8', margin: '4px 0' }}>
-            {formatVND(totalEscrowRevenue)}
-          </div>
-          <div style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700 }}>
-            Tiền cọc an toàn bảo chứng 100%
-          </div>
+        <div style={panelStyle}>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Doanh Thu Dự Kiến Trong Ngày</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#1D4ED8', margin: '4px 0' }}>{formatVND(expectedRevenue)}</div>
+          <div style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700 }}>Tổng giá các ca đã có khách</div>
         </div>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.94)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: '14px', padding: '16px 20px', border: '1px solid rgba(255, 255, 255, 0.90)', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+        <div style={panelStyle}>
           <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Sân Sẵn Sàng Phục Vụ</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>
-            {filteredCourts.length} Sân Đấu
+            {activeCourtCount}/{filteredCourts.length} Sân
           </div>
-          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
-            Áp dụng định giá động tự động
-          </div>
+          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>Sân con đang hoạt động</div>
         </div>
       </div>
 
       {/* Filter and Legend Controls */}
       <div
         style={{
-          background: 'rgba(255, 255, 255, 0.94)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
+          ...panelStyle,
           borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.90)',
-          padding: '16px 20px',
           marginBottom: '20px',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '16px',
-          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
         }}
       >
-        {/* Filters */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
+          {/* Date picker */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Ngày:</span>
+            <button type="button" style={dateButtonStyle} onClick={() => setSelectedDate((d) => shiftDate(d, -1))} title="Ngày trước">
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_left</span>
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 700, color: '#0F172A' }}
+            />
+            <button type="button" style={dateButtonStyle} onClick={() => setSelectedDate((d) => shiftDate(d, 1))} title="Ngày sau">
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_right</span>
+            </button>
+            <button type="button" style={dateButtonStyle} onClick={() => setSelectedDate(todayVN())}>Hôm nay</button>
+            <button type="button" style={dateButtonStyle} onClick={reload} title="Tải lại lịch">
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>refresh</span>
+            </button>
+          </div>
+
           {/* Sport Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Bộ môn:</span>
             <select
               value={filterSport}
               onChange={(e) => setFilterSport(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#0F172A',
-              }}
+              style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 700, color: '#0F172A' }}
             >
               <option value="all">Tất cả môn</option>
-              <option value="badminton">🏸 Cầu lông</option>
-              <option value="football">⚽ Bóng đá mini</option>
-              <option value="pickleball">🏓 Pickleball</option>
-              <option value="tennis">🎾 Tennis</option>
-            </select>
-          </div>
-
-          {/* Zone Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Khu vực:</span>
-            <select
-              value={filterZone}
-              onChange={(e) => setFilterZone(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '13px',
-                fontWeight: 700,
-                color: '#0F172A',
-              }}
-            >
-              <option value="all">Tất cả khu (A, B, C, D)</option>
-              <option value="Khu A">Khu A (Cầu lông)</option>
-              <option value="Khu B">Khu B (Bóng đá)</option>
-              <option value="Khu C">Khu C (Pickleball)</option>
-              <option value="Khu D">Khu D (Tennis)</option>
+              {sports.map((sport) => (
+                <option key={sport} value={sport}>{sport}</option>
+              ))}
             </select>
           </div>
         </div>
 
         {/* Legend */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12px', fontWeight: 600 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: '#10B981' }} />
-            <span>Đã Check-in (Đang chơi)</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: '#F59E0B' }} />
-            <span>Đã Cọc Escrow (Chờ vào sân)</span>
-          </div>
-
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', fontSize: '12px', fontWeight: 600 }}>
+          {[
+            ['#10B981', 'Đã Check-in'],
+            ['#F59E0B', 'Đã Thanh Toán (Chờ vào sân)'],
+            ['#3B82F6', 'Chờ Góp Tiền'],
+            ['#8B5CF6', 'Giữ Cho Giải Đấu'],
+            ['#94A3B8', 'Bảo Trì / Khóa'],
+          ].map(([color, label]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: color }} />
+              <span>{label}</span>
+            </div>
+          ))}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: '#F1F5F9', border: '1px solid #CBD5E1' }} />
             <span>Còn Trống (Bấm để nhận khách)</span>
@@ -441,170 +488,170 @@ export default function ViewCourtBookingSchedule() {
           position: 'relative',
         }}
       >
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1200px' }}>
-          <thead>
-            <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #CBD5E1' }}>
-              <th
-                style={{
-                  padding: '14px 18px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  color: '#1E293B',
-                  textAlign: 'left',
-                  width: '240px',
-                  position: 'sticky',
-                  left: 0,
-                  background: '#F8FAFC',
-                  zIndex: 20,
-                  boxShadow: '2px 0 5px rgba(0,0,0,0.04)',
-                }}
-              >
-                SÂN THI ĐẤU
-              </th>
-              {TIME_SLOTS.map((slot) => {
-                const hourNum = parseInt(slot.split(':')[0], 10)
-                const isPeak = hourNum >= 17 && hourNum <= 22
-                return (
+        {loading || loadError || timeSlots.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '40px', color: loadError ? '#EF4444' : '#10B981' }}>
+              {loading ? 'progress_activity' : loadError ? 'error' : 'event_busy'}
+            </span>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginTop: '8px' }}>
+              {loading ? 'Đang tải lịch đặt sân...' : loadError ? 'Không thể tải lịch đặt sân' : 'Chưa có ca sân nào trong ngày này'}
+            </div>
+            <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
+              {loading
+                ? 'Lần tải đầu có thể mất 30–60 giây khi máy chủ khởi động.'
+                : loadError || 'Vào Quản Lý Cụm Sân để sinh ca cho các sân con, hoặc chọn ngày khác.'}
+            </div>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1200px' }}>
+            <thead>
+              <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #CBD5E1' }}>
+                <th
+                  style={{
+                    padding: '14px 18px',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    color: '#1E293B',
+                    textAlign: 'left',
+                    width: '240px',
+                    position: 'sticky',
+                    left: 0,
+                    background: '#F8FAFC',
+                    zIndex: 20,
+                    boxShadow: '2px 0 5px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  SÂN THI ĐẤU
+                </th>
+                {timeSlots.map((time) => (
                   <th
-                    key={slot}
+                    key={time}
                     style={{
                       padding: '12px 10px',
                       fontSize: '12px',
                       fontWeight: 800,
-                      color: isPeak ? '#DC2626' : '#475569',
+                      color: '#475569',
                       textAlign: 'center',
-                      background: isPeak ? '#FEF2F2' : '#F8FAFC',
+                      background: '#F8FAFC',
                       borderLeft: '1px solid #E2E8F0',
                       minWidth: '85px',
                     }}
                   >
-                    <div>{slot}</div>
-                    {isPeak && (
-                      <span style={{ fontSize: '9px', color: '#EF4444', fontWeight: 800, textTransform: 'uppercase' }}>
-                        Peak 🔥
-                      </span>
-                    )}
+                    {time}
                   </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCourts.map((court) => (
-              <tr key={court.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                {/* Court Name Col (Sticky) */}
-                <td
-                  style={{
-                    padding: '12px 18px',
-                    position: 'sticky',
-                    left: 0,
-                    background: '#FFFFFF',
-                    zIndex: 10,
-                    boxShadow: '2px 0 5px rgba(0,0,0,0.04)',
-                    borderRight: '1px solid #E2E8F0',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        background: court.color,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                        {court.name}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#1E293B', fontWeight: 700 }}>
-                        {court.zoneName.split('—')[0]} • {formatVND(court.price)}/h
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCourts.map((court) => (
+                <tr key={court.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  {/* Court Name Col (Sticky) */}
+                  <td
+                    style={{
+                      padding: '12px 18px',
+                      position: 'sticky',
+                      left: 0,
+                      background: '#FFFFFF',
+                      zIndex: 10,
+                      boxShadow: '2px 0 5px rgba(0,0,0,0.04)',
+                      borderRight: '1px solid #E2E8F0',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: sportColor(court.sport), flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{court.name}</div>
+                        <div style={{ fontSize: '11.5px', color: court.status === 'ACTIVE' ? '#1E293B' : '#B45309', fontWeight: 700 }}>
+                          {court.sport}{court.status !== 'ACTIVE' ? ' • Tạm ngưng' : ''}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
+                  </td>
 
-                {/* Time Slot Columns */}
-                {TIME_SLOTS.map((time) => {
-                  const key = `${court.id}-${time}`
-                  const booking = bookings[key]
-                  const isCheckedIn = booking?.status === 'checked_in'
-                  const isLocked = booking?.status === 'escrow_locked'
+                  {/* Time Slot Columns */}
+                  {timeSlots.map((time) => {
+                    const slot = court.slots.get(time)
+                    const state = cellState(slot)
+                    const style = CELL_STYLES[state]
+                    const clickable = state === 'available' || state === 'maintenance' || !!style && state !== 'reserved'
 
-                  return (
-                    <td
-                      key={time}
-                      onClick={() => handleSlotClick(court, time)}
-                      style={{
-                        padding: '6px',
-                        borderLeft: '1px solid #F1F5F9',
-                        cursor: 'pointer',
-                        verticalAlign: 'top',
-                        background: isCheckedIn
-                          ? '#ECFDF5'
-                          : isLocked
-                          ? '#FEF3C7'
-                          : '#FFFFFF',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!booking) e.currentTarget.style.background = '#F1F5F9'
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!booking) e.currentTarget.style.background = '#FFFFFF'
-                      }}
-                    >
-                      {booking ? (
-                        <div
-                          style={{
-                            padding: '6px 8px',
-                            borderRadius: '8px',
-                            background: isCheckedIn ? '#10B981' : '#F59E0B',
-                            color: '#FFFFFF',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
-                          }}
-                        >
+                    return (
+                      <td
+                        key={time}
+                        onClick={() => handleSlotClick(court, slot)}
+                        title={slot ? `${toClockVN(slot.startTime)} - ${toClockVN(slot.endTime)} • ${formatVND(slot.price)}` : 'Chưa sinh ca'}
+                        style={{
+                          padding: '6px',
+                          borderLeft: '1px solid #F1F5F9',
+                          cursor: clickable ? 'pointer' : 'default',
+                          verticalAlign: 'top',
+                          background: style ? style.bg : state === 'maintenance' ? '#F1F5F9' : '#FFFFFF',
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (state === 'available') e.currentTarget.style.background = '#F1F5F9'
+                        }}
+                        onMouseLeave={(e) => {
+                          if (state === 'available') e.currentTarget.style.background = '#FFFFFF'
+                        }}
+                      >
+                        {style ? (
                           <div
                             style={{
-                              fontSize: '11px',
-                              fontWeight: 800,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
+                              padding: '6px 8px',
+                              borderRadius: '8px',
+                              background: style.chip,
+                              color: '#FFFFFF',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                             }}
                           >
-                            {booking.customer.split('(')[0].trim()}
+                            <div style={{ fontSize: '11px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }}>
+                              {state === 'reserved' ? slot.matchName || slot.tournamentName || 'Trận đấu giải' : slot.customerName || 'Khách hàng'}
+                            </div>
+                            <div style={{ fontSize: '10px', opacity: 0.9, marginTop: '2px' }}>
+                              {style.label}{slot.isWalkIn ? ' • Vãng lai' : ''}
+                            </div>
                           </div>
-                          <div style={{ fontSize: '10px', opacity: 0.9, marginTop: '2px' }}>
-                            {isCheckedIn ? 'Đã Vào Sân' : 'Đã Cọc Escrow'}
+                        ) : (
+                          <div
+                            style={{
+                              height: '42px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: state === 'maintenance' ? '#64748B' : '#CBD5E1',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {state === 'available' && (
+                              <>
+                                <span>+ Trống</span>
+                                <span style={{ fontSize: '10px', color: '#94A3B8' }}>{formatVND(slot.price)}</span>
+                              </>
+                            )}
+                            {state === 'maintenance' && (
+                              <>
+                                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>build</span>
+                                <span>Bảo trì</span>
+                              </>
+                            )}
+                            {state === 'past' && <span>Đã qua</span>}
+                            {state === 'none' && <span>—</span>}
                           </div>
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            height: '42px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#CBD5E1',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                          }}
-                        >
-                          + Trống
-                        </div>
-                      )}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Modal: Chi Tiết Lượt Đặt Sân Đã Có */}
+      {/* Modal: Chi tiết ca đã đặt / đang bảo trì */}
       {selectedSlot && (
         <div
           style={{
@@ -619,117 +666,158 @@ export default function ViewCourtBookingSchedule() {
             padding: '20px',
           }}
         >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: '20px',
-              maxWidth: '480px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    background: selectedSlot.status === 'checked_in' ? '#DCFCE7' : '#FEF3C7',
-                    color: selectedSlot.status === 'checked_in' ? '#15803D' : '#B45309',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    padding: '4px 8px',
-                    borderRadius: '6px',
-                  }}
-                >
-                  {selectedSlot.status === 'checked_in' ? 'ĐÃ CHECK-IN (ĐANG CHƠI)' : 'CHỜ CHECK-IN (ĐÃ CỌC ESCROW)'}
-                </span>
-              </div>
-              <button
-                onClick={() => setSelectedSlot(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
+          <div style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '480px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            {(() => {
+              const { court, slot } = selectedSlot
+              const state = cellState(slot)
+              const timeRange = `${toClockVN(slot.startTime)} - ${toClockVN(slot.endTime)}`
 
-            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: '0 0 16px 0' }}>
-              Chi Tiết Đặt Sân: {selectedSlot.court.name}
-            </h3>
+              if (state === 'maintenance') {
+                return (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Ca Đang Khóa / Bảo Trì</h3>
+                      <button onClick={() => setSelectedSlot(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '14px', color: '#1E293B', fontWeight: 600, margin: '0 0 20px 0' }}>
+                      {court.name} • {timeRange} ngày {formatDateVN(selectedDate)}. Mở lại để người chơi có thể đặt ca này.
+                    </p>
+                    <button
+                      onClick={() => handleToggleSlotLock(slot, false)}
+                      disabled={busy || slot.isPast}
+                      style={{ width: '100%', background: '#10B981', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy || slot.isPast ? 0.6 : 1 }}
+                    >
+                      {slot.isPast ? 'Ca đã qua giờ' : busy ? 'Đang xử lý...' : 'Mở Lại Ca'}
+                    </button>
+                  </>
+                )
+              }
 
-            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', border: '1px solid #CBD5E1', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Người đặt:</span>
-                <strong style={{ fontSize: '14px', color: '#0F172A' }}>{selectedSlot.customer}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Số điện thoại:</span>
-                <span style={{ fontSize: '13px', color: '#1D4ED8', fontWeight: 800 }}>{selectedSlot.phone}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Khung giờ:</span>
-                <strong style={{ fontSize: '14px', color: '#0F172A' }}>
-                  {selectedSlot.time} (60 phút) • {selectedDate}
-                </strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Tiền cọc Escrow:</span>
-                <strong style={{ fontSize: '15px', color: '#047857' }}>{formatVND(selectedSlot.escrow)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>Mã vé đặt sân:</span>
-                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700, fontFamily: 'monospace' }}>{selectedSlot.code}</span>
-              </div>
-            </div>
+              return (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <span
+                      style={{
+                        background: state === 'checked_in' ? '#DCFCE7' : state === 'pending' ? '#DBEAFE' : '#FEF3C7',
+                        color: state === 'checked_in' ? '#15803D' : state === 'pending' ? '#1D4ED8' : '#B45309',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      {BOOKING_STATUS_LABEL[state]}
+                    </span>
+                    <button onClick={() => setSelectedSlot(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {selectedSlot.status !== 'checked_in' && (
-                <button
-                  onClick={() => handleQuickCheckIn(selectedSlot.key)}
-                  style={{
-                    flex: 1,
-                    background: '#10B981',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: '10px',
-                    padding: '12px',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                    how_to_reg
-                  </span>
-                  Check-in Nhanh & Giải Ngân
-                </button>
-              )}
+                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: '0 0 16px 0' }}>
+                    Chi Tiết Đặt Sân: {court.name}
+                  </h3>
 
-              <button
-                onClick={() => handleCancelBooking(selectedSlot.key)}
-                style={{
-                  background: '#FEE2E2',
-                  color: '#DC2626',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '12px 18px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Hủy Đặt Sân
-              </button>
-            </div>
+                  <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', border: '1px solid #CBD5E1', marginBottom: '20px' }}>
+                    {[
+                      ['Người đặt:', `${slot.customerName || '—'}${slot.isWalkIn ? ' (Khách vãng lai)' : ''}`],
+                      ['Số điện thoại:', slot.customerPhone || '—'],
+                      ['Khung giờ:', `${timeRange} • ${formatDateVN(selectedDate)}`],
+                      ['Giá ca:', formatVND(slot.price)],
+                      ['Mã đơn:', String(slot.bookingId || '—').slice(0, 8).toUpperCase()],
+                    ].map(([label, value], idx, rows) => (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: idx < rows.length - 1 ? '8px' : 0 }}>
+                        <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>{label}</span>
+                        <strong style={{ fontSize: '14px', color: '#0F172A', textAlign: 'right', fontFamily: label === 'Mã đơn:' ? 'monospace' : undefined }}>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {cancelMode ? (
+                    <form onSubmit={handleCancelBooking}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Lý do hủy:</label>
+                      <select value={cancelReasonCode} onChange={(e) => setCancelReasonCode(e.target.value)} style={{ ...inputStyle, marginBottom: '10px', background: '#FFFFFF' }}>
+                        {cancelReasons.map((reason) => (
+                          <option key={reason.code} value={String(reason.code)}>{reason.label}</option>
+                        ))}
+                      </select>
+                      {cancelReasons.find((item) => String(item.code) === cancelReasonCode)?.isCustom && (
+                        <input
+                          type="text"
+                          placeholder="Nhập lý do hủy..."
+                          value={cancelReasonText}
+                          onChange={(e) => setCancelReasonText(e.target.value)}
+                          style={{ ...inputStyle, marginBottom: '10px' }}
+                        />
+                      )}
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#1E293B', marginBottom: '8px' }}>
+                        <input type="checkbox" checked={lockAfterCancel} onChange={(e) => setLockAfterCancel(e.target.checked)} />
+                        Khóa ca này để bảo trì sau khi hủy
+                      </label>
+                      <p style={{ fontSize: '12px', color: '#B45309', fontWeight: 600, margin: '0 0 16px 0' }}>
+                        Chủ sân hủy đơn thì người đặt luôn được hoàn tiền.
+                      </p>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button type="button" onClick={() => setCancelMode(false)} style={{ flex: 1, background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                          Quay lại
+                        </button>
+                        <button type="submit" disabled={busy} style={{ flex: 1, background: '#DC2626', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                          {busy ? 'Đang hủy...' : 'Xác Nhận Hủy Đơn'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {state === 'paid' && (
+                        <button
+                          onClick={handleQuickCheckIn}
+                          disabled={busy}
+                          style={{
+                            flex: 1,
+                            background: '#10B981',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '12px',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            opacity: busy ? 0.6 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>how_to_reg</span>
+                          {busy ? 'Đang check-in...' : 'Check-in Thủ Công'}
+                        </button>
+                      )}
+                      {state !== 'checked_in' && (
+                        <button
+                          onClick={() => setCancelMode(true)}
+                          style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', flex: state === 'paid' ? undefined : 1 }}
+                        >
+                          Hủy Đặt Sân
+                        </button>
+                      )}
+                      {state === 'checked_in' && (
+                        <div style={{ flex: 1, textAlign: 'center', fontSize: '13px', color: '#047857', fontWeight: 700 }}>
+                          Khách đã check-in — đơn không thể hủy.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
 
       {/* Modal: Đặt Sân Cho Khách Vãng Lai (Walk-in) */}
-      {showWalkinModal && walkinSlotData && (
+      {walkinSlot && (
         <div
           style={{
             position: 'fixed',
@@ -743,109 +831,79 @@ export default function ViewCourtBookingSchedule() {
             padding: '20px',
           }}
         >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: '20px',
-              maxWidth: '460px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)',
-            }}
-          >
+          <div style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                Đặt Giữ Chỗ Nhanh (Khách Vãng Lai)
-              </h3>
-              <button
-                onClick={() => setShowWalkinModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
-              >
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Đặt Giữ Chỗ Nhanh (Khách Vãng Lai)</h3>
+              <button onClick={() => setWalkinSlot(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                {walkinSlotData.court.name}
-              </div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{walkinSlot.court.name}</div>
               <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
-                Khung giờ: <strong>{walkinSlotData.time}</strong> • Giá: <strong>{formatVND(walkinSlotData.court.price)}</strong>
+                Bắt đầu: <strong>{toClockVN(walkinSlot.slot.startTime)}</strong> ngày {formatDateVN(selectedDate)} • Giá:{' '}
+                <strong>{formatVND(walkinSlot.slot.price)}</strong>/ca
               </div>
             </div>
 
             <form onSubmit={handleCreateWalkinBooking}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
-                  Tên Khách Hàng / Đội Bóng:
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="VD: Anh Tuấn, FC Hoàng Gia..."
-                  value={walkinName}
-                  onChange={(e) => setWalkinName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '14px',
-                  }}
-                />
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Tên Khách Hàng / Đội Bóng:</label>
+                <input type="text" required placeholder="VD: Anh Tuấn, FC Hoàng Gia..." value={walkinName} onChange={(e) => setWalkinName(e.target.value)} style={inputStyle} />
               </div>
 
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Số Điện Thoại Liên Hệ:
-                </label>
-                <input
-                  type="tel"
-                  placeholder="09xx xxx xxx"
-                  value={walkinPhone}
-                  onChange={(e) => setWalkinPhone(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '14px',
-                  }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số Điện Thoại:</label>
+                  <input type="tel" placeholder="09xx xxx xxx" value={walkinPhone} onChange={(e) => setWalkinPhone(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số ca liên tiếp:</label>
+                  <select value={walkinSlots} onChange={(e) => setWalkinSlots(Number(e.target.value))} style={{ ...inputStyle, background: '#FFFFFF' }}>
+                    {Array.from({ length: consecutiveFreeSlots(walkinSlot.court, walkinSlot.slot) }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{n} ca</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Ghi chú tại quầy:</label>
+                <input type="text" placeholder="VD: Đã thu tiền mặt 100%" value={walkinNote} onChange={(e) => setWalkinNote(e.target.value)} style={inputStyle} />
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#1E293B', marginBottom: '20px' }}>
+                <input type="checkbox" checked={walkinAutoCheckIn} onChange={(e) => setWalkinAutoCheckIn(e.target.checked)} />
+                Khách đã có mặt — check-in luôn
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowWalkinModal(false)}
-                  style={{
-                    padding: '10px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    color: '#475569',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => handleToggleSlotLock(walkinSlot.slot, true)}
+                  disabled={busy}
+                  title="Khóa ca này (bảo trì), người chơi sẽ không đặt được"
+                  style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #FED7AA', background: '#FFF7ED', color: '#C2410C', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
                 >
-                  Đóng
+                  Khóa ca
                 </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#10B981',
-                    color: '#FFFFFF',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Xác Nhận Giữ Sân
-                </button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setWalkinSlot(null)}
+                    style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}
+                  >
+                    {busy ? 'Đang tạo đơn...' : 'Xác Nhận Giữ Sân'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
