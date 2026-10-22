@@ -9,7 +9,7 @@ import {
   getWallet,
   normalizeDepositStatus,
   readPendingDeposit,
-} from '../../api/walletApi.js'
+} from '../../api/player/walletApi.js'
 import DepositResultCard, { PrimaryButton, SecondaryButton, formatVND } from './DepositResultCard.jsx'
 
 /**

@@ -4,7 +4,7 @@ import TopBar from './TopBar.jsx'
 import TopSideBar from './TopSideBar.jsx'
 import PlayerFooter from './PlayerFooter.jsx'
 import { SportProvider } from '../Context/SportContext.jsx'
-import AIChatModal from '../Book a court/AIChatModal.jsx'
+import AIChatModal from '../Booking/AIChat/AIChatModal.jsx'
 
 function PlayerLayout() {
   const [aiOpen, setAiOpen] = useState(false)
