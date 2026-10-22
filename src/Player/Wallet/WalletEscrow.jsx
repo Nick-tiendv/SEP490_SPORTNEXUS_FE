@@ -18,14 +18,14 @@ import {
   readPendingDeposit,
   savePendingDeposit,
   validateDepositAmount,
-} from '../../api/walletApi.js'
+} from '../../api/player/walletApi.js'
 import {
   MIN_MAINTENANCE_FEE,
   POPULAR_BANKS,
   getWithdrawalRequests,
   createWithdrawalRequest,
   WITHDRAW_STATUS,
-} from '../../api/withdrawApi.js'
+} from '../../api/player/withdrawApi.js'
 import { isSafeInternalPath } from './DepositResultCard.jsx'
 
 /**

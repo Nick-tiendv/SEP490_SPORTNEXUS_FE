@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import NotificationBell from './NotificationBell.jsx'
-import { getWallet } from '../../api/walletApi.js'
+import { getWallet } from '../../api/player/walletApi.js'
 
 function TopBar() {
   const location = useLocation()
