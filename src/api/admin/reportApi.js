@@ -57,13 +57,15 @@ export async function countAdminReports(params) {
 export async function getAdminReport(reportId) {
   return toReport(unwrap((await apiClient.get(`/api/v1/reports/admin/${encodeURIComponent(reportId)}`)).data))
 }
+const sumDefined = (...values) => (values.some(Number.isFinite) ? values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0) : undefined)
 export async function getReportStatistics(params) {
   const data = unwrap((await apiClient.get('/api/v1/reports/admin/statistics', { params: clean(params) })).data) || {}
   const num = (...keys) => { const value = Number(pick(data, ...keys)); return Number.isFinite(value) ? value : undefined }
   return {
     total: num('totalReports', 'total', 'totalCount'),
     pending: num('pendingReports', 'pending', 'pendingCount', 'openReports'),
-    resolved: num('resolvedReports', 'resolved', 'resolvedCount'),
+    // BE tách đã giải quyết thành có hoàn tiền / không hoàn tiền.
+    resolved: sumDefined(num('resolvedRefundedReports'), num('resolvedNoRefundReports')) ?? num('resolvedReports', 'resolved', 'resolvedCount'),
     rejected: num('rejectedReports', 'rejected', 'rejectedCount', 'dismissed'),
   }
 }

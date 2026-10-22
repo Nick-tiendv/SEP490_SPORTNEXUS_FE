@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { UserAvatar } from '../Users/UserDetails.jsx'
-import { addParticipant, cancelTournament, checkInParticipant, createTournament, generateBracket, lockTournament, randomPairing, removeParticipant, unlockTournament, updateMatchScore } from '../../api/admin/tournamentApi.js'
-import { categoryTypeLabels, sportLabels, date } from './tournamentData.js'
+import { addParticipant, cancelTournament, checkInParticipant, generateBracket, lockTournament, randomPairing, removeParticipant, unlockTournament, updateMatchScore } from '../../api/admin/tournamentApi.js'
+import { date } from './tournamentData.js'
 
 const noop = () => {}
 // Chạy một thao tác API trong hộp thoại: quản lý trạng thái đang gửi và lỗi.
@@ -17,46 +16,7 @@ function useSubmit(onDone) {
   return { submitting, error, setError, run }
 }
 
-const emptyChild = () => ({ name: '', categoryType: '0', maxParticipants: '16', entryFee: '0', prizes: [{ position: '1', rewardAmount: '' }] })
-
-// POST /api/v1/tournaments — CreateTournamentRequest.
-export function TournamentForm({ facilities, sports, onClose, onDone }) {
-  const [values, setValues] = useState({ name: '', facilityId: facilities[0]?.id || '', categoryId: sports[0]?.id || '' })
-  const [children, setChildren] = useState([emptyChild()])
-  const { submitting, error, setError, run } = useSubmit(onDone)
-  const setChild = (index, key, value) => setChildren(previous => previous.map((child, i) => (i === index ? { ...child, [key]: value } : child)))
-  const setPrize = (index, prizeIndex, key, value) => setChildren(previous => previous.map((child, i) => (i === index ? { ...child, prizes: child.prizes.map((prize, p) => (p === prizeIndex ? { ...prize, [key]: value } : prize)) } : child)))
-  const submit = event => {
-    event.preventDefault()
-    if (values.name.trim().length < 3) return setError('Tên giải phải có ít nhất 3 ký tự.')
-    if (!values.facilityId || !values.categoryId) return setError('Vui lòng chọn cơ sở và môn thể thao.')
-    const payloadChildren = []
-    for (const child of children) {
-      const maxParticipants = Number(child.maxParticipants), entryFee = Number(child.entryFee)
-      if (child.name.trim().length < 2) return setError('Mỗi hạng mục cần tên (ví dụ: Đơn nam).')
-      if (!Number.isInteger(maxParticipants) || maxParticipants < 2 || maxParticipants > 256) return setError('Số người tối đa phải là số nguyên từ 2 đến 256.')
-      if (!Number.isFinite(entryFee) || entryFee < 0) return setError('Phí tham gia phải lớn hơn hoặc bằng 0.')
-      const prizes = child.prizes.filter(prize => prize.position.trim() && prize.rewardAmount !== '').map(prize => ({ position: prize.position.trim(), rewardAmount: Number(prize.rewardAmount) }))
-      if (prizes.some(prize => !Number.isFinite(prize.rewardAmount) || prize.rewardAmount < 0)) return setError('Giá trị giải thưởng phải lớn hơn hoặc bằng 0.')
-      payloadChildren.push({ name: child.name.trim(), categoryType: Number(child.categoryType), maxParticipants, entryFee, prizes })
-    }
-    run(() => createTournament({ name: values.name.trim(), facilityId: values.facilityId, categoryId: values.categoryId, children: payloadChildren }), `Đã tạo giải ${values.name.trim()}.`)
-  }
-  const row = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }
-  return <DemoDialog title="Tạo giải đấu" onClose={submitting ? noop : onClose}><form className="users-form" noValidate onSubmit={submit}>
-    <label>Tên giải đấu<input value={values.name} onChange={event => setValues({ ...values, name: event.target.value })} maxLength={120} required /></label>
-    <label>Cơ sở<select value={values.facilityId} onChange={event => setValues({ ...values, facilityId: event.target.value })} disabled={!facilities.length}>{facilities.length ? facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>) : <option>Chưa có cơ sở</option>}</select></label>
-    <label>Môn thể thao<select value={values.categoryId} onChange={event => setValues({ ...values, categoryId: event.target.value })} disabled={!sports.length}>{sports.length ? sports.map(sport => <option key={sport.id} value={sport.id}>{sportLabels[sport.name] || sport.name}</option>) : <option>Chưa có môn</option>}</select></label>
-    {children.map((child, index) => <fieldset key={index} style={{ border: '1px solid var(--admin-border-color, #dfe7e2)', borderRadius: 8, padding: 10 }}><legend>Hạng mục {index + 1}{children.length > 1 && <button type="button" className="tournaments-text-button" onClick={() => setChildren(children.filter((_, i) => i !== index))} aria-label={`Xóa hạng mục ${index + 1}`}><Trash2 size={12} /></button>}</legend>
-      <div style={row}><label>Tên hạng mục<input value={child.name} onChange={event => setChild(index, 'name', event.target.value)} placeholder="Đơn nam" maxLength={80} /></label><label>Loại<select value={child.categoryType} onChange={event => setChild(index, 'categoryType', event.target.value)}>{Object.entries(categoryTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-      <div style={row}><label>Số người tối đa<input type="number" min={2} step={1} value={child.maxParticipants} onChange={event => setChild(index, 'maxParticipants', event.target.value)} /></label><label>Phí tham gia (đ)<input type="number" min={0} step={1000} value={child.entryFee} onChange={event => setChild(index, 'entryFee', event.target.value)} /></label></div>
-      {child.prizes.map((prize, prizeIndex) => <div key={prizeIndex} style={row}><label>Hạng<input value={prize.position} onChange={event => setPrize(index, prizeIndex, 'position', event.target.value)} maxLength={20} /></label><label>Tiền thưởng (đ)<input type="number" min={0} step={1000} value={prize.rewardAmount} onChange={event => setPrize(index, prizeIndex, 'rewardAmount', event.target.value)} /></label></div>)}
-      <button type="button" className="tournaments-text-button" onClick={() => setChild(index, 'prizes', [...child.prizes, { position: String(child.prizes.length + 1), rewardAmount: '' }])}><Plus size={12} />Thêm giải thưởng</button>
-    </fieldset>)}
-    <button type="button" className="users-button" onClick={() => setChildren([...children, emptyChild()])}><Plus size={12} />Thêm hạng mục</button>
-    {error && <p className="users-form-error" role="alert">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" disabled={submitting}>{submitting ? 'Đang tạo…' : 'Tạo giải đấu'}</button></footer>
-  </form></DemoDialog>
-}
+// Admin không tạo giải: POST /api/v1/tournaments chỉ dành cho Owner (docs 18), giải do chủ sân tạo.
 
 const actions = {
   generate: { title: 'Tạo nhánh đấu', button: 'Xác nhận', task: context => generateBracket(context.targetId), message: () => 'Đã tạo nhánh đấu.' },

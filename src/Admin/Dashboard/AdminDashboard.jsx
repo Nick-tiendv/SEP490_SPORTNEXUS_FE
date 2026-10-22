@@ -5,8 +5,8 @@ import StatCard from '../components/StatCard.jsx'
 import TrendsChart from './TrendsChart.jsx'
 import RecentBookings from './RecentBookings.jsx'
 import PlatformActivity from './PlatformActivity.jsx'
-import { getAdminBookings, getAdminDashboard, getCurrentUserName, getSports } from '../../api/admin/dashboardApi.js'
-import { AGGREGATE_PAGE_SIZE, PERIODS, buildSportShares, formatCurrency, formatNumber, growth, periodRange } from './dashboardData.js'
+import { fetchAllPages, getAdminBookings, getAdminDashboard, getCurrentUserName, getSports } from '../../api/admin/dashboardApi.js'
+import { AGGREGATE_MAX_PAGES, PERIODS, buildSportShares, formatCurrency, formatNumber, growth, periodRange } from './dashboardData.js'
 import './dashboard.css'
 
 const settledValue = result => (result.status === 'fulfilled' ? result.value : undefined)
@@ -34,11 +34,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     let cancelled = false
     const { current, previous } = periodRange(period)
-    Promise.allSettled([getAdminDashboard(toDashboardRange(current)), getAdminDashboard(toDashboardRange(previous)), getAdminBookings({ ...current, Page: 1, PageSize: AGGREGATE_PAGE_SIZE })])
+    Promise.allSettled([getAdminDashboard(toDashboardRange(current)), getAdminDashboard(toDashboardRange(previous)), fetchAllPages((Page, PageSize) => getAdminBookings({ ...current, Page, PageSize }), AGGREGATE_MAX_PAGES)])
       .then(results => {
         if (cancelled) return
         const [dashboard, previousDashboard, bookings] = results.map(settledValue)
-        setPeriodData({ key: period, dashboard, previous: previousDashboard, bookings: bookings?.items || [], error: results[0].reason?.message })
+        setPeriodData({ key: period, dashboard, previous: previousDashboard, bookings: bookings || [], error: results[0].reason?.message })
       })
     return () => { cancelled = true }
   }, [period])

@@ -168,7 +168,3 @@ export async function checkInParticipant(id, participantId) {
 export async function updateMatchScore(matchId, { scoreP1, scoreP2, winnerId, sets }) {
   return unwrap((await apiClient.put(`/api/v1/matches/${path(matchId)}/score`, { scoreP1, scoreP2, winnerId: winnerId || null, sets: sets?.length ? sets : null })).data)
 }
-// CreateTournamentRequest: { facilityId, categoryId, name, children: [{ name, categoryType, maxParticipants, entryFee, prizes }] }.
-export async function createTournament(payload) {
-  return unwrap((await apiClient.post('/api/v1/tournaments', payload)).data)
-}

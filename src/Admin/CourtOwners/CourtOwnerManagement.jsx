@@ -10,6 +10,7 @@ import OwnerVerifications, { VerificationBadge } from './OwnerVerifications.jsx'
 import { listFacilities, listOwners } from '../../api/admin/ownerApi.js'
 import { listOwnerVerifications } from '../../api/admin/ownerVerificationApi.js'
 import { getMyAccount } from '../../api/admin/accountApi.js'
+import { fetchAllPages } from '../../api/admin/dashboardApi.js'
 import '../Users/users.css'
 import './courtOwners.css'
 
@@ -17,7 +18,6 @@ const statIcons = [Users, UserRoundCheck, BellRing, Building2]
 const settled = result => (result.status === 'fulfilled' ? result.value : undefined)
 // Hồ sơ KYC mới nhất của mỗi chủ sân (theo userId).
 const latestByUser = items => items.reduce((map, item) => (!map[item.userId] || item.createdAt > map[item.userId].createdAt ? { ...map, [item.userId]: item } : map), {})
-const KYC_PAGE_SIZE = 200
 
 export default function CourtOwnerManagement() {
   const [reload, setReload] = useState(0)
@@ -41,8 +41,8 @@ export default function CourtOwnerManagement() {
   // GET /api/v1/admin/owner-verifications: trạng thái KYC hiển thị trong danh sách / chi tiết chủ sân.
   useEffect(() => {
     let cancelled = false
-    listOwnerVerifications({ page: 1, pageSize: KYC_PAGE_SIZE })
-      .then(({ items }) => !cancelled && setVerifications({ byUser: latestByUser(items), pending: items.filter(item => item.status === 'PENDING').length }))
+    fetchAllPages((page, pageSize) => listOwnerVerifications({ page, pageSize }))
+      .then(items => !cancelled && setVerifications({ byUser: latestByUser(items), pending: items.filter(item => item.status === 'PENDING').length }))
       .catch(() => {})
     return () => { cancelled = true }
   }, [reload, kycReload])
