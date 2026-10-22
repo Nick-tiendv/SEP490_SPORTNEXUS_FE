@@ -19,13 +19,23 @@ import {
   savePendingDeposit,
   validateDepositAmount,
 } from '../../api/player/walletApi.js'
-import {
-  MIN_MAINTENANCE_FEE,
-  POPULAR_BANKS,
-  getWithdrawalRequests,
-  createWithdrawalRequest,
-  WITHDRAW_STATUS,
-} from '../../api/player/withdrawApi.js'
+import { MIN_MAINTENANCE_FEE, POPULAR_BANKS, WITHDRAW_STATUS } from '../../api/player/withdrawApi.js'
+import { createWithdrawal, getBankAccount, getMyWithdrawals, updateBankAccount } from '../../api/owner/walletApi.js'
+
+// Yêu cầu rút tiền từ GET /api/v1/wallet/withdrawals -> dạng hiển thị trong lịch sử
+const toWithdrawalItem = (raw) => {
+  const status = String(raw.status || 'PENDING').toUpperCase()
+  return {
+    id: String(raw.id || raw.withdrawalId || ''),
+    amount: Number(raw.amount) || 0,
+    status: status === 'COMPLETED' || status === 'APPROVED' ? WITHDRAW_STATUS.APPROVED : status === 'REJECTED' || status === 'CANCELLED' ? WITHDRAW_STATUS.REJECTED : WITHDRAW_STATUS.PENDING,
+    createdAt: raw.createdAt || raw.requestedAt || null,
+    note: raw.note || '',
+    adminNote: raw.rejectReason || raw.adminNote || raw.reason || '',
+    remainingBalance: raw.balanceAfter ?? null,
+    bank: { bankName: raw.bankName || '', accountNumber: raw.bankAccountNumber || '', accountHolder: raw.bankAccountHolder || '' },
+  }
+}
 import { isSafeInternalPath } from './DepositResultCard.jsx'
 
 /**
@@ -159,36 +169,32 @@ export default function WalletEscrow() {
   const [showIneligibleModal, setShowIneligibleModal] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState(100000)
   const [withdrawBank, setWithdrawBank] = useState(POPULAR_BANKS[0].name)
-  const [withdrawAccount, setWithdrawAccount] = useState('0071001234567')
-  const [withdrawHolder, setWithdrawHolder] = useState('MINH MINH MINH')
+  const [withdrawAccount, setWithdrawAccount] = useState('')
+  const [withdrawHolder, setWithdrawHolder] = useState('')
   const [withdrawNote, setWithdrawNote] = useState('')
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
   const [withdrawReceipt, setWithdrawReceipt] = useState(null)
   const [historyTab, setHistoryTab] = useState('transactions') // 'transactions' | 'withdrawals'
-  const [myWithdrawals, setMyWithdrawals] = useState(() => {
-    try {
-      const list = getWithdrawalRequests()
-      return list.filter((r) => r.player?.role === 'Player')
-    } catch {
-      return []
-    }
-  })
-
-  // Lắng nghe cập nhật danh sách yêu cầu rút tiền thời gian thực
-  useEffect(() => {
-    const handleWithdrawUpdate = () => {
-      try {
-        const list = getWithdrawalRequests()
-        setMyWithdrawals(list.filter((r) => r.player?.role === 'Player'))
-      } catch {}
-    }
-    window.addEventListener('sportnexus_withdraw_requests_updated', handleWithdrawUpdate)
-    window.addEventListener('storage', handleWithdrawUpdate)
-    return () => {
-      window.removeEventListener('sportnexus_withdraw_requests_updated', handleWithdrawUpdate)
-      window.removeEventListener('storage', handleWithdrawUpdate)
-    }
+  // Lịch sử rút tiền: GET /api/v1/wallet/withdrawals; tài khoản ngân hàng: GET /api/v1/wallet/bank-account
+  const [myWithdrawals, setMyWithdrawals] = useState([])
+  const loadWithdrawals = useCallback(() => {
+    getMyWithdrawals({ page: 1, pageSize: 50 })
+      .then(({ items }) => setMyWithdrawals(items.map(toWithdrawalItem)))
+      .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated || isMockSession) return
+    loadWithdrawals()
+    getBankAccount()
+      .then((bank) => {
+        if (!bank) return
+        if (bank.bankName) setWithdrawBank(bank.bankName)
+        if (bank.bankAccountNumber) setWithdrawAccount(bank.bankAccountNumber)
+        if (bank.bankAccountHolder) setWithdrawHolder(bank.bankAccountHolder)
+      })
+      .catch(() => {})
+  }, [isAuthenticated, isMockSession, loadWithdrawals])
 
   const currentAvailableBalance = useMemo(() => {
     if (wallet && typeof wallet.availableBalance === 'number') {
@@ -198,7 +204,7 @@ export default function WalletEscrow() {
     if (local !== null && !isNaN(Number(local))) {
       return Number(local)
     }
-    return 250000
+    return 0
   }, [wallet])
 
   const maxWithdrawable = Math.max(0, currentAvailableBalance - MIN_MAINTENANCE_FEE)
@@ -212,7 +218,7 @@ export default function WalletEscrow() {
     setShowWithdrawModal(true)
   }
 
-  const handleExecuteWithdraw = (e) => {
+  const handleExecuteWithdraw = async (e) => {
     if (e) e.preventDefault()
     if (currentAvailableBalance < MIN_MAINTENANCE_FEE) {
       toast.error(
@@ -241,30 +247,26 @@ export default function WalletEscrow() {
 
     setWithdrawSubmitting(true)
     try {
-      const savedProfile = localStorage.getItem('player_profile_data')
-      const profile = savedProfile
-        ? JSON.parse(savedProfile)
-        : { name: 'Minh Minh Minh', phone: '0908 123 456', email: 'player@sportnexus.vn' }
-
-      const newReq = createWithdrawalRequest({
-        amount: withdrawAmount,
+      // BE chỉ lưu 1 tài khoản nhận tiền: cập nhật trước, rồi tạo lệnh rút (POST /api/v1/wallet/withdrawals)
+      await updateBankAccount({ bankName: withdrawBank, bankAccountNumber: withdrawAccount.trim(), bankAccountHolder: withdrawHolder.trim() })
+      const created = await createWithdrawal(withdrawAmount)
+      const receipt = toWithdrawalItem({
+        ...(created || {}),
+        amount: created?.amount ?? withdrawAmount,
         bankName: withdrawBank,
-        accountNumber: withdrawAccount,
-        accountHolder: withdrawHolder,
-        note: withdrawNote,
-        currentBalance: currentAvailableBalance,
-        userProfile: profile,
+        bankAccountNumber: withdrawAccount.trim(),
+        bankAccountHolder: withdrawHolder.trim(),
       })
-
-      setWithdrawSubmitting(false)
       setShowWithdrawModal(false)
-      setWithdrawReceipt(newReq)
+      setWithdrawReceipt({ ...receipt, remainingBalance: receipt.remainingBalance ?? currentAvailableBalance - withdrawAmount })
       toast.success(`🎉 Đã gửi yêu cầu rút ${formatVND(withdrawAmount)}đ tới Admin xét duyệt!`)
       loadWallet()
       reloadTransactions()
+      loadWithdrawals()
     } catch (err) {
-      setWithdrawSubmitting(false)
       toast.error(err?.message || 'Lỗi khi gửi yêu cầu rút tiền.')
+    } finally {
+      setWithdrawSubmitting(false)
     }
   }
 

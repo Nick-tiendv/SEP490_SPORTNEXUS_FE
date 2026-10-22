@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { createLfg } from '../../api/player/lfgApi.js'
+import { getWallet } from '../../api/player/walletApi.js'
+import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
 // District courts database for dynamic map & closest court detection
 const DISTRICT_DATA = {
@@ -282,6 +284,7 @@ const DISTRICT_DATA = {
 }
 
 function CreateMatch() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
 
   // State management
@@ -351,22 +354,28 @@ function CreateMatch() {
   // Wallet balance synchronized with localStorage
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
+    return saved !== null ? Number(saved) : 0
   })
 
   // LFG Specific State - 2.6 Chủ kèo Bước 1
   const location = useLocation()
-  const initialSlotId = location.state?.courtSlotId || location.state?.slotId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+  // Kèo LFG phải gắn với một ca sân thật, truyền sang từ màn hình chọn ca.
+  const initialSlotId = location.state?.courtSlotId || location.state?.slotId || null
   const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
   const [slotsNeeded, setSlotsNeeded] = useState(3)
   const [pricePerPerson, setPricePerPerson] = useState('')
   const [requireApproval, setRequireApproval] = useState(false)
   const [description, setDescription] = useState('')
-  const [courtFee] = useState(180000) // 100% tiền sân
+  const [courtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
   const [createError, setCreateError] = useState(null)
 
   // Toast / Submission state
   const [submitting, setSubmitting] = useState(false)
+
+  // Lấy số dư ví thật khi mở trang
+  useEffect(() => {
+    getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
+  }, [])
 
   // Listen for balance updates from anywhere in app
   useEffect(() => {
@@ -426,27 +435,18 @@ function CreateMatch() {
     setSubmitting(true)
     setCreateError(null)
 
+    if (!courtSlotId) {
+      setCreateError('Chưa chọn ca sân. Vui lòng chọn sân và ca trống trước khi tạo kèo.')
+      setSubmitting(false)
+      return
+    }
+
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
       alert(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
       setSubmitting(false)
       return
     }
-
-    const formatName = selectedFormats.includes('mixed')
-      ? 'Đôi Nam Nữ'
-      : selectedFormats.includes('men')
-      ? 'Đôi Nam'
-      : selectedFormats.includes('women')
-      ? 'Đôi Nữ'
-      : 'Đơn 1v1'
-
-    const levelText =
-      skillLevel === 'intermediate'
-        ? 'Trung bình - Khá'
-        : skillLevel === 'beginner'
-        ? 'Mới tập chơi'
-        : 'Bán chuyên / Nâng cao'
 
     const skillTag =
       skillLevel === 'beginner'
@@ -455,53 +455,11 @@ function CreateMatch() {
         ? 'ADVANCED'
         : 'INTERMEDIATE'
 
-    const sportMeta = {
-      badminton: { name: 'Cầu Lông', badge: 'CẦU LÔNG ĐÔI', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' },
-      pickleball: { name: 'Pickleball', badge: 'PICKLEBALL ĐÔI', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop' },
-      football: { name: 'Bóng Đá', badge: 'BÓNG ĐÁ SÂN 7', img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&h=600&fit=crop' },
-      basketball: { name: 'Bóng Rổ', badge: 'BÓNG RỔ 3x3', img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop' },
-      tennis: { name: 'Tennis', badge: 'QUẦN VỢT ĐÔI', img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop' },
-    }[sport] || { name: 'Cầu Lông', badge: 'GIAO LƯU THỂ THAO', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' }
-
     const parsedPrice = pricePerPerson ? Number(pricePerPerson) : undefined
-    const autoSplitCost = Math.round(courtFee / (slotsNeeded + 1))
-    const displayCost = parsedPrice || autoSplitCost
-
-    const createdMatch = {
-      id: Date.now(),
-      sport: sport,
-      sportBadge: sportMeta.badge,
-      subBadge: '✓ Kèo Của Bạn (Chủ Kèo)',
-      levelTag: levelText,
-      slotTag: `Cần ${slotsNeeded} Người (${formatName})`,
-      time: `${preferredTimeRange} (${selectedDate === 'today' ? 'Hôm Nay' : 'Ngày Mai'})`,
-      timeSlot: 'evening',
-      title: `[${sportMeta.name} ${formatName}] Giao lưu tại ${currentCourt.name} (${currentDistrictData.name})`,
-      location: `${currentCourt.name}, ${currentCourt.address}`,
-      groupDesc: description || `Host: Bạn (Chỉ số Fairplay 100) • ${requireApproval ? 'Cần chủ duyệt' : 'Vào ngay'}`,
-      roster: [
-        { initials: 'BẠN', bg: '#2D5F3F', name: 'Bạn (Chủ kèo)' },
-        ...Array.from({ length: slotsNeeded }, (_, i) => ({
-          initials: '?',
-          bg: 'empty',
-          name: `Slot trống ${i + 1}`,
-        })),
-      ],
-      currentSlots: 1,
-      totalSlots: slotsNeeded + 1,
-      priceLabel: parsedPrice ? 'Tiền cọc quy định:' : 'Tiền cọc chia đều:',
-      price: displayCost,
-      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(displayCost)} đ`,
-      buttonText: 'Chốt Slot Ngay',
-      isFlashClaim: false,
-      requireApproval: Boolean(requireApproval),
-      image: sportMeta.img,
-    }
-
     // Gọi API BE: POST /api/v1/lfgs
     try {
       await createLfg({
-        courtSlotId: courtSlotId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04',
+        courtSlotId,
         slotsNeeded: Number(slotsNeeded) || 3,
         pricePerPerson: parsedPrice,
         skillLevelTag: skillTag,
@@ -509,25 +467,14 @@ function CreateMatch() {
         requireApproval: Boolean(requireApproval),
       })
     } catch (apiErr) {
-      console.warn('[CreateMatch] API createLfg lỗi hoặc fallback:', apiErr)
-      if (apiErr?.status === 400 || apiErr?.status === 403) {
-        setCreateError(apiErr.message || 'Không thể tạo kèo ghép trên hệ thống.')
-      }
+      console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
+      setCreateError(apiErr?.message || 'Không thể tạo kèo ghép trên hệ thống.')
+      setSubmitting(false)
+      return
     }
 
-    // FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo
-    const newBal = Math.max(0, walletBalance - courtFee)
-    localStorage.setItem('escrow_balance', newBal.toString())
-    setWalletBalance(newBal)
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-
-    try {
-      const existing = localStorage.getItem('lfg_custom_matches')
-      const parsed = existing ? JSON.parse(existing) : []
-      localStorage.setItem('lfg_custom_matches', JSON.stringify([createdMatch, ...parsed]))
-    } catch {
-      localStorage.setItem('lfg_custom_matches', JSON.stringify([createdMatch]))
-    }
+    // Backend đã đặt ca và trừ tiền sân: tải lại ví để hiển thị số dư thật.
+    getWallet().catch(() => {})
 
     setTimeout(() => {
       navigate('/community?tab=my_cards')
@@ -1411,11 +1358,11 @@ function CreateMatch() {
               <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 shadow-2xs flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#2D5F3F] flex items-center justify-center text-white font-black text-xs shadow-xs">
-                    MMM
+                    {initialsOf(currentUser.name)}
                   </div>
                   <div>
                     <h4 className="font-extrabold text-xs text-[#111827]">
-                      Minh Minh Minh (Chủ Kèo)
+                      {currentUser.name || 'Bạn'} (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
                       Trình: Trung bình - Khá • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>

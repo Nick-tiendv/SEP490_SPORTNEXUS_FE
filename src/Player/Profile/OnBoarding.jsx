@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { toast } from 'sonner'
+import { getSportCategories, updateMySports } from '../../api/player/profileApi.js'
 
 function OnBoarding() {
   const navigate = useNavigate()
@@ -25,7 +27,10 @@ function OnBoarding() {
     }
   }
 
-  const handleCompleteSetup = () => {
+  const [saving, setSaving] = useState(false)
+
+  const handleCompleteSetup = async () => {
+    if (saving) return
     // Lưu các môn đã chọn kèm trình độ ban đầu vào localStorage
     const sportMetadata = {
       badminton: { name: 'Cầu Lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
@@ -50,9 +55,26 @@ function OnBoarding() {
         bgColor: meta.bgColor,
       }
     })
-    localStorage.setItem('player_sports_data', JSON.stringify(newSportsData))
-    localStorage.setItem('sportnexus_selected_sports', JSON.stringify(selectedSports))
-    navigate('/dashboard')
+    // Lưu môn & trình độ lên backend: PUT /api/auth/me/sports (cần đối chiếu tên môn với danh mục hệ thống)
+    setSaving(true)
+    try {
+      const categories = await getSportCategories()
+      const normalize = (text) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+      const sports = newSportsData
+        .map((sport) => {
+          const category = categories.find((c) => normalize(c.name).includes(normalize(sport.name)) || normalize(sport.name).includes(normalize(c.name)))
+          return category ? { ...sport, id: category.id, sportCategoryId: category.id } : null
+        })
+        .filter(Boolean)
+      if (sports.length > 0) await updateMySports(sports.map((s) => ({ sportCategoryId: s.sportCategoryId, skillLevel: s.level })))
+      localStorage.setItem('player_sports_data', JSON.stringify(sports.length > 0 ? sports : newSportsData))
+      localStorage.setItem('sportnexus_selected_sports', JSON.stringify(selectedSports))
+      navigate('/dashboard')
+    } catch (error) {
+      toast.error(error?.message || 'Không lưu được môn thể thao. Vui lòng thử lại.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -146,6 +168,7 @@ function OnBoarding() {
             <button
               className="py-3 px-8 rounded-xl bg-gradient-to-r from-primary-container to-secondary-fixed text-on-primary-container font-headline-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:brightness-110 transition-all cursor-pointer"
               onClick={handleCompleteSetup}
+              disabled={saving}
             >
               <span>Hoàn tất &amp; Vào trang chủ</span>
               <span className="material-symbols-outlined">arrow_forward</span>

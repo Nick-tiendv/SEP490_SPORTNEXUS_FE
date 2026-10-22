@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { resetPassword } from '../api/auth/authApi.js'
 import './auth-pages.css'
 
 function ResetPassword() {
   const navigate = useNavigate()
+  const { phone, otpCode } = useLocation().state || {}
+  const [loading, setLoading] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -15,7 +19,7 @@ function ResetPassword() {
     { id: 'uppercase', label: 'Chứa ít nhất 1 chữ cái viết hoa (A-Z)', regex: /[A-Z]/, points: 1 },
     { id: 'lowercase', label: 'Chứa ít nhất 1 chữ cái viết thường (a-z)', regex: /[a-z]/, points: 1 },
     { id: 'number', label: 'Chứa ít nhất 1 chữ số (0-9)', regex: /\d/, points: 1 },
-    { id: 'special', label: 'Chứa ít nhất 1 ký tự đặc biệt (@, #, $, !, %, v.v.)', regex: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, points: 2 },
+    { id: 'special', label: 'Chứa ít nhất 1 ký tự đặc biệt (@, #, $, !, %, v.v.)', regex: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/, points: 2 },
     { id: 'match', label: 'Khớp với mật khẩu xác nhận', check: () => newPassword === confirmPassword && newPassword.length > 0, points: 1 }
   ]
 
@@ -67,18 +71,25 @@ function ResetPassword() {
   const passwordStrength = getPasswordStrength()
 
   const handleSubmit = async () => {
-    if (!allCriteriaMet) return
-
-    // TODO: Call API to reset password
-    console.log('Resetting password:', { newPassword })
-    
-    // Navigate back to login page after successful password reset
-    navigate('/login', { state: { message: 'Mật khẩu đã được cập nhật thành công! Vui lòng đăng nhập lại.' } })
+    if (!allCriteriaMet || loading) return
+    setLoading(true)
+    try {
+      await resetPassword({ phone, otpCode, newPassword, confirmPassword })
+      navigate('/login', { state: { message: 'Mật khẩu đã được cập nhật thành công! Vui lòng đăng nhập lại.' } })
+    } catch (error) {
+      // Sai hoặc hết hạn OTP: BE trả message, quay lại bước nhập mã nếu cần
+      toast.error(error?.message || 'Không đặt lại được mật khẩu. Vui lòng thử lại.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleBack = () => {
     navigate(-1)
   }
+
+  // Vào thẳng trang này mà không qua bước nhập mã OTP
+  if (!phone || !otpCode) return <Navigate to="/forgot-password" replace />
 
   return (
     <div className="min-h-screen flex flex-col sport-animated-bg">
@@ -375,7 +386,7 @@ function ResetPassword() {
           {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={!allCriteriaMet}
+            disabled={!allCriteriaMet || loading}
             className={`w-full py-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]
               ${allCriteriaMet 
                 ? 'bg-[#4A7C3E] hover:bg-[#3d6634]' 

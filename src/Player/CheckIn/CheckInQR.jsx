@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getCancellationReasons, cancelBooking, getBookingQrTicket } from '../../api/player/bookingApi.js'
+import { getCancellationReasons, cancelBooking, getBookingQrTicket, getUpcomingBookings } from '../../api/player/bookingApi.js'
 import { cancelLfg, rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/player/lfgApi.js'
 import { getTournamentQrTicket, checkInTournament } from '../../api/player/tournamentApi.js'
 
@@ -17,70 +17,26 @@ function CheckInQR() {
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
 
-  // Dữ liệu vé dự phòng chi tiết theo từng loại (đảm bảo UI hiển thị đầy đủ ngay cả khi server dev mất kết nối)
-  const getFallbackTicket = (type) => {
-    if (type === 'lfg') {
-      return {
-        id: 'd7b32110-3498-4221-a123-9876543210ab',
-        ticketCode: 'SNX-LFG-8821',
-        qrCode: 'SNX-LFG-d7b32110',
-        courtName: 'Sân Cầu Lông BWF Pro 02 – Kèo Ghép Đôi LFG',
-        venueName: 'SportNexus Arena Q.7',
-        address: 'Khu B - Tầng 2, 480 Huỳnh Tấn Phát, P. Bình Thuận',
-        gate: 'CỔNG B2 • COURT 2',
-        sport: 'Cầu Lông',
-        sportType: 'KÈO GHÉP TRẬN LFG',
-        startTime: '19:30',
-        endTime: '21:00',
-        allowedCheckInStart: '18:30',
-        allowedCheckInEnd: '21:00',
-        playDate: '24/02/2026',
-        facilityId: 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45',
-        escrowAmount: 85000,
-        status: 'PENDING_CHECKIN',
-      }
-    }
-    if (type === 'tournament') {
-      return {
-        id: 'tn-2026-badminton-open',
-        ticketCode: 'SNX-TN-OPEN2026',
-        qrCode: 'SNX-TN-tn-2026-badminton-open',
-        courtName: 'Center Court 01 – Sân Thi Đấu Championship',
-        venueName: 'SportNexus Stadium Q.7',
-        address: 'Khu A - Tầng 1, 480 Huỳnh Tấn Phát, P. Bình Thuận',
-        gate: 'CỔNG A1 • VIP ARENA',
-        sport: 'Cầu Lông',
-        sportType: 'GIẢI ĐẤU (TOURNAMENT)',
-        startTime: '08:00',
-        endTime: '18:00',
-        allowedCheckInStart: '07:00',
-        allowedCheckInEnd: '18:00',
-        playDate: '28/02/2026',
-        facilityId: 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45',
-        escrowAmount: 500000,
-        status: 'PENDING_CHECKIN',
-      }
-    }
-    return {
-      id: 'ba2a7900-1a73-430c-9cbd-3b5be6874b04',
-      ticketCode: 'SNX-BK-8849',
-      qrCode: 'SNX-BK-ba2a7900',
-      courtName: 'Sân Cầu Lông BWF Pro 01 – Yonex Mat',
-      venueName: 'SportNexus Arena Q.7',
-      address: 'Khu B - Tầng 2, 480 Huỳnh Tấn Phát, P. Bình Thuận',
-      gate: 'CỔNG B2 • COURT 3',
-      sport: 'Cầu Lông',
-      sportType: 'SÂN ĐÔI',
-      startTime: '19:30',
-      endTime: '21:00',
-      allowedCheckInStart: '18:30',
-      allowedCheckInEnd: '21:00',
-      playDate: '24/02/2026',
-      facilityId: 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45',
-      escrowAmount: 330000,
-      status: 'PENDING_CHECKIN',
-    }
-  }
+  // Khung vé rỗng: chỉ dùng để giữ đủ field cho giao diện, dữ liệu thật lấy từ API qr-ticket.
+  const getFallbackTicket = () => ({
+    id: null,
+    ticketCode: '',
+    qrCode: '',
+    courtName: '—',
+    venueName: '—',
+    address: '—',
+    gate: '—',
+    sport: '—',
+    sportType: '—',
+    startTime: '—',
+    endTime: '—',
+    allowedCheckInStart: '—',
+    allowedCheckInEnd: '—',
+    playDate: '—',
+    facilityId: null,
+    escrowAmount: 0,
+    status: 'PENDING_CHECKIN',
+  })
 
   // Bước 1: Gọi API qr-ticket tương ứng khi mở vé QR
   useEffect(() => {
@@ -91,7 +47,13 @@ function CheckInQR() {
       try {
         if (ticketType === 'booking') {
           // Đặt sân: GET /api/v1/bookings/{bookingId}/qr-ticket
-          const bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_selected_slot_id') || localStorage.getItem('sportnexus_last_booking_id') || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+          let bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_last_booking_id')
+          if (!bookingId) {
+            // Không có mã đơn trên URL: lấy đơn sắp tới gần nhất của người dùng
+            const upcoming = await getUpcomingBookings()
+            bookingId = upcoming[0]?.id || upcoming[0]?.bookingId || null
+          }
+          if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
           const res = await getBookingQrTicket(bookingId)
           if (isMounted) {
             const fallback = getFallbackTicket('booking')
@@ -105,7 +67,8 @@ function CheckInQR() {
           }
         } else if (ticketType === 'lfg') {
           // Kèo LFG: GET /api/v1/lfgs/{cardId}/qr-ticket
-          const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id') || 'd7b32110-3498-4221-a123-9876543210ab'
+          const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id')
+          if (!cardId) throw new Error('Bạn chưa tham gia kèo LFG nào có vé check-in.')
           const res = await getLfgQrTicket(cardId)
           if (isMounted) {
             const fallback = getFallbackTicket('lfg')
@@ -119,7 +82,8 @@ function CheckInQR() {
           }
         } else if (ticketType === 'tournament') {
           // Giải đấu: GET /api/v1/tournaments/{id}/qr-ticket
-          const tournamentId = searchParams.get('tournamentId') || localStorage.getItem('sportnexus_current_tournament_id') || 'tn-2026-badminton-open'
+          const tournamentId = searchParams.get('tournamentId') || localStorage.getItem('sportnexus_current_tournament_id')
+          if (!tournamentId) throw new Error('Bạn chưa đăng ký giải đấu nào có vé check-in.')
           const res = await getTournamentQrTicket(tournamentId)
           if (isMounted) {
             const fallback = getFallbackTicket('tournament')
@@ -133,9 +97,10 @@ function CheckInQR() {
           }
         }
       } catch (err) {
-        console.warn(`[CheckInQR] Không thể tải vé từ API (${ticketType}), sử dụng vé mặc định:`, err)
+        console.warn(`[CheckInQR] Không thể tải vé từ API (${ticketType}):`, err)
         if (isMounted) {
-          setTicketData(getFallbackTicket(ticketType))
+          setTicketData(null)
+          setTicketError(err?.message || 'Không tải được vé check-in.')
         }
       } finally {
         if (isMounted) setIsLoadingTicket(false)
@@ -159,28 +124,33 @@ function CheckInQR() {
   const handleGateScanCheckIn = async () => {
     setIsScanningCheckIn(true)
     setScanError(null)
-    const facilityId = ticketData?.facilityId || 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45'
-    const qrCode = ticketData?.qrCode || ticketData?.ticketCode || 'SNX-QR-TOKEN'
+    const facilityId = ticketData?.facilityId
+    const qrCode = ticketData?.qrCode || ticketData?.ticketCode
+    if (!ticketData?.id || !qrCode) {
+      setScanError('Chưa có vé hợp lệ để check-in.')
+      setIsScanningCheckIn(false)
+      return
+    }
 
     try {
       if (ticketType === 'tournament') {
         // Giải đấu dùng POST /api/v1/tournaments/{id}/check-in
-        await checkInTournament(ticketData?.id || 'tn-2026-badminton-open', { facilityId, qrCode })
+        await checkInTournament(ticketData.id, { facilityId, qrCode })
       } else {
         // Đặt sân và kèo LFG: POST /api/v1/checkin/scan?facilityId=...&qrCode=...
         await scanCheckIn(facilityId, qrCode)
       }
 
       setCheckInDone(true)
-      const currentCode = ticketData?.ticketCode || 'SNX-BK-8849'
+      const currentCode = ticketData?.ticketCode || '—'
       const cleanCode = currentCode.replace('#', '').trim()
       localStorage.setItem(`sportnexus_checked_in_${cleanCode}`, 'true')
       localStorage.setItem(`sportnexus_checked_in_${currentCode}`, 'true')
 
       const session = {
-        courtId: ticketData?.gate || 'Court 3',
-        courtName: ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01',
-        sport: ticketData?.sport || 'Cầu Lông',
+        courtId: ticketData?.gate || '—',
+        courtName: ticketData?.courtName || '—',
+        sport: ticketData?.sport || '—',
         ticketCode: cleanCode,
         checkInDone: true,
         checkInTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
@@ -205,9 +175,9 @@ function CheckInQR() {
         // Fallback demo trong môi trường offline
         setCheckInDone(true)
         const session = {
-          courtId: ticketData?.gate || 'Court 3',
-          courtName: ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01',
-          sport: ticketData?.sport || 'Cầu Lông',
+          courtId: ticketData?.gate || '—',
+          courtName: ticketData?.courtName || '—',
+          sport: ticketData?.sport || '—',
           checkInDone: true,
           checkInTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           checkOutDone: false,
@@ -284,18 +254,15 @@ function CheckInQR() {
     const isEligibleRefund = hoursLeft >= 24
 
     try {
-      const bookingId = localStorage.getItem('sportnexus_selected_slot_id') || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+      const bookingId = ticketData?.id
+      if (!bookingId) throw new Error('Không tìm thấy đơn đặt sân để hủy.')
       await cancelBooking(bookingId, {
         reasonCode: selectedReasonCode,
         reason: finalReason,
       })
 
-      if (isEligibleRefund) {
-        const savedBal = Number(localStorage.getItem('escrow_balance') || 2450000)
-        const newBal = savedBal + 330000
-        localStorage.setItem('escrow_balance', newBal.toString())
-        window.dispatchEvent(new Event('escrow_balance_updated'))
-      }
+      // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
+      if (isEligibleRefund) window.dispatchEvent(new Event('escrow_balance_updated'))
 
       setIsCancelled(true)
       localStorage.setItem('sportnexus_last_booking_cancelled', 'true')
@@ -664,8 +631,8 @@ function CheckInQR() {
 
     const targetName = selectedCoPlayer?.name || selectedCoPlayer?.email?.split('@')[0] || 'Bạn chơi'
     // 2.7 Bước 3: contextId là id kèo LFG hoặc id đơn đặt sân
-    const contextId = ticketData?.id || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
-    const revieweeId = selectedCoPlayer?.userId || selectedCoPlayer?.id || 'c0a80123-4567-89ab-cdef-0123456789ab'
+    const contextId = ticketData?.id
+    const revieweeId = selectedCoPlayer?.userId || selectedCoPlayer?.id
 
     try {
       await rateFairPlay({
@@ -695,8 +662,8 @@ function CheckInQR() {
       avatarInitial: targetName.slice(0, 2).toUpperCase(),
       avatarBg: selectedCoPlayer?.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
       avatarColor: selectedCoPlayer?.isDoublesGuest ? '#D97706' : '#15803D',
-      matchType: ticketData?.sportType || 'Kèo Cầu Lông',
-      court: `${ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01'} (${ticketData?.gate || 'Court 3'})`,
+      matchType: ticketData?.sportType || '—',
+      court: `${ticketData?.courtName || '—'} (${ticketData?.gate || '—'})`,
       time: 'Vừa xong',
       rating: rateStars,
       fairPlayScore: rateStars * 20,
@@ -793,6 +760,29 @@ function CheckInQR() {
       stars: 5,
     },
   ]
+
+  if (!isLoadingTicket && !ticketData) {
+    return (
+      <div style={{ minHeight: 'calc(100vh - 60px)', padding: '28px 36px 60px 36px', color: '#111827' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          {[['booking', 'Đặt sân'], ['lfg', 'Kèo LFG'], ['tournament', 'Giải đấu']].map(([type, label]) => (
+            <button key={type} type="button" onClick={() => handleSelectTicketType(type)}
+              style={{ padding: '8px 16px', borderRadius: '10px', border: '1px solid #E2E8F0', fontWeight: 700, cursor: 'pointer',
+                background: ticketType === type ? '#15803D' : '#FFFFFF', color: ticketType === type ? '#FFFFFF' : '#334155' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '32px', textAlign: 'center' }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: '20px' }}>Chưa có vé check-in</h2>
+          <p style={{ margin: '0 0 20px', color: '#64748B' }}>{ticketError || 'Không tìm thấy vé.'}</p>
+          <Link to="/court-finder" style={{ padding: '10px 18px', borderRadius: '10px', background: '#15803D', color: '#FFFFFF', fontWeight: 700, textDecoration: 'none' }}>
+            Tìm sân để đặt
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -929,15 +919,15 @@ function CheckInQR() {
             >
               {checkOutDone ? (
                 <>
-                  <span style={{ color: '#15803D' }}>Đã Check-out Trả Sân</span> • {ticketData?.gate || 'Court 3'}
+                  <span style={{ color: '#15803D' }}>Đã Check-out Trả Sân</span> • {ticketData?.gate || '—'}
                 </>
               ) : checkInDone ? (
                 <>
-                  <span style={{ color: '#0284C7' }}>Đang Hoạt Động</span> • {ticketData?.gate || 'Court 3'}
+                  <span style={{ color: '#0284C7' }}>Đang Hoạt Động</span> • {ticketData?.gate || '—'}
                 </>
               ) : (
                 <>
-                  <span style={{ color: '#15803D' }}>Sẵn Sàng Check-in</span> • {ticketData?.gate || 'Court 3'}
+                  <span style={{ color: '#15803D' }}>Sẵn Sàng Check-in</span> • {ticketData?.gate || '—'}
                 </>
               )}
             </div>
@@ -1106,7 +1096,7 @@ function CheckInQR() {
                   }}
                 >
                   <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#0369A1' }}>
-                    #{ticketData?.ticketCode || 'TK-8849'}
+                    #{ticketData?.ticketCode || '—'}
                   </span>
                   <span
                     style={{
@@ -1119,7 +1109,7 @@ function CheckInQR() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {ticketData?.sportType || 'SÂN ĐÔI'}
+                    {ticketData?.sportType || '—'}
                   </span>
                 </div>
               </div>
@@ -1167,7 +1157,7 @@ function CheckInQR() {
                       lineHeight: 1.35,
                     }}
                   >
-                    {ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01'}
+                    {ticketData?.courtName || '—'}
                   </h3>
                 </div>
               </div>
@@ -1186,12 +1176,12 @@ function CheckInQR() {
                   <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#10B981', flexShrink: 0 }}>
                     stadium
                   </span>
-                  <span>{ticketData?.venueName || 'SportNexus Arena Q.7'}</span>
+                  <span>{ticketData?.venueName || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6B7280', fontSize: '11.5px', fontWeight: 500 }}>
-                  <span>🕒 {ticketData?.startTime || '19:30'} - {ticketData?.endTime || '21:00'}</span>
+                  <span>🕒 {ticketData?.startTime || '—'} - {ticketData?.endTime || '—'}</span>
                   <span>•</span>
-                  <span>📅 {ticketData?.playDate || '24/02/2026'}</span>
+                  <span>📅 {ticketData?.playDate || '—'}</span>
                 </div>
               </div>
             </div>
@@ -1208,7 +1198,7 @@ function CheckInQR() {
             >
               <img
                 src="https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=400&fit=crop"
-                alt={ticketData?.courtName || 'Sân Cầu Lông'}
+                alt={ticketData?.courtName || '—'}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -1267,7 +1257,7 @@ function CheckInQR() {
                     location_on
                   </span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ticketData?.address || '480 Huỳnh Tấn Phát, P. Bình Thuận'}
+                    {ticketData?.address || '—'}
                   </span>
                 </div>
 
@@ -1289,7 +1279,7 @@ function CheckInQR() {
                     flexShrink: 0,
                   }}
                 >
-                  {ticketData?.gate || 'CỔNG B2 • COURT 3'}
+                  {ticketData?.gate || '—'}
                 </div>
               </div>
             </div>
@@ -1434,7 +1424,7 @@ function CheckInQR() {
                 >
                   verified
                 </span>
-                <span>Mã QR Check-in: #{ticketData?.ticketCode || 'TK-8849'}</span>
+                <span>Mã QR Check-in: #{ticketData?.ticketCode || '—'}</span>
               </div>
 
               {/* Tên cơ sở & địa chỉ sân */}
@@ -1451,7 +1441,7 @@ function CheckInQR() {
                 <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#10B981' }}>
                   location_on
                 </span>
-                <span>{ticketData?.venueName || 'SportNexus Arena Q.7'}</span>
+                <span>{ticketData?.venueName || '—'}</span>
               </div>
 
               {/* Khung giờ thi đấu & Khung giờ check-in mở hiển thị cân đối từng dòng */}
@@ -1478,7 +1468,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#64748B', fontWeight: 600 }}>🕒 Giờ chơi:</span>
                   <span style={{ color: '#0F172A', fontWeight: 700 }}>
-                    {ticketData?.startTime || '19:30'} - {ticketData?.endTime || '21:00'}
+                    {ticketData?.startTime || '—'} - {ticketData?.endTime || '—'}
                   </span>
                 </div>
 
@@ -1496,7 +1486,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#15803D', fontWeight: 600 }}>🎟️ Khung check-in mở:</span>
                   <span style={{ color: '#166534', fontWeight: 800 }}>
-                    {ticketData?.allowedCheckInStart || '18:30'} - {ticketData?.allowedCheckInEnd || '21:00'}
+                    {ticketData?.allowedCheckInStart || '—'} - {ticketData?.allowedCheckInEnd || '—'}
                   </span>
                 </div>
               </div>
@@ -1858,7 +1848,7 @@ function CheckInQR() {
               <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#10B981' }}>
                 confirmation_number
               </span>
-              <span>Vé #{ticketData?.ticketCode || 'TK-8849'}</span>
+              <span>Vé #{ticketData?.ticketCode || '—'}</span>
             </div>
           </div>
 
@@ -1883,7 +1873,7 @@ function CheckInQR() {
                     HỆ THỐNG FAIRPLAY SPORTNEXUS
                   </span>
                   <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
-                    Vé #{ticketData?.ticketCode || 'TK-8849'} • {ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01'}
+                    Vé #{ticketData?.ticketCode || '—'} • {ticketData?.courtName || '—'}
                   </span>
                 </div>
 
@@ -1947,7 +1937,7 @@ function CheckInQR() {
                         TRẠNG THÁI CHECK-IN
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 800, color: '#166534' }}>
-                        Đã check-in ({ticketData?.startTime || '19:30'}) • Hợp lệ để đánh giá bạn chơi
+                        Đã check-in ({ticketData?.startTime || '—'}) • Hợp lệ để đánh giá bạn chơi
                       </div>
                     </div>
                   </div>
@@ -2345,7 +2335,7 @@ function CheckInQR() {
                         </span>
                       </div>
                       <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>
-                        {ticketData?.courtName || 'Sân Cầu Lông BWF Pro 01'} • {ticketData?.gate || 'Court 3'} • Check-in lúc {ticketData?.startTime || '19:30'}
+                        {ticketData?.courtName || '—'} • {ticketData?.gate || '—'} • Check-in lúc {ticketData?.startTime || '—'}
                       </div>
                     </div>
                   </div>
@@ -2637,7 +2627,7 @@ function CheckInQR() {
                     Lịch Sử Check-in &amp; Đánh Giá Fairplay Gần Đây
                   </h3>
                   <div style={{ fontSize: '12px', color: '#6B7280', fontWeight: 500, marginTop: '2px' }}>
-                    {ticketData?.venueName || 'SportNexus Arena Q.7'} • {ticketData?.startTime || '19:30'}, {ticketData?.playDate || '24/02/2026'}
+                    {ticketData?.venueName || '—'} • {ticketData?.startTime || '—'}, {ticketData?.playDate || '—'}
                   </div>
                 </div>
 
@@ -3020,7 +3010,7 @@ function CheckInQR() {
                     margin: '0 0 6px 0',
                   }}
                 >
-                  Check-in {ticketData?.gate || 'Cổng B2'} Thành Công!
+                  Check-in {ticketData?.gate || '—'} Thành Công!
                 </h3>
                 <p
                   style={{
@@ -3030,7 +3020,7 @@ function CheckInQR() {
                     lineHeight: 1.5,
                   }}
                 >
-                  Hệ thống đã xác thực vé #{ticketData?.ticketCode || 'TK-8849'}. Barie {ticketData?.gate || 'Cổng B2'} đã mở, chúc bạn có trận đấu bùng nổ!
+                  Hệ thống đã xác thực vé #{ticketData?.ticketCode || '—'}. Barie {ticketData?.gate || '—'} đã mở, chúc bạn có trận đấu bùng nổ!
                 </p>
 
                 {/* Escrow Release info box */}
@@ -3054,7 +3044,7 @@ function CheckInQR() {
                     Giải ngân ký quỹ Escrow thành công
                   </div>
                   <div>
-                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 330000)} đ</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || 'Sân Cầu Lông'}.
+                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 330000)} đ</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
                   </div>
                 </div>
 
@@ -3115,7 +3105,7 @@ function CheckInQR() {
                     lineHeight: 1.5,
                   }}
                 >
-                  Quét mã vé <strong>#{ticketData?.ticketCode || 'TK-8849'}</strong> tại máy quét barie để mở cổng vào sân thi đấu.
+                  Quét mã vé <strong>#{ticketData?.ticketCode || '—'}</strong> tại máy quét barie để mở cổng vào sân thi đấu.
                 </p>
 
                 {/* Info Card */}
@@ -3134,7 +3124,7 @@ function CheckInQR() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ color: '#64748B' }}>Loại vé:</span>
-                    <strong style={{ color: '#0284C7' }}>{ticketData?.sportType || 'Đặt sân'}</strong>
+                    <strong style={{ color: '#0284C7' }}>{ticketData?.sportType || '—'}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ color: '#64748B' }}>Sân:</span>

@@ -1,126 +1,144 @@
 import { useState } from 'react'
-import { Bell, CalendarClock, CheckCircle2, Download, FilePenLine, Mail, Plus, Power, Send, ShieldCheck } from 'lucide-react'
+import { Bell, CalendarClock, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
+import { usePagedList } from '../components/listHooks.js'
+import { useApi } from '../../hooks/useApi.js'
+import { createBroadcast, deleteBroadcast, getNotificationStatistics, listBroadcasts } from '../../api/admin/notificationApi.js'
 import '../Users/users.css'
 import './notification.css'
-import { audiences, deliveryStatuses, formTypes, initialBroadcasts, initialFilters, initialNotifications, initialTriggers, mockSummary, notificationTypes, roles, tabLabels } from './notificationData.js'
-import { broadcastAction, createNotifications, filterManagement, filterNotifications, formatNumber, formatTime, localDate, managementCsv, notificationSummary, notificationsCsv, paginate, saveBroadcast, toggleTrigger as updateTrigger, validateNotification } from './notificationHelpers.js'
-import { NotificationFilters, NotificationPagination } from './NotificationUI.jsx'
-import NotificationTable from './NotificationTable.jsx'
-import { BroadcastInspector, BroadcastPreview, NotificationInspector, TriggerInspector } from './NotificationInspector.jsx'
-import CreateNotificationModal from './CreateNotificationModal.jsx'
 
-const newTabState = () => Object.fromEntries(Object.keys(tabLabels).map(key => [key, { filters: { ...initialFilters }, page: 1, pageSize: 10, selectedId: null }]))
+// Giá trị target gửi lên BE. Để trống = gửi tất cả người dùng; "Selected" dùng danh sách userIds.
+const TARGETS = [
+  { value: '', label: 'Tất cả người dùng' },
+  { value: 'Player', label: 'Người chơi' },
+  { value: 'CourtOwner', label: 'Chủ sân' },
+  { value: 'Selected', label: 'Người dùng cụ thể (nhập ID)' },
+]
+const STATUS_OPTIONS = ['', 'Scheduled', 'Sent', 'Cancelled']
+const number = value => new Intl.NumberFormat('vi-VN').format(Number(value) || 0)
+const time = value => (value ? new Date(value).toLocaleString('vi-VN') : '—')
+const emptyForm = { title: '', body: '', target: '', userIds: '', scheduledAt: '' }
+
+function ComposeDialog({ onClose, onSent }) {
+  const [form, setForm] = useState(emptyForm)
+  const [sending, setSending] = useState(false)
+  const change = (key, value) => setForm(previous => ({ ...previous, [key]: value }))
+
+  const submit = async event => {
+    event.preventDefault()
+    if (!form.title.trim() || !form.body.trim()) { toast.error('Vui lòng nhập tiêu đề và nội dung.'); return }
+    const userIds = form.target === 'Selected' ? form.userIds.split(/[\s,;]+/).filter(Boolean) : []
+    if (form.target === 'Selected' && userIds.length === 0) { toast.error('Vui lòng nhập ít nhất một ID người dùng.'); return }
+    setSending(true)
+    try {
+      await createBroadcast({
+        title: form.title.trim(),
+        body: form.body.trim(),
+        target: form.target === 'Selected' ? undefined : form.target || undefined,
+        userIds,
+        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
+      })
+      toast.success(form.scheduledAt ? 'Đã lên lịch gửi thông báo.' : 'Đã gửi thông báo.')
+      onSent()
+    } catch (error) {
+      toast.error(error?.message || 'Không gửi được thông báo.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return <DemoDialog title="Gửi thông báo hệ thống" onClose={onClose}>
+    <form onSubmit={submit}>
+      <div className="users-form">
+        <label>Tiêu đề<input maxLength={255} value={form.title} onChange={event => change('title', event.target.value)} /></label>
+        <label>Nội dung<textarea rows={5} maxLength={2000} value={form.body} onChange={event => change('body', event.target.value)} /></label>
+        <label>Người nhận<select value={form.target} onChange={event => change('target', event.target.value)}>{TARGETS.map(target => <option key={target.value} value={target.value}>{target.label}</option>)}</select></label>
+        {form.target === 'Selected' && <label>ID người dùng (cách nhau bởi dấu phẩy)<textarea rows={2} value={form.userIds} onChange={event => change('userIds', event.target.value)} /></label>}
+        <label>Hẹn giờ gửi (để trống = gửi ngay)<input type="datetime-local" value={form.scheduledAt} onChange={event => change('scheduledAt', event.target.value)} /></label>
+      </div>
+      <div className="users-details-actions">
+        <button type="button" className="users-button" onClick={onClose}>Hủy</button>
+        <button type="submit" className="users-button users-primary" disabled={sending}><Send size={13} />{sending ? 'Đang gửi…' : form.scheduledAt ? 'Lên lịch' : 'Gửi ngay'}</button>
+      </div>
+    </form>
+  </DemoDialog>
+}
 
 export default function NotificationManagement() {
-  const [notifications, setNotifications] = useState(() => initialNotifications)
-  const [triggers, setTriggers] = useState(() => initialTriggers)
-  const [broadcasts, setBroadcasts] = useState(() => initialBroadcasts)
-  const [tab, setTab] = useState('history')
-  const [tabState, setTabState] = useState(newTabState)
-  const [composer, setComposer] = useState(null)
-  const [confirmation, setConfirmation] = useState(null)
-  const [exporting, setExporting] = useState(false)
-  const [today] = useState(() => localDate(new Date()))
-  const state = tabState[tab]
-  const summary = notificationSummary(notifications, today)
-  const invalidRange = Boolean(state.filters.from && state.filters.to && state.filters.from > state.filters.to)
-  const filtered = tab === 'history' ? invalidRange ? [] : filterNotifications(notifications, state.filters) : filterManagement(tab === 'triggers' ? triggers : broadcasts, state.filters, tab)
-  const pagination = paginate(filtered, state.page, state.pageSize)
-  const selected = pagination.rows.find(record => record.id === state.selectedId) || pagination.rows[0]
+  const [status, setStatus] = useState('')
+  const [page, setPage] = useState(1)
+  const [reload, setReload] = useState(0)
+  const [composing, setComposing] = useState(false)
+  const refresh = () => setReload(value => value + 1)
 
-  const updateTab = changes => setTabState(current => ({ ...current, [tab]: { ...current[tab], ...changes } }))
-  const changeFilter = (key, value) => updateTab({ filters: { ...state.filters, [key]: value }, page: 1, selectedId: null })
-  const showRecord = (targetTab, id) => {
-    setTab(targetTab)
-    setTabState(current => ({ ...current, [targetTab]: { ...current[targetTab], filters: { ...initialFilters }, page: 1, selectedId: id } }))
-  }
-  const toggleTrigger = record => setConfirmation({ action: 'toggle', record })
-  const handleBroadcast = (action, record) => {
-    if (action === 'edit') { setComposer(record); return }
-    if (action === 'duplicate') {
-      const id = crypto.randomUUID()
-      setBroadcasts(current => broadcastAction(current, record.id, 'duplicate', id))
-      showRecord('broadcasts', `BCAST-${id}`)
-      toast.success('Đã tạo bản sao Draft trong dữ liệu mẫu.')
-      return
-    }
-    setConfirmation({ action, record })
-  }
-  const confirmAction = () => {
-    const { action, record } = confirmation
-    if (action === 'reset') {
-      setNotifications(initialNotifications); setTriggers(initialTriggers); setBroadcasts(initialBroadcasts)
-      setTabState(newTabState()); setTab('history')
-    } else if (action === 'toggle') {
-      setTriggers(current => updateTrigger(current, record.id))
-    } else setBroadcasts(current => broadcastAction(current, record.id, action))
-    setConfirmation(null)
-    toast.success(action === 'reset' ? 'Đã khôi phục dữ liệu mẫu.' : 'Đã cập nhật trạng thái trong phiên dữ liệu mẫu.')
-  }
-  const saveNotification = (form, mode) => {
-    const error = validateNotification(form, mode)
-    if (error) { toast.error(error); return }
-    if (mode === 'send') {
-      const added = createNotifications(form)
-      setNotifications(current => [...added, ...current])
-      showRecord('history', added[0].id)
-      toast.success(`Đã tạo ${added.length} thông báo Đã gửi mô phỏng; không gửi thật.`)
-    } else {
-      const id = form.id || `BCAST-${crypto.randomUUID()}`
-      // New records get an ID after the helper has inserted them, rather than being treated as an edit.
-      setBroadcasts(current => saveBroadcast(current, form, mode, id.replace(/^BCAST-/, '')))
-      showRecord('broadcasts', id)
-      toast.success(mode === 'draft' ? 'Đã lưu bản nháp mẫu.' : `Đã lên lịch mô phỏng: ${formatTime(form.scheduleAt)} (UTC+7).`)
-    }
-    setComposer(null)
-  }
-  const exportCsv = () => {
-    setExporting(true)
+  // GET /api/v1/admin/notifications/statistics?days=30
+  const stats = useApi(() => getNotificationStatistics(30), [reload], { initialData: {} })
+  // GET /api/v1/admin/notifications/broadcasts
+  const list = usePagedList(listBroadcasts, { status, page, pageSize: 20, PageSize: 20 }, reload)
+  const s = stats.data || {}
+  const show = value => (stats.loading ? '…' : number(value))
+
+  const remove = async broadcast => {
+    if (!window.confirm(`Xóa / hủy thông báo "${broadcast.title}"?`)) return
     try {
-      const contents = tab === 'history' ? notificationsCsv(filtered) : managementCsv(filtered, tab)
-      const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8;' }))
-      const anchor = document.createElement('a')
-      anchor.href = url; anchor.download = `sportnexus-notifications-${tab}-demo.csv`; anchor.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.success(`Đã xuất ${filtered.length} bản ghi mẫu theo bộ lọc hiện tại.`)
-    } catch { toast.error('Không thể xuất CSV. Vui lòng thử lại.') }
-    finally { setExporting(false) }
+      await deleteBroadcast(broadcast.id)
+      toast.success('Đã xóa thông báo.')
+      refresh()
+    } catch (error) {
+      toast.error(error?.message || 'Không xóa được thông báo.')
+    }
   }
 
-  const stats = tab === 'history' ? [
-    ["Tổng thông báo", formatNumber(summary.total), Bell, 'Tổng quan minh họa, tách khỏi bảng mẫu'],
-    ["Đã gửi hôm nay", formatNumber(summary.sentToday), Send, `${formatNumber(mockSummary.sentToday)} mẫu + thông báo tạo trong ngày`],
-    ["Thông báo chưa đọc", formatNumber(summary.unread), Mail, 'Tổng quan chưa đọc (số liệu tổng hợp mẫu)'],
-    ["Tỷ lệ gửi thành công", `${summary.rate.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`, CheckCircle2, 'Đã giao / Đã đọc trên tổng số mẫu'],
-  ] : tab === 'triggers' ? [
-    ["Tổng sự kiện kích hoạt", triggers.length, Bell, 'Cấu hình sự kiện mẫu'],
-    ["Sự kiện đang hoạt động", triggers.filter(item => item.status === 'Active').length, Power, 'Đang bật trong dữ liệu trong phiên'],
-    ["Sự kiện ngừng hoạt động", triggers.filter(item => item.status === 'Inactive').length, ShieldCheck, 'Đang tắt trong dữ liệu trong phiên'],
-    ["Số lần kích hoạt hôm nay", triggers.reduce((total, item) => total + item.triggeredToday, 0), Send, 'Lịch sử minh họa ngày 13/10/2026'],
-  ] : [
-    ["Tổng thông báo hàng loạt", broadcasts.length, Bell, 'Bản ghi chiến dịch mẫu'],
-    ['Scheduled', broadcasts.filter(item => item.status === 'Scheduled').length, CalendarClock, 'Lịch minh họa; chưa có scheduler'],
-    ['Draft', broadcasts.filter(item => item.status === 'Draft').length, FilePenLine, 'Bản nháp có thể chỉnh sửa'],
-    ['Completed', broadcasts.filter(item => item.status === 'Completed').length, CheckCircle2, 'Lịch sử hoàn thành minh họa'],
-  ]
-  const filterOptions = tab === 'history' ? { type: notificationTypes, status: deliveryStatuses, audience: roles } : tab === 'triggers' ? { type: notificationTypes.filter(type => type !== 'Broadcast'), status: ['Active', 'Inactive'] } : { type: formTypes, status: ['Draft', 'Scheduled', 'Sending', 'Completed', 'Cancelled'], audience: audiences }
-  const confirmationText = confirmation?.action === 'reset' ? 'Khôi phục dữ liệu ban đầu? Các thông báo, bản nháp và lịch gửi vừa tạo trong phiên sẽ được xóa.' : confirmation?.action === 'toggle' ? `${confirmation.record.status === 'Active' ? 'Tắt' : 'Bật'} sự kiện kích hoạt “${confirmation.record.name}” trong dữ liệu mẫu?` : `${confirmation?.action === 'delete' ? 'Xóa bản nháp' : 'Hủy lịch gửi'} “${confirmation?.record.title}”?`
-
-  return <div className="nt-page">
-    <div className="nt-page-heading admin-page-header"><div><div className="nt-title-row"><h1>Quản lý thông báo</h1><span className="nt-overview-badge">{formatNumber(summary.total)} Thông báo</span></div><p>Theo dõi thông báo, trạng thái gửi và hoạt động truyền thông trên SportNexus.</p></div><div className="nt-heading-actions"><button className="nt-button" onClick={exportCsv} disabled={exporting || !filtered.length || invalidRange}><Download size={14} />{exporting ? "Đang xuất…" : "Xuất CSV"}</button><button className="nt-button primary" onClick={() => setComposer({})}><Plus size={15} />Tạo thông báo</button></div></div>
-    <div className="nt-stats">{stats.map(([label, value, icon, trend]) => <StatCard key={label} label={label} value={value} icon={icon} trend={trend} />)}</div>
-    <div className="nt-tabs" role="tablist" aria-label="Các mục quản lý thông báo">{Object.entries(tabLabels).map(([key, label]) => <button key={key} id={`nt-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="nt-tab-panel" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{label}<span>{key === 'history' ? formatNumber(summary.total) : key === 'triggers' ? triggers.length : broadcasts.length}</span></button>)}</div>
-    <div id="nt-tab-panel" role="tabpanel" aria-labelledby={`nt-tab-${tab}`}>
-      <NotificationFilters tab={tab} filters={state.filters} options={filterOptions} onChange={changeFilter} onReset={() => updateTab({ filters: { ...initialFilters }, page: 1, selectedId: null })} />
-      <div className="nt-data-caption"><span>{tab === 'history' ? `${notifications.length} bản ghi mẫu hiển thị · Tổng quan ${formatNumber(mockSummary.total)} là số liệu tổng hợp mẫu riêng.` : `${filtered.length} kết quả mẫu · Cấu hình chỉ lưu trong phiên hiện tại.`}</span><button className="nt-text-button" onClick={() => setConfirmation({ action: 'reset' })}>Khôi phục dữ liệu mẫu</button></div>
-      <div className="nt-content-grid"><section className="nt-panel nt-list" aria-label={tabLabels[tab]}><NotificationTable tab={tab} rows={pagination.rows} selectedId={selected?.id} onSelect={selectedId => updateTab({ selectedId })} onToggle={toggleTrigger} onBroadcastAction={handleBroadcast} /><NotificationPagination total={filtered.length} page={pagination.page} pages={pagination.pages} pageSize={state.pageSize} onPage={page => updateTab({ page, selectedId: null })} onPageSize={pageSize => updateTab({ pageSize, page: 1, selectedId: null })} /></section>
-        <div className="nt-inspector-column">{tab === 'history' ? <NotificationInspector notification={selected} /> : tab === 'triggers' ? <TriggerInspector trigger={selected} onToggle={toggleTrigger} /> : <BroadcastInspector broadcast={selected} onAction={handleBroadcast} />}<BroadcastPreview onCreate={setComposer} /></div>
+  return <div className="users-page">
+    <header className="users-page-heading admin-page-header">
+      <div><h1>Quản lý thông báo</h1><p>Gửi và theo dõi các thông báo hệ thống tới người dùng SportNexus.</p></div>
+      <div className="users-heading-actions">
+        <button className="users-button" onClick={refresh}><RefreshCw size={13} />Làm mới</button>
+        <button className="users-button users-primary" onClick={() => setComposing(true)}><Plus size={13} />Tạo thông báo</button>
       </div>
+    </header>
+
+    <div className="users-kpis">
+      <StatCard label="Thông báo đã gửi (30 ngày)" value={show(s.totalSent ?? s.totalNotifications ?? s.total)} icon={Send} />
+      <StatCard label="Chưa đọc" value={show(s.totalUnread ?? s.unread)} icon={Bell} />
+      <StatCard label="Lượt broadcast" value={show(s.totalBroadcasts ?? s.broadcasts)} icon={CalendarClock} />
     </div>
-    {composer && <CreateNotificationModal initial={composer} onClose={() => setComposer(null)} onSave={saveNotification} />}
-    {confirmation && <DemoDialog title={confirmation.action === 'reset' ? 'Khôi phục dữ liệu mẫu' : 'Xác nhận thay đổi mẫu'} onClose={() => setConfirmation(null)}><div className="nt-modal-content"><p>{confirmationText}</p><p className="nt-demo-note">Thao tác chỉ áp dụng cho dữ liệu trong phiên; không thay đổi máy chủ hoặc gửi thông báo thật.</p><footer><button className="nt-button" onClick={() => setConfirmation(null)}>Hủy</button><button className="nt-button primary" onClick={confirmAction}>Xác nhận</button></footer></div></DemoDialog>}
+    {stats.error && <div className="users-notice" role="alert"><span>Không tải được thống kê: {stats.error}</span></div>}
+    {list.error && <div className="users-notice" role="alert"><span>Không tải được danh sách: {list.error}</span></div>}
+
+    <section className="users-toolbar" aria-label="Bộ lọc">
+      <label>Trạng thái<select value={status} onChange={event => { setStatus(event.target.value); setPage(1) }}>
+        {STATUS_OPTIONS.map(value => <option key={value} value={value}>{value || 'Tất cả'}</option>)}
+      </select></label>
+    </section>
+
+    <section className="users-table-panel">
+      <div className="users-table-scroll">
+        <table>
+          <thead><tr><th>Tiêu đề</th><th>Người nhận</th><th>Trạng thái</th><th>Số người nhận</th><th>Hẹn giờ / Đã gửi</th><th /></tr></thead>
+          <tbody>
+            {list.loading && <tr><td colSpan={6}>Đang tải…</td></tr>}
+            {!list.loading && list.items.length === 0 && <tr><td colSpan={6} className="users-empty">Chưa có thông báo nào.</td></tr>}
+            {!list.loading && list.items.map(broadcast => <tr key={broadcast.id}>
+              <td><strong>{broadcast.title}</strong><br /><small>{broadcast.body.slice(0, 80)}</small></td>
+              <td>{TARGETS.find(target => target.value === broadcast.target)?.label || broadcast.target}</td>
+              <td>{broadcast.status || '—'}</td>
+              <td>{number(broadcast.recipients)}</td>
+              <td>{time(broadcast.sentAt || broadcast.scheduledAt || broadcast.createdAt)}</td>
+              <td><button className="users-button" aria-label={`Xóa ${broadcast.title}`} onClick={() => remove(broadcast)}><Trash2 size={13} /></button></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="users-pagination">
+        <button className="users-button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Trước</button>
+        <span>Trang {page} / {list.totalPages || 1}</span>
+        <button className="users-button" disabled={page >= (list.totalPages || 1)} onClick={() => setPage(value => value + 1)}>Sau</button>
+      </div>
+    </section>
+
+    {composing && <ComposeDialog onClose={() => setComposing(false)} onSent={() => { setComposing(false); setPage(1); refresh() }} />}
   </div>
 }

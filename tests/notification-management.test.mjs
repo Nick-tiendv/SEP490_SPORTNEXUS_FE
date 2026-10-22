@@ -166,7 +166,8 @@ test('React page, delivery inspectors, trigger/broadcast details and composer re
   try {
     const { default: Page } = await server.ssrLoadModule('/src/Admin/Notifications/NotificationManagement.jsx')
     const markup = renderToString(createElement(Page))
-    for (const content of ['Quản lý thông báo', 'Lịch sử thông báo', 'Chi tiết thông báo', 'Đã xác nhận đặt sân', 'Xem trước thông báo hàng loạt', '18.420']) assert.ok(markup.includes(content))
+    // Trang dùng API thật (broadcasts + statistics): khi render phía server chỉ có khung trang và trạng thái đang tải.
+    for (const content of ['Quản lý thông báo', 'Tạo thông báo', 'Đang tải']) assert.ok(markup.includes(content))
     const { NotificationInspector, TriggerInspector, BroadcastInspector } = await server.ssrLoadModule('/src/Admin/Notifications/NotificationInspector.jsx')
     const { default: Composer } = await server.ssrLoadModule('/src/Admin/Notifications/CreateNotificationModal.jsx')
     for (const status of ['Read', 'Delivered', 'Failed', 'Pending', 'Sent']) {

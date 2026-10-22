@@ -4,7 +4,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import { QRCodeSVG } from 'qrcode.react'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities } from '../../api/player/facilityApi.js'
+import { getUpcomingBookings } from '../../api/player/bookingApi.js'
+import { getLfgs } from '../../api/player/lfgApi.js'
 
 const actionCards = [
   {
@@ -731,402 +735,78 @@ export function SportCourtDiagram({ sport, width = 58, height = 32, style = {}, 
 }
 
 // Dữ liệu trận đấu kế tiếp của cả 5 môn thể thao
-const upcomingMatchesData = [
-  {
-    id: 'up-1',
-    sport: 'badminton',
-    sportName: 'Cầu Lông',
-    sportEmoji: '🏸',
-    sportBadgeBg: '#EAF7EE',
-    sportBadgeColor: '#15803D',
-    time: '19:30 Tối nay (90 phút)',
-    type: 'Cầu Lông Đôi Nam Nữ • BWF',
-    surface: 'Thảm PVC Yonex 5mm',
-    deposit: 'Đã đặt cọc: 60.000 đ',
-    title: 'Cầu Lông Bình Thạnh Arena — Sân Yonex BWF 03',
-    address: 'Số 18/2 Chu Văn An, Bình Thạnh (Cách 1.5km) • Đủ 4/4 người',
-    img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop',
-    qrCode: 'SNX-BAD-9921',
-  },
-  {
-    id: 'up-2',
-    sport: 'pickleball',
-    sportName: 'Pickleball',
-    sportEmoji: '🏓',
-    sportBadgeBg: '#ECFDF5',
-    sportBadgeColor: '#047857',
-    time: '20:00 Ngày mai (120 phút)',
-    type: 'Pickleball Đôi Nam Nữ • Trình Khá',
-    surface: 'Mặt Acrylic Pro USAPA 8 Lớp',
-    deposit: 'Đã đặt cọc: 80.000 đ',
-    title: 'Pickleball D-Dink Hub Thảo Điền — Sân Pro USAPA 02',
-    address: 'Số 28 Thảo Điền, TP. Thủ Đức (Cách 2.3km) • Đủ 4/4 người',
-    img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop',
-    qrCode: 'SNX-PCK-4412',
-  },
-  {
-    id: 'up-3',
-    sport: 'football',
-    sportName: 'Bóng Đá',
-    sportEmoji: '⚽',
-    sportBadgeBg: '#FEF3C7',
-    sportBadgeColor: '#B45309',
-    time: '18:00 Thứ 7 (90 phút)',
-    type: 'Bóng Đá Mini Sân 7 • Giao Lưu',
-    deposit: 'Đã đặt cọc: 100.000 đ',
-    title: 'Sân Bóng Đá SportZone Q7 — Sân Cỏ Nhân Tạo 02',
-    address: 'Đường Nguyễn Văn Linh, Quận 7 (Cách 3.5km) • Đủ 14/14 người',
-    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=160&h=160&fit=crop',
-    qrCode: 'SNX-FTB-8832',
-  },
-  {
-    id: 'up-4',
-    sport: 'basketball',
-    sportName: 'Bóng Rổ',
-    sportEmoji: '🏀',
-    sportBadgeBg: '#FFEDD5',
-    sportBadgeColor: '#C2410C',
-    time: '17:00 Chủ Nhật (60 phút)',
-    type: 'Bóng Rổ 3x3 • Trình Độ Khá',
-    deposit: 'Đã đặt cọc: 50.000 đ',
-    title: 'SSA Thảo Điền Basketball Court — Sân Gỗ Trong Nhà',
-    address: 'Số 28 Thảo Điền, TP. Thủ Đức (Cách 2.1km) • Đủ 6/6 người',
-    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=160&h=160&fit=crop',
-    qrCode: 'SNX-BSK-1109',
-  },
-  {
-    id: 'up-5',
-    sport: 'tennis',
-    sportName: 'Tennis',
-    sportEmoji: '🎾',
-    sportBadgeBg: '#F7FEE7',
-    sportBadgeColor: '#4D7C0F',
-    time: '07:00 Sáng Thứ Bảy (120 phút)',
-    type: 'Tennis Đơn Nam • Trình độ Khá',
-    deposit: 'Đã đặt cọc: 150.000 đ',
-    title: 'CLB Quần Vợt Lan Anh — Sân Cứng Đèn Đêm 01',
-    address: 'Số 291 Cách Mạng Tháng 8, Quận 10 (Cách 4.0km) • Đủ 2/2 người',
-    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=160&h=160&fit=crop',
-    qrCode: 'SNX-TNS-3321',
-  },
-]
+const SPORT_META = {
+  badminton: { name: 'Cầu Lông', emoji: '🏸', bg: '#EAF7EE', color: '#15803D', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop' },
+  pickleball: { name: 'Pickleball', emoji: '🏓', bg: '#ECFDF5', color: '#047857', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop' },
+  football: { name: 'Bóng Đá', emoji: '⚽', bg: '#EFF6FF', color: '#2563EB', img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=320&h=320&fit=crop' },
+  basketball: { name: 'Bóng Rổ', emoji: '🏀', bg: '#FFF7ED', color: '#EA580C', img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=320&h=320&fit=crop' },
+  tennis: { name: 'Tennis', emoji: '🎾', bg: '#F7FEE7', color: '#65A30D', img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=320&h=320&fit=crop' },
+}
+const sportKeyOf = (name = '') => {
+  const n = name.toLowerCase()
+  if (n.includes('pickle')) return 'pickleball'
+  if (n.includes('bóng đá') || n.includes('football')) return 'football'
+  if (n.includes('bóng rổ') || n.includes('basket')) return 'basketball'
+  if (n.includes('tennis') || n.includes('quần vợt')) return 'tennis'
+  return 'badminton'
+}
+const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+const whenText = (start, end) => {
+  if (!start) return '—'
+  const s = new Date(start)
+  const minutes = end ? Math.round((new Date(end) - s) / 60000) : 0
+  return `${s.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${s.toLocaleDateString('vi-VN')}${minutes > 0 ? ` (${minutes} phút)` : ''}`
+}
 
-// Dữ liệu kèo ghép trận LFG cho 5 môn với hình ảnh riêng biệt
-const allLfgMatches = [
-  {
-    id: 'lfg-1',
-    sport: 'pickleball',
-    sportName: 'Pickleball Đôi D-Dink',
-    sportEmoji: '🏓',
-    missing: 'Thiếu 1 người',
-    missingColor: '#DC2626',
-    time: '20:30 Hôm nay • CLB Phú Mỹ Hưng (1.2 km)',
-    price: '55.000 đ / người',
-    host: 'Host Tuấn Hoàng (Trình Khá)',
-    img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=100&h=100&fit=crop',
-    badge: 'Chuẩn USAPA',
-  },
-  {
-    id: 'lfg-2',
-    sport: 'badminton',
-    sportName: 'Cầu Lông Nam Nữ',
-    sportEmoji: '🏸',
-    missing: 'Thiếu 2 người',
-    missingColor: '#DC2626',
-    time: '18:00 Ngày mai • Sân Tre Xanh Bình Thạnh (2.8 km)',
-    price: '45.000 đ / người',
-    host: 'Host Linh (Trình Khá - Nâng cao)',
-    img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop',
-    badge: 'Thảm Yonex',
-  },
-  {
-    id: 'lfg-3',
-    sport: 'pickleball',
-    sportName: 'Pickleball Giao Lưu D-Dink',
-    sportEmoji: '🏓',
-    missing: 'Thiếu 2 người',
-    missingColor: '#D97706',
-    time: '06:30 Sáng mai • Sân Sala Q.2 (1.8 km)',
-    price: '60.000 đ / người',
-    host: 'Host Quỳnh Anh (Trình Trung bình)',
-    img: 'https://images.unsplash.com/photo-1693142518820-78d7a05f1546?w=100&h=100&fit=crop',
-    badge: 'Cộng Đồng',
-  },
-  {
-    id: 'lfg-4',
-    sport: 'badminton',
-    sportName: 'Cầu Lông Smash Đôi Nam',
-    sportEmoji: '🏸',
-    missing: 'Thiếu 1 người',
-    missingColor: '#DC2626',
-    time: '19:30 Tối nay • CLB Viettel Q.10 (3.2 km)',
-    price: '50.000 đ / người',
-    host: 'Host Hoàng Nam (Trình Bán chuyên)',
-    img: 'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?w=100&h=100&fit=crop',
-    badge: 'Cạnh Tranh Cao',
-  },
-  {
-    id: 'lfg-5',
-    sport: 'football',
-    sportName: 'Bóng Đá Sân 7',
-    sportEmoji: '⚽',
-    missing: 'Thiếu 3 người',
-    missingColor: '#DC2626',
-    time: '19:00 Tối mai • Sân Kênh Tẻ Q.7 (2.0 km)',
-    price: '65.000 đ / người',
-    host: 'Host Minh Trí (Đá Tiền Đạo)',
-    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
-    badge: 'Cỏ Mới êm chân',
-  },
-  {
-    id: 'lfg-6',
-    sport: 'basketball',
-    sportName: 'Bóng Rổ 3x3 Bán Chuyên',
-    sportEmoji: '🏀',
-    missing: 'Thiếu 2 người',
-    missingColor: '#D97706',
-    time: '17:30 Chiều nay • Sân Cung Thiếu Nhi Q.1 (3.0 km)',
-    price: '40.000 đ / người',
-    host: 'Host Quốc Bảo',
-    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=100&h=100&fit=crop',
-    badge: 'Sân Trong Nhà',
-  },
-  {
-    id: 'lfg-7',
-    sport: 'tennis',
-    sportName: 'Tennis Giao Lưu Đôi',
-    sportEmoji: '🎾',
-    missing: 'Thiếu 1 người',
-    missingColor: '#DC2626',
-    time: '06:00 Sáng mai • Sân Sunrise City Q.7 (1.5 km)',
-    price: '120.000 đ / người',
-    host: 'Host Lê Nam (Trình Khá)',
-    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=100&h=100&fit=crop',
-    badge: 'Mặt Sân Cứng',
-  },
-  {
-    id: 'lfg-8',
-    sport: 'football',
-    sportName: 'Bóng Đá Mini Sân 5 Tốc Độ',
-    sportEmoji: '⚽',
-    missing: 'Thiếu 2 người',
-    missingColor: '#2563EB',
-    time: '21:00 Tối mai • Sân Chảo Lửa Tân Bình (2.4 km)',
-    price: '50.000 đ / người',
-    host: 'Host Quang Huy (Trình Khá)',
-    img: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=100&h=100&fit=crop',
-    badge: 'Cỏ Đèn LED Đêm',
-  },
-  {
-    id: 'lfg-9',
-    sport: 'basketball',
-    sportName: 'Bóng Rổ Phủi Full Court 5x5',
-    sportEmoji: '🏀',
-    missing: 'Thiếu 3 người',
-    missingColor: '#EA580C',
-    time: '17:00 Chủ nhật • Sân Cung Thiếu Nhi Q.1 (1.8 km)',
-    price: '40.000 đ / người',
-    host: 'Host Đức Anh (Trình Phong trào)',
-    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
-    badge: 'Mặt Cao Su EPDM',
-  },
-  {
-    id: 'lfg-10',
-    sport: 'tennis',
-    sportName: 'Tennis Rally Rèn Kỹ Năng',
-    sportEmoji: '🎾',
-    missing: 'Thiếu 1 người',
-    missingColor: '#65A30D',
-    time: '17:30 Tối nay • Sân Sunrise City Q.7 (2.1 km)',
-    price: '95.000 đ / người',
-    host: 'Host Hoàng Long (Trình Khá - Chắc tay)',
-    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=100&h=100&fit=crop',
-    badge: 'Sân Resort Cao Cấp',
-  },
-]
+// Đơn đặt sân sắp tới (GET /api/v1/bookings/upcoming) -> thẻ "Trận sắp tới"
+const toUpcomingCard = (b) => {
+  const sportName = b.sportName || b.categoryName || ''
+  const sport = sportKeyOf(sportName)
+  const meta = SPORT_META[sport]
+  const id = String(b.id || b.bookingId || '')
+  return {
+    id,
+    bookingId: id,
+    sport,
+    sportName: sportName || meta.name,
+    sportEmoji: meta.emoji,
+    sportBadgeBg: meta.bg,
+    sportBadgeColor: meta.color,
+    time: whenText(b.startTime, b.endTime),
+    type: [sportName, b.courtName].filter(Boolean).join(' • ') || 'Đặt sân',
+    surface: b.bookingStatus || b.status || '',
+    deposit: b.totalAmount ? `Tổng tiền: ${vnd(b.totalAmount)}` : '',
+    title: [b.facilityName, b.courtName].filter(Boolean).join(' — ') || 'Đơn đặt sân',
+    address: b.facilityAddress || b.address || '',
+    img: b.facilityImageUrl || b.imageUrl || meta.img,
+    qrCode: b.bookingCode || b.code || id,
+  }
+}
 
-// Dữ liệu gợi ý sân trống với hình minh họa và mặt sân riêng biệt cho từng sân của mỗi môn
-const allSuggestedCourts = [
-  {
-    id: 'court-1',
-    sport: 'pickleball',
-    sportEmoji: '🏓',
-    slot: 'Trống 18:00 - 19:30',
-    dist: 'Cách 1.5 km',
-    name: 'Pickleball Hub Q.7',
-    surface: 'Mặt Acrylic Pro USAPA 2 màu • Kitchen Zone 7ft',
-    price: '180.000 đ/h • Chuẩn USAPA Pro',
-    rating: '4.9 ★ (512 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1693142518820-78d7a05f1546?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-2',
-    sport: 'badminton',
-    sportEmoji: '🏸',
-    slot: 'Trống 19:00 - 21:00',
-    dist: 'Cách 3.1 km',
-    name: 'Cầu Lông Bình Thạnh Arena',
-    surface: 'Thảm PVC BWF Yonex giảm chấn • Đèn chống lóa',
-    price: '120.000 đ/h • Thảm BWF Yonex',
-    rating: '4.8 ★ (340 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-3',
-    sport: 'pickleball',
-    sportEmoji: '🏓',
-    slot: 'Trống 20:00 - 22:00',
-    dist: 'Cách 2.8 km',
-    name: 'Pickleball Saigon D-Dink Park Thủ Đức',
-    surface: 'Cụm 8 Sân USAPA Ngoài Trời • Đèn LED Chuyên Dụng',
-    price: '160.000 đ/h • 8 Sân Đèn LED Ngoài Trời',
-    rating: '4.9 ★ (210 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1519766304817-4f37bda74a29?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-4',
-    sport: 'badminton',
-    sportEmoji: '🏸',
-    slot: 'Trống 17:30 - 19:00',
-    dist: 'Cách 2.0 km',
-    name: 'CLB Cầu Lông Đào Duy Anh Phú Nhuận',
-    surface: '6 Sân Thảm Tiêu Chuẩn Thi Đấu • Trần Cao 10m',
-    price: '110.000 đ/h • 6 Sân Chuẩn Thi Đấu',
-    rating: '4.7 ★ (185 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-5',
-    sport: 'football',
-    sportEmoji: '⚽',
-    slot: 'Trống 19:00 - 21:00',
-    dist: 'Cách 2.4 km',
-    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
-    surface: 'Cụm 8 Sân 5 & 7 Cỏ Nhân Tạo • Đèn Pha 1000W',
-    price: '300.000 đ/h • Cụm 8 Sân Cỏ Nhân Tạo',
-    rating: '4.9 ★ (420 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-6',
-    sport: 'basketball',
-    sportEmoji: '🏀',
-    slot: 'Trống 18:00 - 20:00',
-    dist: 'Cách 3.0 km',
-    name: 'Sân Bóng Rổ SSA Thảo Điền',
-    surface: 'Sàn Gỗ Phong Maple Pro • Trụ Kính FIBA',
-    price: '280.000 đ/h • Sàn Thi Đấu Trong Nhà',
-    rating: '4.8 ★ (195 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-7',
-    sport: 'tennis',
-    sportEmoji: '🎾',
-    slot: 'Trống 17:00 - 19:00',
-    dist: 'Cách 1.8 km',
-    name: 'CLB Tennis Lan Anh Quận 10',
-    surface: '7 Sân Cứng DecoTurf US Open • Khán Đài Đèn Thi Đấu',
-    price: '260.000 đ/h • Chuẩn Quốc Tế',
-    rating: '4.9 ★ (610 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-8',
-    sport: 'football',
-    sportEmoji: '⚽',
-    slot: 'Trống 20:30 - 22:00',
-    dist: 'Cách 2.5 km',
-    name: 'Sân Bóng Đá SportZone Q.7',
-    surface: 'Sân 7 Chuẩn FIFA • Cỏ Monofilament Êm Chân',
-    price: '320.000 đ/h • Cụm Sân Hiện Đại Q7',
-    rating: '4.8 ★ (290 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-9',
-    sport: 'basketball',
-    sportEmoji: '🏀',
-    slot: 'Trống 17:00 - 19:00',
-    dist: 'Cách 1.8 km',
-    name: 'Sân Bóng Rổ Cung Thiếu Nhi Q.1',
-    surface: 'Mặt Sân Cao Su EPDM Ngoài Trời • Kháng Thời Tiết',
-    price: '250.000 đ/h • 4 Sân Trụ Kính',
-    rating: '4.9 ★ (310 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-10',
-    sport: 'tennis',
-    sportEmoji: '🎾',
-    slot: 'Trống 18:30 - 20:30',
-    dist: 'Cách 2.1 km',
-    name: 'Sân Quần Vợt Sunrise City Q.7',
-    surface: 'Mặt Sân Đất Nện & Cứng • Dịch Vụ Căng Vợt Nhặt Bóng',
-    price: '220.000 đ/h • Khuôn Viên Resort',
-    rating: '4.7 ★ (180 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-11',
-    sport: 'badminton',
-    sportEmoji: '🏸',
-    slot: 'Trống 20:00 - 22:00',
-    dist: 'Cách 3.2 km',
-    name: 'Sân Cầu Lông Viettel Hoàng Hoa Thám',
-    surface: '12 Sân Thảm BWF Liên Hoàn • Trần Cao 11m Máy Lạnh',
-    price: '170.000 đ/h • 12 Sân Thi Đấu',
-    rating: '4.8 ★ (560 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-12',
-    sport: 'pickleball',
-    sportEmoji: '🏓',
-    slot: 'Trống 19:30 - 21:00',
-    dist: 'Cách 2.4 km',
-    name: 'Kỳ Hòa Pickleball & Sport Club Q.10',
-    surface: 'Mặt Sân Acrylic 8 Lớp • Ghế Khán Giả Che Mát',
-    price: '240.000 đ/h • Có Mái Che Thoáng',
-    rating: '4.8 ★ (275 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=200&h=200&fit=crop',
-  },
-  {
-    id: 'court-5',
-    sport: 'football',
-    sportEmoji: '⚽',
-    slot: 'Trống 19:30 - 21:00',
-    dist: 'Cách 3.4 km',
-    name: 'Sân Bóng Đá Chảo Lửa Tân Bình',
-    price: '350.000 đ/h • Cụm 6 Sân 5-7 Người',
-    rating: '4.8 ★ (420 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=100&h=100&fit=crop',
-  },
-  {
-    id: 'court-6',
-    sport: 'basketball',
-    sportEmoji: '🏀',
-    slot: 'Trống 18:00 - 20:00',
-    dist: 'Cách 2.4 km',
-    name: 'Sân Bóng Rổ SSA Thảo Điền',
-    price: '200.000 đ/h • Sân Tiêu Chuẩn FIBA',
-    rating: '4.9 ★ (190 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=100&h=100&fit=crop',
-  },
-  {
-    id: 'court-7',
-    sport: 'tennis',
-    sportEmoji: '🎾',
-    slot: 'Trống 06:00 - 08:00',
-    dist: 'Cách 1.8 km',
-    name: 'CLB Tennis Sunrise City Quận 7',
-    price: '220.000 đ/h • Mặt Sân Cứng Đạt Chuẩn ITF',
-    rating: '4.9 ★ (315 đánh giá)',
-    img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=100&h=100&fit=crop',
-  },
-]
+// Kèo LFG đang mở (GET /api/v1/lfgs) -> dòng "Kèo đang tìm người"
+const toLfgRow = (c) => {
+  const sportName = c.sportName || c.sportCategoryName || ''
+  const sport = sportKeyOf(sportName)
+  const meta = SPORT_META[sport]
+  const total = Number(c.totalSlots ?? (Number(c.slotsNeeded || 0) + 1)) || 0
+  const current = Number(c.currentSlots ?? c.participantCount ?? 1) || 0
+  return {
+    id: String(c.id || c.cardId || ''),
+    sport,
+    sportName: c.title || sportName || meta.name,
+    sportEmoji: meta.emoji,
+    missing: `Thiếu ${Math.max(0, total - current)} người`,
+    missingColor: '#DC2626',
+    time: [whenText(c.startTime), c.facilityName || c.courtName].filter(Boolean).join(' • '),
+    price: `${vnd(c.pricePerPerson ?? c.price)} / người`,
+    host: c.hostName ? `Host ${c.hostName}` : '',
+    img: meta.img,
+    badge: c.skillLevelTag || '',
+  }
+}
 
 function Dashboard() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
 
   // Tự động chuyển hướng sang trang Quản trị nếu tài khoản có vai trò là Court Owner hoặc Admin
@@ -1144,7 +824,7 @@ function Dashboard() {
       const saved = localStorage.getItem('player_profile_data')
       if (saved) return JSON.parse(saved)
     } catch (e) {}
-    return { name: 'Minh Minh Minh' }
+    return {}
   })
 
   useEffect(() => {
@@ -1177,6 +857,20 @@ function Dashboard() {
 
   // Tải danh sách cơ sở thực tế từ API /api/v1/facilities
   const [apiSuggestedCourts, setApiSuggestedCourts] = useState([])
+  // Trận sắp tới (GET /api/v1/bookings/upcoming) và kèo LFG đang mở (GET /api/v1/lfgs)
+  const [upcomingMatchesData, setUpcomingMatchesData] = useState([])
+  const [allLfgMatches, setAllLfgMatches] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    getUpcomingBookings()
+      .then((list) => !cancelled && setUpcomingMatchesData(list.map(toUpcomingCard)))
+      .catch((err) => console.warn('Dashboard: Không tải được lịch sắp tới:', err))
+    getLfgs({ page: 1, pageSize: 6 })
+      .then((res) => !cancelled && setAllLfgMatches((res?.items || []).map(toLfgRow)))
+      .catch((err) => console.warn('Dashboard: Không tải được kèo LFG:', err))
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -1200,9 +894,10 @@ function Dashboard() {
 
             const emoji =
               sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : sportKey === 'football' ? '⚽' : sportKey === 'basketball' ? '🏀' : '🎾'
-            const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
-            const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
-            const distArea = fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : fac.address?.includes('Quận 7') ? 'Quận 7' : fac.address?.includes('Quận 1') ? 'Quận 1' : 'Hà Nội'
+            const prices = (fac.courts || []).map((c) => Number(c.defaultPrice)).filter((n) => n > 0)
+            const minPrice = prices.length ? Math.min(...prices) : 0
+            const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || SPORT_META[sportKey]?.img
+            const distArea = fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || ''
 
             return {
               id: fac.id,
@@ -1212,9 +907,9 @@ function Dashboard() {
               slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
               dist: distArea,
               name: fac.name,
-              surface: fac.description || 'Sân đạt chuẩn thi đấu, đèn LED cao áp',
-              price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
-              rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★ (${fac.reviewCount || 128} đánh giá)`,
+              surface: fac.description || '',
+              price: `${minPrice ? `${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${fac.courts?.length || 0} sân`,
+              rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
               img: thumb,
               isFromApi: true,
               rawFacility: fac,
@@ -1240,7 +935,7 @@ function Dashboard() {
   )
 
   const combinedSuggestedCourts = useMemo(() => {
-    return apiSuggestedCourts.length > 0 ? [...apiSuggestedCourts, ...allSuggestedCourts] : allSuggestedCourts
+    return apiSuggestedCourts
   }, [apiSuggestedCourts])
 
   const filteredCourts = combinedSuggestedCourts.filter((c) => {
@@ -1296,7 +991,7 @@ function Dashboard() {
                   letterSpacing: '-0.5px',
                 }}
               >
-                Xin chào, {playerProfile.name || 'Minh Minh Minh'} 👋
+                Xin chào, {currentUser.name || 'bạn'} 👋
               </h1>
               <span
                 style={{
@@ -2300,11 +1995,7 @@ function Dashboard() {
                 marginBottom: '16px',
               }}
             >
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrModalMatch.qrCode}`}
-                alt="QR Code"
-                style={{ width: '160px', height: '160px', display: 'block' }}
-              />
+              <QRCodeSVG value={String(qrModalMatch.qrCode || '')} size={160} style={{ display: 'block' }} />
               <span
                 style={{
                   display: 'block',

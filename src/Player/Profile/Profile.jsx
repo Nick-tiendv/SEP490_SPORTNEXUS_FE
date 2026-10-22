@@ -1,6 +1,10 @@
 import { useAuth } from '../../context/authContext.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getMyProfile, updateMyProfile, logoutApi, getMySports, updateMySports, getSportCategories } from '../../api/player/profileApi.js'
+import { getMyFairPlay } from '../../api/player/lfgApi.js'
+import { initialsOf } from '../../hooks/useCurrentUser.js'
+import { getMyBookings } from '../../api/player/bookingApi.js'
 
 export const PRESET_SPORTS_CATALOG = [
   { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
@@ -20,148 +24,63 @@ export const PRESET_SPORTS_CATALOG = [
   { key: 'other', name: 'Môn thể thao khác (Tùy chỉnh)', icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' },
 ]
 
+// Chuyển một môn từ backend sang dạng thẻ hiển thị (icon/màu lấy theo danh mục có sẵn).
+const toUiSport = (sport) => {
+  const lower = (sport.name || '').toLowerCase()
+  const preset = PRESET_SPORTS_CATALOG.find((p) => lower && (p.name.toLowerCase().startsWith(lower) || lower.startsWith(p.name.toLowerCase().split(' (')[0])))
+  return {
+    id: sport.sportCategoryId,
+    sportCategoryId: sport.sportCategoryId,
+    name: sport.name || preset?.name || 'Môn thể thao',
+    icon: preset?.icon || '🎯',
+    level: sport.skillLevel || 'Chưa có đánh giá',
+    field: 'Trình độ',
+    ranked: true,
+    matches: 0,
+    winRate: '—',
+    color: preset?.color || '#15803D',
+    bgColor: preset?.bgColor || '#DCFCE7',
+  }
+}
+
 export default function Profile() {
   const { logout } = useAuth()
   const navigate = useNavigate()
 
-  // State thông tin người chơi - Đồng bộ tên & handle
+  // Thông tin người chơi: tên, SĐT, ảnh lấy từ GET /api/auth/me.
+  // Khu vực và giới thiệu chưa có trên backend nên chỉ lưu trên máy (localStorage).
   const [profile, setProfile] = useState(() => {
-    const saved = localStorage.getItem('player_profile_data')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        return {
-          name: parsed.name || 'Minh Minh Minh',
-          username: parsed.username || '@minhminhminh',
-          location: parsed.location || 'Thủ Đức',
-          bio: parsed.bio || 'Bị cầu lông chơi',
-          joinDate: parsed.joinDate || 'Tháng 03/2024',
-          phone: parsed.phone || '0908 123 456',
-          reputationScore: parsed.reputationScore || 4.9,
-          totalReviews: parsed.totalReviews || 58,
-          matchesPlayed: parsed.matchesPlayed || 48,
-          winRate: parsed.winRate || 86,
-          punctualityRate: parsed.punctualityRate || 99,
-          ...parsed,
-        }
-      } catch (e) {
-        console.error(e)
-      }
-    }
+    let local = {}
+    try { local = JSON.parse(localStorage.getItem('player_profile_data') || '{}') } catch { /* bỏ qua */ }
     return {
-      name: 'Minh Minh Minh',
-      username: '@minhminhminh',
-      location: 'Thủ Đức',
-      joinDate: 'Tháng 03/2024',
-      phone: '0908 123 456',
-      bio: 'Bị cầu lông chơi',
-      reputationScore: 4.9,
-      totalReviews: 58,
-      matchesPlayed: 48,
-      winRate: 86,
-      punctualityRate: 99,
+      name: '',
+      username: '',
+      location: local.location || '',
+      bio: local.bio || '',
+      joinDate: '',
+      phone: '',
+      email: '',
+      avatarUrl: null,
+      reputationScore: 0,
+      totalReviews: 0,
+      matchesPlayed: 0,
+      winRate: 0,
+      punctualityRate: 0,
     }
   })
 
-  // State các môn thể thao
-  const [sportsData, setSportsData] = useState(() => {
-    const saved = localStorage.getItem('player_sports_data') || localStorage.getItem('player_sports_elo')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        return parsed.map((s) => {
-          const { elo, ...rest } = s
-          return rest
-        })
-      } catch (e) {
-        console.error(e)
-      }
-    }
-    return [
-      {
-        id: 'badminton',
-        name: 'Cầu lông',
-        icon: '🏸',
-        level: 'Trung bình - Khá',
-        field: 'Trình độ',
-        ranked: true,
-        matches: 32,
-        winRate: '88%',
-        color: '#15803D',
-        bgColor: '#DCFCE7',
-      },
-      {
-        id: 'pickleball',
-        name: 'Pickleball',
-        icon: '🏓',
-        level: 'Mới chơi - Đang tiến bộ',
-        field: 'Trình độ',
-        ranked: true,
-        matches: 12,
-        winRate: '82%',
-        color: '#0284C7',
-        bgColor: '#E0F2FE',
-      },
-      {
-        id: 'football',
-        name: 'Bóng đá',
-        icon: '⚽',
-        level: 'Khá - Đá phong trào',
-        field: 'Trình độ',
-        ranked: true,
-        matches: 8,
-        winRate: '75%',
-        color: '#2563EB',
-        bgColor: '#EFF6FF',
-      },
-      {
-        id: 'basketball',
-        name: 'Bóng rổ',
-        icon: '🏀',
-        level: 'Trung bình - Khá',
-        field: 'Trình độ',
-        ranked: true,
-        matches: 6,
-        winRate: '80%',
-        color: '#EA580C',
-        bgColor: '#FFF7ED',
-      },
-      {
-        id: 'basketball',
-        name: 'Bóng rổ',
-        icon: '🏀',
-        level: 'Hậu vệ dẫn bóng',
-        field: 'Sở trường',
-        ranked: true,
-        matches: 8,
-        winRate: '80%',
-        color: '#EA580C',
-        bgColor: '#FFEDD5',
-      },
-      {
-        id: 'tennis',
-        name: 'Quần vợt (Tennis)',
-        icon: '🎾',
-        level: 'Mới tập chơi - Căn bản',
-        field: 'Trình độ',
-        ranked: true,
-        matches: 2,
-        winRate: '50%',
-        color: '#65A30D',
-        bgColor: '#F7FEE7',
-      },
-    ]
-  })
+  // Môn thể thao & trình độ: GET/PUT /api/auth/me/sports
+  const [sportsData, setSportsData] = useState([])
+  const [sportCategories, setSportCategories] = useState([])
 
   // Lưu profile khi thay đổi
   useEffect(() => {
     localStorage.setItem('player_profile_data', JSON.stringify(profile))
   }, [profile])
 
-  // Lưu sportsData khi thay đổi
+  // Giữ bản sao môn đã chọn cho các trang khác đang đọc (SportContext, Onboarding)
   useEffect(() => {
     localStorage.setItem('player_sports_data', JSON.stringify(sportsData))
-    localStorage.removeItem('player_sports_elo')
   }, [sportsData])
 
   // Trạng thái các Modal
@@ -213,111 +132,60 @@ export default function Profile() {
     }, 3500)
   }
 
+  // Tải hồ sơ, điểm Fair Play, số trận và danh sách môn từ backend khi mở trang
+  useEffect(() => {
+    let cancelled = false
+    Promise.allSettled([getMyProfile(), getMyFairPlay(), getMyBookings()]).then(([me, fairPlay, bookings]) => {
+      if (cancelled) return
+      const u = me.status === 'fulfilled' ? me.value || {} : {}
+      const fp = fairPlay.status === 'fulfilled' ? fairPlay.value || {} : {}
+      const list = bookings.status === 'fulfilled' && Array.isArray(bookings.value) ? bookings.value : []
+      const score = Number(fp.score ?? fp.fairPlayScore ?? fp.currentScore)
+      const created = u.createdAt ? new Date(u.createdAt) : null
+      setProfile((prev) => ({
+        ...prev,
+        name: u.fullName || prev.name,
+        username: u.username ? `@${u.username}` : prev.username,
+        phone: u.phone || prev.phone,
+        email: u.email || prev.email,
+        avatarUrl: u.avatarUrl || prev.avatarUrl,
+        joinDate: created ? `Tháng ${String(created.getMonth() + 1).padStart(2, '0')}/${created.getFullYear()}` : prev.joinDate,
+        // Điểm Fair Play thang 100 quy ra thang 5 sao
+        reputationScore: Number.isFinite(score) ? Math.round(score / 2) / 10 : prev.reputationScore,
+        totalReviews: Number(fp.totalRatings ?? fp.ratingCount ?? fp.totalReviews ?? prev.totalReviews) || 0,
+        matchesPlayed: list.filter((b) => /COMPLETED|CHECKED_IN/i.test(b.status || b.bookingStatus || '')).length,
+      }))
+      if (me.status === 'rejected') triggerToast(`⚠️ ${me.reason?.message || 'Không tải được hồ sơ.'}`)
+    })
+    Promise.all([getMySports(), getSportCategories()])
+      .then(([mine, categories]) => {
+        if (cancelled) return
+        setSportCategories(categories)
+        setSportsData(mine.map(toUiSport))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // Lưu danh sách môn lên backend; chỉ cập nhật giao diện khi lưu thành công.
+  const saveSports = async (next, successText) => {
+    const missing = next.find((s) => !s.sportCategoryId)
+    if (missing) {
+      triggerToast(`⚠️ Môn "${missing.name}" chưa có trong danh mục của hệ thống.`)
+      return false
+    }
+    try {
+      await updateMySports(next.map((s) => ({ sportCategoryId: s.sportCategoryId, skillLevel: s.level })))
+      setSportsData(next)
+      if (successText) triggerToast(successText)
+      return true
+    } catch (error) {
+      triggerToast(`⚠️ ${error?.message || 'Không lưu được môn thể thao.'}`)
+      return false
+    }
+  }
+
   // Danh sách đánh giá mẫu ban đầu
-  const initialReviews = [
-    {
-      id: 1,
-      author: 'Lê Nam',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Đối thủ đánh đôi',
-      avatarInitial: 'LN',
-      avatarBg: '#DCFCE7',
-      avatarColor: '#15803D',
-      matchType: 'Kèo Cầu lông',
-      court: 'Sân Q7 (Sân số 3)',
-      time: '2 ngày trước',
-      rating: 5,
-      content:
-        'Đánh cầu rất chuẩn và vui tính! Lên lưới chắc tay, giao lưu cực kỳ thoải mái, phối hợp nhịp nhàng.',
-      verifiedCheckout: true,
-      checkoutTime: '20:15',
-    },
-    {
-      id: 2,
-      author: 'Trần Hùng',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Đồng đội đánh cặp',
-      avatarInitial: 'TH',
-      avatarBg: '#E0F2FE',
-      avatarColor: '#0284C7',
-      matchType: 'Kèo Pickleball',
-      court: 'Sân Nam Sài Gòn (Sân 2)',
-      time: '5 ngày trước',
-      rating: 5,
-      content:
-        'Đúng giờ, tinh thần thể thao tuyệt vời. Luôn chủ động chia tiền sân sòng phẳng và hỗ trợ bọc lót đồng đội.',
-      verifiedCheckout: true,
-      checkoutTime: '19:40',
-    },
-    {
-      id: 3,
-      author: 'Hoàng Anh Tuấn',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Bạn chơi cùng sân',
-      avatarInitial: 'AT',
-      avatarBg: '#FEF3C7',
-      avatarColor: '#B45309',
-      matchType: 'Kèo Cầu lông',
-      court: 'Sân Hoàng Vy Q8 (Sân 1)',
-      time: '1 tuần trước',
-      rating: 5,
-      content:
-        'Kỹ thuật phong cầu và đập cầu rất chuẩn mực. Thái độ thi đấu văn minh, rất mong tiếp tục giao lưu ở các giải phong trào tới!',
-      verifiedCheckout: true,
-      checkoutTime: '21:00',
-    },
-    {
-      id: 4,
-      author: 'Võ Minh Đạt',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Đối thủ cùng sân',
-      avatarInitial: 'MĐ',
-      avatarBg: '#F3E8FF',
-      avatarColor: '#7E22CE',
-      matchType: 'Kèo Bóng đá',
-      court: 'Sân Cỏ Nhân Tạo Kênh Tẻ',
-      time: '2 tuần trước',
-      rating: 5,
-      content:
-        'Đá bóng nhiệt huyết, tôn trọng đối thủ và đồng đội. Chuyền bóng sắc bén, rất kỷ luật và hòa nhã!',
-      verifiedCheckout: true,
-      checkoutTime: '18:30',
-    },
-    {
-      id: 5,
-      author: 'Nguyễn Quốc Huy',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Đồng đội đánh cặp',
-      avatarInitial: 'QH',
-      avatarBg: '#FCE7F3',
-      avatarColor: '#BE185D',
-      matchType: 'Kèo Cầu lông',
-      court: 'CLB Viettel Q.10 (Sân 4)',
-      time: '3 tuần trước',
-      rating: 5,
-      content:
-        'Bảo bọc lưới cực tốt, phản xạ nhanh và luôn động viên đồng đội lúc bị dẫn điểm. Rất uy tín!',
-      verifiedCheckout: true,
-      checkoutTime: '20:30',
-    },
-    {
-      id: 6,
-      author: 'Đặng Tuấn',
-      targetPlayer: 'Minh Minh Minh',
-      coPlayerRole: 'Đối thủ cùng sân',
-      avatarInitial: 'ĐT',
-      avatarBg: '#E0E7FF',
-      avatarColor: '#4338CA',
-      matchType: 'Kèo Cầu lông',
-      court: 'Sân Tân Phong Q7',
-      time: '28/09/2026',
-      rating: 4,
-      content:
-        'Trận đấu kịch tính đến set 3, chơi sòng phẳng, chấp hành nghiêm quy định giờ giấc và check-out trả sân đúng giờ.',
-      verifiedCheckout: true,
-      checkoutTime: '21:30',
-    },
-  ]
 
   // State danh sách đánh giá sau trận (lưu localStorage)
   const [reviewsList, setReviewsList] = useState(() => {
@@ -330,7 +198,7 @@ export default function Profile() {
         console.error(e)
       }
     }
-    return initialReviews
+    return []
   })
 
   // Lưu reviewsList khi có thay đổi
@@ -533,7 +401,7 @@ export default function Profile() {
 
     const newReview = {
       id: Date.now(),
-      author: 'Bạn (Minh Minh Minh)',
+      author: `Bạn (${profile.name || 'Người chơi'})`,
       targetPlayer: writeReviewForm.targetPlayer,
       coPlayerRole: effectiveRole,
       isDoublesGuest: Boolean(targetCoPlayer?.isDoublesGuest),
@@ -566,43 +434,8 @@ export default function Profile() {
   }
 
   // Danh sách sân yêu thích
-  const favoriteCourts = [
-    {
-      name: 'Sân Cầu Lông Tân Phong (Quận 7)',
-      address: 'Số 45 Lê Văn Lương, Tân Phong, Quận 7',
-      sport: 'Cầu lông',
-      rating: 4.9,
-      courtsCount: '8 sân thảm PVC tiêu chuẩn',
-    },
-    {
-      name: 'SportNexus Arena Nam Sài Gòn',
-      address: 'Đường số 10, KDC Him Lam, Quận 7',
-      sport: 'Pickleball & Cầu lông',
-      rating: 5.0,
-      courtsCount: '12 sân có máy che & quạt làm mát',
-    },
-    {
-      name: 'CLB Pickleball Phú Mỹ Hưng',
-      address: 'Khu Đô Thị Phú Mỹ Hưng, Quận 7',
-      sport: 'Pickleball',
-      rating: 4.8,
-      courtsCount: '6 sân chuẩn USAPA',
-    },
-    {
-      name: 'Sân Bóng Đá SportZone Q7',
-      address: 'Nguyễn Văn Linh, Tân Phú, Quận 7',
-      sport: 'Bóng đá mini 5-7 người',
-      rating: 4.7,
-      courtsCount: '4 sân cỏ nhân tạo đời mới',
-    },
-    {
-      name: 'Sân Tennis Sunrise City',
-      address: 'Khu Sunrise City, Nguyễn Hữu Thọ, Quận 7',
-      sport: 'Tennis',
-      rating: 4.9,
-      courtsCount: '2 sân cứng tiêu chuẩn quốc tế',
-    },
-  ]
+  // Backend chưa có API sân yêu thích nên danh sách để trống.
+  const favoriteCourts = []
 
   // Mở modal cập nhật trình độ & số trận
   const handleOpenSkillModal = (sport) => {
@@ -615,27 +448,15 @@ export default function Profile() {
   }
 
   // Lưu trình độ & số trận
-  const handleSaveSkill = () => {
+  const handleSaveSkill = async () => {
     if (!selectedSportToEdit) return
     const numMatches = Math.max(0, parseInt(skillForm.matches, 10) || 0)
-    setSportsData((prev) =>
-      prev.map((s) => {
-        if (s.id === selectedSportToEdit.id) {
-          return {
-            ...s,
-            level: skillForm.level,
-            matches: numMatches,
-            field: 'Trình độ',
-            ranked: true,
-          }
-        }
-        return s
-      })
+    const next = sportsData.map((s) =>
+      s.id === selectedSportToEdit.id ? { ...s, level: skillForm.level, matches: numMatches, field: 'Trình độ', ranked: true } : s
     )
-    setShowSkillModal(false)
-    triggerToast(
-      `🎉 Đã cập nhật thành công trình độ ${selectedSportToEdit.name} (${skillForm.level} • ${numMatches} trận)!`
-    )
+    if (await saveSports(next, `🎉 Đã cập nhật trình độ ${selectedSportToEdit.name} (${skillForm.level})!`)) {
+      setShowSkillModal(false)
+    }
   }
 
   // Mở modal thêm môn thể thao mới
@@ -655,7 +476,7 @@ export default function Profile() {
   }
 
   // Lưu môn thể thao mới & tự đánh giá trình độ ban đầu
-  const handleSaveNewSport = () => {
+  const handleSaveNewSport = async () => {
     const isCustom = newSportForm.sportKey === 'other'
     const preset = PRESET_SPORTS_CATALOG.find((p) => p.key === newSportForm.sportKey)
     const sportName = isCustom ? newSportForm.customName.trim() : (preset ? preset.name : '')
@@ -673,8 +494,11 @@ export default function Profile() {
       return
     }
 
+    const baseName = sportName.toLowerCase().split(' (')[0]
+    const category = sportCategories.find((c) => c.name.toLowerCase() === sportName.toLowerCase() || c.name.toLowerCase().includes(baseName))
     const newSport = {
-      id: isCustom ? `sport_${Date.now()}` : newSportForm.sportKey,
+      sportCategoryId: category?.id || null,
+      id: category?.id || (isCustom ? `sport_${Date.now()}` : newSportForm.sportKey),
       name: sportName,
       icon: isCustom ? (newSportForm.customIcon.trim() || '🎯') : preset.icon,
       level: newSportForm.level,
@@ -686,9 +510,9 @@ export default function Profile() {
       bgColor: preset?.bgColor || '#DCFCE7',
     }
 
-    setSportsData((prev) => [...prev, newSport])
-    setShowAddSportModal(false)
-    triggerToast(`🎉 Đã thêm thành công môn ${newSport.name} (${newSport.level}) vào hồ sơ!`)
+    if (await saveSports([...sportsData, newSport], `🎉 Đã thêm môn ${newSport.name} (${newSport.level}) vào hồ sơ!`)) {
+      setShowAddSportModal(false)
+    }
   }
 
   // Xóa môn thể thao khỏi danh sách kỹ năng
@@ -698,15 +522,25 @@ export default function Profile() {
       return
     }
     if (window.confirm(`Bạn có chắc chắn muốn xóa môn "${sport.name}" khỏi danh sách trình độ kỹ năng?`)) {
-      setSportsData((prev) => prev.filter((s) => s.id !== sport.id))
-      triggerToast(`🗑️ Đã xóa môn ${sport.name} khỏi danh sách kỹ năng.`)
+      saveSports(sportsData.filter((s) => s.id !== sport.id), `🗑️ Đã xóa môn ${sport.name} khỏi danh sách kỹ năng.`)
     }
   }
 
   // Lưu Form Edit Profile
-  const handleSaveProfile = () => {
-    setProfile({ ...editForm })
-    localStorage.setItem('player_profile_data', JSON.stringify(editForm))
+  const handleSaveProfile = async () => {
+    if (!editForm.name?.trim()) {
+      triggerToast('⚠️ Vui lòng nhập họ tên.')
+      return
+    }
+    try {
+      // Họ tên lưu lên backend (PUT /api/auth/me); khu vực & giới thiệu chỉ lưu trên máy.
+      await updateMyProfile({ fullName: editForm.name.trim(), avatarUrl: profile.avatarUrl ?? null })
+    } catch (error) {
+      triggerToast(`⚠️ ${error?.message || 'Không cập nhật được hồ sơ.'}`)
+      return
+    }
+    setProfile({ ...editForm, name: editForm.name.trim() })
+    localStorage.setItem('player_profile_data', JSON.stringify({ location: editForm.location, bio: editForm.bio }))
     window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
     setShowEditModal(false)
     triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
@@ -937,7 +771,7 @@ export default function Profile() {
                         boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.25)',
                       }}
                     >
-                      MMM
+                      {initialsOf(profile.name)}
                     </div>
                   </div>
                   {/* Chấm tròn online / verified xanh lá góc dưới */}
@@ -4229,6 +4063,9 @@ export default function Profile() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {favoriteCourts.length === 0 && (
+                <p style={{ margin: 0, color: '#6B7280', fontSize: '14px' }}>Bạn chưa lưu sân yêu thích nào.</p>
+              )}
               {favoriteCourts.map((c, idx) => (
                 <div
                   key={idx}
@@ -4578,6 +4415,7 @@ export default function Profile() {
                     localStorage.removeItem('sportnexus_user_fullname')
                   } catch (e) {}
                   setShowLogoutModal(false)
+                  logoutApi().catch(() => {})
                   logout()
                   navigate('/login')
                 }}
