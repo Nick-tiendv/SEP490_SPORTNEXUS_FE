@@ -2,7 +2,18 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { createBooking, getBookingQrTicket, getCourtSlots } from '../../api/bookingApi.js'
+import {
+  createBooking,
+  getBookingQrTicket,
+  getCourtSlots,
+  lookupAccountByPhone,
+  joinBooking,
+  payRemainingBooking,
+  getCancellationReasons,
+  cancelBooking,
+  getBookingById,
+} from '../../api/bookingApi.js'
+import { cancelLfg } from '../../api/lfgApi.js'
 import {
   getWallet,
   createDeposit,
@@ -169,6 +180,41 @@ function SplitPayment() {
   const [modalData, setModalData] = useState(null)
   const [copiedField, setCopiedField] = useState(null)
 
+  // =========================================================================
+  // ĐẶT SÂN CHIA TIỀN VỚI BẠN BÈ (Image 1: Bước 1, 2, 3, 4, 5)
+  // =========================================================================
+  const DEFAULT_SAMPLE_FRIENDS = [
+    { id: '11111111-1111-1111-1111-111111111111', fullName: 'Lê Hoàng Nam', phone: '0912345678', email: 'hoang.nam@sportnexus.vn' },
+    { id: '22222222-2222-2222-2222-222222222222', fullName: 'Trần Bảo An', phone: '0988777666', email: 'bao.an@sportnexus.vn' },
+    { id: '33333333-3333-3333-3333-333333333333', fullName: 'Phạm Quốc Thịnh', phone: '0903112233', email: 'quoc.thinh@sportnexus.vn' },
+  ]
+
+  const [lookupPhone, setLookupPhone] = useState('')
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupResult, setLookupResult] = useState(null)
+  const [lookupError, setLookupError] = useState(null)
+  const [invitedFriends, setInvitedFriends] = useState(() => [
+    { id: '11111111-1111-1111-1111-111111111111', fullName: 'Lê Hoàng Nam', phone: '0912345678', email: 'hoang.nam@sportnexus.vn', status: 'WAITING' },
+    { id: '22222222-2222-2222-2222-222222222222', fullName: 'Trần Bảo An', phone: '0988777666', email: 'bao.an@sportnexus.vn', status: 'WAITING' },
+    { id: '33333333-3333-3333-3333-333333333333', fullName: 'Phạm Quốc Thịnh', phone: '0903112233', email: 'quoc.thinh@sportnexus.vn', status: 'WAITING' },
+  ])
+
+  // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
+  const [bookingStatus, setBookingStatus] = useState('PAID')
+  const [paymentDeadline, setPaymentDeadline] = useState(null)
+  const [deadlineSeconds, setDeadlineSeconds] = useState(30 * 60) // 30 phút theo Bước 2
+  const [isPayingRemaining, setIsPayingRemaining] = useState(false)
+
+  // =========================================================================
+  // HỦY ĐƠN VÀ HOÀN TIỀN (Image 2)
+  // =========================================================================
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancellationReasons, setCancellationReasons] = useState([])
+  const [selectedReasonCode, setSelectedReasonCode] = useState(1)
+  const [customReasonText, setCustomReasonText] = useState('')
+  const [isCanceling, setIsCanceling] = useState(false)
+  const [cancelError, setCancelError] = useState(null)
+
   // Countdown timer for booking hold (Step: confirm)
   useEffect(() => {
     if (step !== 'confirm') return
@@ -204,8 +250,43 @@ function SplitPayment() {
 
   const formatVnd = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
-  // Split calculation (4 players)
-  const splitAmount = Math.round(totalAmount / 4)
+  // Che số điện thoại bảo mật (Bước 1: SĐT trả về đã được che)
+  const maskPhone = (phone) => {
+    if (!phone) return '09•• ••• •••'
+    const s = String(phone).replace(/\s+/g, '')
+    if (s.includes('•••') || s.includes('*')) return s
+    if (s.length >= 10) {
+      return `${s.slice(0, 4)} ••• ${s.slice(-3)}`
+    }
+    return s
+  }
+
+  // Tính số giờ còn lại từ bây giờ tới ca thi đấu (Image 2: mốc 24h xét hoàn tiền)
+  const getHoursUntilMatch = () => {
+    try {
+      const now = new Date()
+      const matchDate = new Date()
+      if (activeSlotData?.startTime) {
+        const slotDate = new Date(activeSlotData.startTime)
+        if (!isNaN(slotDate.getTime())) {
+          return (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+        }
+      }
+      if (slotTime) {
+        const startTimeStr = slotTime.split('-')[0].trim()
+        const [h, m] = startTimeStr.split(':').map(Number)
+        if (!isNaN(h)) {
+          matchDate.setHours(h, m || 0, 0, 0)
+          return (matchDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+        }
+      }
+    } catch {}
+    return 26 // Mặc định > 24h nếu chưa rõ thời điểm cụ thể
+  }
+
+  // Split calculation: Tổng tiền / (1 Người tạo + N Bạn bè)
+  const totalParticipantCount = paymentMode === 'split' ? (invitedFriends.length + 1) : 1
+  const splitAmount = Math.round(totalAmount / (totalParticipantCount || 1))
   const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
 
   // Handle Copy to clipboard
@@ -213,6 +294,326 @@ function SplitPayment() {
     navigator.clipboard?.writeText(text)
     setCopiedField(fieldName)
     setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
+  useEffect(() => {
+    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return
+    const timer = setInterval(() => {
+      setDeadlineSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          handleDeadlineExpired()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [step, bookingStatus])
+
+  const handleDeadlineExpired = () => {
+    // Bước 5: Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả
+    const refundedBalance = walletBalance + payableAmount
+    const refundedFrozen = Math.max(0, frozenBalance - payableAmount)
+    setWalletBalance(refundedBalance)
+    setFrozenBalance(refundedFrozen)
+    localStorage.setItem('escrow_balance', refundedBalance.toString())
+    localStorage.setItem('frozen_balance', refundedFrozen.toString())
+    window.dispatchEvent(new Event('escrow_balance_updated'))
+    window.dispatchEvent(new Event('frozen_balance_updated'))
+    setBookingStatus('CANCELLED')
+
+    window.dispatchEvent(
+      new CustomEvent('player_new_notification', {
+        detail: {
+          id: `expired_${Date.now()}`,
+          type: 'booking',
+          icon: 'timer_off',
+          color: '#DC2626',
+          bg: '#FEE2E2',
+          title: 'Đơn chia tiền đã hết hạn (CANCELLED)',
+          message: `Đơn đặt sân tại ${courtName} đã tự động hủy do quá hạn góp tiền (PaymentDeadline).`,
+          details: `Hệ thống đã tự động hoàn 100% tiền (${formatVnd(payableAmount)}) vào Ví Escrow.`,
+          time: 'Vừa xong',
+          unread: true,
+          link: '/wallet',
+          linkText: 'Xem số dư ví',
+        },
+      })
+    )
+    alert(`⏰ Đã hết hạn góp tiền (PaymentDeadline)!\n\nĐơn đặt sân đã tự động hủy. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
+  }
+
+  // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
+  const handleSearchFriend = async (e) => {
+    if (e) e.preventDefault()
+    const cleanPhone = lookupPhone.trim()
+    if (!cleanPhone) {
+      setLookupError('Vui lòng nhập số điện thoại bạn bè cần tìm.')
+      return
+    }
+    setLookupLoading(true)
+    setLookupError(null)
+    setLookupResult(null)
+    try {
+      const data = await lookupAccountByPhone(cleanPhone)
+      if (data) {
+        setLookupResult({
+          id: data.id || data.userId || 'f4d8b134-b950-434e-8de0-0ad9cc37f283',
+          fullName: data.fullName || data.name || data.userName || `Bạn chơi (${cleanPhone})`,
+          phone: data.phone || cleanPhone,
+          email: data.email || `${cleanPhone}@sportnexus.vn`,
+        })
+      } else {
+        setLookupError('Không tìm thấy tài khoản với số điện thoại này trên hệ thống.')
+      }
+    } catch (err) {
+      console.warn('[SplitPayment] lookupAccountByPhone notice:', err)
+      const errMessage = err?.message || 'Không tìm thấy tài khoản.'
+      setLookupError(`Không tìm thấy tài khoản (${errMessage}). Bạn có thể chọn nhanh từ danh sách bạn bè gợi ý bên dưới.`)
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleAddInvitedFriend = (friend) => {
+    if (!friend || !friend.id) return
+    if (invitedFriends.some((f) => f.id === friend.id)) {
+      alert('Bạn này đã có trong danh sách chia tiền rồi!')
+      return
+    }
+    if (invitedFriends.length >= 7) {
+      alert('Tối đa 8 người chia tiền cho 1 đơn đặt sân.')
+      return
+    }
+    setInvitedFriends((prev) => [
+      ...prev,
+      {
+        id: friend.id,
+        fullName: friend.fullName || friend.name || 'Bạn chơi',
+        phone: friend.phone || '09•• ••• •••',
+        email: friend.email || '',
+        status: 'WAITING',
+      },
+    ])
+    setLookupResult(null)
+    setLookupPhone('')
+  }
+
+  const handleRemoveInvitedFriend = (id) => {
+    setInvitedFriends((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  // BƯỚC 3: Người được mời nhận thông báo -> POST /api/v1/bookings/{bookingId}/join
+  const handleSimulateFriendJoin = async (friendId) => {
+    const bookingId =
+      (typeof bookingResult === 'string' && isValidGuid(bookingResult) ? bookingResult : null) ||
+      bookingResult?.id ||
+      bookingResult?.bookingId ||
+      bookingResult?.data?.id
+    try {
+      if (isValidGuid(bookingId)) {
+        await joinBooking(bookingId)
+      }
+    } catch (err) {
+      console.warn('[SplitPayment] joinBooking API notice:', err?.message)
+    }
+
+    setInvitedFriends((prev) => {
+      const next = prev.map((f) => (f.id === friendId ? { ...f, status: 'PAID' } : f))
+      const allPaid = next.every((f) => f.status === 'PAID')
+      if (allPaid) {
+        setBookingStatus('PAID')
+        window.dispatchEvent(
+          new CustomEvent('player_new_notification', {
+            detail: {
+              id: `all_paid_${Date.now()}`,
+              type: 'booking',
+              icon: 'verified',
+              color: '#15803D',
+              bg: '#DCFCE7',
+              title: 'Tất cả bạn bè đã góp tiền đủ (PAID)!',
+              message: `Đơn đặt sân ${courtName} đã thanh toán đủ và chuyển sang PAID. Vé QR check-in đã sẵn sàng!`,
+              time: 'Vừa xong',
+              unread: true,
+              link: '/checkin',
+              linkText: 'Xem vé QR',
+            },
+          })
+        )
+      }
+      return next
+    })
+  }
+
+  // BƯỚC 4: (Tùy chọn) Người tạo trả nốt phần của người chưa góp -> POST /api/v1/bookings/{bookingId}/pay-remaining
+  const handlePayRemaining = async () => {
+    const unpaid = invitedFriends.filter((f) => f.status !== 'PAID')
+    if (unpaid.length === 0) {
+      alert('Tất cả mọi người đã góp đủ tiền rồi!')
+      return
+    }
+    const remainingDue = unpaid.length * splitAmount
+    if (walletBalance < remainingDue) {
+      alert(`Số dư ví (${formatVnd(walletBalance)}) không đủ để trả nốt (${formatVnd(remainingDue)})! Vui lòng nạp thêm tiền.`)
+      return
+    }
+
+    const confirmPay = window.confirm(
+      `👉 Người tạo trả nốt phần của ${unpaid.length} người chưa góp (${formatVnd(remainingDue)}) để xác nhận đơn ngay?\n\nLưu ý: Những người chưa góp sẽ bị loại khỏi đơn theo quy định Bước 4.`
+    )
+    if (!confirmPay) return
+
+    setIsPayingRemaining(true)
+    try {
+      const bookingId =
+        (typeof bookingResult === 'string' && isValidGuid(bookingResult) ? bookingResult : null) ||
+        bookingResult?.id ||
+        bookingResult?.bookingId ||
+        bookingResult?.data?.id
+      if (isValidGuid(bookingId)) {
+        try {
+          await payRemainingBooking(bookingId)
+        } catch (apiErr) {
+          console.warn('[SplitPayment] payRemainingBooking API notice:', apiErr)
+        }
+      }
+
+      // Trừ số tiền còn thiếu từ ví người tạo
+      const newBal = walletBalance - remainingDue
+      const newFroz = frozenBalance + remainingDue
+      setWalletBalance(newBal)
+      setFrozenBalance(newFroz)
+      localStorage.setItem('escrow_balance', newBal.toString())
+      localStorage.setItem('frozen_balance', newFroz.toString())
+      window.dispatchEvent(new Event('escrow_balance_updated'))
+      window.dispatchEvent(new Event('frozen_balance_updated'))
+
+      // Loại bỏ người chưa góp khỏi đơn và chuyển trạng thái đơn sang PAID
+      setInvitedFriends((prev) => prev.filter((f) => f.status === 'PAID'))
+      setBookingStatus('PAID')
+
+      window.dispatchEvent(
+        new CustomEvent('player_new_notification', {
+          detail: {
+            id: `pay_remaining_${Date.now()}`,
+            type: 'booking',
+            icon: 'check_circle',
+            color: '#15803D',
+            bg: '#DCFCE7',
+            title: 'Đã thanh toán nốt phần còn lại (PAID)!',
+            message: `Người tạo đã đóng nốt ${formatVnd(remainingDue)}. Đơn đã xác nhận thành công và chuyển sang PAID.`,
+            time: 'Vừa xong',
+            unread: true,
+            link: '/checkin',
+            linkText: 'Xem vé QR',
+          },
+        })
+      )
+      alert(`✅ Đã thanh toán nốt ${formatVnd(remainingDue)} thành công!\n\nĐơn hàng đã chuyển sang trạng thái PAID. Vé QR check-in đã sẵn sàng.`)
+    } finally {
+      setIsPayingRemaining(false)
+    }
+  }
+
+  // HỦY ĐƠN VÀ HOÀN TIỀN (Image 2)
+  const handleOpenCancelModal = async () => {
+    if (bookingStatus === 'CHECKED_IN') {
+      alert('❌ Đơn đã check-in tại sân không thể hủy theo quy định!')
+      return
+    }
+    setShowCancelModal(true)
+    setCancelError(null)
+    try {
+      const reasons = await getCancellationReasons()
+      if (Array.isArray(reasons) && reasons.length > 0) {
+        setCancellationReasons(reasons)
+        setSelectedReasonCode(reasons[0].code)
+      }
+    } catch (e) {
+      console.warn('[SplitPayment] Không thể tải cancellation reasons:', e)
+    }
+  }
+
+  const handleConfirmCancel = async () => {
+    const bookingId =
+      (typeof bookingResult === 'string' && isValidGuid(bookingResult) ? bookingResult : null) ||
+      bookingResult?.id ||
+      bookingResult?.bookingId ||
+      bookingResult?.data?.id
+
+    const selectedReasonObj = cancellationReasons.find((r) => r.code === selectedReasonCode)
+    const finalReason = selectedReasonObj?.isCustom
+      ? customReasonText.trim() || 'Lý do khác'
+      : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
+
+    const hoursLeft = getHoursUntilMatch()
+    const isEligibleRefund = hoursLeft >= 24
+
+    setIsCanceling(true)
+    setCancelError(null)
+    try {
+      // Đơn đang dùng cho kèo LFG không hủy trực tiếp được: phải hủy kèo (POST /api/v1/lfgs/{cardId}/cancel)
+      const isLfg = Boolean(state.isLfg || state.cardId)
+      if (isLfg && state.cardId) {
+        await cancelLfg(state.cardId, { reason: finalReason })
+      } else if (isValidGuid(bookingId)) {
+        await cancelBooking(bookingId, {
+          reasonCode: selectedReasonCode,
+          reason: finalReason,
+        })
+      }
+
+      // Xử lý hoàn tiền
+      if (isEligibleRefund) {
+        const refundedBal = walletBalance + payableAmount
+        const refundedFroz = Math.max(0, frozenBalance - payableAmount)
+        setWalletBalance(refundedBal)
+        setFrozenBalance(refundedFroz)
+        localStorage.setItem('escrow_balance', refundedBal.toString())
+        localStorage.setItem('frozen_balance', refundedFroz.toString())
+        window.dispatchEvent(new Event('escrow_balance_updated'))
+        window.dispatchEvent(new Event('frozen_balance_updated'))
+      }
+
+      setBookingStatus('CANCELLED')
+      setShowCancelModal(false)
+
+      window.dispatchEvent(
+        new CustomEvent('player_new_notification', {
+          detail: {
+            id: `cancel_${Date.now()}`,
+            type: 'booking',
+            icon: 'cancel',
+            color: '#DC2626',
+            bg: '#FEE2E2',
+            title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
+            message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
+            details: isEligibleRefund
+              ? `Hủy trước ca >= 24h: Đã hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow.`
+              : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
+            time: 'Vừa xong',
+            unread: true,
+            link: '/wallet',
+            linkText: 'Xem ví Escrow',
+          },
+        })
+      )
+
+      alert(
+        `✅ Đã hủy đơn đặt sân thành công!\n\n${
+          isEligibleRefund
+            ? `💰 Bạn đã được hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
+            : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
+        }`
+      )
+    } catch (err) {
+      console.error('[SplitPayment] Hủy đơn thất bại:', err)
+      setCancelError(err?.message || 'Lỗi khi gửi yêu cầu hủy đơn.')
+    } finally {
+      setIsCanceling(false)
+    }
   }
 
   // Regex kiểm tra chuỗi có phải UUID/GUID hợp lệ (8-4-4-4-12 hex) và không thuộc ca đã qua giờ bắt đầu
@@ -276,7 +677,7 @@ function SplitPayment() {
     return single ? [single] : [FALLBACK_DEFAULT_SLOT_ID]
   }
 
-  // Hàm tạo payload đặt sân chuẩn theo đặc tả Bước 3 API
+  // Hàm tạo payload đặt sân chuẩn theo đặc tả Bước 2 API
   const buildBookingPayload = () => {
     const validSingleId = resolveCurrentSlotId()
     const validSlotIds = resolveCurrentSlotIds()
@@ -287,6 +688,11 @@ function SplitPayment() {
 
     const isConsecutive = state.isConsecutive !== false && (validSlotIds.length <= 1 || state.isConsecutive === true)
 
+    // Lấy danh sách ID người tham gia nếu chia tiền (Bước 2: participantIds: [...])
+    const activeParticipantIds = paymentMode === 'split' && Array.isArray(invitedFriends)
+      ? invitedFriends.map((f) => f.id).filter(isValidGuid)
+      : []
+
     if (isConsecutive && validSingleId) {
       // Cách 1: courtSlotId + numberOfSlots (đặt N ca liên tiếp, tối đa 24). courtSlotIds để null
       return {
@@ -295,9 +701,7 @@ function SplitPayment() {
         courtSlotIds: null,
         totalAmount: 0, // Server tự tính giá
         isSplitPayment: paymentMode === 'split',
-        participantIds: (paymentMode === 'split' && Array.isArray(state.participantIds))
-          ? state.participantIds.filter(isValidGuid)
-          : [],
+        participantIds: activeParticipantIds,
       }
     }
 
@@ -308,9 +712,7 @@ function SplitPayment() {
       courtSlotIds: validSlotIds.length > 0 ? validSlotIds : [validSingleId],
       totalAmount: 0,
       isSplitPayment: paymentMode === 'split',
-      participantIds: (paymentMode === 'split' && Array.isArray(state.participantIds))
-        ? state.participantIds.filter(isValidGuid)
-        : [],
+      participantIds: activeParticipantIds,
     }
   }
 
@@ -410,18 +812,33 @@ function SplitPayment() {
         }
         setQrToken(ticketTokenValue)
 
-        // Phát thông báo Đặt sân thành công (PAID) & Tiền được bảo chứng trong frozenBalance
+        // Cập nhật trạng thái đơn theo Bước 2 (isSplitPayment -> PENDING, người tạo trả phần của mình ngay, hạn 30 phút)
+        if (paymentMode === 'split') {
+          setBookingStatus('PENDING')
+          const now = Date.now()
+          const thirtyMins = now + 30 * 60 * 1000
+          setPaymentDeadline(new Date(thirtyMins))
+          setDeadlineSeconds(30 * 60)
+        } else {
+          setBookingStatus('PAID')
+        }
+
+        // Phát thông báo Đặt sân thành công (PAID hoặc PENDING)
         window.dispatchEvent(
           new CustomEvent('player_new_notification', {
             detail: {
               id: `book_${Date.now()}`,
               type: 'booking',
               icon: 'sports_tennis',
-              color: '#15803D',
-              bg: '#EAF7EE',
-              title: 'Đặt sân thành công (Trạng thái: PAID)!',
-              message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
-              details: `Khung giờ: ${slotTime} • Tiền giữ trong frozenBalance • Mã vé: #${ticketTokenValue}`,
+              color: paymentMode === 'split' ? '#D97706' : '#15803D',
+              bg: paymentMode === 'split' ? '#FEF3C7' : '#EAF7EE',
+              title: paymentMode === 'split'
+                ? 'Đã tạo đơn chia tiền (Trạng thái: PENDING)!'
+                : 'Đặt sân thành công (Trạng thái: PAID)!',
+              message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
+              details: paymentMode === 'split'
+                ? `Hạn góp tiền: 30 phút • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
+                : `Khung giờ: ${slotTime} • Tiền giữ trong frozenBalance • Mã vé: #${ticketTokenValue}`,
               time: 'Vừa xong',
               unread: true,
               link: '/checkin',
@@ -432,8 +849,12 @@ function SplitPayment() {
         )
 
         setModalData({
-          title: 'Thanh Toán & Đặt Sân Thành Công (PAID)!',
-          desc: `Đã tự động trừ ${formatVnd(payableAmount)} từ Ví Escrow và chuyển vào số dư đóng băng (frozenBalance) bảo chứng 100% tới khi chơi xong. Đang xuất vé QR check-in...`,
+          title: paymentMode === 'split'
+            ? 'Đã Tạo Đơn Chia Tiền Thành Công (PENDING)!'
+            : 'Thanh Toán & Đặt Sân Thành Công (PAID)!',
+          desc: paymentMode === 'split'
+            ? `Đã trừ ${formatVnd(payableAmount)} (phần của bạn) từ Ví Escrow. Đơn ở trạng thái PENDING với hạn nộp 30 phút. Chờ người được mời góp để chuyển PAID.`
+            : `Đã tự động trừ ${formatVnd(payableAmount)} từ Ví Escrow và chuyển vào số dư đóng băng (frozenBalance) bảo chứng 100% tới khi chơi xong. Đang xuất vé QR check-in...`,
           onClose: () => {
             setModalData(null)
             setStep('ticket_pass')
@@ -592,6 +1013,16 @@ function SplitPayment() {
         if (w && typeof w.balance === 'number') setWalletBalance(w.balance)
       } catch {}
 
+      if (paymentMode === 'split') {
+        setBookingStatus('PENDING')
+        const now = Date.now()
+        const thirtyMins = now + 30 * 60 * 1000
+        setPaymentDeadline(new Date(thirtyMins))
+        setDeadlineSeconds(30 * 60)
+      } else {
+        setBookingStatus('PAID')
+      }
+
       // Phát thông báo Đặt sân thành công & Giao dịch PayOS
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
@@ -599,10 +1030,12 @@ function SplitPayment() {
             id: `book_${Date.now()}`,
             type: 'booking',
             icon: 'sports_tennis',
-            color: '#15803D',
-            bg: '#EAF7EE',
-            title: 'Đặt sân & Thanh toán PayOS thành công (PAID)!',
-            message: `Bạn đã giữ chỗ thành công tại ${courtName} (${subCourt}).`,
+            color: paymentMode === 'split' ? '#D97706' : '#15803D',
+            bg: paymentMode === 'split' ? '#FEF3C7' : '#EAF7EE',
+            title: paymentMode === 'split'
+              ? 'Đặt sân qua PayOS thành công (Trạng thái: PENDING)!'
+              : 'Đặt sân & Thanh toán PayOS thành công (PAID)!',
+            message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
             details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
             time: 'Vừa xong',
             unread: true,
@@ -883,7 +1316,7 @@ function SplitPayment() {
                       </span>
                     </span>
                     <span className="sp-mode-title">Thanh Toán Từng Người</span>
-                    <span className="sp-badge-count">4 người</span>
+                    <span className="sp-badge-count">{invitedFriends.length + 1} người</span>
                   </div>
                   <div className="sp-mode-amount-row">
                     <small>SỐ TIỀN:</small>
@@ -891,6 +1324,148 @@ function SplitPayment() {
                   </div>
                 </div>
               </div>
+
+              {/* BƯỚC 1: TÌM BẠN BÈ THEO SỐ ĐIỆN THOẠI ĐỂ LẤY USERID (GET /api/accounts/lookup?phone=...) */}
+              {paymentMode === 'split' && (
+                <div className="sp-split-friends-section">
+                  <div className="sp-split-title-row">
+                    <div className="sp-split-title-left">
+                      <span className="material-symbols-outlined" style={{ color: '#15803D' }}>group_add</span>
+                      <span>Tìm &amp; Thêm Bạn Bè Cùng Chia Tiền</span>
+                    </div>
+                    <span className="sp-badge-count" style={{ background: '#DCFCE7', color: '#15803D' }}>
+                      {invitedFriends.length + 1} người trong đơn
+                    </span>
+                  </div>
+
+                  {/* Input tra cứu số điện thoại */}
+                  <form className="sp-phone-search-row" onSubmit={handleSearchFriend}>
+                    <input
+                      type="tel"
+                      className="sp-phone-search-input"
+                      placeholder="Nhập số điện thoại bạn bè (vd: 0912345678)..."
+                      value={lookupPhone}
+                      onChange={(e) => setLookupPhone(e.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      className="sp-phone-search-btn"
+                      disabled={lookupLoading || !lookupPhone.trim()}
+                    >
+                      <span className={`material-symbols-outlined ${lookupLoading ? 'animate-spin' : ''}`}>
+                        {lookupLoading ? 'sync' : 'search'}
+                      </span>
+                      <span>{lookupLoading ? 'Đang tìm...' : 'Tra cứu'}</span>
+                    </button>
+                  </form>
+
+                  {lookupError && (
+                    <div style={{ padding: '8px 12px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', color: '#B91C1C', fontSize: '12px', marginBottom: '10px' }}>
+                      ⚠️ {lookupError}
+                    </div>
+                  )}
+
+                  {/* Kết quả tìm kiếm bạn bè từ API */}
+                  {lookupResult && (
+                    <div className="sp-friend-result-card">
+                      <div className="sp-friend-info-left">
+                        <div className="sp-friend-avatar">
+                          {(lookupResult.fullName || 'U').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="sp-friend-names">
+                          <div className="sp-friend-name">{lookupResult.fullName}</div>
+                          <div className="sp-friend-phone">SĐT (đã che): {maskPhone(lookupResult.phone)}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="sp-btn-add-friend"
+                        onClick={() => handleAddInvitedFriend(lookupResult)}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
+                        <span>Thêm vào nhóm chia tiền</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Gợi ý thêm nhanh bạn bè mẫu */}
+                  <div className="sp-sample-friends-row">
+                    <span className="sp-sample-label">Gợi ý bạn chơi:</span>
+                    {DEFAULT_SAMPLE_FRIENDS.map((sample) => {
+                      const isAdded = invitedFriends.some((f) => f.id === sample.id)
+                      return (
+                        <button
+                          key={sample.id}
+                          type="button"
+                          className="sp-sample-pill"
+                          style={{ opacity: isAdded ? 0.5 : 1, textDecoration: isAdded ? 'line-through' : 'none' }}
+                          disabled={isAdded}
+                          onClick={() => handleAddInvitedFriend(sample)}
+                        >
+                          + {sample.fullName} ({maskPhone(sample.phone)})
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Danh sách người tham gia */}
+                  <div className="sp-friends-list">
+                    {/* Host (Người tạo đơn) */}
+                    <div className="sp-friend-item-row" style={{ background: '#F0FDF4', borderColor: '#BBF7D0' }}>
+                      <div className="sp-friend-item-left">
+                        <div className="sp-friend-avatar" style={{ background: '#15803D' }}>BẠN</div>
+                        <div>
+                          <div className="sp-friend-name">Bạn (Chủ Nhóm Đặt Sân)</div>
+                          <div className="sp-friend-phone">Người tạo trả phần của mình ngay khi tạo đơn</div>
+                        </div>
+                      </div>
+                      <div className="sp-friend-item-right">
+                        <strong className="sp-friend-share-amt">{formatVnd(splitAmount)}</strong>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#15803D', background: '#DCFCE7', padding: '3px 8px', borderRadius: 6 }}>
+                          Người tạo đơn
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bạn bè được mời */}
+                    {invitedFriends.map((friend) => (
+                      <div key={friend.id} className="sp-friend-item-row">
+                        <div className="sp-friend-item-left">
+                          <div className="sp-friend-avatar" style={{ background: '#0284C7' }}>
+                            {(friend.fullName || 'U').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="sp-friend-name">{friend.fullName}</div>
+                            <div className="sp-friend-phone">SĐT (đã che): {maskPhone(friend.phone)}</div>
+                          </div>
+                        </div>
+                        <div className="sp-friend-item-right">
+                          <strong className="sp-friend-share-amt">{formatVnd(splitAmount)}</strong>
+                          <button
+                            type="button"
+                            className="sp-btn-remove-friend"
+                            title="Xóa bạn này khỏi đơn chia tiền"
+                            onClick={() => handleRemoveInvitedFriend(friend.id)}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Bảng tóm tắt chia tiền */}
+                  <div className="sp-split-summary-box">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong>Tổng tiền: {formatVnd(totalAmount)} ÷ {invitedFriends.length + 1} người</strong>
+                      <strong style={{ fontSize: 14, color: '#15803D' }}>= {formatVnd(splitAmount)} / người</strong>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#4b5563', marginTop: 2 }}>
+                      💡 <strong>Quy trình xử lý FE:</strong> Người tạo trả phần của mình ngay. Đơn ở trạng thái <strong>PENDING</strong>, hạn góp tiền là 30 phút (xem PaymentDeadline). Khi đủ người trả thì đơn chuyển <strong>PAID</strong>.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Sub-section: Kênh / Phương Thức Thanh Toán */}
               <div className="sp-channel-head">
@@ -1325,19 +1900,204 @@ function SplitPayment() {
           {/* CỘT TRÁI: THẺ MÃ QR CHECK-IN CỐ ĐỊNH & CÁC NÚT TƯƠNG TÁC QR */}
           <div className="sp-ticket-col">
             <div className="sp-ticket-card">
-              <span className="sp-ticket-badge-ready" style={{ background: '#DCFCE7', color: '#15803D' }}>
-                <span className="sp-ticket-pulse-dot" />
-                PAID • Sẵn sàng check-in cổng sân
-              </span>
+              {/* 4 TRẠNG THÁI ĐƠN CHUẨN: PENDING | PAID | CHECKED_IN | CANCELLED */}
+              {bookingStatus === 'PENDING' && (
+                <div className="sp-status-card sp-status-card--pending">
+                  <div className="sp-status-icon-wrap">
+                    <span className="material-symbols-outlined animate-spin">schedule</span>
+                  </div>
+                  <div className="sp-status-info">
+                    <div className="sp-status-head-row">
+                      <span className="sp-status-title">PENDING • Đơn chia tiền đang chờ người được mời góp</span>
+                      <span className="sp-deadline-badge">
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>timer</span>
+                        HẠN GÓP: {formatTimer(deadlineSeconds)}
+                      </span>
+                    </div>
+                    <div className="sp-status-desc">
+                      Người tạo đã trả phần của mình ({formatVnd(payableAmount)}). Hạn góp tiền là 30 phút (xem PaymentDeadline). Quá hạn mà chưa đủ thì hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả.
+                    </div>
+
+                    {/* Danh sách người tham gia góp tiền */}
+                    <div className="sp-participants-panel">
+                      <div className="sp-participants-title">
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#D97706' }}>group</span>
+                        <span>Tiến độ góp tiền ({invitedFriends.filter(f => f.status === 'PAID').length + 1} / {invitedFriends.length + 1} người đã đóng)</span>
+                      </div>
+
+                      {/* Host */}
+                      <div className="sp-part-row">
+                        <div className="sp-part-left">
+                          <span className="material-symbols-outlined" style={{ color: '#15803D', fontSize: 18 }}>check_circle</span>
+                          <strong>Bạn (Chủ Nhóm Đặt Sân)</strong>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{formatVnd(splitAmount)}</span>
+                          <span className="sp-part-status-badge sp-part-status--paid">ĐÃ TRẢ (KÝ QUỸ ESCROW)</span>
+                        </div>
+                      </div>
+
+                      {/* Invited friends */}
+                      {invitedFriends.map((f) => (
+                        <div key={f.id} className="sp-part-row">
+                          <div className="sp-part-left">
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ color: f.status === 'PAID' ? '#15803D' : '#D97706', fontSize: 18 }}
+                            >
+                              {f.status === 'PAID' ? 'check_circle' : 'hourglass_empty'}
+                            </span>
+                            <span>{f.fullName} ({maskPhone(f.phone)})</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{formatVnd(splitAmount)}</span>
+                            {f.status === 'PAID' ? (
+                              <span className="sp-part-status-badge sp-part-status--paid">ĐÃ GÓP TIỀN</span>
+                            ) : (
+                              <>
+                                <span className="sp-part-status-badge sp-part-status--pending">CHỜ GÓP</span>
+                                <button
+                                  type="button"
+                                  className="sp-btn-sim-join"
+                                  title="Bước 3: Người được mời nhận thông báo -> POST /api/v1/bookings/{id}/join"
+                                  onClick={() => handleSimulateFriendJoin(f.id)}
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>send</span>
+                                  <span>Góp tiền</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Tùy chọn: Người tạo trả nốt phần của người chưa góp để xác nhận đơn ngay */}
+                      {invitedFriends.some(f => f.status !== 'PAID') && (
+                        <button
+                          type="button"
+                          className="sp-btn-pay-remaining"
+                          disabled={isPayingRemaining}
+                          onClick={handlePayRemaining}
+                        >
+                          <span className="material-symbols-outlined">payments</span>
+                          <span>
+                            {isPayingRemaining
+                              ? 'Đang thanh toán nốt phần còn lại...'
+                              : `Trả nốt phần chưa góp (${formatVnd(invitedFriends.filter(f => f.status !== 'PAID').length * splitAmount)}) để xác nhận đơn ngay`}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {bookingStatus === 'PAID' && (
+                <div className="sp-status-card sp-status-card--paid">
+                  <div className="sp-status-icon-wrap">
+                    <span className="material-symbols-outlined">verified</span>
+                  </div>
+                  <div className="sp-status-info">
+                    <div className="sp-status-head-row">
+                      <span className="sp-status-title">PAID • Đã thanh toán đủ, giữ chỗ thành công</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '3px 8px', borderRadius: 10 }}>
+                        ĐÃ KHÓA SÂN
+                      </span>
+                    </div>
+                    <div className="sp-status-desc">
+                      Đã thanh toán đủ tiền sân, giữ chỗ thành công. Tiền được bảo chứng an toàn 100% trong quỹ Escrow SportNexus.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {bookingStatus === 'CHECKED_IN' && (
+                <div className="sp-status-card sp-status-card--checkedin">
+                  <div className="sp-status-icon-wrap">
+                    <span className="material-symbols-outlined">how_to_reg</span>
+                  </div>
+                  <div className="sp-status-info">
+                    <div className="sp-status-head-row">
+                      <span className="sp-status-title">CHECKED_IN • Đã check-in tại sân</span>
+                    </div>
+                    <div className="sp-status-desc">
+                      Bạn đã hoàn tất quét mã QR check-in tại cổng sân thi đấu.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {bookingStatus === 'CANCELLED' && (
+                <div className="sp-status-card sp-status-card--cancelled">
+                  <div className="sp-status-icon-wrap">
+                    <span className="material-symbols-outlined">cancel</span>
+                  </div>
+                  <div className="sp-status-info">
+                    <div className="sp-status-head-row">
+                      <span className="sp-status-title">CANCELLED • Đã hủy đơn đặt sân</span>
+                    </div>
+                    <div className="sp-status-desc">
+                      Đơn đặt sân này đã bị hủy (người đặt, chủ sân, Admin hủy hoặc quá hạn góp tiền). Tiền đã được xử lý hoàn trả theo quy định.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <h2 className="sp-ticket-title">Vé QR Check-in Vào Cụm Sân</h2>
               <p className="sp-ticket-sub">
-                Đưa mã QR này cho chủ sân hoặc quầy lễ tân quét khi tới sân (GET /bookings/{'{id}'}/qr-ticket)
+                Đưa mã QR này cho chủ sân hoặc quầy lễ tân quét khi tới sân
               </p>
 
               {/* Khung mã QR cố định với hiệu ứng laser */}
-              <div className="sp-ticket-qr-box">
-                <div className="sp-ticket-laser-line" />
+              <div className="sp-ticket-qr-box" style={{ opacity: bookingStatus === 'CANCELLED' ? 0.35 : 1 }}>
+                {bookingStatus === 'PAID' && <div className="sp-ticket-laser-line" />}
+
+                {bookingStatus === 'PENDING' && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(255, 255, 255, 0.88)',
+                      backdropFilter: 'blur(3px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      padding: 16,
+                      textAlign: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#D97706' }}>lock_clock</span>
+                    <strong style={{ fontSize: 13, color: '#92400E' }}>Mã QR Tạm Khóa</strong>
+                    <span style={{ fontSize: 11, color: '#78350F' }}>
+                      Đang chờ bạn bè góp đủ tiền để kích hoạt mã vé QR check-in cổng sân.
+                    </span>
+                  </div>
+                )}
+
+                {bookingStatus === 'CANCELLED' && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(254, 242, 242, 0.92)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      padding: 16,
+                      textAlign: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#DC2626' }}>cancel</span>
+                    <strong style={{ fontSize: 14, color: '#991B1B' }}>ĐƠN ĐÃ BỊ HỦY</strong>
+                    <span style={{ fontSize: 11.5, color: '#7F1D1D' }}>Vé không còn hiệu lực check-in</span>
+                  </div>
+                )}
 
                 <div className="sp-qr-svg-wrap" key={qrVersion}>
                   <svg
@@ -1378,22 +2138,28 @@ function SplitPayment() {
                       width: '36px',
                       height: '36px',
                       borderRadius: '50%',
-                      background: '#DCFCE7',
+                      background: bookingStatus === 'PENDING' ? '#FEF3C7' : bookingStatus === 'CANCELLED' ? '#FEE2E2' : '#DCFCE7',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#15803D',
+                      color: bookingStatus === 'PENDING' ? '#D97706' : bookingStatus === 'CANCELLED' ? '#DC2626' : '#15803D',
                       flexShrink: 0,
                     }}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                      verified
+                      {bookingStatus === 'PENDING' ? 'schedule' : bookingStatus === 'CANCELLED' ? 'cancel' : 'verified'}
                     </span>
                   </div>
 
                   <div className="sp-timer-text-wrap">
-                    <strong>Đơn hàng trạng thái PAID (Bảo chứng Escrow)</strong>
-                    <small>Tiền được giữ trong frozenBalance ({formatVnd(payableAmount)}) tới khi chơi xong</small>
+                    <strong>
+                      Trạng thái đơn: {bookingStatus} {bookingStatus === 'PENDING' ? '(Chờ góp tiền)' : '(Bảo chứng Escrow)'}
+                    </strong>
+                    <small>
+                      {bookingStatus === 'PENDING'
+                        ? `Đã góp: ${formatVnd(payableAmount)} • Còn thiếu: ${formatVnd(invitedFriends.filter(f => f.status !== 'PAID').length * splitAmount)}`
+                        : `Tiền được giữ trong frozenBalance (${formatVnd(payableAmount)}) tới khi chơi xong`}
+                    </small>
                   </div>
                 </div>
               </div>
@@ -1405,30 +2171,53 @@ function SplitPayment() {
                   shield
                 </span>
                 <span>
-                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công.
+                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công. Sau giờ chơi, tiền giữ được chuyển cho chủ sân (trừ phí nền tảng).
                 </span>
               </div>
             </div>
 
-            {/* Khung Tải ảnh vé QR về máy và Gửi mã cho bạn chơi - Dưới phần mã QR Check-in */}
-            <div className="sp-pass-qr-actions">
-              <button
-                type="button"
-                className="sp-btn-action-primary"
-                onClick={() => alert('Đã lưu mã vé QR vào thư viện ảnh của thiết bị!')}
-              >
-                <span className="material-symbols-outlined">download</span>
-                <span>Tải ảnh vé QR về máy</span>
-              </button>
+            {/* Khung Tải ảnh vé QR về máy, Gửi mã cho bạn chơi, và HỦY ĐƠN VÀ HOÀN TIỀN (Image 2) */}
+            <div className="sp-pass-qr-actions" style={{ flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                <button
+                  type="button"
+                  className="sp-btn-action-primary"
+                  style={{ flex: 1 }}
+                  disabled={bookingStatus === 'CANCELLED'}
+                  onClick={() => alert('Đã lưu mã vé QR vào thư viện ảnh của thiết bị!')}
+                >
+                  <span className="material-symbols-outlined">download</span>
+                  <span>Tải ảnh vé QR</span>
+                </button>
 
+                <button
+                  type="button"
+                  className="sp-btn-action-secondary"
+                  style={{ flex: 1, borderColor: '#16a34a', color: '#16a34a', background: '#f0fdf4' }}
+                  disabled={bookingStatus === 'CANCELLED'}
+                  onClick={handleSendCodeToFriends}
+                >
+                  <span className="material-symbols-outlined">share</span>
+                  <span>Gửi cho bạn chơi</span>
+                </button>
+              </div>
+
+              {/* Nút Hủy đơn & hoàn tiền (Image 2: POST /api/v1/bookings/{id}/cancel) */}
               <button
                 type="button"
-                className="sp-btn-action-secondary"
-                style={{ borderColor: '#16a34a', color: '#16a34a', background: '#f0fdf4' }}
-                onClick={handleSendCodeToFriends}
+                className="sp-btn-cancel-booking"
+                style={{ width: '100%' }}
+                disabled={bookingStatus === 'CHECKED_IN' || bookingStatus === 'CANCELLED'}
+                onClick={handleOpenCancelModal}
               >
-                <span className="material-symbols-outlined">share</span>
-                <span>Gửi mã cho bạn chơi</span>
+                <span className="material-symbols-outlined">event_busy</span>
+                <span>
+                  {bookingStatus === 'CANCELLED'
+                    ? 'Đơn đã được hủy'
+                    : bookingStatus === 'CHECKED_IN'
+                    ? 'Đơn đã check-in (Không thể hủy)'
+                    : 'Hủy đơn đặt sân & Hoàn tiền'}
+                </span>
               </button>
             </div>
           </div>
@@ -1651,7 +2440,125 @@ function SplitPayment() {
         </div>
       )}
 
-      {/* ===================== SUCCESS / NOTIFICATION MODAL ===================== */}
+      {/* ===================== CANCELLATION & REFUND MODAL (Image 2) ===================== */}
+      {showCancelModal && (
+        <div className="sp-modal-backdrop" onClick={() => !isCanceling && setShowCancelModal(false)}>
+          <div className="sp-cancel-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="sp-cancel-head">
+              <div className="sp-cancel-icon">
+                <span className="material-symbols-outlined">event_busy</span>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+                  Xác Nhận Hủy Đơn Đặt Sân
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#64748b' }}>
+                  Áp dụng chính sách hoàn tiền tự động theo quy định của SportNexus
+                </p>
+              </div>
+            </div>
+
+            {/* Chính sách hoàn tiền 24 giờ */}
+            <div className={`sp-cancel-policy-card ${getHoursUntilMatch() >= 24 ? 'sp-policy-full' : 'sp-policy-zero'}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 4 }}>
+                <span className="material-symbols-outlined">
+                  {getHoursUntilMatch() >= 24 ? 'check_circle' : 'warning'}
+                </span>
+                <span>
+                  {getHoursUntilMatch() >= 24
+                    ? 'ĐỦ ĐIỀU KIỆN HOÀN TIỀN 100%'
+                    : 'KHÔNG HOÀN TIỀN (0%)'}
+                </span>
+              </div>
+              <div>
+                {getHoursUntilMatch() >= 24 ? (
+                  <>
+                    Thời điểm hủy cách giờ chơi <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 24h).
+                    Bạn sẽ nhận lại <strong>100% số tiền ({formatVnd(payableAmount)})</strong> vào Ví Escrow ngay sau khi hủy.
+                  </>
+                ) : (
+                  <>
+                    Thời điểm hủy cách giờ chơi chỉ <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&lt; 24h).
+                    Theo quy định SportNexus, đơn hủy trong vòng 24 giờ trước giờ thi đấu sẽ <strong>không được hoàn tiền</strong>.
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Lưu ý nếu đơn là kèo LFG */}
+            {(state.isLfg || state.cardId) && (
+              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: 12, color: '#1e40af' }}>
+                ℹ️ <strong>Đơn gắn kèm kèo ghép LFG:</strong> Hệ thống sẽ tự động hủy kèo ghép theo quy định.
+              </div>
+            )}
+
+            {/* Chọn lý do hủy từ API GET /api/v1/bookings/cancellation-reasons */}
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                Lý do hủy đơn:
+              </label>
+              <select
+                className="sp-reason-select"
+                value={selectedReasonCode}
+                onChange={(e) => setSelectedReasonCode(Number(e.target.value))}
+                disabled={isCanceling}
+              >
+                {cancellationReasons.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Nhập lý do khác nếu chọn mục 6 (Custom) */}
+            {selectedReasonCode === 6 && (
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                  Chi tiết lý do của bạn:
+                </label>
+                <textarea
+                  className="sp-reason-textarea"
+                  placeholder="Vui lòng nêu rõ lý do bạn muốn hủy đơn..."
+                  value={customReasonText}
+                  onChange={(e) => setCustomReasonText(e.target.value)}
+                  disabled={isCanceling}
+                />
+              </div>
+            )}
+
+            {cancelError && (
+              <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 12 }}>
+                ⚠️ {cancelError}
+              </div>
+            )}
+
+            <div className="sp-cancel-actions">
+              <button
+                type="button"
+                className="sp-btn-action-secondary"
+                style={{ flex: 1, padding: '11px 16px', borderRadius: 10 }}
+                onClick={() => setShowCancelModal(false)}
+                disabled={isCanceling}
+              >
+                Giữ lại đơn
+              </button>
+
+              <button
+                type="button"
+                className="sp-btn-confirm-cancel"
+                onClick={handleConfirmCancel}
+                disabled={isCanceling}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  {isCanceling ? 'sync' : 'event_busy'}
+                </span>
+                <span>{isCanceling ? 'Đang xử lý hủy...' : 'Xác Nhận Hủy Đơn'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===================== SUCCESS / NOTIFICATION MODAL ===================== */}
       {modalData && (

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { createLfg } from '../../api/lfgApi.js'
 
 // District courts database for dynamic map & closest court detection
 const DISTRICT_DATA = {
@@ -353,6 +354,17 @@ function CreateMatch() {
     return saved !== null ? Number(saved) : 2450000
   })
 
+  // LFG Specific State - 2.6 Chủ kèo Bước 1
+  const location = useLocation()
+  const initialSlotId = location.state?.courtSlotId || location.state?.slotId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+  const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
+  const [slotsNeeded, setSlotsNeeded] = useState(3)
+  const [pricePerPerson, setPricePerPerson] = useState('')
+  const [requireApproval, setRequireApproval] = useState(false)
+  const [description, setDescription] = useState('')
+  const [courtFee] = useState(180000) // 100% tiền sân
+  const [createError, setCreateError] = useState(null)
+
   // Toast / Submission state
   const [submitting, setSubmitting] = useState(false)
 
@@ -409,17 +421,18 @@ function CreateMatch() {
   }
 
   // Handle Match Publishing & save into feed
-  const handlePublishMatch = () => {
+  // 2.6 Chủ kèo Bước 1: POST /api/v1/lfgs
+  const handlePublishMatch = async () => {
     setSubmitting(true)
+    setCreateError(null)
 
-    // Deduct deposit and save to localStorage
-    const deposit = 45000
-    const newBal = Math.max(0, walletBalance - deposit)
-    localStorage.setItem('escrow_balance', newBal.toString())
-    setWalletBalance(newBal)
-    window.dispatchEvent(new Event('escrow_balance_updated'))
+    // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
+    if (walletBalance < courtFee) {
+      alert(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
+      setSubmitting(false)
+      return
+    }
 
-    // Create a new match object to prepend into community feed
     const formatName = selectedFormats.includes('mixed')
       ? 'Đôi Nam Nữ'
       : selectedFormats.includes('men')
@@ -435,6 +448,13 @@ function CreateMatch() {
         ? 'Mới tập chơi'
         : 'Bán chuyên / Nâng cao'
 
+    const skillTag =
+      skillLevel === 'beginner'
+        ? 'BEGINNER'
+        : skillLevel === 'pro'
+        ? 'ADVANCED'
+        : 'INTERMEDIATE'
+
     const sportMeta = {
       badminton: { name: 'Cầu Lông', badge: 'CẦU LÔNG ĐÔI', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' },
       pickleball: { name: 'Pickleball', badge: 'PICKLEBALL ĐÔI', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop' },
@@ -443,33 +463,63 @@ function CreateMatch() {
       tennis: { name: 'Tennis', badge: 'QUẦN VỢT ĐÔI', img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop' },
     }[sport] || { name: 'Cầu Lông', badge: 'GIAO LƯU THỂ THAO', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop' }
 
+    const parsedPrice = pricePerPerson ? Number(pricePerPerson) : undefined
+    const autoSplitCost = Math.round(courtFee / (slotsNeeded + 1))
+    const displayCost = parsedPrice || autoSplitCost
+
     const createdMatch = {
       id: Date.now(),
       sport: sport,
       sportBadge: sportMeta.badge,
-      subBadge: '✓ Kèo Của Bạn (Host: Minh Minh Minh)',
+      subBadge: '✓ Kèo Của Bạn (Chủ Kèo)',
       levelTag: levelText,
-      slotTag: 'Cần 3 Người (Nam/Nữ)',
+      slotTag: `Cần ${slotsNeeded} Người (${formatName})`,
       time: `${preferredTimeRange} (${selectedDate === 'today' ? 'Hôm Nay' : 'Ngày Mai'})`,
       timeSlot: 'evening',
       title: `[${sportMeta.name} ${formatName}] Giao lưu tại ${currentCourt.name} (${currentDistrictData.name})`,
       location: `${currentCourt.name}, ${currentCourt.address}`,
-      groupDesc: 'Host: Minh Minh Minh (Chỉ số Fairplay 99.4)',
+      groupDesc: description || `Host: Bạn (Chỉ số Fairplay 100) • ${requireApproval ? 'Cần chủ duyệt' : 'Vào ngay'}`,
       roster: [
-        { initials: 'MMM', bg: '#2D5F3F', name: 'Minh Minh Minh (Bạn - Host)' },
-        { initials: '?', bg: 'empty', name: 'Slot trống 1' },
-        { initials: '?', bg: 'empty', name: 'Slot trống 2' },
-        { initials: '?', bg: 'empty', name: 'Slot trống 3' },
+        { initials: 'BẠN', bg: '#2D5F3F', name: 'Bạn (Chủ kèo)' },
+        ...Array.from({ length: slotsNeeded }, (_, i) => ({
+          initials: '?',
+          bg: 'empty',
+          name: `Slot trống ${i + 1}`,
+        })),
       ],
       currentSlots: 1,
-      totalSlots: 4,
-      priceLabel: 'Tiền cọc chia đều:',
-      price: deposit,
-      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(deposit)} đ`,
+      totalSlots: slotsNeeded + 1,
+      priceLabel: parsedPrice ? 'Tiền cọc quy định:' : 'Tiền cọc chia đều:',
+      price: displayCost,
+      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(displayCost)} đ`,
       buttonText: 'Chốt Slot Ngay',
       isFlashClaim: false,
+      requireApproval: Boolean(requireApproval),
       image: sportMeta.img,
     }
+
+    // Gọi API BE: POST /api/v1/lfgs
+    try {
+      await createLfg({
+        courtSlotId: courtSlotId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04',
+        slotsNeeded: Number(slotsNeeded) || 3,
+        pricePerPerson: parsedPrice,
+        skillLevelTag: skillTag,
+        description: description.trim() || undefined,
+        requireApproval: Boolean(requireApproval),
+      })
+    } catch (apiErr) {
+      console.warn('[CreateMatch] API createLfg lỗi hoặc fallback:', apiErr)
+      if (apiErr?.status === 400 || apiErr?.status === 403) {
+        setCreateError(apiErr.message || 'Không thể tạo kèo ghép trên hệ thống.')
+      }
+    }
+
+    // FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo
+    const newBal = Math.max(0, walletBalance - courtFee)
+    localStorage.setItem('escrow_balance', newBal.toString())
+    setWalletBalance(newBal)
+    window.dispatchEvent(new Event('escrow_balance_updated'))
 
     try {
       const existing = localStorage.getItem('lfg_custom_matches')
@@ -480,7 +530,7 @@ function CreateMatch() {
     }
 
     setTimeout(() => {
-      navigate('/community')
+      navigate('/community?tab=my_cards')
     }, 600)
   }
 
@@ -1146,6 +1196,126 @@ function CreateMatch() {
                   </div>
                 </div>
               </div>
+
+              {/* 05. CẤU HÌNH SUẤT & DUYỆT NGƯỜI THAM GIA (LFG SPEC) */}
+              <div className="bg-[#FAFBF9] rounded-2xl p-5 border border-gray-200/80 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[12px] font-black text-[#111827] uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">group_add</span>
+                    05. CẤU HÌNH SUẤT &amp; DUYỆT NGƯỜI THAM GIA
+                  </label>
+                  <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
+                    API /api/v1/lfgs
+                  </span>
+                </div>
+
+                {/* Số người cần tìm (slotsNeeded) & Giá mỗi người (pricePerPerson) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* slotsNeeded */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Số người cần tìm thêm (<code className="text-[#2D5F3F] font-mono">slotsNeeded</code>):
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSlotsNeeded((prev) => Math.max(1, prev - 1))}
+                        className="w-10 h-10 rounded-xl bg-white border border-gray-300 font-black text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-all cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={slotsNeeded}
+                        onChange={(e) => setSlotsNeeded(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                        className="flex-1 h-10 px-3 text-center bg-white border border-gray-300 rounded-xl font-black text-base text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2D5F3F]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSlotsNeeded((prev) => Math.min(20, prev + 1))}
+                        className="w-10 h-10 rounded-xl bg-white border border-gray-300 font-black text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-all cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="text-[10.5px] text-gray-500 mt-1 block">
+                      Tổng số người trên sân = {slotsNeeded + 1} (bao gồm bạn là chủ kèo)
+                    </span>
+                  </div>
+
+                  {/* pricePerPerson */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Tiền mỗi người đóng (<code className="text-[#2D5F3F] font-mono">pricePerPerson</code>):
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="Để trống = Tự chia đều tiền sân"
+                        value={pricePerPerson}
+                        onChange={(e) => setPricePerPerson(e.target.value)}
+                        className="w-full h-10 pl-3 pr-8 bg-white border border-gray-300 rounded-xl text-xs font-bold text-[#111827] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2D5F3F]"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-gray-400 font-bold">đ</span>
+                    </div>
+                    <span className="text-[10.5px] text-gray-500 mt-1 block">
+                      {pricePerPerson
+                        ? `Mỗi người đóng: ${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ`
+                        : `Chia đều dự kiến: ~${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / (slotsNeeded + 1)))} đ / người`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Require Approval Switch */}
+                <div className="p-3.5 rounded-xl bg-white border border-gray-200">
+                  <label className="flex items-start justify-between gap-3 cursor-pointer">
+                    <div className="flex flex-col">
+                      <span className="font-extrabold text-xs text-[#111827] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-amber-600">verified</span>
+                        Chế độ duyệt người tham gia (requireApproval)
+                      </span>
+                      <span className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                        {requireApproval
+                          ? 'BẬT: Người tham gia gửi yêu cầu, tiền cọc được giữ trong ví họ và bạn có quyền Duyệt (Approve) hoặc Từ chối (Reject).'
+                          : 'TẮT: Người tham gia chọn slot là trừ tiền và vào kèo ngay (Kèo công khai trực tiếp).'}
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={requireApproval}
+                      onChange={(e) => setRequireApproval(e.target.checked)}
+                      className="w-5 h-5 mt-0.5 rounded accent-[#2D5F3F] cursor-pointer shrink-0"
+                    />
+                  </label>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Ghi chú mô tả trận đấu (description):
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ví dụ: Giao lưu 2-3 set vui vẻ, đề nghị đến đúng giờ, nước uống tự chuẩn bị..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2D5F3F]"
+                  />
+                </div>
+
+                {/* Court Slot UUID */}
+                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between text-[11px] text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">pin</span>
+                    Ca sân UUID (<code className="text-[#2D5F3F] font-mono">courtSlotId</code>):
+                  </span>
+                  <span className="font-mono text-gray-700 text-[10.5px] truncate max-w-[220px]" title={courtSlotId}>
+                    {courtSlotId}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* ================= RIGHT COLUMN: DYNAMIC MAP & SUMMARY ================= */}
@@ -1296,41 +1466,43 @@ function CreateMatch() {
                 </div>
               </div>
 
-              {/* Card 4: Auto Booking & Lock Court Guarantee */}
+              {/* Card 4: FE Xử lý Hệ thống tự đặt ca sân & Trừ 100% tiền sân từ ví chủ kèo (Image 1) */}
               <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs">
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoLockCourt}
-                    onChange={(e) => setAutoLockCourt(e.target.checked)}
-                    className="mt-0.5 rounded accent-[#2D5F3F]"
-                  />
+                <div className="flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[#15803D] text-[20px] shrink-0 mt-0.5">account_balance_wallet</span>
                   <div>
                     <p className="font-extrabold text-[#111827]">
-                      Xác nhận tìm &amp; tự động giữ sân 🔒
+                      Trừ 100% Tiền Sân Từ Ví Chủ Kèo: {new Intl.NumberFormat('vi-VN').format(courtFee)} đ
                     </p>
                     <p className="text-[11px] text-[#2D5F3F] mt-1 leading-relaxed">
-                      SportNexus sẽ tự động tìm và khóa sân trống phù hợp nhất trong bán kính khu
-                      vực và khung giờ đã chọn nếu chưa có sẵn.
+                      Hệ thống tự động đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Tiền của người tham gia giữ trong ví họ, chỉ chuyển cho chủ kèo khi check-in hoặc sau giờ chơi.
                     </p>
                     <p className="text-[10.5px] text-[#15803D] font-bold mt-1.5 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
-                      Tự động hoàn cọc nếu không tìm được sân đạt chuẩn
+                      {pricePerPerson
+                        ? `Thu người chơi: ${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ/suất`
+                        : `pricePerPerson để trống = chia đều ~${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / (slotsNeeded + 1)))} đ cho ${slotsNeeded + 1} người.`}
                     </p>
                   </div>
-                </label>
+                </div>
               </div>
 
-              {/* Card 5: Escrow Fee Notice */}
-              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-[11px] text-gray-500 flex items-start gap-2 leading-relaxed">
-                <span className="w-4 h-4 rounded-full bg-gray-200 text-gray-600 font-bold flex items-center justify-center shrink-0 mt-0.5 text-[10px]">
-                  0
-                </span>
-                <span>
-                  Tiền cọc ký quỹ <strong>45.000 đ/người</strong> được hoàn trả 100% khi trận đấu
-                  kết thúc hoặc huỷ trước 2 tiếng qua hợp đồng Escrow.
-                </span>
+              {/* Card 5: Quy tắc Hủy tự động & Hoàn tiền (Image 2) */}
+              <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2.5 leading-relaxed">
+                <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">info</span>
+                <div>
+                  <strong className="block font-bold mb-0.5">Quy tắc hủy tự động &amp; Hoàn 100%:</strong>
+                  Kèo chưa đủ người khi còn <strong>2 ngày tới giờ chơi</strong> sẽ tự động bị hủy, hủy luôn đơn sân và <strong>hoàn 100% cho mọi người</strong>.
+                </div>
               </div>
+
+              {/* Error banner if any */}
+              {createError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium flex items-start gap-2">
+                  <span className="material-symbols-outlined text-red-600 text-[16px] shrink-0 mt-0.5">error</span>
+                  <span>{createError}</span>
+                </div>
+              )}
 
               {/* Card 6: Action Buttons */}
               <div className="flex items-center justify-between gap-3 pt-2">
@@ -1360,7 +1532,7 @@ function CreateMatch() {
                   className="px-6 py-3.5 rounded-2xl bg-[#2D5F3F] hover:bg-[#234A31] text-white font-black text-sm shadow-md shadow-[#2D5F3F]/35 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-60 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">bolt</span>
-                  <span>{submitting ? 'Đang Đăng...' : 'ĐĂNG KÈO NGAY'}</span>
+                  <span>{submitting ? 'Đang Đăng Kèo...' : 'ĐĂNG KÈO NGAY'}</span>
                 </button>
               </div>
             </div>
