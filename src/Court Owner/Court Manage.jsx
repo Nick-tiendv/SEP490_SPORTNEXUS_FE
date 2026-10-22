@@ -1,253 +1,343 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { createCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../api/owner'
+import { useOwnerContext } from './ownerContext.js'
 
-// Dữ liệu mẫu ban đầu về Cụm sân phức hợp SportNexus
-const INITIAL_COMPLEX_DATA = {
-  facilityName: 'SportNexus Multi-Sport Complex Saigon',
-  facilityAddress: '35 Huỳnh Tấn Phát, P. Tân Thuận Đông, Quận 7, TP. Hồ Chí Minh',
-  facilityPhone: '0908 123 456',
-  openingTime: '05:00',
-  closingTime: '23:30',
-  slotDuration: 60, // phút
-  bufferTime: 10, // phút đọn dẹp vệ sinh giữa ca
-  zones: [
-    {
-      id: 'zone-a',
-      name: 'Khu A — Cụm Sân Cầu Lông Quốc Tế BWF',
-      sport: 'badminton',
-      sportLabel: 'Cầu lông',
-      color: '#10B981',
-      icon: 'sports_tennis',
-      basePrice: 180000,
-      peakPrice: 260000,
-      description: 'Thảm Yonex thi đấu chuyên nghiệp, hệ thống đèn LED 1200 Lux chống chói, máy lạnh 21°C',
-      amenities: ['Máy lạnh 21°C', 'Thảm Yonex BWF', 'Đèn LED chống chói', 'Ghế trọng tài', 'Phòng tắm nóng lạnh'],
-      courts: [
-        { id: 'a1', name: 'Sân A1 (Tiêu chuẩn VIP)', status: 'active', floor: 'Thảm Yonex BWF Xanh' },
-        { id: 'a2', name: 'Sân A2 (Tiêu chuẩn VIP)', status: 'active', floor: 'Thảm Yonex BWF Xanh' },
-        { id: 'a3', name: 'Sân A3 (Tiêu chuẩn Quốc tế)', status: 'active', floor: 'Thảm Yonex BWF Xanh' },
-        { id: 'a4', name: 'Sân A4 (Tiêu chuẩn Quốc tế)', status: 'active', floor: 'Thảm Yonex BWF Xanh' },
-        { id: 'a5', name: 'Sân A5 (Khán đài Mini)', status: 'maintenance', floor: 'Đang bảo trì thay thảm' },
-      ],
-    },
-    {
-      id: 'zone-b',
-      name: 'Khu B — Cụm Sân Bóng Đá Mini Cỏ Nhân Tạo',
-      sport: 'football',
-      sportLabel: 'Bóng đá',
-      color: '#3B82F6',
-      icon: 'sports_soccer',
-      basePrice: 380000,
-      peakPrice: 550000,
-      description: 'Cỏ nhân tạo chất lượng cao FIFA Quality Pro sợi kim cương, hạt cao su EPDM đàn hồi, dàn đèn cao áp 800W',
-      amenities: ['Cỏ FIFA Quality Pro', 'Dàn đèn Philips 800W', 'Lưới chắn bóng cao cấp', 'Bình nước miễn phí', 'Khán đài 50 chỗ'],
-      courts: [
-        { id: 'b1', name: 'Sân B1 — Sân 5 Mini (Khung thành nhôm)', status: 'active', floor: 'Cỏ nhân tạo 5cm EPDM' },
-        { id: 'b2', name: 'Sân B2 — Sân 5 Mini (Khung thành nhôm)', status: 'active', floor: 'Cỏ nhân tạo 5cm EPDM' },
-        { id: 'b3', name: 'Sân B3 — Sân 7 Liên hoàn (Có thể ghép)', status: 'active', floor: 'Cỏ nhân tạo 5cm EPDM' },
-      ],
-    },
-    {
-      id: 'zone-c',
-      name: 'Khu C — Cụm Sân Pickleball USAPA Pro',
-      sport: 'pickleball',
-      sportLabel: 'Pickleball',
-      color: '#F59E0B',
-      icon: 'sports_tennis',
-      basePrice: 200000,
-      peakPrice: 280000,
-      description: 'Mặt sân Acrylic 8 lớp đạt chuẩn USAPA, mái che vòm khí động học thoáng mát, lưới điều chỉnh cơ khí',
-      amenities: ['Mái che vòm chống mưa', 'Mặt sân Acrylic 8 lớp', 'Bóng thi đấu Franklin', 'Khu nghỉ ngơi quạt gió'],
-      courts: [
-        { id: 'c1', name: 'Sân C1 (Center Court VIP)', status: 'active', floor: 'Acrylic Cushion USAPA' },
-        { id: 'c2', name: 'Sân C2 (Mái che cao)', status: 'active', floor: 'Acrylic Cushion USAPA' },
-        { id: 'c3', name: 'Sân C3 (Mái che cao)', status: 'active', floor: 'Acrylic Cushion USAPA' },
-        { id: 'c4', name: 'Sân C4 (Mặt sân ngoài trời)', status: 'active', floor: 'Acrylic Hardcourt' },
-      ],
-    },
-    {
-      id: 'zone-d',
-      name: 'Khu D — Sân Quần Vợt (Tennis)',
-      sport: 'tennis',
-      sportLabel: 'Tennis',
-      color: '#EC4899',
-      icon: 'sports_tennis',
-      basePrice: 300000,
-      peakPrice: 420000,
-      description: 'Mặt sân cứng DecoTurf tiêu chuẩn giải Grand Slam US Open, hệ thống chiếu sáng ban đêm không bóng mờ',
-      amenities: ['Mặt sân DecoTurf', 'Đèn LED 1500 Lux', 'Máy bắn bóng tự động', 'Phòng thay đồ riêng'],
-      courts: [
-        { id: 'd1', name: 'Sân D1 (Sân trung tâm có mái che)', status: 'active', floor: 'DecoTurf 5 lớp' },
-        { id: 'd2', name: 'Sân D2 (Sân ngoài trời cao cấp)', status: 'active', floor: 'DecoTurf 5 lớp' },
-      ],
-    },
-  ],
-  dynamicPricingRules: [
-    {
-      id: 'rule-peak-evening',
-      name: 'Giờ Cao Điểm Buổi Tối (Peak Hours)',
-      type: 'time_window',
-      days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
-      timeRange: '17:00 - 22:00',
-      multiplier: 1.35,
-      active: true,
-      badge: 'Giờ vàng',
-      badgeColor: '#EF4444',
-      description: 'Áp dụng cho các ca tối đông khách trong tuần (tăng 35% so với giá cơ sở)',
-    },
-    {
-      id: 'rule-weekend',
-      name: 'Cuối Tuần Cao Điểm (Weekend Premium)',
-      type: 'weekend',
-      days: ['Thứ 7', 'Chủ Nhật'],
-      timeRange: '06:00 - 10:30 & 16:00 - 22:30',
-      multiplier: 1.45,
-      active: true,
-      badge: 'Cuối tuần',
-      badgeColor: '#F97316',
-      description: 'Lượng khách tập trung cao nhất tuần (tăng 45% hoặc định giá cố định)',
-    },
-    {
-      id: 'rule-offpeak',
-      name: 'Giờ Vắng Khách (Happy Hours / Giảm Giá)',
-      type: 'discount',
-      days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
-      timeRange: '09:00 - 15:00',
-      multiplier: 0.8,
-      active: true,
-      badge: 'Giảm 20%',
-      badgeColor: '#10B981',
-      description: 'Kích cầu khung giờ trưa vắng khách cho học sinh, sinh viên, người làm việc tự do',
-    },
-    {
-      id: 'rule-lastminute',
-      name: 'Khuyến Mãi Đặt Cận Giờ (Flash Fill)',
-      type: 'last_minute',
-      days: ['Hàng ngày'],
-      timeRange: 'Trước giờ chơi 90 phút nếu sân còn trống',
-      multiplier: 0.75,
-      active: true,
-      badge: 'Flash 25%',
-      badgeColor: '#8B5CF6',
-      description: 'Tự động mở bán giảm 25% cho các slot trống chuẩn bị đến giờ chơi',
-    },
-  ],
+// Màu & icon theo môn (scoringRule của master-data/sports).
+const SPORT_STYLES = {
+  BADMINTON: { color: '#10B981', icon: 'sports_tennis' },
+  FOOTBALL: { color: '#3B82F6', icon: 'sports_soccer' },
+  PICKLEBALL: { color: '#F59E0B', icon: 'sports_tennis' },
+  TENNIS: { color: '#EC4899', icon: 'sports_tennis' },
+  VOLLEYBALL: { color: '#8B5CF6', icon: 'sports_volleyball' },
+  BASKETBALL: { color: '#EF4444', icon: 'sports_basketball' },
+}
+const DEFAULT_SPORT_STYLE = { color: '#64748B', icon: 'sports' }
+// Giá cao điểm mặc định = giá chuẩn x hệ số này (BE chưa lưu giá cao điểm riêng).
+const PEAK_MULTIPLIER = 1.35
+
+// Quy tắc định giá động: chưa có API lưu riêng, sẽ áp dụng qua priceRules khi sinh slot.
+const DEFAULT_PRICING_RULES = [
+  {
+    id: 'rule-peak-evening',
+    name: 'Giờ Cao Điểm Buổi Tối (Peak Hours)',
+    type: 'time_window',
+    days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
+    timeRange: '17:00 - 22:00',
+    multiplier: 1.35,
+    active: true,
+    badge: 'Giờ vàng',
+    badgeColor: '#EF4444',
+    description: 'Áp dụng cho các ca tối đông khách trong tuần (tăng 35% so với giá cơ sở)',
+  },
+  {
+    id: 'rule-weekend',
+    name: 'Cuối Tuần Cao Điểm (Weekend Premium)',
+    type: 'weekend',
+    days: ['Thứ 7', 'Chủ Nhật'],
+    timeRange: '06:00 - 10:30 & 16:00 - 22:30',
+    multiplier: 1.45,
+    active: true,
+    badge: 'Cuối tuần',
+    badgeColor: '#F97316',
+    description: 'Lượng khách tập trung cao nhất tuần (tăng 45% hoặc định giá cố định)',
+  },
+  {
+    id: 'rule-offpeak',
+    name: 'Giờ Vắng Khách (Happy Hours / Giảm Giá)',
+    type: 'discount',
+    days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
+    timeRange: '09:00 - 15:00',
+    multiplier: 0.8,
+    active: true,
+    badge: 'Giảm 20%',
+    badgeColor: '#10B981',
+    description: 'Kích cầu khung giờ trưa vắng khách cho học sinh, sinh viên, người làm việc tự do',
+  },
+  {
+    id: 'rule-lastminute',
+    name: 'Khuyến Mãi Đặt Cận Giờ (Flash Fill)',
+    type: 'last_minute',
+    days: ['Hàng ngày'],
+    timeRange: 'Trước giờ chơi 90 phút nếu sân còn trống',
+    multiplier: 0.75,
+    active: true,
+    badge: 'Flash 25%',
+    badgeColor: '#8B5CF6',
+    description: 'Tự động mở bán giảm 25% cho các slot trống chuẩn bị đến giờ chơi',
+  },
+]
+
+const toClock = value => (value && /^\d{1,2}:\d{2}/.test(value) ? value.slice(0, 5).padStart(5, '0') : '')
+const toMinutes = clock => {
+  const [h, m] = clock.split(':').map(Number)
+  return h * 60 + m
+}
+const fromMinutes = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+const roundPrice = value => Math.round(value / 10000) * 10000
+
+function toCourt(raw) {
+  return {
+    id: String(raw.id),
+    categoryId: String(raw.categoryId ?? ''),
+    categoryName: raw.categoryName || 'Khác',
+    name: raw.name || '—',
+    status: String(raw.status || 'ACTIVE').toUpperCase(),
+    defaultPrice: Number(raw.defaultPrice) || 0,
+    courtType: raw.courtType ?? null,
+    isIndoor: raw.isIndoor ?? null,
+    surfaceType: raw.surfaceType ?? null,
+    maxPlayers: raw.maxPlayers ?? null,
+  }
 }
 
+function toFacility(raw) {
+  return {
+    id: String(raw.id),
+    name: raw.name || '—',
+    address: raw.address || '',
+    phone: raw.phone || '',
+    openTime: toClock(raw.openTime) || '06:00',
+    closeTime: toClock(raw.closeTime) || '22:00',
+    status: raw.status || '',
+    approvalStatus: raw.approvalStatus || '',
+    amenities: (raw.amenities || []).map(item => item.name).filter(Boolean),
+  }
+}
+
+// Body PUT court cần đủ field, chỉ thay phần thay đổi.
+const courtPayload = (court, changes) => ({
+  categoryId: court.categoryId,
+  name: court.name,
+  status: court.status,
+  defaultPrice: court.defaultPrice,
+  courtType: court.courtType,
+  isIndoor: court.isIndoor,
+  surfaceType: court.surfaceType,
+  maxPlayers: court.maxPlayers,
+  ...changes,
+})
+
 export default function CourtManage() {
-  const [complexData, setComplexData] = useState(INITIAL_COMPLEX_DATA)
+  // Cơ sở đang chọn lấy từ CourtOwnerLayout (dropdown ở sidebar).
+  const { facilityId, loading: layoutLoading, error: layoutError, refreshFacilities } = useOwnerContext()
+  const [sports, setSports] = useState([])
+  // Chi tiết của cơ sở nào thì gắn kèm facilityId đó, để khi đổi cơ sở không hiện nhầm dữ liệu cũ.
+  const [detail, setDetail] = useState(null) // { facilityId, facility, courts }
+  const [detailError, setDetailError] = useState(null) // { facilityId, message }
+  const [busyId, setBusyId] = useState(null)
+
+  const facility = detail?.facilityId === facilityId ? detail.facility : null
+  const courts = useMemo(() => (detail?.facilityId === facilityId ? detail.courts : []), [detail, facilityId])
+  const setCourts = (updater) => setDetail(prev => prev && { ...prev, courts: typeof updater === 'function' ? updater(prev.courts) : updater })
+  const setFacility = (updater) => setDetail(prev => prev && { ...prev, facility: updater(prev.facility) })
+  const loadError = layoutError || (detailError?.facilityId === facilityId ? detailError.message : '')
+  const loading = layoutLoading || (!!facilityId && !facility && !loadError)
+
   const [activeTab, setActiveTab] = useState('zones') // 'zones' | 'pricing' | 'timegrid'
-  const [selectedZone, setSelectedZone] = useState(complexData.zones[0])
+  const [selectedZoneId, setSelectedZoneId] = useState(null)
   const [showAddCourtModal, setShowAddCourtModal] = useState(false)
   const [newCourtName, setNewCourtName] = useState('')
   const [newCourtFloor, setNewCourtFloor] = useState('')
+  const [newCourtSportId, setNewCourtSportId] = useState('')
+  const [newCourtPrice, setNewCourtPrice] = useState('')
   const [toastMessage, setToastMessage] = useState(null)
 
+  // Giá chỉnh tay theo khu: { [categoryId]: { basePrice, peakPrice } }
+  const [zonePrices, setZonePrices] = useState({})
+  const [pricingRules, setPricingRules] = useState(DEFAULT_PRICING_RULES)
+  const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00', slotDuration: 60, bufferTime: 0 })
+
   // Bộ mô phỏng tính giá động trực quan
-  const [simSport, setSimSport] = useState('badminton')
+  const [simZoneId, setSimZoneId] = useState('')
   const [simDay, setSimDay] = useState('weekday') // 'weekday' | 'weekend'
   const [simHour, setSimHour] = useState(18) // 18h tối
 
-  const showToast = (msg) => {
-    setToastMessage(msg)
+  const showToast = (msg, type = 'success') => {
+    setToastMessage({ msg, type })
     setTimeout(() => setToastMessage(null), 3500)
   }
 
-  // Toggle trạng thái sân
-  const handleToggleCourtStatus = (zoneId, courtId) => {
-    setComplexData((prev) => {
-      const updatedZones = prev.zones.map((zone) => {
-        if (zone.id !== zoneId) return zone
-        const updatedCourts = zone.courts.map((court) => {
-          if (court.id !== courtId) return court
-          const nextStatus = court.status === 'active' ? 'maintenance' : 'active'
-          return { ...court, status: nextStatus }
-        })
-        return { ...zone, courts: updatedCourts }
+  // Master data môn thể thao
+  useEffect(() => {
+    getSports().then(setSports).catch(() => {})
+  }, [])
+
+  // Chi tiết cơ sở + danh sách sân khi đổi cơ sở
+  useEffect(() => {
+    if (!facilityId) return
+    let cancelled = false
+    Promise.all([getFacility(facilityId), getCourts(facilityId)])
+      .then(([facilityData, courtList]) => {
+        if (cancelled) return
+        const mapped = toFacility(facilityData)
+        setDetail({ facilityId, facility: mapped, courts: courtList.map(toCourt) })
+        setSelectedZoneId(null)
+        setZonePrices({})
+        setGridConfig(prev => ({ ...prev, openingTime: mapped.openTime, closingTime: mapped.closeTime }))
       })
-      return { ...prev, zones: updatedZones }
+      .catch(error => !cancelled && setDetailError({ facilityId, message: error.message }))
+    return () => { cancelled = true }
+  }, [facilityId])
+
+  // Cập nhật số sân ở sidebar sau khi thêm / đổi trạng thái sân.
+  const syncLayout = () => refreshFacilities().catch(() => {})
+
+  // Gom sân theo môn thể thao thành các "Khu"
+  const zones = useMemo(() => {
+    const groups = new Map()
+    for (const court of courts) {
+      if (!groups.has(court.categoryId)) groups.set(court.categoryId, [])
+      groups.get(court.categoryId).push(court)
+    }
+    return [...groups.entries()].map(([categoryId, zoneCourts]) => {
+      const sport = sports.find(item => String(item.id) === categoryId)
+      const style = SPORT_STYLES[sport?.scoringRule] || DEFAULT_SPORT_STYLE
+      const label = sport?.name || zoneCourts[0].categoryName
+      const basePrice = zonePrices[categoryId]?.basePrice ?? Math.min(...zoneCourts.map(court => court.defaultPrice))
+      return {
+        id: categoryId,
+        name: `Khu ${label}`,
+        sportLabel: label,
+        color: style.color,
+        icon: style.icon,
+        description: sport?.rulesDescription || '',
+        basePrice,
+        peakPrice: zonePrices[categoryId]?.peakPrice ?? roundPrice(basePrice * PEAK_MULTIPLIER),
+        courts: zoneCourts,
+      }
     })
-    showToast('Đã cập nhật trạng thái hoạt động của sân thành công!')
+  }, [courts, sports, zonePrices])
+
+  const selectedZone = zones.find(zone => zone.id === selectedZoneId) || zones[0] || null
+
+  const reloadCourts = async () => setCourts((await getCourts(facilityId)).map(toCourt))
+
+  // Bật / tạm ngưng sân: PUT court với status ACTIVE | INACTIVE
+  const handleToggleCourtStatus = async (court) => {
+    const nextStatus = court.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+    setBusyId(court.id)
+    try {
+      await updateCourt(facilityId, court.id, courtPayload(court, { status: nextStatus }))
+      setCourts(prev => prev.map(item => (item.id === court.id ? { ...item, status: nextStatus } : item)))
+      syncLayout()
+      showToast(`Đã ${nextStatus === 'ACTIVE' ? 'mở lại' : 'tạm ngưng'} ${court.name}!`)
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  // Thêm sân mới vào khu vực
-  const handleAddCourt = (e) => {
+  // Mở modal thêm sân: mặc định môn của khu đang chọn (hoặc chọn môn mới)
+  const openAddCourtModal = (sportId) => {
+    const sportZone = zones.find(zone => zone.id === sportId)
+    setNewCourtSportId(sportId || sports[0]?.id || '')
+    setNewCourtPrice(sportZone ? String(sportZone.basePrice) : '')
+    setShowAddCourtModal(true)
+  }
+
+  // Thêm sân mới: POST /facilities/{facilityId}/courts
+  const handleAddCourt = async (e) => {
     e.preventDefault()
-    if (!newCourtName.trim()) return
-
-    const newCourt = {
-      id: `${selectedZone.id}-${Date.now().toString().slice(-4)}`,
-      name: newCourtName.trim(),
-      status: 'active',
-      floor: newCourtFloor.trim() || 'Tiêu chuẩn quốc tế',
-    }
-
-    setComplexData((prev) => {
-      const updatedZones = prev.zones.map((z) => {
-        if (z.id !== selectedZone.id) return z
-        return { ...z, courts: [...z.courts, newCourt] }
+    if (!newCourtName.trim() || !newCourtSportId || busyId) return
+    setBusyId('add-court')
+    try {
+      await createCourt(facilityId, {
+        categoryId: newCourtSportId,
+        name: newCourtName.trim(),
+        defaultPrice: Number(newCourtPrice) || 0,
+        courtType: null,
+        isIndoor: null,
+        surfaceType: newCourtFloor.trim() || null,
+        maxPlayers: null,
       })
-      return { ...prev, zones: updatedZones }
-    })
-
-    setSelectedZone((prev) => ({
-      ...prev,
-      courts: [...prev.courts, newCourt],
-    }))
-
-    setNewCourtName('')
-    setNewCourtFloor('')
-    setShowAddCourtModal(false)
-    showToast(`Đã thêm sân "${newCourt.name}" vào ${selectedZone.name}!`)
+      await reloadCourts()
+      syncLayout()
+      setSelectedZoneId(newCourtSportId)
+      showToast(`Đã thêm sân "${newCourtName.trim()}"!`)
+      setNewCourtName('')
+      setNewCourtFloor('')
+      setShowAddCourtModal(false)
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  // Toggle quy tắc định giá động
+  // Toggle quy tắc định giá động (lưu cục bộ)
   const handleToggleRule = (ruleId) => {
-    setComplexData((prev) => {
-      const updatedRules = prev.dynamicPricingRules.map((rule) => {
-        if (rule.id !== ruleId) return rule
-        return { ...rule, active: !rule.active }
-      })
-      return { ...prev, dynamicPricingRules: updatedRules }
-    })
-    showToast('Đã lưu cấu hình quy tắc định giá động!')
+    setPricingRules(prev => prev.map(rule => (rule.id === ruleId ? { ...rule, active: !rule.active } : rule)))
   }
 
-  // Cập nhật giá cơ bản của Khu
+  // Sửa giá của Khu trên giao diện
   const handleUpdateZonePrice = (zoneId, field, value) => {
-    const num = Number(value) || 0
-    setComplexData((prev) => {
-      const updatedZones = prev.zones.map((z) => {
-        if (z.id !== zoneId) return z
-        return { ...z, [field]: num }
-      })
-      return { ...prev, zones: updatedZones }
-    })
-    if (selectedZone.id === zoneId) {
-      setSelectedZone((prev) => ({ ...prev, [field]: num }))
+    const zone = zones.find(item => item.id === zoneId)
+    setZonePrices(prev => ({
+      ...prev,
+      [zoneId]: { basePrice: zone.basePrice, peakPrice: zone.peakPrice, ...prev[zoneId], [field]: Number(value) || 0 },
+    }))
+  }
+
+  // Lưu giá chuẩn của Khu vào defaultPrice của từng sân trong khu
+  const handleSaveZoneBasePrice = async (zone) => {
+    const changed = zone.courts.filter(court => court.defaultPrice !== zone.basePrice)
+    if (!changed.length) return
+    setBusyId(zone.id)
+    try {
+      await Promise.all(changed.map(court => updateCourt(facilityId, court.id, courtPayload(court, { defaultPrice: zone.basePrice }))))
+      setCourts(prev => prev.map(court => (court.categoryId === zone.id ? { ...court, defaultPrice: zone.basePrice } : court)))
+      showToast(`Đã cập nhật giá chuẩn ${zone.name}: ${formatVND(zone.basePrice)}/h`)
+    } catch (error) {
+      showToast(error.message, 'error')
+      await reloadCourts().catch(() => {})
+    } finally {
+      setBusyId(null)
     }
   }
+
+  // Lưu giờ mở / đóng cửa: PUT /facilities/{id} (field null thì BE giữ nguyên)
+  const handleSaveTimeGrid = async () => {
+    if (toMinutes(gridConfig.closingTime) <= toMinutes(gridConfig.openingTime)) {
+      showToast('Giờ đóng cửa phải sau giờ mở cửa.', 'error')
+      return
+    }
+    setBusyId('timegrid')
+    try {
+      await updateFacility(facilityId, {
+        name: null, address: null, latitude: null, longitude: null, description: null, phone: null,
+        openTime: `${gridConfig.openingTime}:00`, closeTime: `${gridConfig.closingTime}:00`,
+        status: null, amenityIds: null, imageUrls: null,
+      })
+      setFacility(prev => ({ ...prev, openTime: gridConfig.openingTime, closeTime: gridConfig.closingTime }))
+      showToast('Đã lưu giờ mở cửa / đóng cửa của cơ sở!')
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const isRuleActive = id => pricingRules.find(rule => rule.id === id)?.active
 
   // Tính giá mô phỏng theo giờ
   const calculateSimulatedPrice = () => {
-    const zone = complexData.zones.find((z) => z.sport === simSport) || complexData.zones[0]
+    const zone = zones.find((z) => z.id === simZoneId) || zones[0]
+    if (!zone) return null
     let base = zone.basePrice
     let multiplier = 1.0
     let appliedRule = 'Giá Tiêu Chuẩn (Giờ Thường)'
 
     if (simDay === 'weekend') {
-      if ((simHour >= 6 && simHour < 11) || (simHour >= 16 && simHour <= 22)) {
+      if (isRuleActive('rule-weekend') && ((simHour >= 6 && simHour < 11) || (simHour >= 16 && simHour <= 22))) {
         multiplier = 1.45
         appliedRule = 'Quy tắc Cuối Tuần Cao Điểm (+45%)'
-      } else {
-        multiplier = 1.2
-        appliedRule = 'Cuối Tuần Giờ Thường (+20%)'
       }
     } else {
-      if (simHour >= 17 && simHour <= 22) {
+      if (isRuleActive('rule-peak-evening') && simHour >= 17 && simHour <= 22) {
         multiplier = 1.35
         appliedRule = 'Quy tắc Giờ Cao Điểm Buổi Tối (+35%)'
-      } else if (simHour >= 9 && simHour < 15) {
+      } else if (isRuleActive('rule-offpeak') && simHour >= 9 && simHour < 15) {
         multiplier = 0.8
         appliedRule = 'Quy tắc Giờ Vắng Khách / Happy Hours (-20%)'
       }
@@ -261,12 +351,39 @@ export default function CourtManage() {
 
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
+  // Các ca trong ngày theo giờ mở/đóng cửa, thời lượng slot và thời gian đệm
+  const gridSlots = useMemo(() => {
+    const slots = []
+    const end = toMinutes(gridConfig.closingTime)
+    const step = gridConfig.slotDuration + gridConfig.bufferTime
+    for (let start = toMinutes(gridConfig.openingTime); start + gridConfig.slotDuration <= end && slots.length < 48; start += step) {
+      slots.push(start)
+    }
+    return slots
+  }, [gridConfig])
+
   // Tổng số sân trong cụm
-  const totalCourts = complexData.zones.reduce((sum, z) => sum + z.courts.length, 0)
-  const activeCourts = complexData.zones.reduce(
-    (sum, z) => sum + z.courts.filter((c) => c.status === 'active').length,
-    0
-  )
+  const totalCourts = courts.length
+  const activeCourts = courts.filter((c) => c.status === 'ACTIVE').length
+  const activeRuleCount = pricingRules.filter(rule => rule.active).length
+
+  if (loading || loadError || !facility) {
+    return (
+      <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)' }}>
+        <div style={{ background: 'rgba(255, 255, 255, 0.94)', borderRadius: '20px', padding: '48px 28px', textAlign: 'center', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '44px', color: loadError ? '#EF4444' : '#10B981' }}>
+            {loading ? 'progress_activity' : loadError ? 'error' : 'domain_add'}
+          </span>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '12px 0 6px' }}>
+            {loading ? 'Đang tải dữ liệu cơ sở...' : loadError ? 'Không thể tải dữ liệu cơ sở' : 'Bạn chưa có cơ sở nào'}
+          </h2>
+          <p style={{ margin: 0, color: '#475569', fontSize: '14px', fontWeight: 600 }}>
+            {loading ? 'Vui lòng chờ trong giây lát.' : loadError || 'Hãy đăng ký cơ sở thể thao và chờ quản trị viên phê duyệt để bắt đầu quản lý sân.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
@@ -278,11 +395,11 @@ export default function CourtManage() {
             top: '24px',
             right: '24px',
             zIndex: 9999,
-            background: '#10B981',
+            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
             color: '#FFFFFF',
             padding: '14px 22px',
             borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4)',
+            boxShadow: toastMessage.type === 'error' ? '0 10px 25px -5px rgba(239, 68, 68, 0.4)' : '0 10px 25px -5px rgba(16, 185, 129, 0.4)',
             fontWeight: 600,
             fontSize: '14px',
             display: 'flex',
@@ -292,9 +409,9 @@ export default function CourtManage() {
           }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            check_circle
+            {toastMessage.type === 'error' ? 'error' : 'check_circle'}
           </span>
-          {toastMessage}
+          {toastMessage.msg}
         </div>
       )}
 
@@ -333,8 +450,13 @@ export default function CourtManage() {
               Cơ Sở Phức Hợp Thể Thao
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
-              Mã cơ sở: <strong>SNX-FAC-HCM07</strong>
+              Mã cơ sở: <strong>{facility.id.slice(0, 8).toUpperCase()}</strong>
             </span>
+            {facility.approvalStatus && facility.approvalStatus !== 'APPROVED' && (
+              <span style={{ background: facility.approvalStatus === 'REJECTED' ? '#FEE2E2' : '#FEF3C7', color: facility.approvalStatus === 'REJECTED' ? '#B91C1C' : '#B45309', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 800 }}>
+                {facility.approvalStatus === 'REJECTED' ? 'Bị từ chối' : 'Chờ admin duyệt'}
+              </span>
+            )}
           </div>
           <h1
             style={{
@@ -345,13 +467,13 @@ export default function CourtManage() {
               letterSpacing: '-0.5px',
             }}
           >
-            {complexData.facilityName}
+            {facility.name}
           </h1>
           <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10B981' }}>
               location_on
             </span>
-            {complexData.facilityAddress}
+            {facility.address}
           </p>
         </div>
 
@@ -386,7 +508,7 @@ export default function CourtManage() {
             <div>
               <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>Quy mô Cụm</div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A' }}>
-                {complexData.zones.length} Khu Vực • {totalCourts} Sân Con
+                {zones.length} Khu Vực • {totalCourts} Sân Con
               </div>
             </div>
           </div>
@@ -420,7 +542,7 @@ export default function CourtManage() {
             <div>
               <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>Tỷ lệ Sẵn Sàng</div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#16A34A' }}>
-                {activeCourts}/{totalCourts} Đang Phục Vụ ({Math.round((activeCourts / totalCourts) * 100)}%)
+                {activeCourts}/{totalCourts} Đang Phục Vụ ({totalCourts ? Math.round((activeCourts / totalCourts) * 100) : 0}%)
               </div>
             </div>
           </div>
@@ -553,17 +675,22 @@ export default function CourtManage() {
                   Danh Sách Khu Vực
                 </h3>
                 <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 800 }}>
-                  {complexData.zones.length} khu
+                  {zones.length} khu
                 </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {complexData.zones.map((zone) => {
-                  const isSelected = selectedZone.id === zone.id
+                {zones.length === 0 && (
+                  <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600, textAlign: 'center', padding: '12px 0' }}>
+                    Cơ sở chưa có sân nào.
+                  </div>
+                )}
+                {zones.map((zone) => {
+                  const isSelected = selectedZone?.id === zone.id
                   return (
                     <div
                       key={zone.id}
-                      onClick={() => setSelectedZone(zone)}
+                      onClick={() => setSelectedZoneId(zone.id)}
                       style={{
                         padding: '14px',
                         borderRadius: '12px',
@@ -614,7 +741,7 @@ export default function CourtManage() {
 
               {/* Add Zone prompt */}
               <button
-                onClick={() => showToast('Tính năng thêm cụm sân thể thao mới đã sẵn sàng.')}
+                onClick={() => openAddCourtModal(String(sports.find((sport) => !zones.some((zone) => zone.id === String(sport.id)))?.id || ''))}
                 style={{
                   width: '100%',
                   marginTop: '16px',
@@ -642,6 +769,7 @@ export default function CourtManage() {
           </div>
 
           {/* Zone Detail & Courts View */}
+          {selectedZone && (
           <div>
             <div
               style={{
@@ -692,7 +820,7 @@ export default function CourtManage() {
                 </div>
 
                 <button
-                  onClick={() => setShowAddCourtModal(true)}
+                  onClick={() => openAddCourtModal(selectedZone.id)}
                   style={{
                     background: '#10B981',
                     color: '#FFFFFF',
@@ -718,10 +846,13 @@ export default function CourtManage() {
               {/* Amenities tags */}
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-                  Tiện ích trang bị cho khu vực:
+                  Tiện ích của cơ sở:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {selectedZone.amenities.map((item, idx) => (
+                  {facility.amenities.length === 0 && (
+                    <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>Chưa cập nhật tiện ích.</span>
+                  )}
+                  {facility.amenities.map((item, idx) => (
                     <span
                       key={idx}
                       style={{
@@ -809,7 +940,7 @@ export default function CourtManage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                 {selectedZone.courts.map((court) => {
-                  const isActive = court.status === 'active'
+                  const isActive = court.status === 'ACTIVE'
                   return (
                     <div
                       key={court.id}
@@ -852,11 +983,11 @@ export default function CourtManage() {
                               background: isActive ? '#16A34A' : '#D97706',
                             }}
                           />
-                          {isActive ? 'Hoạt động tốt' : 'Đang bảo trì'}
+                          {isActive ? 'Hoạt động tốt' : 'Tạm ngưng / Bảo trì'}
                         </span>
 
                         <span style={{ fontSize: '11px', color: '#475569', fontWeight: 800 }}>
-                          ID: {court.id.toUpperCase()}
+                          ID: {court.id.slice(0, 8).toUpperCase()}
                         </span>
                       </div>
 
@@ -868,7 +999,8 @@ export default function CourtManage() {
                         <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#10B981' }}>
                           layers
                         </span>
-                        {court.floor}
+                        {court.surfaceType || court.courtType || 'Chưa cập nhật mặt sân'}
+                        <span style={{ marginLeft: 'auto', color: '#047857', fontWeight: 800 }}>{formatVND(court.defaultPrice)}/h</span>
                       </div>
 
                       {/* Actions */}
@@ -882,7 +1014,8 @@ export default function CourtManage() {
                         }}
                       >
                         <button
-                          onClick={() => handleToggleCourtStatus(selectedZone.id, court.id)}
+                          onClick={() => handleToggleCourtStatus(court)}
+                          disabled={busyId === court.id}
                           style={{
                             background: isActive ? '#FFF7ED' : '#F0FDF4',
                             border: isActive ? '1px solid #FFEDD5' : '1px solid #DCFCE7',
@@ -891,16 +1024,17 @@ export default function CourtManage() {
                             borderRadius: '8px',
                             fontSize: '12px',
                             fontWeight: 800,
-                            cursor: 'pointer',
+                            cursor: busyId === court.id ? 'wait' : 'pointer',
+                            opacity: busyId === court.id ? 0.6 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
                           }}
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                            {isActive ? 'build' : 'check_circle'}
+                            {isActive ? 'pause_circle' : 'play_circle'}
                           </span>
-                          {isActive ? 'Chuyển bảo trì' : 'Mở lại sân'}
+                          {isActive ? 'Tạm ngưng sân' : 'Mở lại sân'}
                         </button>
 
                         <button
@@ -930,6 +1064,7 @@ export default function CourtManage() {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -1031,7 +1166,7 @@ export default function CourtManage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {complexData.zones.map((zone) => (
+                    {zones.map((zone) => (
                       <tr key={zone.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                         <td style={{ padding: '14px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1065,6 +1200,8 @@ export default function CourtManage() {
                             step="10000"
                             value={zone.basePrice}
                             onChange={(e) => handleUpdateZonePrice(zone.id, 'basePrice', e.target.value)}
+                            onBlur={() => handleSaveZoneBasePrice(zone)}
+                            disabled={busyId === zone.id}
                             style={{
                               width: '140px',
                               padding: '8px 12px',
@@ -1104,7 +1241,7 @@ export default function CourtManage() {
                               borderRadius: '6px',
                             }}
                           >
-                            +{Math.round(((zone.peakPrice - zone.basePrice) / zone.basePrice) * 100)}%
+                            +{zone.basePrice ? Math.round(((zone.peakPrice - zone.basePrice) / zone.basePrice) * 100) : 0}%
                           </span>
                         </td>
                       </tr>
@@ -1138,12 +1275,12 @@ export default function CourtManage() {
                   Quy Tắc Định Giá Động Đang Áp Dụng
                 </h3>
                 <span style={{ fontSize: '13px', color: '#047857', fontWeight: 800 }}>
-                  ● 4/4 Quy tắc đang hoạt động
+                  ● {activeRuleCount}/{pricingRules.length} Quy tắc đang hoạt động
                 </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {complexData.dynamicPricingRules.map((rule) => (
+                {pricingRules.map((rule) => (
                   <div
                     key={rule.id}
                     style={{
@@ -1278,8 +1415,8 @@ export default function CourtManage() {
                   Chọn Bộ Môn / Khu Vực
                 </label>
                 <select
-                  value={simSport}
-                  onChange={(e) => setSimSport(e.target.value)}
+                  value={simResult?.zone.id || ''}
+                  onChange={(e) => setSimZoneId(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '10px 12px',
@@ -1291,10 +1428,9 @@ export default function CourtManage() {
                     background: '#F8FAFC',
                   }}
                 >
-                  <option value="badminton">Khu A — Cầu Lông (Gốc: 180.000đ)</option>
-                  <option value="football">Khu B — Bóng Đá Sân 5 (Gốc: 380.000đ)</option>
-                  <option value="pickleball">Khu C — Pickleball (Gốc: 200.000đ)</option>
-                  <option value="tennis">Khu D — Tennis (Gốc: 300.000đ)</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>{zone.name} (Gốc: {formatVND(zone.basePrice)})</option>
+                  ))}
                 </select>
               </div>
 
@@ -1364,6 +1500,7 @@ export default function CourtManage() {
               </div>
 
               {/* Simulator Calculation Result Card */}
+              {simResult && (
               <div
                 style={{
                   background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
@@ -1410,6 +1547,7 @@ export default function CourtManage() {
                   <span>{simResult.multiplier}x</span>
                 </div>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -1435,8 +1573,8 @@ export default function CourtManage() {
               </label>
               <input
                 type="time"
-                value={complexData.openingTime}
-                onChange={(e) => setComplexData((prev) => ({ ...prev, openingTime: e.target.value }))}
+                value={gridConfig.openingTime}
+                onChange={(e) => setGridConfig((prev) => ({ ...prev, openingTime: e.target.value }))}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1459,8 +1597,8 @@ export default function CourtManage() {
               </label>
               <input
                 type="time"
-                value={complexData.closingTime}
-                onChange={(e) => setComplexData((prev) => ({ ...prev, closingTime: e.target.value }))}
+                value={gridConfig.closingTime}
+                onChange={(e) => setGridConfig((prev) => ({ ...prev, closingTime: e.target.value }))}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1482,8 +1620,8 @@ export default function CourtManage() {
                 Thời Lượng Mỗi Slot (Bước Nhảy)
               </label>
               <select
-                value={complexData.slotDuration}
-                onChange={(e) => setComplexData((prev) => ({ ...prev, slotDuration: Number(e.target.value) }))}
+                value={gridConfig.slotDuration}
+                onChange={(e) => setGridConfig((prev) => ({ ...prev, slotDuration: Number(e.target.value) }))}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1510,8 +1648,8 @@ export default function CourtManage() {
                 Thời Gian Đệm Vệ Sinh / Lau Sân
               </label>
               <select
-                value={complexData.bufferTime}
-                onChange={(e) => setComplexData((prev) => ({ ...prev, bufferTime: Number(e.target.value) }))}
+                value={gridConfig.bufferTime}
+                onChange={(e) => setGridConfig((prev) => ({ ...prev, bufferTime: Number(e.target.value) }))}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1536,17 +1674,17 @@ export default function CourtManage() {
           {/* Time Grid Preview */}
           <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '24px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginBottom: '14px' }}>
-              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày (05:00 - 23:00)
+              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày ({gridConfig.openingTime} - {gridConfig.closingTime})
             </h3>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {Array.from({ length: 18 }).map((_, i) => {
-                const hour = 5 + i
+              {gridSlots.map((start) => {
+                const hour = Math.floor(start / 60)
                 const isPeak = hour >= 17 && hour <= 22
                 const isOffpeak = hour >= 9 && hour <= 14
                 return (
                   <div
-                    key={hour}
+                    key={start}
                     style={{
                       padding: '10px 14px',
                       borderRadius: '10px',
@@ -1557,7 +1695,7 @@ export default function CourtManage() {
                     }}
                   >
                     <div style={{ fontSize: '13px', fontWeight: 800, color: isPeak ? '#DC2626' : '#0F172A' }}>
-                      {hour.toString().padStart(2, '0')}:00
+                      {fromMinutes(start)}
                     </div>
                     <div
                       style={{
@@ -1576,7 +1714,8 @@ export default function CourtManage() {
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                onClick={() => showToast('Cấu hình Lưới thời gian đã được lưu và áp dụng cho toàn hệ thống!')}
+                onClick={handleSaveTimeGrid}
+                disabled={busyId === 'timegrid'}
                 style={{
                   background: '#10B981',
                   color: '#FFFFFF',
@@ -1589,7 +1728,7 @@ export default function CourtManage() {
                   boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
                 }}
               >
-                Lưu Thay Đổi Cấu Hình Lưới Thời Gian
+                {busyId === 'timegrid' ? 'Đang lưu...' : 'Lưu Giờ Mở / Đóng Cửa Cơ Sở'}
               </button>
             </div>
           </div>
@@ -1623,7 +1762,7 @@ export default function CourtManage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>
-                Thêm Sân Mới Vào {selectedZone.name.split('—')[0].trim()}
+                Thêm Sân Mới
               </h3>
               <button
                 onClick={() => setShowAddCourtModal(false)}
@@ -1634,6 +1773,22 @@ export default function CourtManage() {
             </div>
 
             <form onSubmit={handleAddCourt}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Bộ Môn (Khu)
+                </label>
+                <select
+                  required
+                  value={newCourtSportId}
+                  onChange={(e) => setNewCourtSportId(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', background: '#FFFFFF' }}
+                >
+                  {sports.map((sport) => (
+                    <option key={sport.id} value={sport.id}>{sport.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                   Tên Sân Con (VD: Sân A6 - Sân Thảm Thi Đấu)
@@ -1651,6 +1806,22 @@ export default function CourtManage() {
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
                   }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Giá Mặc Định (VND/giờ)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="1000"
+                  placeholder="VD: 150000"
+                  value={newCourtPrice}
+                  onChange={(e) => setNewCourtPrice(e.target.value)}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px' }}
                 />
               </div>
 
@@ -1692,6 +1863,7 @@ export default function CourtManage() {
                 </button>
                 <button
                   type="submit"
+                  disabled={busyId === 'add-court'}
                   style={{
                     padding: '10px 20px',
                     borderRadius: '8px',
@@ -1703,7 +1875,7 @@ export default function CourtManage() {
                     cursor: 'pointer',
                   }}
                 >
-                  Xác Nhận Thêm Sân
+                  {busyId === 'add-court' ? 'Đang thêm...' : 'Xác Nhận Thêm Sân'}
                 </button>
               </div>
             </form>

@@ -1,5 +1,27 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { getMyFacilities, getMyProfile, getMyWallet } from '../api/owner'
+import { FACILITY_STORAGE_KEY } from './ownerContext.js'
+
+const toFacilitySummary = (raw) => {
+  const courts = Array.isArray(raw.courts) ? raw.courts : []
+  return {
+    id: String(raw.id),
+    name: raw.name || '—',
+    address: raw.address || '',
+    approvalStatus: String(raw.approvalStatus || '').toUpperCase(),
+    isLocked: raw.isLocked === true,
+    courtCount: courts.length,
+    activeCourtCount: courts.filter((court) => String(court.status).toUpperCase() === 'ACTIVE').length,
+    sportCount: new Set(courts.map((court) => court.categoryId)).size,
+  }
+}
+
+const fetchFacilities = async () => (await getMyFacilities()).map(toFacilitySummary)
+
+const readSavedFacilityId = () => {
+  try { return localStorage.getItem(FACILITY_STORAGE_KEY) } catch { return null }
+}
 
 const navItems = [
   { label: 'Trang Chủ', path: '/owner/dashboard', icon: 'home', desc: 'Tổng quan vận hành cơ sở' },
@@ -12,59 +34,53 @@ const navItems = [
 
 export default function CourtOwnerLayout() {
   const location = useLocation()
-  const [ownerBalance, setOwnerBalance] = useState(() => {
-    const saved = localStorage.getItem('court_owner_balance')
-    return saved !== null ? Number(saved) : 48650000
-  })
-
-  const [ownerProfile, setOwnerProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sportnexus_owner_profile')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {}
-    return {
-      fullName: 'Nguyễn Văn Đức',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
-      roleTitle: 'Chủ Cơ Sở',
-    }
-  })
+  const [profile, setProfile] = useState(null)
+  const [wallet, setWallet] = useState(null)
+  const [facilities, setFacilities] = useState([])
+  const [facilityId, setFacilityId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const [hoveredNav, setHoveredNav] = useState(null)
 
-  useEffect(() => {
-    // Tự động làm sạch '• Đối Tác Kim Cương' hoặc 'VIP' trong localStorage nếu có
-    try {
-      const saved = localStorage.getItem('sportnexus_owner_profile')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.roleTitle && (parsed.roleTitle.includes('Kim Cương') || parsed.roleTitle.includes('VIP'))) {
-          parsed.roleTitle = 'Chủ Cơ Sở'
-          localStorage.setItem('sportnexus_owner_profile', JSON.stringify(parsed))
-          setOwnerProfile(parsed)
-        }
-      }
-    } catch (e) {}
-
-    const interval = setInterval(() => {
-      const saved = localStorage.getItem('court_owner_balance')
-      if (saved !== null) setOwnerBalance(Number(saved))
-    }, 1000)
-
-    const handleProfileUpdate = () => {
-      try {
-        const saved = localStorage.getItem('sportnexus_owner_profile')
-        if (saved) setOwnerProfile(JSON.parse(saved))
-      } catch (e) {}
-    }
-    window.addEventListener('sportnexus_owner_profile_updated', handleProfileUpdate)
-
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('sportnexus_owner_profile_updated', handleProfileUpdate)
-    }
+  const applyFacilities = useCallback((list) => {
+    setFacilities(list)
+    setFacilityId((current) => {
+      if (list.some((item) => item.id === current)) return current
+      const saved = readSavedFacilityId()
+      // Ưu tiên cơ sở đã chọn trước đó, rồi đến cơ sở đã có sân.
+      return list.find((item) => item.id === saved)?.id || list.find((item) => item.courtCount > 0)?.id || list[0]?.id || ''
+    })
+    return list
   }, [])
 
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+  const refreshProfile = useCallback(() => getMyProfile().then((data) => { setProfile(data); return data }), [])
+  const refreshWallet = useCallback(() => getMyWallet().then((data) => { setWallet(data); return data }), [])
+  // Tải lại danh sách cơ sở (gồm số sân) — gọi sau khi thêm / đổi trạng thái sân.
+  const refreshFacilities = useCallback(() => fetchFacilities().then(applyFacilities), [applyFacilities])
+
+  const selectFacility = useCallback((id) => {
+    setFacilityId(id)
+    try { localStorage.setItem(FACILITY_STORAGE_KEY, id) } catch { /* bỏ qua */ }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    // Hồ sơ và ví lỗi thì chỉ hiện "—", không chặn trang; lỗi danh sách cơ sở mới báo cho trang con.
+    getMyProfile().then((data) => !cancelled && setProfile(data)).catch(() => {})
+    getMyWallet().then((data) => !cancelled && setWallet(data)).catch(() => {})
+    fetchFacilities()
+      .then((list) => !cancelled && applyFacilities(list))
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => { cancelled = true }
+  }, [applyFacilities])
+
+  const facility = facilities.find((item) => item.id === facilityId) || null
+  const outletContext = { profile, wallet, facilities, facilityId, facility, selectFacility, refreshProfile, refreshWallet, refreshFacilities, loading, error }
+
+  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' đ')
+  const displayName = profile?.fullName || profile?.username || 'Chủ sân'
 
   // Xác định tiêu đề hiển thị trên header tương ứng với trang
   const getCurrentPageTitle = () => {
@@ -80,10 +96,6 @@ export default function CourtOwnerLayout() {
   const pageInfo = getCurrentPageTitle()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Đóng sidebar khi đổi trang trên điện thoại
-  useEffect(() => {
-    setMobileOpen(false)
-  }, [location.pathname])
 
   return (
     <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif" }} className="sport-animated-bg">
@@ -212,22 +224,48 @@ export default function CourtOwnerLayout() {
             <div style={{ fontSize: '10px', color: '#15803D', fontWeight: 800, textTransform: 'uppercase' }}>
               CƠ SỞ ĐANG QUẢN LÝ
             </div>
-            <div
-              style={{
-                fontSize: '13px',
-                fontWeight: 800,
-                color: '#1C3524',
-                marginTop: '2px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              SportNexus Arena Q.7
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '11px', color: '#047857' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }} />
-              4 Khu Vực • 14 Sân Hoạt Động
+            {facilities.length > 1 ? (
+              <select
+                value={facilityId}
+                onChange={(e) => selectFacility(e.target.value)}
+                title="Đổi cơ sở đang quản lý"
+                style={{
+                  width: '100%',
+                  marginTop: '4px',
+                  padding: '4px 6px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(45, 95, 63, 0.25)',
+                  background: '#FFFFFF',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  color: '#1C3524',
+                  cursor: 'pointer',
+                }}
+              >
+                {facilities.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{item.approvalStatus === 'PENDING' ? ' (Chờ duyệt)' : item.approvalStatus === 'REJECTED' ? ' (Bị từ chối)' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  color: '#1C3524',
+                  marginTop: '2px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {loading ? 'Đang tải...' : facility?.name || 'Chưa có cơ sở'}
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '4px', fontSize: '11px', color: '#047857' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: facility?.activeCourtCount ? '#10B981' : '#9CA3AF' }} />
+              {facility ? `${facility.sportCount} Khu Vực • ${facility.activeCourtCount}/${facility.courtCount} Sân Hoạt Động` : '0 Sân'}
             </div>
           </div>
         </div>
@@ -246,6 +284,8 @@ export default function CourtOwnerLayout() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                // Đóng sidebar khi chọn trang trên điện thoại
+                onClick={() => setMobileOpen(false)}
                 onMouseEnter={() => setHoveredNav(item.path)}
                 onMouseLeave={() => setHoveredNav(null)}
                 style={{
@@ -373,8 +413,8 @@ export default function CourtOwnerLayout() {
                 whiteSpace: 'nowrap',
               }}
             >
-              <span style={{ fontSize: '11px' }}>🟢</span>
-              <span>14/14 Sân Đang Phục Vụ</span>
+              <span style={{ fontSize: '11px' }}>{facility?.activeCourtCount ? '🟢' : '⚪'}</span>
+              <span>{facility ? `${facility.activeCourtCount}/${facility.courtCount}` : '0/0'} Sân Đang Phục Vụ</span>
             </div>
           </div>
 
@@ -405,7 +445,7 @@ export default function CourtOwnerLayout() {
                   Số Dư Khả Dụng
                 </div>
                 <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#1C3524', whiteSpace: 'nowrap' }}>
-                  {formatVND(ownerBalance)}
+                  {formatVND(wallet?.availableBalance ?? wallet?.balance)}
                 </div>
               </div>
             </Link>
@@ -429,10 +469,10 @@ export default function CourtOwnerLayout() {
               </span>
               <div>
                 <div style={{ fontSize: '9px', color: '#92400E', fontWeight: 800, textTransform: 'uppercase' }}>
-                  Tạm Giữ Escrow
+                  Đang Tạm Giữ
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#78350F' }}>
-                  19.820.000 đ
+                  {formatVND(wallet?.frozenBalance)}
                 </div>
               </div>
             </div>
@@ -456,21 +496,42 @@ export default function CourtOwnerLayout() {
               onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(45, 95, 63, 0.06)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
-              <img
-                src={ownerProfile.avatar}
-                alt={ownerProfile.fullName}
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  border: '2px solid #10B981',
-                  objectFit: 'cover',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-                }}
-              />
+              {profile?.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={displayName}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    border: '2px solid #10B981',
+                    objectFit: 'cover',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    border: '2px solid #10B981',
+                    background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: '15px',
+                    flexShrink: 0,
+                  }}
+                >
+                  {displayName.trim().charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:flex flex-col">
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#1C3524', lineHeight: 1.2, whiteSpace: 'nowrap' }}>
-                  {ownerProfile.fullName}
+                  {displayName}
                 </span>
                 <span style={{ fontSize: '10.5px', color: '#15803D', fontWeight: 700 }}>
                   Chủ Cơ Sở
@@ -482,7 +543,7 @@ export default function CourtOwnerLayout() {
 
         {/* Page Content */}
         <main style={{ width: '100%', paddingTop: '60px', minHeight: '100vh' }}>
-          <Outlet />
+          <Outlet context={outletContext} />
         </main>
       </div>
     </div>
