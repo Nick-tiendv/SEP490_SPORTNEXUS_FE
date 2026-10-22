@@ -1,9 +1,10 @@
 // Dashboard.jsx — SportNexus Player Dashboard
 // Thiết kế pastel sáng, năng động, chuyên nghiệp & hỗ trợ lọc linh hoạt theo 5 môn thể thao (Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis)
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import { getFacilities } from '../../api/facilityApi.js'
 
 const actionCards = [
   {
@@ -1174,6 +1175,61 @@ function Dashboard() {
   const [qrModalMatch, setQrModalMatch] = useState(null)
   const [inspectCourtSport, setInspectCourtSport] = useState(null)
 
+  // Tải danh sách cơ sở thực tế từ API /api/v1/facilities
+  const [apiSuggestedCourts, setApiSuggestedCourts] = useState([])
+
+  useEffect(() => {
+    let isMounted = true
+    async function fetchApiFacilities() {
+      try {
+        const raw = await getFacilities()
+        if (isMounted && Array.isArray(raw) && raw.length > 0) {
+          const transformed = raw.map((fac) => {
+            const firstCourt = fac.courts?.[0]
+            const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
+              ? 'badminton'
+              : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
+              ? 'pickleball'
+              : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
+              ? 'football'
+              : firstCourt?.categoryName?.toLowerCase().includes('bóng rổ')
+              ? 'basketball'
+              : firstCourt?.categoryName?.toLowerCase().includes('tennis')
+              ? 'tennis'
+              : 'badminton'
+
+            const emoji =
+              sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : sportKey === 'football' ? '⚽' : sportKey === 'basketball' ? '🏀' : '🎾'
+            const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
+            const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
+            const distArea = fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : fac.address?.includes('Quận 7') ? 'Quận 7' : fac.address?.includes('Quận 1') ? 'Quận 1' : 'Hà Nội'
+
+            return {
+              id: fac.id,
+              sport: sportKey,
+              sports: Array.from(new Set((fac.courts || []).map((c) => c.categoryName?.toLowerCase().includes('cầu lông') ? 'badminton' : c.categoryName?.toLowerCase().includes('pickleball') ? 'pickleball' : c.categoryName?.toLowerCase().includes('bóng đá') ? 'football' : c.categoryName?.toLowerCase().includes('tennis') ? 'tennis' : 'badminton'))),
+              sportEmoji: emoji,
+              slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
+              dist: distArea,
+              name: fac.name,
+              surface: fac.description || 'Sân đạt chuẩn thi đấu, đèn LED cao áp',
+              price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
+              rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★ (${fac.reviewCount || 128} đánh giá)`,
+              img: thumb,
+              isFromApi: true,
+              rawFacility: fac,
+            }
+          })
+          setApiSuggestedCourts(transformed)
+        }
+      } catch (err) {
+        console.warn('Dashboard: Không thể kết nối API /api/v1/facilities:', err)
+      }
+    }
+    fetchApiFacilities()
+    return () => { isMounted = false }
+  }, [])
+
   // Lọc dữ liệu theo môn đang chọn
   const filteredUpcomingMatches = upcomingMatchesData.filter((m) =>
     isSportActive(m.sport)
@@ -1183,9 +1239,16 @@ function Dashboard() {
     isSportActive(m.sport)
   )
 
-  const filteredCourts = allSuggestedCourts.filter((c) =>
-    isSportActive(c.sport)
-  )
+  const combinedSuggestedCourts = useMemo(() => {
+    return apiSuggestedCourts.length > 0 ? [...apiSuggestedCourts, ...allSuggestedCourts] : allSuggestedCourts
+  }, [apiSuggestedCourts])
+
+  const filteredCourts = combinedSuggestedCourts.filter((c) => {
+    if (Array.isArray(c.sports) && c.sports.length > 0) {
+      return c.sports.some((s) => isSportActive(s))
+    }
+    return isSportActive(c.sport)
+  })
 
   return (
     <div
@@ -2135,7 +2198,13 @@ function Dashboard() {
 
                   <button
                     type="button"
-                    onClick={() => navigate('/court-finder')}
+                    onClick={() => {
+                      if (c.rawFacility) {
+                        navigate('/court', { state: { facility: c.rawFacility, facilityId: c.id } })
+                      } else {
+                        navigate('/court-finder')
+                      }
+                    }}
                     style={{
                       background: '#EAF7EE',
                       color: '#15803D',

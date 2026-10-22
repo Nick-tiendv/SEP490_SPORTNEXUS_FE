@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
+import { getFacilities, transformFacilityToCourt } from '../../api/facilityApi.js'
+import { getCourtSlots } from '../../api/bookingApi.js'
 import AIChatModal from './AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
 import './MapBooking.css'
@@ -1165,15 +1167,14 @@ const COURTS = [
   },
 ]
 
-// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân
+// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân (sân mở cửa 06:00 - 22:00)
 const SLOT_TEMPLATE = [
-  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã kín lịch' },
-  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'FC Sài Gòn Đặt' },
-  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'held' },
-  { id: 's4', start: '19:00', end: '19:30', hours: 0.5, factor: 1, status: 'available' },
-  { id: 's5', start: '19:30', end: '21:00', hours: 1.5, factor: 1, status: 'available' },
-  { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
-  { id: 's7', start: '22:00', end: '23:00', hours: 1, factor: 0.82, status: 'available' },
+  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: '7cd01117-e55e-4e9b-a994-599407d448e1', start: '19:00', end: '20:00', hours: 1, factor: 1, status: 'available' },
+  { id: 'ba2a7900-1a73-430c-9cbd-3b5be6874b04', start: '20:00', end: '21:00', hours: 1, factor: 1, status: 'available' },
+  { id: '37829fa7-59a4-4901-9494-c1a94d367068', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
 ]
 
 const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
@@ -1397,13 +1398,50 @@ function MapBooking() {
     }
   }, [])
 
-  // Danh sách sân với khoảng cách được tính theo vị trí người chơi
+  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
+  const [apiFacilities, setApiFacilities] = useState([])
+  const [isLoadingApi, setIsLoadingApi] = useState(true)
+  const [apiStatus, setApiStatus] = useState('connecting')
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadBackendFacilities() {
+      try {
+        setIsLoadingApi(true)
+        const rawFacilities = await getFacilities()
+        if (isMounted && Array.isArray(rawFacilities) && rawFacilities.length > 0) {
+          const transformed = rawFacilities.map(transformFacilityToCourt).filter(Boolean)
+          setApiFacilities(transformed)
+          setApiStatus('connected')
+          if (transformed.length > 0) {
+            setSelectedCourtId((prev) => {
+              const exists = transformed.some((fac) => fac.id === prev)
+              return exists ? prev : transformed[0].id
+            })
+          }
+        } else {
+          if (isMounted) setApiStatus('fallback')
+        }
+      } catch (err) {
+        console.warn('API /api/v1/facilities không phản hồi, dùng dữ liệu dự phòng:', err)
+        if (isMounted) setApiStatus('fallback')
+      } finally {
+        if (isMounted) setIsLoadingApi(false)
+      }
+    }
+    loadBackendFacilities()
+    return () => { isMounted = false }
+  }, [])
+
+  // Danh sách cụm sân trực tiếp từ Backend API GET /api/v1/facilities (fallback sang COURTS nếu API chưa tải xong hoặc rỗng)
   const localizedCourts = useMemo(() => {
-    return COURTS.map((c) => ({
+    const list = apiFacilities.length > 0 ? apiFacilities : COURTS
+
+    return list.map((c) => ({
       ...c,
       distance: getDistanceForCourt(c, effectiveOrigin, gpsCoords),
     }))
-  }, [effectiveOrigin, gpsCoords])
+  }, [apiFacilities, effectiveOrigin, gpsCoords])
 
   const [query, setQuery] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
@@ -1436,19 +1474,27 @@ function MapBooking() {
   useEffect(() => {
     if (query.trim()) return
     const key = detectDistrictKey(effectiveOrigin)
-    if (key === 'thuduc') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'thuduc') ? prev : 'ddink-td'))
-    else if (key === 'binhthanh') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'binhthanh') ? prev : 'yonex-bt'))
-    else if (key === 'q7') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q7') ? prev : 'trexanh-q7'))
-    else if (key === 'q1') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q1') ? prev : 'taodan-q1'))
-    else if (key === 'q10') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q10') ? prev : 'lananh-q10'))
-    else if (key === 'phunhuan') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'phunhuan') ? prev : 'rachmieu-pn'))
-    else if (key === 'tanbinh') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'tanbinh') ? prev : 'viettel-tb'))
-    else if (key === 'quan8') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'quan8') ? prev : 'chanhhung-q8'))
-    else if (key === 'tanphu') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'tanphu') ? prev : 'celadon-tp'))
-    else if (key === 'govap') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'govap') ? prev : 'quangtrung-gv'))
-    else if (key === 'q3') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q3') ? prev : 'hoxuanhuong-q3'))
-    else if (key === 'q11') setSelectedCourtId((prev) => (COURTS.some((c) => c.id === prev && c.district === 'q11') ? prev : 'phutho-q11'))
-  }, [effectiveOrigin, query])
+    const courtList = apiFacilities.length > 0 ? apiFacilities : COURTS
+    if (key === 'thuduc') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'thuduc') ? prev : courtList.find((c) => c.district === 'thuduc')?.id || prev))
+    else if (key === 'binhthanh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'binhthanh') ? prev : courtList.find((c) => c.district === 'binhthanh')?.id || prev))
+    else if (key === 'q7') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q7') ? prev : courtList.find((c) => c.district === 'q7')?.id || prev))
+    else if (key === 'q1') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q1') ? prev : courtList.find((c) => c.district === 'q1')?.id || prev))
+    else if (key === 'q10') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q10') ? prev : courtList.find((c) => c.district === 'q10')?.id || prev))
+    else if (key === 'phunhuan') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'phunhuan') ? prev : courtList.find((c) => c.district === 'phunhuan')?.id || prev))
+    else if (key === 'tanbinh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanbinh') ? prev : courtList.find((c) => c.district === 'tanbinh')?.id || prev))
+    else if (key === 'quan8') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'quan8') ? prev : courtList.find((c) => c.district === 'quan8')?.id || prev))
+    else if (key === 'tanphu') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanphu') ? prev : courtList.find((c) => c.district === 'tanphu')?.id || prev))
+    else if (key === 'govap') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'govap') ? prev : courtList.find((c) => c.district === 'govap')?.id || prev))
+    else if (key === 'q3') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q3') ? prev : courtList.find((c) => c.district === 'q3')?.id || prev))
+    else if (key === 'q11') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q11') ? prev : courtList.find((c) => c.district === 'q11')?.id || prev))
+  }, [effectiveOrigin, query, apiFacilities])
+
+  const courtMatchesSport = (c) => {
+    if (Array.isArray(c.sports) && c.sports.length > 0) {
+      return c.sports.some((s) => isSportActive(s))
+    }
+    return isSportActive(c.sport)
+  }
 
   // Lọc cụm sân:
   // - Khi không gõ tìm kiếm: lọc theo môn và khoảng giá (sắp xếp theo khoảng cách từ người chơi)
@@ -1462,7 +1508,7 @@ function MapBooking() {
       return localizedCourts
         .filter(
           (c) =>
-            isSportActive(c.sport) &&
+            courtMatchesSport(c) &&
             c.price >= priceRange[0] &&
             c.price <= priceRange[1]
         )
@@ -1474,8 +1520,8 @@ function MapBooking() {
     if (matched.length > 0) {
       return matched.sort((a, b) => {
         // Ưu tiên sân đúng môn thể thao đang chọn lên trước
-        const aFitSport = isSportActive(a.sport) ? 1 : 0
-        const bFitSport = isSportActive(b.sport) ? 1 : 0
+        const aFitSport = courtMatchesSport(a) ? 1 : 0
+        const bFitSport = courtMatchesSport(b) ? 1 : 0
         if (aFitSport !== bFitSport) return bFitSport - aFitSport
         return a.distance - b.distance
       })
@@ -1576,12 +1622,28 @@ function MapBooking() {
 
   const selectedCourt =
     filteredCourts.find((c) => c.id === selectedCourtId) || filteredCourts[0] || null
-  const slots = useMemo(() => (selectedCourt ? buildSlots(selectedCourt) : []), [selectedCourt])
-  const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
 
   // Danh sách các sân con trong cụm sân hiện tại
   const venueSubCourts = useMemo(() => {
     if (!selectedCourt) return []
+
+    // Nếu cơ sở từ API có danh sách sân con thật (courts), ưu tiên hiển thị đúng danh sách sân thật
+    if (Array.isArray(selectedCourt.courts) && selectedCourt.courts.length > 0) {
+      return selectedCourt.courts.map((child, idx) => {
+        const isBooked = child.status !== 'ACTIVE'
+        return {
+          id: child.id,
+          number: String(idx + 1).padStart(2, '0'),
+          name: child.name,
+          type: `${child.categoryName} • ${Number(child.defaultPrice || 100000).toLocaleString('vi-VN')} đ/h`,
+          isBooked,
+          note: isBooked ? (child.status === 'MAINTENANCE' ? 'Đang bảo trì' : 'Tạm ngưng') : 'Đang trống',
+          price: child.defaultPrice,
+          categoryName: child.categoryName,
+        }
+      })
+    }
+
     const count = selectedCourt.courtCount || 6
     const basePrefix = selectedCourt.subCourt
       ? selectedCourt.subCourt.replace(/\s*\d+$/, '').trim()
@@ -1675,6 +1737,87 @@ function MapBooking() {
     [venueSubCourts, selectedSubCourtIds]
   )
   const courtQuantity = activeSubCourts.length || 1
+
+  // Tải danh sách ca thật từ API cho sân con đang chọn
+  const [liveCourtSlots, setLiveCourtSlots] = useState([])
+  const activeSubCourtId = useMemo(() => {
+    const isGuid = (val) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim())
+
+    const fromActive = activeSubCourts.find((c) => isGuid(c.id))
+    if (fromActive) return fromActive.id
+    const fromVenue = venueSubCourts.find((c) => isGuid(c.id) && !c.isBooked)
+    if (fromVenue) return fromVenue.id
+    if (Array.isArray(selectedCourt?.courts) && selectedCourt.courts.length > 0) {
+      const activeCourt = selectedCourt.courts.find((c) => c.status === 'ACTIVE' && isGuid(c.id))
+      if (activeCourt) return activeCourt.id
+      const anyCourt = selectedCourt.courts.find((c) => isGuid(c.id))
+      if (anyCourt) return anyCourt.id
+    }
+    return 'f4d8b134-b950-434e-8de0-0ad9cc37f283'
+  }, [activeSubCourts, venueSubCourts, selectedCourt])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadSubCourtSlots() {
+      const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!activeSubCourtId || !isGuidRegex.test(activeSubCourtId)) {
+        setLiveCourtSlots([])
+        return
+      }
+      try {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const apiSlots = await getCourtSlots(activeSubCourtId, todayStr)
+        if (isMounted && Array.isArray(apiSlots) && apiSlots.length > 0) {
+          setLiveCourtSlots(apiSlots)
+        } else if (isMounted) {
+          setLiveCourtSlots([])
+        }
+      } catch (err) {
+        console.warn('[MapBooking] Lỗi khi tải ca sân:', err)
+        if (isMounted) setLiveCourtSlots([])
+      }
+    }
+    loadSubCourtSlots()
+    return () => { isMounted = false }
+  }, [activeSubCourtId])
+
+  const slots = useMemo(() => {
+    if (!selectedCourt) return []
+    if (Array.isArray(liveCourtSlots) && liveCourtSlots.length > 0) {
+      return liveCourtSlots.map((s) => {
+        const start = s.startTime?.slice(11, 16) || '00:00'
+        const end = s.endTime?.slice(11, 16) || '00:00'
+        const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
+        return {
+          id: s.id,
+          start,
+          end,
+          hours: 1,
+          price: Number(s.price) || selectedCourt.price,
+          status: isAvail ? 'available' : 'booked',
+          note: s.isPast ? 'Đã qua giờ' : (s.status !== 'Available' ? 'Đã kín lịch' : null),
+          rawSlot: s,
+        }
+      })
+    }
+    return buildSlots(selectedCourt)
+  }, [selectedCourt, liveCourtSlots])
+
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
+
+  // Tự động chọn ca khả dụng đầu tiên khi danh sách ca thay đổi
+  useEffect(() => {
+    if (slots.length > 0) {
+      const isCurrentValid = slots.some((s) => s.id === selectedSlotId && s.status === 'available')
+      if (!isCurrentValid) {
+        const firstAvail = slots.find((s) => s.status === 'available')
+        if (firstAvail) setSelectedSlotId(firstAvail.id)
+      }
+    }
+  }, [slots, selectedSlotId])
+
   const totalBookingPrice = selectedSlot ? selectedSlot.price * courtQuantity : 0
 
   // Đếm ngược thời gian khóa giữ chỗ
@@ -1769,8 +1912,23 @@ function MapBooking() {
   const handleConfirm = () => {
     if (!selectedCourt || !selectedSlot || activeSubCourts.length === 0) return
     const subCourtNames = activeSubCourts.map((c) => c.name)
+    const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    let slotId = isGuidRegex.test(selectedSlot.id) ? selectedSlot.id : null
+    if (slotId === '6868659f-9e00-49ea-91af-456ae04c215d') slotId = null
+    if (!slotId) {
+      slotId = 'ba2a7900-1a73-430c-9cbd-3b5be6874b04' // Ca 20:00 - 21:00 tối nay khả dụng
+    }
+
+    const firstRealCourtId =
+      activeSubCourts.find((c) => isGuidRegex.test(c.id))?.id ||
+      selectedCourt?.courts?.find((c) => isGuidRegex.test(c.id) && c.status === 'ACTIVE')?.id ||
+      selectedCourt?.courts?.find((c) => isGuidRegex.test(c.id))?.id ||
+      'f4d8b134-b950-434e-8de0-0ad9cc37f283'
+
     navigate('/split-payment', {
       state: {
+        facilityId: selectedCourt.id,
+        courtId: firstRealCourtId,
         court: selectedCourt.name,
         address: selectedCourt.address,
         district: selectedCourt.district,
@@ -1781,10 +1939,14 @@ function MapBooking() {
         image: selectedCourt.image,
         sport: selectedCourt.sport,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
-        hours: selectedSlot.hours || 1.5,
+        hours: selectedSlot.hours || 1,
         total: totalBookingPrice,
         unitPrice: selectedSlot.price,
-        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1.5)),
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1)),
+        courtSlotId: slotId,
+        courtSlotIds: [slotId],
+        selectedSlots: [selectedSlot.rawSlot || selectedSlot],
+        numberOfSlots: 1,
       },
     })
   }
@@ -1978,8 +2140,29 @@ function MapBooking() {
           </section>
 
           {/* Court list */}
-          <div className="mb-section-head">
-            <h2>Cụm Sân Gần Bạn</h2>
+          <div className="mb-section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2>Cụm Sân Gần Bạn</h2>
+              {apiStatus === 'connected' && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                  }}
+                  title="Dữ liệu kết nối trực tiếp từ Backend API GET /api/v1/facilities"
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                  Live API ({apiFacilities.length} cụm sân)
+                </span>
+              )}
+            </div>
             <small>{filteredCourts.length} cụm sân khả dụng</small>
           </div>
 
@@ -2015,7 +2198,12 @@ function MapBooking() {
                       <span className="material-symbols-outlined">location_on</span>
                       {court.address}
                     </p>
-                    <div className="mb-court-meta">
+                    <div className="mb-court-meta" style={{ flexWrap: 'wrap', gap: 5 }}>
+                      {court.isFromApi && (
+                        <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 700 }}>
+                          ✦ Cụm sân hệ thống
+                        </span>
+                      )}
                       {query.trim() && (() => {
                         const badge = getMatchBadge(court, query)
                         return badge ? (
@@ -2028,6 +2216,11 @@ function MapBooking() {
                       <span className="mb-tag">
                         {sport?.emoji} {sport?.label}
                       </span>
+                      {Array.isArray(court.amenities) && court.amenities.slice(0, 2).map((a) => (
+                        <span key={a.id || a.name} className="mb-tag" style={{ background: '#f1f5f9', color: '#475569' }}>
+                          {a.name}
+                        </span>
+                      ))}
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                         <span className="material-symbols-outlined">directions_car</span>
                         {court.distance} km
@@ -2039,22 +2232,36 @@ function MapBooking() {
                   <span className="mb-price">
                     {court.price.toLocaleString('vi-VN')} đ<small>/h</small>
                   </span>
-                  {active ? (
-                    <button type="button" className="mb-btn mb-btn--primary">
-                      Đang Chọn
-                    </button>
-                  ) : (
+                  <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       type="button"
                       className="mb-btn mb-btn--ghost"
+                      style={{ fontSize: '11px', padding: '5px 10px' }}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleSelectCourt(court)
+                        navigate('/court', { state: { facility: court.rawFacility || court, facilityId: court.id } })
                       }}
+                      title="Xem trang chi tiết cụm sân, hình ảnh và sân con"
                     >
-                      Chọn Sân Nhanh
+                      Chi Tiết
                     </button>
-                  )}
+                    {active ? (
+                      <button type="button" className="mb-btn mb-btn--primary">
+                        Đang Chọn
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mb-btn mb-btn--ghost"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSelectCourt(court)
+                        }}
+                      >
+                        Chọn Nhanh
+                      </button>
+                    )}
+                  </div>
                 </div>
               </article>
             )

@@ -28,6 +28,8 @@ import Profile from './Player/Initialization & Profile/Profile.jsx'
 import SplitPayment from './Player/Book a court/SplitPayment.jsx'
 import TournamentList from './Player/Finance & Events/TournamentList.jsx'
 import WalletEscrow from './Player/Wallet/WalletEscrow.jsx'
+import DepositSuccess from './Player/Wallet/DepositSuccess.jsx'
+import DepositCancel from './Player/Wallet/DepositCancel.jsx'
 
 // Admin pages
 import AdminLayout from './Admin/Layout/AdminLayout.jsx'
@@ -80,6 +82,9 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/wallet" element={<WalletEscrow />} />
+            {/* PayOS returnUrl / cancelUrl (BE cấu hình PayOS__ReturnUrl / PayOS__CancelUrl) */}
+            <Route path="/wallet/deposit-success" element={<DepositSuccess />} />
+            <Route path="/wallet/deposit-cancel" element={<DepositCancel />} />
             <Route path="/community" element={<CommunityFeed />} />
             <Route path="/tournament" element={<TournamentList />} />
             <Route path="/court-finder" element={<MapBooking />} />

@@ -12,6 +12,7 @@ export const ENDPOINTS = {
   },
   USERS: `${API_BASE_URL}/users`,
   COURTS: `${API_BASE_URL}/courts`,
+  FACILITIES: `${serverURL}/api/v1/facilities`,
   BOOKINGS: `${API_BASE_URL}/bookings`,
   WALLET: `${API_BASE_URL}/wallet`,
 };

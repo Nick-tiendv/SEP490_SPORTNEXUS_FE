@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import NotificationBell from './NotificationBell.jsx'
+import { getWallet } from '../../api/walletApi.js'
 
 function TopBar() {
   const location = useLocation()
@@ -27,6 +28,15 @@ function TopBar() {
   })
 
   useEffect(() => {
+    // Đồng bộ số dư thực tế từ Backend API
+    getWallet()
+      .then((w) => {
+        if (w && typeof w.balance === 'number') {
+          setWalletBalance(w.balance)
+        }
+      })
+      .catch(() => {})
+
     const handleUpdate = () => {
       const saved = localStorage.getItem('escrow_balance')
       if (saved !== null) setWalletBalance(Number(saved))
@@ -242,6 +252,9 @@ function TopBar() {
           </span>
           <span style={{ fontSize: '13px', fontWeight: 800, color: '#15803D', whiteSpace: 'nowrap' }}>
             {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
+          </span>
+          <span style={{ fontSize: '11px', fontWeight: 700, background: '#15803D', color: '#ffffff', borderRadius: '12px', padding: '2px 8px', marginLeft: '2px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+            + Nạp tiền
           </span>
         </Link>
 
