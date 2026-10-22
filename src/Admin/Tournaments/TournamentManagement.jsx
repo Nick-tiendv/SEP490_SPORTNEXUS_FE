@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trophy, UserRoundPlus, Clock3, BadgeCheck, Users, Download, ListFilter, Plus, Search, RefreshCw } from 'lucide-react'
+import { Trophy, UserRoundPlus, Clock3, BadgeCheck, Users, Download, ListFilter, Search, RefreshCw } from 'lucide-react'
 import TournamentTable from './TournamentTable.jsx'
 import TournamentDetails from './TournamentDetails.jsx'
-import { TournamentForm, TournamentActionDialog, ParticipantDialog, AddParticipantDialog, ScoreDialog } from './TournamentDialogs.jsx'
+import { TournamentActionDialog, ParticipantDialog, AddParticipantDialog, ScoreDialog } from './TournamentDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
 import { tournamentStats, statusLabels, statusFilterOptions, number, money, exportTournaments } from './tournamentData.js'
 import { getTournamentStatistics, listAdminTournaments } from '../../api/admin/tournamentApi.js'
-import { getSportOptions, listAdminFacilities } from '../../api/admin/facilityApi.js'
+import { listAdminFacilities } from '../../api/admin/facilityApi.js'
+import { fetchAllPages } from '../../api/admin/dashboardApi.js'
 import '../Users/users.css'
 import './tournament.css'
 
@@ -18,7 +19,6 @@ export default function TournamentManagement() {
   const [reload, setReload] = useState(0)
   const [stats, setStats] = useState({ key: -1, value: {}, error: '' })
   const [facilities, setFacilities] = useState([])
-  const [sports, setSports] = useState([])
   const [detailId, setDetailId] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
@@ -38,8 +38,7 @@ export default function TournamentManagement() {
   }, [reload])
   useEffect(() => {
     let cancelled = false
-    listAdminFacilities({ ApprovalStatus: 'APPROVED', IsLocked: false, Page: 1, PageSize: 200 }).then(({ items }) => !cancelled && setFacilities(items)).catch(() => {})
-    getSportOptions().then(items => !cancelled && setSports(items)).catch(() => {})
+    fetchAllPages((Page, PageSize) => listAdminFacilities({ ApprovalStatus: 'APPROVED', IsLocked: false, Page, PageSize })).then(items => !cancelled && setFacilities(items)).catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -54,7 +53,7 @@ export default function TournamentManagement() {
   const done = message => { setDialog(null); if (message) setNotice(message); setReload(value => value + 1) }
   const onAction = (type, context) => setDialog({ type, context })
 
-  return <div className="tournaments-page"><header className="tournaments-page-heading admin-page-header"><div><h1>Quản lý giải đấu <span>{statsLoading ? '…' : `${number(s.totalTournaments)} giải`}</span></h1><p>Theo dõi đăng ký, nhánh đấu và tiến độ các giải thể thao trên SportNexus.</p></div><div><button className="users-button" onClick={() => setReload(value => value + 1)} disabled={list.loading}><RefreshCw size={13} />Làm mới</button><button className="users-button" disabled={!tournaments.length} onClick={() => { exportTournaments(tournaments); setNotice(`Đã xuất ${number(tournaments.length)} giải của trang hiện tại ra CSV.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'OPEN'}><ListFilter size={13} />Đang mở đăng ký</button><button className="users-button primary" onClick={() => setDialog({ type: 'form' })} disabled={!facilities.length || !sports.length} title={facilities.length && sports.length ? undefined : 'Cần có cơ sở và môn thể thao trên hệ thống'}><Plus size={13} />Tạo giải đấu</button></div></header>
+  return <div className="tournaments-page"><header className="tournaments-page-heading admin-page-header"><div><h1>Quản lý giải đấu <span>{statsLoading ? '…' : `${number(s.totalTournaments)} giải`}</span></h1><p>Theo dõi đăng ký, nhánh đấu và tiến độ các giải thể thao trên SportNexus.</p></div><div><button className="users-button" onClick={() => setReload(value => value + 1)} disabled={list.loading}><RefreshCw size={13} />Làm mới</button><button className="users-button" disabled={!tournaments.length} onClick={() => { exportTournaments(tournaments); setNotice(`Đã xuất ${number(tournaments.length)} giải của trang hiện tại ra CSV.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'OPEN'}><ListFilter size={13} />Đang mở đăng ký</button></div></header>
     <div className="tournaments-kpis">{tournamentStats(s).map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{statsLoading ? '…' : number(stat.value)}</strong><p>{stat.note}</p></article> })}</div>
     {!statsLoading && <p className="tournaments-filter-hint">Quỹ giải thưởng đang giữ {money(s.prizeFundsHeld)} · đã trả thưởng {money(s.prizesPaid)} · phí đã hoàn {money(s.entryFeesRefunded)}{s.topFacilities?.length ? ` · Cơ sở tổ chức nhiều nhất: ${s.topFacilities.slice(0, 3).map(item => `${item.name} (${item.count})`).join(', ')}` : ''}</p>}
     {stats.error && <div className="users-notice" role="alert"><span>Không tải được thống kê giải đấu: {stats.error}</span></div>}
@@ -64,7 +63,6 @@ export default function TournamentManagement() {
       <div className="tournaments-filter-row"><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)} disabled={!facilities.length}><option value="">{facilities.length ? 'Tất cả cơ sở' : 'Chưa có cơ sở'}</option>{facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>)}</select></label><label>Khóa<select value={filters.locked} onChange={event => change('locked', event.target.value)}><option value="">Tất cả</option><option value="true">Đang bị khóa</option><option value="false">Không bị khóa</option></select></label><button type="button" className="tournaments-text-button" onClick={reset} disabled={!activeFilters}>Đặt lại</button></div>
     </section>
     <div className={`tournaments-content-grid ${detail ? 'with-details' : ''}`}><TournamentTable tournaments={tournaments} total={list.total} totalPages={list.totalPages} loading={list.loading} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <TournamentDetails key={`${detail.id}#${reload}`} tournament={detail} onClose={() => setDetailId(null)} onAction={onAction} />}</div>
-    {dialog?.type === 'form' && <TournamentForm facilities={facilities} sports={sports} onClose={() => setDialog(null)} onDone={done} />}
     {['generate', 'pair', 'cancel', 'lock', 'unlock'].includes(dialog?.type) && <TournamentActionDialog type={dialog.type} context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
     {dialog?.type === 'add' && <AddParticipantDialog context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
     {dialog?.type === 'participant' && <ParticipantDialog context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}

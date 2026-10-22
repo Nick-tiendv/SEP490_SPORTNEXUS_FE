@@ -36,6 +36,16 @@ export function toList(data) {
   return { items: Array.isArray(items) ? items : [], total, totalPages }
 }
 
+// Lấy đủ mọi trang của một danh sách (pageSize tối đa 100 theo docs 02), dừng ở maxPages để giới hạn số request.
+// fetchPage(page, pageSize) phải trả { items, total, totalPages } như toList.
+export const MAX_PAGE_SIZE = 100
+export async function fetchAllPages(fetchPage, maxPages = 20) {
+  const first = await fetchPage(1, MAX_PAGE_SIZE)
+  const pages = Math.min(maxPages, first.totalPages || Math.ceil((first.total || 0) / MAX_PAGE_SIZE) || 1)
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) => fetchPage(index + 2, MAX_PAGE_SIZE)))
+  return [first, ...rest].flatMap(result => result.items)
+}
+
 // ---------- Booking ----------
 export function normalizeBooking(raw) {
   const start = pick(raw, 'startTime', 'slotStartTime', 'courtSlot.startTime', 'slot.startTime')
@@ -67,7 +77,8 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
   return {
     raw: data,
     totalBookings: toNumber(pick(data, 'totalBookings', 'totalBooking', 'bookingCount', 'total', 'count')),
-    totalRevenue: toNumber(pick(data, 'totalRevenue', 'revenue', 'totalAmount', 'grossRevenue', 'platformRevenue')),
+    // activeRevenue = doanh thu đơn chưa hủy (docs 11: AdminBookingStatisticsResponse).
+    totalRevenue: toNumber(pick(data, 'activeRevenue', 'grossBookingVolume', 'totalRevenue', 'revenue', 'totalAmount', 'grossRevenue', 'platformRevenue')),
   }
 }
 

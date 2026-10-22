@@ -70,7 +70,10 @@ export default function ViewCourtBookingSchedule() {
   const [cancelReasons, setCancelReasons] = useState([])
 
   const [selectedSlot, setSelectedSlot] = useState(null) // { court, slot }
-  const [walkinSlot, setWalkinSlot] = useState(null) // { court, slot }
+  const [walkinSlot, setWalkinSlot] = useState(null) // { court, slot } hoặc { items: [{ court, slot }] } khi đặt nhiều ca
+  // Chế độ chọn nhiều ca rời nhau (gửi courtSlotIds). Danh sách chọn gắn với cơ sở + ngày.
+  const [multiMode, setMultiMode] = useState(false)
+  const [picks, setPicks] = useState({ key: '', items: [] })
   const [walkinName, setWalkinName] = useState('')
   const [walkinPhone, setWalkinPhone] = useState('')
   const [walkinSlots, setWalkinSlots] = useState(1)
@@ -159,16 +162,53 @@ export default function ViewCourtBookingSchedule() {
     return Math.max(count, 1)
   }
 
+  // Ca đang chọn của đúng cơ sở + ngày đang xem (đổi ngày thì danh sách cũ tự bỏ qua).
+  const viewKey = `${facilityId}|${selectedDate}`
+  const pickedItems = picks.key === viewKey ? picks.items : []
+  const pickedIds = new Set(pickedItems.map((item) => item.slot.id))
+  const pickedTotal = pickedItems.reduce((sum, item) => sum + (Number(item.slot.price) || 0), 0)
+
+  const togglePick = (court, slot) => {
+    setPicks((prev) => {
+      const items = prev.key === viewKey ? prev.items : []
+      const exists = items.some((item) => item.slot.id === slot.id)
+      return { key: viewKey, items: exists ? items.filter((item) => item.slot.id !== slot.id) : [...items, { court, slot }] }
+    })
+  }
+
+  const clearPicks = () => setPicks({ key: '', items: [] })
+
+  const toggleMultiMode = () => {
+    setMultiMode((value) => !value)
+    clearPicks()
+  }
+
+  const openWalkin = (target) => {
+    setWalkinSlot(target)
+    setWalkinName('')
+    setWalkinPhone('')
+    setWalkinSlots(1)
+    setWalkinNote('')
+    setWalkinAutoCheckIn(false)
+  }
+
+  const openMultiWalkin = () => {
+    if (!pickedItems.length) return
+    const items = [...pickedItems].sort(
+      (a, b) => a.court.name.localeCompare(b.court.name, 'vi') || String(a.slot.startTime).localeCompare(String(b.slot.startTime)),
+    )
+    openWalkin({ items })
+  }
+
   const handleSlotClick = (court, slot) => {
     const state = cellState(slot)
+    if (multiMode) {
+      if (state === 'available') togglePick(court, slot)
+      return
+    }
     if (state === 'none' || state === 'past' || state === 'reserved') return
     if (state === 'available') {
-      setWalkinSlot({ court, slot })
-      setWalkinName('')
-      setWalkinPhone('')
-      setWalkinSlots(1)
-      setWalkinNote('')
-      setWalkinAutoCheckIn(false)
+      openWalkin({ court, slot })
       return
     }
     setSelectedSlot({ court, slot })
@@ -196,18 +236,30 @@ export default function ViewCourtBookingSchedule() {
   const handleCreateWalkinBooking = (e) => {
     e.preventDefault()
     if (!walkinName.trim() || !walkinSlot || busy) return
+    const customer = {
+      customerName: walkinName.trim(),
+      customerPhone: walkinPhone.trim() || null,
+      note: walkinNote.trim() || null,
+      autoCheckIn: walkinAutoCheckIn,
+    }
+    if (walkinSlot.items) {
+      const { items } = walkinSlot
+      runAction(
+        () => createWalkInBooking({ courtSlotIds: items.map((item) => item.slot.id), ...customer }),
+        `Đã nhận đặt ${items.length} ca cho "${customer.customerName}"!`,
+        () => { setWalkinSlot(null); clearPicks(); setMultiMode(false) },
+      )
+      return
+    }
     const { court, slot } = walkinSlot
     runAction(
       () =>
         createWalkInBooking({
           courtSlotId: slot.id,
           numberOfSlots: Number(walkinSlots) || 1,
-          customerName: walkinName.trim(),
-          customerPhone: walkinPhone.trim() || null,
-          note: walkinNote.trim() || null,
-          autoCheckIn: walkinAutoCheckIn,
+          ...customer,
         }),
-      `Đã nhận đặt sân cho "${walkinName.trim()}" tại ${court.name} lúc ${toClockVN(slot.startTime)}!`,
+      `Đã nhận đặt sân cho "${customer.customerName}" tại ${court.name} lúc ${toClockVN(slot.startTime)}!`,
       () => setWalkinSlot(null),
     )
   }
@@ -452,6 +504,22 @@ export default function ViewCourtBookingSchedule() {
               ))}
             </select>
           </div>
+
+          <button
+            type="button"
+            onClick={toggleMultiMode}
+            title="Chọn nhiều ca rời nhau rồi tạo một đơn tại quầy"
+            style={{
+              ...dateButtonStyle,
+              gap: '6px',
+              background: multiMode ? '#10B981' : '#FFFFFF',
+              borderColor: multiMode ? '#10B981' : '#CBD5E1',
+              color: multiMode ? '#FFFFFF' : '#0F172A',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{multiMode ? 'close' : 'library_add_check'}</span>
+            {multiMode ? 'Thoát chọn nhiều ca' : 'Chọn nhiều ca'}
+          </button>
         </div>
 
         {/* Legend */}
@@ -573,7 +641,8 @@ export default function ViewCourtBookingSchedule() {
                     const slot = court.slots.get(time)
                     const state = cellState(slot)
                     const style = CELL_STYLES[state]
-                    const clickable = state === 'available' || state === 'maintenance' || !!style && state !== 'reserved'
+                    const picked = !!slot && pickedIds.has(slot.id)
+                    const clickable = multiMode ? state === 'available' : state === 'available' || state === 'maintenance' || !!style && state !== 'reserved'
 
                     return (
                       <td
@@ -585,14 +654,17 @@ export default function ViewCourtBookingSchedule() {
                           borderLeft: '1px solid #F1F5F9',
                           cursor: clickable ? 'pointer' : 'default',
                           verticalAlign: 'top',
-                          background: style ? style.bg : state === 'maintenance' ? '#F1F5F9' : '#FFFFFF',
+                          background: picked ? '#D1FAE5' : style ? style.bg : state === 'maintenance' ? '#F1F5F9' : '#FFFFFF',
+                          outline: picked ? '2px solid #10B981' : 'none',
+                          outlineOffset: '-2px',
+                          opacity: multiMode && !clickable ? 0.55 : 1,
                           transition: 'background 0.15s',
                         }}
                         onMouseEnter={(e) => {
-                          if (state === 'available') e.currentTarget.style.background = '#F1F5F9'
+                          if (state === 'available' && !picked) e.currentTarget.style.background = '#F1F5F9'
                         }}
                         onMouseLeave={(e) => {
-                          if (state === 'available') e.currentTarget.style.background = '#FFFFFF'
+                          if (state === 'available' && !picked) e.currentTarget.style.background = '#FFFFFF'
                         }}
                       >
                         {style ? (
@@ -625,9 +697,18 @@ export default function ViewCourtBookingSchedule() {
                               fontWeight: 600,
                             }}
                           >
-                            {state === 'available' && (
+                            {state === 'available' && picked && (
                               <>
-                                <span>+ Trống</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#047857', fontWeight: 800 }}>
+                                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check_circle</span>
+                                  Đã chọn
+                                </span>
+                                <span style={{ fontSize: '10px', color: '#047857' }}>{formatVND(slot.price)}</span>
+                              </>
+                            )}
+                            {state === 'available' && !picked && (
+                              <>
+                                <span>{multiMode ? '+ Chọn' : '+ Trống'}</span>
                                 <span style={{ fontSize: '10px', color: '#94A3B8' }}>{formatVND(slot.price)}</span>
                               </>
                             )}
@@ -650,6 +731,49 @@ export default function ViewCourtBookingSchedule() {
           </table>
         )}
       </div>
+
+      {/* Thanh thao tác khi chọn nhiều ca */}
+      {multiMode && (
+        <div
+          style={{
+            ...panelStyle,
+            position: 'sticky',
+            bottom: '16px',
+            marginTop: '16px',
+            zIndex: 30,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            border: '1px solid #A7F3D0',
+          }}
+        >
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+            {pickedItems.length
+              ? <>Đã chọn <strong>{pickedItems.length} ca</strong> • Tổng <strong style={{ color: '#047857' }}>{formatVND(pickedTotal)}</strong></>
+              : 'Bấm vào các ô trống trên lưới để chọn ca (có thể khác giờ, khác sân).'}
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={clearPicks}
+              disabled={!pickedItems.length}
+              style={{ padding: '9px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: pickedItems.length ? 1 : 0.5 }}
+            >
+              Bỏ chọn
+            </button>
+            <button
+              type="button"
+              onClick={openMultiWalkin}
+              disabled={!pickedItems.length}
+              style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer', opacity: pickedItems.length ? 1 : 0.5 }}
+            >
+              Đặt {pickedItems.length || ''} ca đã chọn
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Chi tiết ca đã đặt / đang bảo trì */}
       {selectedSlot && (
@@ -839,13 +963,33 @@ export default function ViewCourtBookingSchedule() {
               </button>
             </div>
 
-            <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{walkinSlot.court.name}</div>
-              <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
-                Bắt đầu: <strong>{toClockVN(walkinSlot.slot.startTime)}</strong> ngày {formatDateVN(selectedDate)} • Giá:{' '}
-                <strong>{formatVND(walkinSlot.slot.price)}</strong>/ca
+            {walkinSlot.items ? (
+              <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
+                  {walkinSlot.items.length} ca ngày {formatDateVN(selectedDate)}
+                </div>
+                <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                  {walkinSlot.items.map(({ court, slot }) => (
+                    <div key={slot.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#1E293B', fontWeight: 600, padding: '3px 0' }}>
+                      <span>{court.name} • {toClockVN(slot.startTime)} - {toClockVN(slot.endTime)}</span>
+                      <span>{formatVND(slot.price)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#047857', borderTop: '1px dashed #CBD5E1', marginTop: '6px', paddingTop: '6px' }}>
+                  <span>Tổng cộng</span>
+                  <span>{formatVND(walkinSlot.items.reduce((sum, { slot }) => sum + (Number(slot.price) || 0), 0))}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{walkinSlot.court.name}</div>
+                <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
+                  Bắt đầu: <strong>{toClockVN(walkinSlot.slot.startTime)}</strong> ngày {formatDateVN(selectedDate)} • Giá:{' '}
+                  <strong>{formatVND(walkinSlot.slot.price)}</strong>/ca
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleCreateWalkinBooking}>
               <div style={{ marginBottom: '14px' }}>
@@ -853,19 +997,19 @@ export default function ViewCourtBookingSchedule() {
                 <input type="text" required placeholder="VD: Anh Tuấn, FC Hoàng Gia..." value={walkinName} onChange={(e) => setWalkinName(e.target.value)} style={inputStyle} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: walkinSlot.items ? '1fr' : '1fr 140px', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số Điện Thoại:</label>
                   <input type="tel" placeholder="09xx xxx xxx" value={walkinPhone} onChange={(e) => setWalkinPhone(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
+                {!walkinSlot.items && <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số ca liên tiếp:</label>
                   <select value={walkinSlots} onChange={(e) => setWalkinSlots(Number(e.target.value))} style={{ ...inputStyle, background: '#FFFFFF' }}>
                     {Array.from({ length: consecutiveFreeSlots(walkinSlot.court, walkinSlot.slot) }, (_, i) => i + 1).map((n) => (
                       <option key={n} value={n}>{n} ca</option>
                     ))}
                   </select>
-                </div>
+                </div>}
               </div>
 
               <div style={{ marginBottom: '12px' }}>
@@ -879,15 +1023,17 @@ export default function ViewCourtBookingSchedule() {
               </label>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSlotLock(walkinSlot.slot, true)}
-                  disabled={busy}
-                  title="Khóa ca này (bảo trì), người chơi sẽ không đặt được"
-                  style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #FED7AA', background: '#FFF7ED', color: '#C2410C', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Khóa ca
-                </button>
+                {walkinSlot.items ? <span /> : (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSlotLock(walkinSlot.slot, true)}
+                    disabled={busy}
+                    title="Khóa ca này (bảo trì), người chơi sẽ không đặt được"
+                    style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #FED7AA', background: '#FFF7ED', color: '#C2410C', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Khóa ca
+                  </button>
+                )}
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"

@@ -1,4 +1,4 @@
-import { getBookingStatistics } from './dashboardApi.js'
+import { fetchAllPages, getBookingStatistics } from './dashboardApi.js'
 import { listAccounts } from './accountApi.js'
 import { listAdminFacilities } from './facilityApi.js'
 
@@ -10,9 +10,8 @@ export async function listOwners() {
 }
 
 // Cơ sở của chủ sân lấy từ GET /api/v1/admin/facilities (gồm cả cơ sở chờ duyệt / bị khóa).
-const FACILITY_PAGE_SIZE = 500
 export async function listFacilities() {
-  const { items } = await listAdminFacilities({ Page: 1, PageSize: FACILITY_PAGE_SIZE })
+  const items = await fetchAllPages((Page, PageSize) => listAdminFacilities({ Page, PageSize }))
   return items.map(facility => ({
     id: facility.id,
     ownerId: facility.owner.id,

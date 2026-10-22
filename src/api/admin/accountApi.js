@@ -43,7 +43,7 @@ export async function getMyAccount() {
 }
 // Body theo swagger CreateAccountRequest (roleId, password là bắt buộc phía BE).
 export async function createAccount({ username, password, fullName, phone, email, roleId }) {
-  return unwrap((await apiClient.post('/api/accounts', { username, password, fullName, phone: phone || null, email, roleId, isActive: true, fairPlayScore: 100, walletBalance: 0 })).data)
+  return unwrap((await apiClient.post('/api/accounts', { username, password, fullName, phone: phone || null, email, roleId, isActive: true, fairPlayScore: 100 })).data)
 }
 // UpdateAccountRequest: field nào null thì BE giữ nguyên.
 export async function updateAccount(id, { username, fullName, phone, email, roleId, password }) {

@@ -3,7 +3,8 @@
 export const PERIODS = ['Hôm nay', 'Tháng này', 'Quý này']
 export const TREND_RANGES = { '7 ngày': 7, '30 ngày': 30, '90 ngày': 90 }
 // Số bản ghi tối đa lấy về để tổng hợp biểu đồ / môn thể thao phía FE.
-export const AGGREGATE_PAGE_SIZE = 1000
+// Số trang booking tối đa (100 đơn/trang) dùng để tính tỉ lệ theo môn.
+export const AGGREGATE_MAX_PAGES = 10
 
 const startOfDay = date => new Date(date.getFullYear(), date.getMonth(), date.getDate())
 const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)

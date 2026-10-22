@@ -6,6 +6,7 @@ import CancelLfgDialog from './LFGDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
 import { getLfgStatistics, listLfgs } from '../../api/admin/lfgApi.js'
 import { getSportOptions, listAdminFacilities } from '../../api/admin/facilityApi.js'
+import { fetchAllPages } from '../../api/admin/dashboardApi.js'
 import { statusLabels, sportLabels, number, money, percent, exportLfgs } from './lfgData.js'
 import '../Users/users.css'
 import './lfg.css'
@@ -38,8 +39,8 @@ export default function LFGManagement() {
   }, [reload])
   useEffect(() => {
     let cancelled = false
-    Promise.allSettled([getSportOptions(), listAdminFacilities({ ApprovalStatus: 'APPROVED', Page: 1, PageSize: 200 })]).then(([sports, facilities]) => {
-      if (!cancelled) setOptions({ sports: sports.value || [], facilities: facilities.value?.items || [] })
+    Promise.allSettled([getSportOptions(), fetchAllPages((Page, PageSize) => listAdminFacilities({ ApprovalStatus: 'APPROVED', Page, PageSize }))]).then(([sports, facilities]) => {
+      if (!cancelled) setOptions({ sports: sports.value || [], facilities: facilities.value || [] })
     })
     return () => { cancelled = true }
   }, [])
