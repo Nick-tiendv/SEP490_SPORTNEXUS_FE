@@ -47,11 +47,27 @@ export async function searchTournaments({ keyword, registrationOpen, page = 1, p
   const { items, total } = await getList(`${TOURNAMENTS_ENDPOINT}/search`, { Keyword: keyword, RegistrationOpen: registrationOpen, Page: page, PageSize: pageSize })
   return { items: items.map(toTournament), total }
 }
-export const getTournament = async id => toTournament(await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}`))
+// GET /api/v1/tournaments/{id} trả về MẢNG TournamentDetailResponse (giải mẹ kèm children)
+export const getTournament = async id => {
+  const data = await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}`)
+  const list = Array.isArray(data) ? data : [data]
+  return toTournament(list.find(item => !item?.parentTournamentId) || list[0] || {})
+}
 // GET /api/v1/tournaments/my-registrations: các giải tôi đã đăng ký
 export async function getMyRegistrations() {
   const { items } = await getList(`${TOURNAMENTS_ENDPOINT}/my-registrations`)
-  return items.map(raw => ({ ...toTournament(raw), registrationStatus: raw.registrationStatus || raw.participantStatus || raw.status || '' }))
+  // MyTournamentRegistrationResponse: tournamentId (bảng đã đăng ký), parentTournamentId/Name, paymentStatus, tournamentStatus, qrCode
+  return items.map(raw => ({
+    ...toTournament(raw),
+    id: String(raw.tournamentId),
+    parentId: String(raw.parentTournamentId || raw.tournamentId),
+    name: raw.parentTournamentName ? `${raw.parentTournamentName} — ${raw.tournamentName}` : raw.tournamentName,
+    status: raw.tournamentStatus || '',
+    registrationStatus: raw.tournamentStatus || '',
+    paymentStatus: raw.paymentStatus || '',
+    teamName: raw.teamName || '',
+    qrCode: raw.qrCode || '',
+  }))
 }
 // POST /api/v1/tournaments/{id}/join?teamId= (teamId chỉ cần với nội dung thi đấu theo đội)
 export const joinTournament = (id, teamId) => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/join${teamId ? `?teamId=${encodeURIComponent(teamId)}` : ''}`)

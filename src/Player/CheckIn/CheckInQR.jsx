@@ -1,8 +1,33 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getCancellationReasons, cancelBooking, getBookingQrTicket, getUpcomingBookings } from '../../api/player/bookingApi.js'
+import { getCancellationReasons, cancelBooking, getBookingQrTicket, getBookingById, getUpcomingBookings } from '../../api/player/bookingApi.js'
 import { cancelLfg, rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/player/lfgApi.js'
 import { getTournamentQrTicket, checkInTournament } from '../../api/player/tournamentApi.js'
+
+const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
+const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
+
+// Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
+const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType }) => ({
+  id,
+  qrCode: qrCode || '',
+  ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
+  facilityId: facilityId || null,
+  venueName: facilityName || '—',
+  address: facilityAddress || '—',
+  courtName: courtName || '—',
+  gate: courtName || '—',
+  sport: sportName || '—',
+  sportType: sportType || sportName || '—',
+  startTime: clockVN(startTime),
+  endTime: clockVN(endTime),
+  allowedCheckInStart: clockVN(startTime),
+  allowedCheckInEnd: clockVN(endTime),
+  playDate: dateVN(startTime),
+  startAt: startTime || null,
+  escrowAmount: Number(amount) || 0,
+  status: status || 'PENDING_CHECKIN',
+})
 
 function CheckInQR() {
   const [copied, setCopied] = useState(false)
@@ -16,27 +41,6 @@ function CheckInQR() {
   const [ticketError, setTicketError] = useState(null)
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
-
-  // Khung vé rỗng: chỉ dùng để giữ đủ field cho giao diện, dữ liệu thật lấy từ API qr-ticket.
-  const getFallbackTicket = () => ({
-    id: null,
-    ticketCode: '',
-    qrCode: '',
-    courtName: '—',
-    venueName: '—',
-    address: '—',
-    gate: '—',
-    sport: '—',
-    sportType: '—',
-    startTime: '—',
-    endTime: '—',
-    allowedCheckInStart: '—',
-    allowedCheckInEnd: '—',
-    playDate: '—',
-    facilityId: null,
-    escrowAmount: 0,
-    status: 'PENDING_CHECKIN',
-  })
 
   // Bước 1: Gọi API qr-ticket tương ứng khi mở vé QR
   useEffect(() => {
@@ -54,16 +58,23 @@ function CheckInQR() {
             bookingId = upcoming[0]?.id || upcoming[0]?.bookingId || null
           }
           if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
-          const res = await getBookingQrTicket(bookingId)
+          // qr-ticket trả về chuỗi mã QR; chi tiết đơn lấy từ GET /api/v1/bookings/{bookingId}
+          const [qr, detail] = await Promise.all([getBookingQrTicket(bookingId), getBookingById(bookingId)])
           if (isMounted) {
-            const fallback = getFallbackTicket('booking')
-            setTicketData({
-              ...fallback,
-              ...(res || {}),
+            const me = (detail?.participants || []).find((p) => p.isHost) || {}
+            setTicketData(toTicket({
               id: bookingId,
-              ticketCode: res?.ticketCode || res?.code || `SNX-BK-${String(bookingId).slice(0, 8).toUpperCase()}`,
-              qrCode: res?.qrCode || res?.qrToken || res?.token || `SNX-BK-${bookingId}`,
-            })
+              qrCode: typeof qr === 'string' ? qr : qr?.qrCode,
+              facilityId: detail?.facilityId,
+              facilityName: detail?.facilityName,
+              facilityAddress: detail?.facilityAddress,
+              courtName: detail?.courtName,
+              sportName: detail?.sportName,
+              startTime: detail?.startTime,
+              endTime: detail?.endTime,
+              status: me.isCheckedIn ? 'CHECKED_IN' : detail?.bookingStatus,
+              amount: detail?.paidAmount ?? detail?.totalAmount,
+            }))
           }
         } else if (ticketType === 'lfg') {
           // Kèo LFG: GET /api/v1/lfgs/{cardId}/qr-ticket
@@ -71,14 +82,16 @@ function CheckInQR() {
           if (!cardId) throw new Error('Bạn chưa tham gia kèo LFG nào có vé check-in.')
           const res = await getLfgQrTicket(cardId)
           if (isMounted) {
-            const fallback = getFallbackTicket('lfg')
-            setTicketData({
-              ...fallback,
-              ...(res || {}),
-              id: cardId,
-              ticketCode: res?.ticketCode || res?.code || `SNX-LFG-${String(cardId).slice(0, 8).toUpperCase()}`,
-              qrCode: res?.qrCode || res?.qrToken || res?.token || `SNX-LFG-${cardId}`,
-            })
+            setTicketData(toTicket({
+              id: res?.lfgCardId || cardId,
+              qrCode: res?.qrCode,
+              facilityName: res?.facilityName,
+              courtName: res?.courtName,
+              startTime: res?.startTime,
+              endTime: res?.endTime,
+              status: res?.isCheckedIn ? 'CHECKED_IN' : 'PENDING_CHECKIN',
+              sportType: 'KÈO GHÉP TRẬN LFG',
+            }))
           }
         } else if (ticketType === 'tournament') {
           // Giải đấu: GET /api/v1/tournaments/{id}/qr-ticket
@@ -86,14 +99,16 @@ function CheckInQR() {
           if (!tournamentId) throw new Error('Bạn chưa đăng ký giải đấu nào có vé check-in.')
           const res = await getTournamentQrTicket(tournamentId)
           if (isMounted) {
-            const fallback = getFallbackTicket('tournament')
-            setTicketData({
-              ...fallback,
-              ...(res || {}),
-              id: tournamentId,
-              ticketCode: res?.ticketCode || res?.code || `SNX-TN-${String(tournamentId).slice(0, 8).toUpperCase()}`,
-              qrCode: res?.qrCode || res?.qrToken || res?.token || `SNX-TN-${tournamentId}`,
-            })
+            setTicketData(toTicket({
+              id: res?.tournamentId || tournamentId,
+              qrCode: res?.qrCode,
+              facilityId: res?.facilityId,
+              facilityName: res?.facilityName,
+              facilityAddress: res?.facilityAddress,
+              courtName: res?.teamName || res?.fullName,
+              sportType: res?.tournamentName || 'GIẢI ĐẤU',
+              status: res?.tournamentStatus,
+            }))
           }
         }
       } catch (err) {
@@ -214,10 +229,9 @@ function CheckInQR() {
 
   const getHoursUntilMatch = () => {
     try {
-      const now = new Date()
-      const matchDate = new Date()
-      matchDate.setHours(19, 30, 0, 0)
-      return (matchDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+      // Số giờ còn lại tới giờ bắt đầu thật của vé (dùng cho quy định hoàn tiền 24h)
+      if (!ticketData?.startAt) return 0
+      return (new Date(ticketData.startAt).getTime() - new Date().getTime()) / (1000 * 60 * 60)
     } catch {
       return 8
     }
@@ -3044,7 +3058,7 @@ function CheckInQR() {
                     Giải ngân ký quỹ Escrow thành công
                   </div>
                   <div>
-                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 330000)} đ</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
+                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} đ</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
                   </div>
                 </div>
 

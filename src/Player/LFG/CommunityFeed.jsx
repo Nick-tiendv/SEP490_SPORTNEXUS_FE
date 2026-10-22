@@ -57,8 +57,8 @@ const toFeedMatch = (card) => {
   const sport = /pickle/i.test(sportName) ? 'pickleball' : 'badminton'
   const start = card.startTime ? new Date(card.startTime) : null
   const hour = start ? start.getHours() : 18
-  const totalSlots = Number(card.totalSlots ?? (Number(card.slotsNeeded || 0) + 1)) || 0
-  const currentSlots = Number(card.currentSlots ?? card.participantCount ?? card.joinedCount ?? 1) || 0
+  const totalSlots = Number(card.totalSlots) || 0
+  const currentSlots = Math.max(0, totalSlots - (Number(card.remainingSlots) || 0))
   const price = Number(card.pricePerPerson ?? card.price ?? 0)
   const roster = Array.from({ length: totalSlots }, (_, i) => {
     const p = (card.participants || [])[i]
@@ -70,14 +70,15 @@ const toFeedMatch = (card) => {
     id: card.id || card.cardId,
     sport,
     sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
-    subBadge: card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay',
+    subBadge: [card.format, card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
     levelTag: card.skillLevelTag || card.skillLevel || 'Mọi trình độ',
-    slotTag: `Cần ${Math.max(0, totalSlots - currentSlots)} người`,
+    slotTag: `Cần ${Number(card.remainingSlots) || 0} người`,
     time: start ? start.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—',
     timeSlot: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening',
     title: card.title || card.description || `Kèo ${sportName || 'ghép trận'}`,
     location: [card.courtName, card.facilityName, card.facilityAddress].filter(Boolean).join(', ') || '—',
-    groupDesc: card.hostName ? `Chủ kèo: ${card.hostName}` : (card.description || ''),
+    groupDesc: card.hostName ? `Chủ kèo: ${card.hostName}${card.hostFairPlayScore != null ? ` (Fair Play ${card.hostFairPlayScore})` : ''}` : (card.description || ''),
+    requireApproval: Boolean(card.requireApproval),
     roster,
     currentSlots,
     totalSlots,

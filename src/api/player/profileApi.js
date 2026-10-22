@@ -25,7 +25,25 @@ export const getMySports = async () => {
   const list = Array.isArray(data) ? data : pick(data, 'sports', 'items') || []
   return list.map(toMySport)
 }
-// UpdateUserSportsRequest: { sports: [{ sportCategoryId, skillLevel }] } (ghi đè toàn bộ danh sách)
+// skillLevel BE nhận: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL. Giao diện hiển thị nhãn tiếng Việt.
+export const SKILL_LABELS = {
+  BEGINNER: 'Mới tập chơi',
+  INTERMEDIATE: 'Trung bình - Khá',
+  ADVANCED: 'Bán chuyên / Nâng cao',
+  PROFESSIONAL: 'Chuyên nghiệp / Thi đấu giải',
+}
+export const skillLabel = value => SKILL_LABELS[String(value || '').toUpperCase()] || value || ''
+export function toSkillEnum(label) {
+  const text = String(label || '').toLowerCase()
+  if (SKILL_LABELS[String(label || '').toUpperCase()]) return String(label).toUpperCase()
+  if (text.includes('chuyên nghiệp') || text.includes('thi đấu giải')) return 'PROFESSIONAL'
+  if (text.includes('bán chuyên') || text.includes('nâng cao') || text.includes('khá - đánh') || text.includes('chắc tay')) return 'ADVANCED'
+  if (text.includes('trung bình')) return 'INTERMEDIATE'
+  if (text.includes('mới')) return 'BEGINNER'
+  return null
+}
+
+// UpdateUserSportsRequest: { sports: [{ sportCategoryId, skillLevel }] } (ghi đè toàn bộ, tối đa 10 môn)
 export const updateMySports = sports => put('/api/auth/me/sports', {
-  sports: sports.map(sport => ({ sportCategoryId: sport.sportCategoryId, skillLevel: sport.skillLevel || null })),
+  sports: sports.map(sport => ({ sportCategoryId: sport.sportCategoryId, skillLevel: toSkillEnum(sport.skillLevel) })),
 })

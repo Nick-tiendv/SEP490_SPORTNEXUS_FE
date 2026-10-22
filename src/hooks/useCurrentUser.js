@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { getMyProfile } from '../api/player/profileApi.js'
-import { getMyFairPlay } from '../api/player/lfgApi.js'
 
 // Thông tin người dùng đang đăng nhập (GET /api/auth/me), dùng chung cho TopBar, trang chủ, thanh toán...
 // Gọi API một lần cho cả app; tải lại khi hồ sơ được sửa (sự kiện 'player-profile-updated').
@@ -25,15 +24,12 @@ const toUser = me => ({
   phone: me.phone || '',
   email: me.email || '',
   avatarUrl: me.avatarUrl || null,
+  fairPlayScore: me.fairPlayScore ?? null,
 })
 const load = (force = false) => {
   if (!force && (cache || pending)) return pending || Promise.resolve(cache)
-  pending = Promise.all([getMyProfile(), getMyFairPlay().catch(() => null)])
-    .then(([me, fairPlay]) => {
-      const score = Number(fairPlay?.score ?? fairPlay?.fairPlayScore ?? fairPlay?.currentScore)
-      cache = { ...toUser(me || {}), fairPlayScore: Number.isFinite(score) ? score : null }
-      return cache
-    })
+  pending = getMyProfile()
+    .then(me => { cache = toUser(me || {}); return cache })
     .finally(() => { pending = null })
   return pending
 }

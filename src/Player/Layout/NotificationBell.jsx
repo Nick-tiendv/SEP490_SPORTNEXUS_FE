@@ -4,7 +4,7 @@ import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
-  deleteAllNotifications,
+  deleteReadNotifications,
 } from '../../api/player/notificationApi.js'
 
 // Icon / màu theo loại thông báo
@@ -16,8 +16,20 @@ const TYPE_STYLES = {
   wallet: { icon: 'account_balance_wallet', color: '#15803D', bg: '#EAF7EE', link: '/wallet', linkText: 'Xem ví Escrow' },
   lfg: { icon: 'groups', color: '#7C3AED', bg: '#F3E8FF', link: '/community', linkText: 'Xem kèo' },
   tournament: { icon: 'emoji_events', color: '#CA8A04', bg: '#FEF9C3', link: '/tournament', linkText: 'Xem giải đấu' },
+  review: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
   feedback: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
   rating: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
+  team: { icon: 'groups', color: '#0EA5E9', bg: '#E0F2FE', link: '/tournament', linkText: 'Xem chi tiết' },
+  community: { icon: 'forum', color: '#7C3AED', bg: '#F3E8FF', link: '/community', linkText: 'Xem bảng tin' },
+  report: { icon: 'flag', color: '#DC2626', bg: '#FEE2E2', link: '/profile', linkText: 'Xem chi tiết' },
+}
+
+// Mở đúng màn hình theo referenceType + referenceId của thông báo
+const linkFor = (n, style) => {
+  if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
+  if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
+  if (n.referenceType === 'TOURNAMENT') return '/tournament'
+  return style.link
 }
 const DEFAULT_STYLE = { icon: 'notifications', color: '#475569', bg: '#F1F5F9', link: '', linkText: 'Xem chi tiết' }
 
@@ -33,16 +45,17 @@ const timeAgo = (value) => {
 // Thông báo từ API -> dạng hiển thị trong chuông
 const toBellItem = (n) => {
   const style = TYPE_STYLES[n.type] || DEFAULT_STYLE
-  return { ...style, ...n, details: '', time: timeAgo(n.createdAt), link: n.link || style.link }
+  return { ...style, ...n, details: '', time: timeAgo(n.createdAt), link: linkFor(n, style) }
 }
 
+// Nhóm theo type của BE: BOOKING | LFG | TEAM | TOURNAMENT | REVIEW | COMMUNITY | WALLET | REPORT | SYSTEM
 const FILTER_TABS = [
   { key: 'all', label: 'Tất cả' },
   { key: 'booking', label: 'Đặt sân' },
-  { key: 'transaction', label: 'Giao dịch' },
-  { key: 'wallet', label: 'Ví Escrow' },
-  { key: 'checkin', label: 'Check-in QR' },
-  { key: 'feedback', label: 'Feedback' },
+  { key: 'wallet', label: 'Ví' },
+  { key: 'lfg', label: 'Kèo LFG' },
+  { key: 'tournament', label: 'Giải đấu' },
+  { key: 'review', label: 'Đánh giá' },
 ]
 
 export default function NotificationBell() {
@@ -174,9 +187,9 @@ export default function NotificationBell() {
 
   // Xoá tất cả thông báo
   const handleClearAll = () => {
-    if (!window.confirm('Xóa tất cả thông báo?')) return
-    setNotifications([])
-    deleteAllNotifications().catch(() => {})
+    if (!window.confirm('Xóa tất cả thông báo đã đọc?')) return
+    setNotifications((prev) => prev.filter((n) => !n.read))
+    deleteReadNotifications().catch(() => {})
   }
 
   // Đánh dấu 1 thông báo là đã đọc
@@ -190,17 +203,7 @@ export default function NotificationBell() {
   }
 
   // Lọc theo tab
-  const filteredNotifications = notifications.filter((n) => {
-    if (activeTab === 'all') return true
-    if (activeTab === 'booking') return n.type === 'booking'
-    if (activeTab === 'transaction') return n.type === 'transaction' || n.type === 'payment'
-    if (activeTab === 'wallet') return n.type === 'wallet'
-    if (activeTab === 'checkin')
-      return n.type === 'checkin' || n.type === 'invite' || n.type === 'friend_code'
-    if (activeTab === 'feedback')
-      return n.type === 'feedback' || n.type === 'rating'
-    return true
-  })
+  const filteredNotifications = notifications.filter((n) => activeTab === 'all' || n.type === activeTab)
 
   return (
     <div className="relative" ref={containerRef}>

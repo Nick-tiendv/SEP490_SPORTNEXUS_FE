@@ -1,7 +1,7 @@
 import { useAuth } from '../../context/authContext.js'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getMyProfile, updateMyProfile, logoutApi, getMySports, updateMySports, getSportCategories } from '../../api/player/profileApi.js'
+import { getMyProfile, updateMyProfile, logoutApi, getMySports, updateMySports, getSportCategories, skillLabel } from '../../api/player/profileApi.js'
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
@@ -33,7 +33,7 @@ const toUiSport = (sport) => {
     sportCategoryId: sport.sportCategoryId,
     name: sport.name || preset?.name || 'Môn thể thao',
     icon: preset?.icon || '🎯',
-    level: sport.skillLevel || 'Chưa có đánh giá',
+    level: skillLabel(sport.skillLevel) || 'Chưa có đánh giá',
     field: 'Trình độ',
     ranked: true,
     matches: 0,
@@ -140,7 +140,7 @@ export default function Profile() {
       const u = me.status === 'fulfilled' ? me.value || {} : {}
       const fp = fairPlay.status === 'fulfilled' ? fairPlay.value || {} : {}
       const list = bookings.status === 'fulfilled' && Array.isArray(bookings.value) ? bookings.value : []
-      const score = Number(fp.score ?? fp.fairPlayScore ?? fp.currentScore)
+      const rating = Number(fp.averageRating)
       const created = u.createdAt ? new Date(u.createdAt) : null
       setProfile((prev) => ({
         ...prev,
@@ -150,9 +150,10 @@ export default function Profile() {
         email: u.email || prev.email,
         avatarUrl: u.avatarUrl || prev.avatarUrl,
         joinDate: created ? `Tháng ${String(created.getMonth() + 1).padStart(2, '0')}/${created.getFullYear()}` : prev.joinDate,
-        // Điểm Fair Play thang 100 quy ra thang 5 sao
-        reputationScore: Number.isFinite(score) ? Math.round(score / 2) / 10 : prev.reputationScore,
-        totalReviews: Number(fp.totalRatings ?? fp.ratingCount ?? fp.totalReviews ?? prev.totalReviews) || 0,
+        // GET /api/v1/fair-play/me: averageRating (sao), ratingCount, fairPlayScore (thang 100)
+        reputationScore: Number.isFinite(rating) ? Math.round(rating * 10) / 10 : prev.reputationScore,
+        totalReviews: Number(fp.ratingCount) || 0,
+        fairPlayScore: fp.fairPlayScore ?? u.fairPlayScore ?? null,
         matchesPlayed: list.filter((b) => /COMPLETED|CHECKED_IN/i.test(b.status || b.bookingStatus || '')).length,
       }))
       if (me.status === 'rejected') triggerToast(`⚠️ ${me.reason?.message || 'Không tải được hồ sơ.'}`)

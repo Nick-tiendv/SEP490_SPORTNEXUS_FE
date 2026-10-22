@@ -7,10 +7,11 @@ export const toNotification = raw => ({
   id: String(pick(raw, 'id', 'notificationId') ?? ''),
   type: String(pick(raw, 'type', 'notificationType', 'category') || 'system').toLowerCase(),
   title: pick(raw, 'title', 'subject') || 'Thông báo',
-  message: pick(raw, 'message', 'content', 'body') || '',
+  message: pick(raw, 'body', 'message') || '',
   read: Boolean(pick(raw, 'isRead', 'read')),
   createdAt: pick(raw, 'createdAt', 'sentAt', 'createdDate') || null,
-  link: pick(raw, 'link', 'url', 'actionUrl', 'deepLink') || '',
+  referenceType: String(pick(raw, 'referenceType') || '').toUpperCase(),
+  referenceId: pick(raw, 'referenceId') || '',
 })
 
 // GET /api/v1/notifications?Type&UnreadOnly&Page&PageSize
@@ -21,12 +22,13 @@ export async function getNotifications({ type, unreadOnly, page = 1, pageSize = 
 // GET /api/v1/notifications/unread-count
 export async function getUnreadCount() {
   const data = await get(`${ENDPOINT}/unread-count`)
-  return Number(typeof data === 'object' ? pick(data, 'count', 'unreadCount', 'total') : data) || 0
+  return Number(typeof data === 'object' ? pick(data, 'total') : data) || 0
 }
 export const markNotificationRead = id => put(`${ENDPOINT}/${encodeURIComponent(id)}/read`)
 export const markAllNotificationsRead = () => put(`${ENDPOINT}/read-all`)
 export const deleteNotification = id => del(`${ENDPOINT}/${encodeURIComponent(id)}`)
-export const deleteAllNotifications = () => del(ENDPOINT)
+// BE chỉ xóa các thông báo đã đọc
+export const deleteReadNotifications = () => del(ENDPOINT)
 // GET/PUT /api/v1/notifications/settings
 export const getNotificationSettings = () => get(`${ENDPOINT}/settings`)
 export const updateNotificationSettings = settings => put(`${ENDPOINT}/settings`, settings)

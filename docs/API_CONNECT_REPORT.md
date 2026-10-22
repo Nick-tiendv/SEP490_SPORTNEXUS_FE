@@ -56,14 +56,27 @@ Nhánh tạo từ `feature/restructure-folders` (cấu trúc thư mục mới). 
 - Mở thử trên trình duyệt bằng phiên mock dev (API bị chặn có chủ đích): Trang chủ, Hồ sơ, Giải đấu, LFG, Vé QR, Tìm sân, Ví, Quên mật khẩu, Admin Thông báo đều hiển thị, không lỗi React.
 - **Chưa kiểm tra với tài khoản thật** vì cần JWT thật: nên đăng nhập thử từng luồng ở mục 3.
 
-## 6. Cần backend xác nhận
+## 6. Đối chiếu với `SEP490_SPORTNEXUS_BE/docs/API_RESPONSES.md`
 
-Swagger không mô tả response, nên FE đọc nhiều tên field (giống phần Admin hiện có). Cần BE xác nhận:
+Đã sửa FE cho khớp tài liệu response của BE:
 
-- Giá trị `target` của `POST /admin/notifications/broadcast` (FE đang gửi: để trống = tất cả, `Player`, `CourtOwner`, hoặc `userIds`).
-- `forgot-password` nhận số điện thoại hay email (FE gửi số điện thoại vì `reset-password` cần `phone`).
-- `POST /tournaments/{id}/join` nhận id giải cha hay id nội dung con (FE gửi id nội dung con nếu có).
-- Tên field của `/auth/me/sports`, `/fair-play/me`, `/notifications`, `/bookings/upcoming`.
+| API | Sai trước đó | Đã sửa |
+|---|---|---|
+| `PUT /api/auth/me/sports` | Gửi `skillLevel` tiếng Việt | Gửi enum `BEGINNER / INTERMEDIATE / ADVANCED / PROFESSIONAL`, hiển thị lại nhãn tiếng Việt |
+| `GET /api/v1/fair-play/me` | Đọc `score` | Đọc `fairPlayScore`, `averageRating`, `ratingCount` |
+| `GET /api/auth/me` | Gọi thêm fair-play để lấy điểm | Dùng `fairPlayScore` có sẵn trong `/me` |
+| `POST /admin/notifications/broadcast` | `target` = Player/CourtOwner | `ALL / PLAYER / OWNER / USERS` |
+| `GET /admin/notifications/broadcasts`, `/statistics` | Trạng thái, field thống kê đoán | `SCHEDULED / SENT / CANCELLED / RECALLED`; `totalSent, totalRead, readRate, broadcastsSent, broadcastsScheduled` |
+| `GET /api/v1/notifications` | Đọc `message`, `link` | Đọc `body`, mở màn hình theo `referenceType + referenceId`; nhóm theo `type` của BE |
+| `DELETE /api/v1/notifications` | Hiểu là xóa tất cả | BE chỉ xóa thông báo **đã đọc** |
+| `GET /api/v1/lfgs` | Đọc `currentSlots` | Tính từ `totalSlots - remainingSlots` |
+| `GET /api/v1/tournaments/{id}` | Coi là object | BE trả **mảng**; lấy giải mẹ kèm `children` |
+| `GET /tournaments/my-registrations` | Đọc `id`, `name` | Đọc `tournamentId`, `tournamentName`, `parentTournamentId`, `paymentStatus`, `tournamentStatus`, `qrCode` |
+| `GET /bookings/{id}/qr-ticket` | Coi là object | BE trả **chuỗi** mã QR; thông tin sân lấy từ `GET /bookings/{id}` |
+| `GET /bookings/upcoming`, `my-bookings` | `id` | `bookingId`, `bookingStatus` |
+| Hủy vé (hoàn tiền 24h) | Giờ trận cứng 19:30 | Dùng `startTime` thật của đơn |
+
+Còn cần BE xác nhận: `forgot-password` gửi OTP cho cả email nhưng `reset-password` chỉ nhận `phone` → FE đang yêu cầu nhập số điện thoại.
 
 ## 7. Còn lại (chưa làm trong nhánh này)
 

@@ -763,7 +763,7 @@ const toUpcomingCard = (b) => {
   const sportName = b.sportName || b.categoryName || ''
   const sport = sportKeyOf(sportName)
   const meta = SPORT_META[sport]
-  const id = String(b.id || b.bookingId || '')
+  const id = String(b.bookingId || b.id || '')
   return {
     id,
     bookingId: id,
@@ -779,7 +779,7 @@ const toUpcomingCard = (b) => {
     title: [b.facilityName, b.courtName].filter(Boolean).join(' — ') || 'Đơn đặt sân',
     address: b.facilityAddress || b.address || '',
     img: b.facilityImageUrl || b.imageUrl || meta.img,
-    qrCode: b.bookingCode || b.code || id,
+    qrCode: id,
   }
 }
 
@@ -788,14 +788,12 @@ const toLfgRow = (c) => {
   const sportName = c.sportName || c.sportCategoryName || ''
   const sport = sportKeyOf(sportName)
   const meta = SPORT_META[sport]
-  const total = Number(c.totalSlots ?? (Number(c.slotsNeeded || 0) + 1)) || 0
-  const current = Number(c.currentSlots ?? c.participantCount ?? 1) || 0
   return {
     id: String(c.id || c.cardId || ''),
     sport,
     sportName: c.title || sportName || meta.name,
     sportEmoji: meta.emoji,
-    missing: `Thiếu ${Math.max(0, total - current)} người`,
+    missing: `Thiếu ${Number(c.remainingSlots) || 0} người`,
     missingColor: '#DC2626',
     time: [whenText(c.startTime), c.facilityName || c.courtName].filter(Boolean).join(' • '),
     price: `${vnd(c.pricePerPerson ?? c.price)} / người`,
@@ -1480,7 +1478,7 @@ function Dashboard() {
                 {/* QR button */}
                 <button
                   type="button"
-                  onClick={() => setQrModalMatch(m)}
+                  onClick={() => navigate(`/qr-pass?type=booking&bookingId=${encodeURIComponent(m.bookingId)}`)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

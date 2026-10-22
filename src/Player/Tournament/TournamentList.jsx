@@ -43,10 +43,10 @@ function TournamentCard({ tournament, actions }) {
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
         <div><dt className="text-slate-500">Bắt đầu</dt><dd className="font-semibold">{date(tournament.starts)}</dd></div>
         <div><dt className="text-slate-500">Hạn đăng ký</dt><dd className="font-semibold">{date(tournament.deadline)}</dd></div>
-        <div><dt className="text-slate-500">Lệ phí</dt><dd className="font-semibold">{money(tournament.entryFee)}</dd></div>
+        <div><dt className="text-slate-500">Lệ phí</dt><dd className="font-semibold">{tournament.entryFee == null ? 'Xem chi tiết' : money(tournament.entryFee)}</dd></div>
         <div>
           <dt className="text-slate-500">Đã đăng ký</dt>
-          <dd className="font-semibold">{tournament.registered ?? 0}{tournament.capacity ? ` / ${tournament.capacity}` : ''}</dd>
+          <dd className="font-semibold">{tournament.registered ?? '—'}{tournament.capacity ? ` / ${tournament.capacity}` : ''}</dd>
         </div>
       </dl>
       {tournament.prize > 0 && <p className="text-sm text-slate-600">Tổng giải thưởng: <strong>{money(tournament.prize)}</strong></p>}
@@ -69,7 +69,8 @@ function TournamentList() {
   const mine = useApi(getMyRegistrations, [], { initialData: [] })
   const teams = useApi(getMyTeams, [], { initialData: [] })
 
-  const registeredIds = new Set((mine.data || []).map((t) => t.id))
+  // Đăng ký nằm ở bảng con, danh sách tìm kiếm là giải mẹ: so theo id giải mẹ
+  const registeredIds = new Set((mine.data || []).map((t) => t.parentId))
   const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
   const current = tab === 'open' ? openList : mine
 
