@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { rateFairPlay, getMyFairPlay } from '../../api/lfgApi.js'
 
 function PostMatchRating() {
   const navigate = useNavigate()
 
-  // Lấy dữ liệu phiên check-out gần nhất từ localStorage
+  // Lấy dữ liệu phiên check-out / check-in gần nhất từ localStorage
   const [checkoutSession, setCheckoutSession] = useState(() => {
     try {
       const saved = localStorage.getItem('sportnexus_last_checkout_session')
       if (saved) {
         return JSON.parse(saved)
+      }
+      const checkinDone = localStorage.getItem('sportnexus_ticket_checkin_done')
+      if (checkinDone === 'true') {
+        return {
+          courtId: 'Court 3',
+          courtName: 'Sân Cầu Lông BWF Pro 01',
+          sport: 'Cầu lông',
+          checkInDone: true,
+          checkInTime: '11:00',
+        }
       }
     } catch (e) {
       console.error(e)
@@ -74,6 +85,17 @@ function PostMatchRating() {
 
   // Toast thông báo
   const [toastMessage, setToastMessage] = useState(null)
+  const [myFairPlayData, setMyFairPlayData] = useState(null)
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false)
+
+  // Tải điểm Fair Play cá nhân
+  useEffect(() => {
+    getMyFairPlay()
+      .then((data) => {
+        if (data) setMyFairPlayData(data)
+      })
+      .catch((err) => console.warn('[PostMatchRating] Không thể lấy điểm Fair Play:', err))
+  }, [])
 
   // Danh sách ID người chơi đã được đánh giá trong phiên này
   const [reviewedPlayers, setReviewedPlayers] = useState(() => {
@@ -184,25 +206,27 @@ function PostMatchRating() {
     triggerToast('🗑️ Đã xóa người chơi khỏi danh sách đánh giá.')
   }
 
-  // Mô phỏng Check-out nhanh nếu người dùng đang ở trạng thái chưa check-out
+  // Mô phỏng Check-in nhanh nếu người dùng đang ở trạng thái chưa check-in
   const handleSimulateCheckout = () => {
     const session = {
       courtId: 'Court 3',
       courtName: 'Sân Cầu Lông BWF Pro 01',
       sport: 'Cầu lông',
       checkInDone: true,
-      checkInTime: '18:00',
+      checkInTime: '11:00',
       checkOutDone: true,
       checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       coPlayers: defaultCoPlayers,
     }
     localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
+    localStorage.setItem('sportnexus_ticket_checkin_done', 'true')
     setCheckoutSession(session)
     setCoPlayers(defaultCoPlayers)
     window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    triggerToast('✅ Check-out thành công! Bây giờ bạn có thể viết nhận xét và chấm sao cho bạn chơi cùng sân.')
+    triggerToast('✅ Check-in thành công! Bây giờ bạn có thể viết nhận xét và chấm sao cho bạn chơi cùng sân.')
   }
 
+  const isEligibleToRate = Boolean(checkoutSession && (checkoutSession.checkInDone || checkoutSession.checkOutDone))
   const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0]
   const isAlreadyReviewed = reviewedPlayers.includes(selectedPlayerId)
 
@@ -222,13 +246,13 @@ function PostMatchRating() {
     })
   }
 
-  // Xử lý gửi đánh giá sau trận
-  const handleSubmitRating = (e) => {
+  // Xử lý gửi đánh giá sau trận - 2.7 Bước 3: POST /api/v1/reviews/fair-play
+  const handleSubmitRating = async (e) => {
     e.preventDefault()
 
-    // 1. Kiểm tra điều kiện check-out thành công
-    if (!checkoutSession || !checkoutSession.checkOutDone) {
-      triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-out thành công!')
+    // 1. Kiểm tra điều kiện check-in thành công (Cả hai người phải đã check-in)
+    if (!isEligibleToRate) {
+      triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-in thành công (Cả hai người phải đã check-in)!')
       return
     }
 
@@ -242,6 +266,32 @@ function PostMatchRating() {
     if (!writtenReview || writtenReview.trim().length < 10) {
       triggerToast('⚠️ Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự) cho người chơi cùng sân!')
       return
+    }
+
+    // 4. Kiểm tra mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận
+    if (reviewedPlayers.includes(selectedPlayerId)) {
+      triggerToast('⚠️ Mỗi người chỉ được chấm Fair Play 1 lần cho 1 người trong 1 trận!')
+      return
+    }
+
+    setIsSubmittingRating(true)
+    const contextId = checkoutSession.contextId || checkoutSession.lfgId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+    const revieweeId = selectedPlayer.userId || selectedPlayer.id || 'c0a80123-4567-89ab-cdef-0123456789ab'
+
+    try {
+      await rateFairPlay({
+        revieweeId,
+        contextId,
+        score: rating,
+        comment: writtenReview.trim(),
+      })
+    } catch (apiErr) {
+      console.warn('[PostMatchRating] Lỗi gọi API rateFairPlay:', apiErr)
+      if (apiErr?.message) {
+        triggerToast(`⚠️ ${apiErr.message}`)
+      }
+    } finally {
+      setIsSubmittingRating(false)
     }
 
     const effectiveRole = selectedPlayer.isDoublesGuest
@@ -262,6 +312,7 @@ function PostMatchRating() {
       court: `${checkoutSession.courtName || 'Sân Cầu Lông BWF Pro 01'} (${checkoutSession.courtId || 'Court 3'})`,
       time: 'Vừa xong',
       rating: rating,
+      fairPlayPoints: rating * 20,
       content: writtenReview.trim(),
       verifiedCheckout: true,
       checkoutTime: checkoutSession.checkOutTime || '19:30',
@@ -272,7 +323,7 @@ function PostMatchRating() {
     setSubmittedReviews(updatedReviews)
     localStorage.setItem('player_match_reviews', JSON.stringify(updatedReviews))
 
-    // Lưu danh sách người đã được đánh giá
+    // Lưu danh sách người đã được đánh giá (mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận)
     const updatedReviewedIds = [...new Set([...reviewedPlayers, selectedPlayerId])]
     setReviewedPlayers(updatedReviewedIds)
     localStorage.setItem('player_match_reviewed_ids', JSON.stringify(updatedReviewedIds))
@@ -281,7 +332,7 @@ function PostMatchRating() {
     setWrittenReview('')
     setRating(5)
 
-    triggerToast(`🎉 Đã gửi đánh giá thành công cho ${selectedPlayer.name}!`)
+    triggerToast(`🎉 Đã chấm Fair Play thành công cho ${selectedPlayer.name} (+${rating * 20} điểm quy đổi)!`)
   }
 
   // Diễn giải ý nghĩa số sao
@@ -428,18 +479,15 @@ function PostMatchRating() {
           </h1>
           <p style={{ fontSize: '13.5px', color: '#4B5563', margin: '6px 0 0 0', fontWeight: 500 }}>
             Quy định: Người chơi chỉ được phép đánh giá bằng hình thức <strong>viết nhận xét</strong> và{' '}
-            <strong>chấm điểm sao</strong> cho người chơi cùng sân sau khi <strong>check-out thành công</strong>.
+            <strong>chấm điểm sao</strong> cho người chơi cùng sân sau khi <strong style={{ color: '#15803D' }}>check-in thành công</strong>.
           </p>
         </div>
 
-        {/* Trạng thái check-out */}
+        {/* Trạng thái check-in */}
         <div
           style={{
-            background: checkoutSession && checkoutSession.checkOutDone ? '#F0FDF4' : '#FEF2F2',
-            border:
-              checkoutSession && checkoutSession.checkOutDone
-                ? '1px solid #BBF7D0'
-                : '1px solid #FECACA',
+            background: isEligibleToRate ? '#F0FDF4' : '#FEF2F2',
+            border: isEligibleToRate ? '1px solid #BBF7D0' : '1px solid #FECACA',
             borderRadius: '14px',
             padding: '12px 18px',
             display: 'flex',
@@ -451,40 +499,40 @@ function PostMatchRating() {
             className="material-symbols-outlined"
             style={{
               fontSize: '22px',
-              color: checkoutSession && checkoutSession.checkOutDone ? '#15803D' : '#DC2626',
+              color: isEligibleToRate ? '#15803D' : '#DC2626',
             }}
           >
-            {checkoutSession && checkoutSession.checkOutDone ? 'verified' : 'lock_clock'}
+            {isEligibleToRate ? 'verified' : 'lock_clock'}
           </span>
           <div>
             <div
               style={{
                 fontSize: '10.5px',
                 fontWeight: 800,
-                color: checkoutSession && checkoutSession.checkOutDone ? '#166534' : '#991B1B',
+                color: isEligibleToRate ? '#166534' : '#991B1B',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
               }}
             >
-              TRẠNG THÁI CHECK-OUT
+              TRẠNG THÁI CHECK-IN
             </div>
             <div
               style={{
                 fontSize: '13px',
                 fontWeight: 800,
-                color: checkoutSession && checkoutSession.checkOutDone ? '#15803D' : '#DC2626',
+                color: isEligibleToRate ? '#15803D' : '#DC2626',
               }}
             >
-              {checkoutSession && checkoutSession.checkOutDone
-                ? `Đã check-out (${checkoutSession.checkOutTime || '19:30'}) • Hợp lệ để đánh giá`
-                : 'Chưa check-out • Đang khóa đánh giá'}
+              {isEligibleToRate
+                ? `Đã check-in (${checkoutSession?.checkInTime || checkoutSession?.checkOutTime || '11:00'}) • Hợp lệ để đánh giá`
+                : 'Chưa check-in • Đang khóa đánh giá'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ===================== TRƯỜNG HỢP 1: CHƯA CHECK-OUT ===================== */}
-      {(!checkoutSession || !checkoutSession.checkOutDone) && (
+      {/* ===================== TRƯỜNG HỢP 1: CHƯA CHECK-IN ===================== */}
+      {!isEligibleToRate && (
         <div
           style={{
             background: '#ffffff',
@@ -523,7 +571,7 @@ function PostMatchRating() {
           <p style={{ fontSize: '14.5px', color: '#64748B', lineHeight: 1.6, margin: '0 0 24px 0' }}>
             Theo quy định minh bạch của <strong>SportNexus</strong>, người chơi chỉ được phép đánh giá bằng hình thức{' '}
             <strong>viết nhận xét</strong> và <strong>chấm điểm sao</strong> cho bạn chơi cùng sân{' '}
-            <span style={{ color: '#DC2626', fontWeight: 700 }}>sau khi đã check-out thành công</span> khỏi sân đấu.
+            <span style={{ color: '#15803D', fontWeight: 700 }}>sau khi đã check-in thành công</span> vào sân đấu.
           </p>
 
           <div
@@ -543,12 +591,12 @@ function PostMatchRating() {
               <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
                 info
               </span>
-              Vì sao cần hoàn tất Check-out trước khi đánh giá?
+              Vì sao cần hoàn tất Check-in trước khi đánh giá?
             </div>
             <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <li>Đảm bảo trận đấu đã kết thúc hoàn toàn và bạn có đủ trải nghiệm với bạn chơi.</li>
-              <li>Chống spam đánh giá ảo hoặc gian lận điểm danh tiếng thể thao.</li>
-              <li>Bảo đảm tiền cọc ký quỹ Escrow đã được xử lý minh bạch tại cổng sân.</li>
+              <li>Đảm bảo người chơi đã có mặt thực tế tại sân đấu (Quy định 2.7: Cả hai người phải đã check-in).</li>
+              <li>Chống spam đánh giá ảo hoặc gian lận điểm danh tiếng Fair Play thể thao.</li>
+              <li>Hệ thống tự động đồng bộ danh sách bạn chơi cùng sân sau khi quét mã QR thành công.</li>
             </ul>
           </div>
 
@@ -572,7 +620,7 @@ function PostMatchRating() {
               <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
                 qr_code_scanner
               </span>
-              Đi Đến Trang Check-out Trả Sân
+              Đi Đến Trang Check-in QR
             </Link>
 
             <button
@@ -595,14 +643,14 @@ function PostMatchRating() {
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
                 bolt
               </span>
-              Mô phỏng Check-out thành công ngay
+              Mô phỏng Check-in thành công ngay
             </button>
           </div>
         </div>
       )}
 
-      {/* ===================== TRƯỜNG HỢP 2: ĐÃ CHECK-OUT THÀNH CÔNG ===================== */}
-      {checkoutSession && checkoutSession.checkOutDone && (
+      {/* ===================== TRƯỜNG HỢP 2: ĐÃ CHECK-IN THÀNH CÔNG ===================== */}
+      {isEligibleToRate && (
         <div
           style={{
             display: 'grid',
@@ -1145,6 +1193,29 @@ function PostMatchRating() {
                   }}
                 >
                   {getStarLabel(hoverRating || rating)}
+                </div>
+
+                {/* Fair Play Points Translation Formula - Image 3: Điểm Fair Play = số sao x 20 */}
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '8px 14px',
+                    background: '#ECFDF5',
+                    borderRadius: '12px',
+                    border: '1px solid #A7F3D0',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12px',
+                    color: '#065F46',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#059669' }}>
+                    verified_user
+                  </span>
+                  <span>
+                    Quy đổi Fair Play: <strong>{rating} sao = +{rating * 20} điểm</strong> (Điểm Fair Play = số sao × 20, thang điểm 0 - 100)
+                  </span>
                 </div>
               </div>
 

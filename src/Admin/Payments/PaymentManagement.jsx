@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Banknote, CheckCircle2, Clock3, CircleX, RotateCcw, Download, ListFilter, ShieldCheck, ChevronRight, AlertTriangle, Search, X } from 'lucide-react'
 import PaymentOverviewChart from './PaymentOverviewChart.jsx'
 import TransactionBreakdown from './TransactionBreakdown.jsx'
 import TransactionTable from './TransactionTable.jsx'
 import TransactionDetails from './TransactionDetails.jsx'
 import PaymentDialogs from './PaymentDialogs.jsx'
+import PlayerWithdrawalApproval from './PlayerWithdrawalApproval.jsx'
+import { getWithdrawalRequests, WITHDRAW_STATUS } from '../../api/withdrawApi.js'
 import { initialTransactions, paymentStats, statusLabels, typeLabels, methodLabels, normalize, parseDate, number, exportTransactions } from './paymentData.js'
 import '../Users/users.css'
 import './payment.css'
@@ -13,6 +15,31 @@ const emptyFilters = { search: '', status: '', type: '', method: '', from: '', t
 const icons = { volume: Banknote, successful: CheckCircle2, pending: Clock3, failed: CircleX, refunded: RotateCcw }
 
 export default function PaymentManagement() {
+  const [activeTab, setActiveTab] = useState('transactions') // 'transactions' | 'withdrawals'
+  const [pendingWithdrawCount, setPendingWithdrawCount] = useState(() => {
+    try {
+      const list = getWithdrawalRequests()
+      return list.filter((r) => r.status === WITHDRAW_STATUS.PENDING).length
+    } catch {
+      return 0
+    }
+  })
+
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const list = getWithdrawalRequests()
+        setPendingWithdrawCount(list.filter((r) => r.status === WITHDRAW_STATUS.PENDING).length)
+      } catch {}
+    }
+    window.addEventListener('sportnexus_withdraw_requests_updated', updateCount)
+    window.addEventListener('storage', updateCount)
+    return () => {
+      window.removeEventListener('sportnexus_withdraw_requests_updated', updateCount)
+      window.removeEventListener('storage', updateCount)
+    }
+  }, [])
+
   const [transactions, setTransactions] = useState(initialTransactions)
   const [filters, setFilters] = useState(emptyFilters)
   const [detailId, setDetailId] = useState(initialTransactions[0].id)
@@ -43,17 +70,103 @@ export default function PaymentManagement() {
   }
   const chipLabels = { search: `Tìm: ${filters.search}`, status: statusLabels[filters.status], type: typeLabels[filters.type], method: methodLabels[filters.method], from: `Từ: ${filters.from}`, to: `Đến: ${filters.to}`, issues: 'Cần rà soát mẫu' }
   const open = type => setDialog({ type, transaction: detail })
-  return <div className="payments-page"><header className="payments-page-heading"><div><h1>Quản lý thanh toán <span>Giao dịch minh họa</span></h1><p>Theo dõi giao dịch, chia tiền và các thông tin ký quỹ trên SportNexus.</p></div><div><button className="users-button" onClick={() => { exportTransactions(filtered); setNotice(`Đã xuất ${number(filtered.length)} giao dịch đang được lọc ra CSV minh họa.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'Successful' && filters.type === 'Split'}><ListFilter size={13} />Bộ lọc nhanh</button></div></header>
-    <section className="payments-security"><ShieldCheck size={21} /><div><strong>Thông tin bảo vệ ký quỹ</strong><p>Minh họa theo dõi khoản đóng góp theo nhóm. Quản trị viên chỉ xem và ghi chú; không xử lý tiền tại đây.</p></div><button onClick={() => setDialog({ type: 'security' })}>Xem chi tiết <ChevronRight size={14} /></button></section>
-    <div className="payments-kpis">{paymentStats.map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{number(stat.value)}{stat.currency && <span>đ</span>}</strong><p>{stat.note}</p></article> })}</div><p className="payments-demo-label">Chỉ số, biểu đồ và phân bổ là dữ liệu minh họa riêng, không tính từ {transactions.length} giao dịch mẫu. Không kết nối máy chủ; ghi chú sẽ mất khi tải lại trang.</p>
-    <div className="payments-analytics"><PaymentOverviewChart /><TransactionBreakdown onType={type => change('type', type)} /></div>
-    <section className="payments-warning"><AlertTriangle size={22} /><div><h2>{issues.length ? `${issues.length} giao dịch mẫu cần rà soát` : 'Không còn giao dịch mẫu chưa được xem'}</h2><ul>{issues.slice(0, 3).map(t => <li key={t.id}>#{t.id}: {t.issue.summary}</li>)}</ul><p>Trạng thái rà soát chỉ áp dụng trong phiên; chưa thực hiện đối soát thực tế.</p></div><button disabled={!issues.length} onClick={reviewIssues}>Xem giao dịch cần xử lý <ChevronRight size={14} /></button></section>
-    {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
-    <section className="payments-toolbar" aria-label="Tìm kiếm và bộ lọc giao dịch"><div className="payments-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm giao dịch" value={filters.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Loại giao dịch<select value={filters.type} onChange={event => change('type', event.target.value)}><option value="">Tất cả loại</option>{Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Phương thức<select value={filters.method} onChange={event => change('method', event.target.value)}><option value="">Tất cả phương thức</option>{Object.entries(methodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><div className="payments-filter-row">{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, label]) => <label key={key}>{label}<input inputMode="numeric" maxLength={10} value={filters[key]} onChange={event => change(key, event.target.value)} aria-describedby={invalidDate || invalidRange ? 'payments-filter-error' : undefined} /></label>)}<button className="payments-text-button" onClick={reset}>Đặt lại</button></div>
-      {(invalidDate || invalidRange) && <p id="payments-filter-error" role="alert" className="users-form-error">{invalidDate ? 'Nhập ngày hợp lệ theo định dạng ngày/tháng/năm.' : 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.'}</p>}
-      <div className="payments-filter-chips" aria-label="Bộ lọc đang áp dụng">{Object.entries(filters).filter(([, value]) => Boolean(value)).map(([key]) => <button key={key} onClick={() => change(key, key === 'issues' ? false : '')} aria-label={`Bỏ bộ lọc ${chipLabels[key]}`}>{chipLabels[key]}<X size={11} /></button>)}</div>
-    </section>
-    <div className={`payments-content-grid ${detail ? 'with-details' : ''}`}><TransactionTable transactions={filtered} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <TransactionDetails transaction={detail} onClose={() => setDetailId(null)} onEscrow={() => open('escrow')} onRefund={() => open('refund')} onReview={() => open('review')} onUser={() => open('user')} onBooking={() => open('booking')} />}</div>
-    {dialog && <PaymentDialogs dialog={dialog} onClose={() => setDialog(null)} onSaveReview={saveReview} />}
-  </div>
+
+  return (
+    <div className="payments-page">
+      {/* Top Switcher Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: '#ffffff',
+          padding: '6px',
+          borderRadius: '16px',
+          marginBottom: '16px',
+          width: 'fit-content',
+          border: '1.5px solid #E2E8F0',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('transactions')}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '11px',
+            border: 'none',
+            background: activeTab === 'transactions' ? '#15803D' : 'transparent',
+            color: activeTab === 'transactions' ? '#ffffff' : '#64748B',
+            fontWeight: 800,
+            fontSize: '13px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: activeTab === 'transactions' ? '0 3px 10px rgba(21, 128, 61, 0.25)' : 'none',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Banknote size={17} />
+          <span>Giao dịch &amp; Ký quỹ</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('withdrawals')}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '11px',
+            border: 'none',
+            background: activeTab === 'withdrawals' ? '#15803D' : 'transparent',
+            color: activeTab === 'withdrawals' ? '#ffffff' : '#64748B',
+            fontWeight: 800,
+            fontSize: '13px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: activeTab === 'withdrawals' ? '0 3px 10px rgba(21, 128, 61, 0.25)' : 'none',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <ShieldCheck size={17} />
+          <span>Duyệt Yêu Cầu Rút Tiền (Player)</span>
+          {pendingWithdrawCount > 0 && (
+            <span
+              style={{
+                background: activeTab === 'withdrawals' ? '#ffffff' : '#DC2626',
+                color: activeTab === 'withdrawals' ? '#15803D' : '#ffffff',
+                padding: '2px 8px',
+                borderRadius: '20px',
+                fontSize: '11px',
+                fontWeight: 900,
+              }}
+            >
+              {pendingWithdrawCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'withdrawals' ? (
+        <PlayerWithdrawalApproval />
+      ) : (
+        <>
+          <header className="payments-page-heading"><div><h1>Quản lý thanh toán <span>Giao dịch minh họa</span></h1><p>Theo dõi giao dịch, chia tiền và các thông tin ký quỹ trên SportNexus.</p></div><div><button className="users-button" onClick={() => { exportTransactions(filtered); setNotice(`Đã xuất ${number(filtered.length)} giao dịch đang được lọc ra CSV minh họa.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'Successful' && filters.type === 'Split'}><ListFilter size={13} />Bộ lọc nhanh</button></div></header>
+          <section className="payments-security"><ShieldCheck size={21} /><div><strong>Thông tin bảo vệ ký quỹ</strong><p>Minh họa theo dõi khoản đóng góp theo nhóm. Quản trị viên chỉ xem và ghi chú; không xử lý tiền tại đây.</p></div><button onClick={() => setDialog({ type: 'security' })}>Xem chi tiết <ChevronRight size={14} /></button></section>
+          <div className="payments-kpis">{paymentStats.map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{number(stat.value)}{stat.currency && <span>đ</span>}</strong><p>{stat.note}</p></article> })}</div><p className="payments-demo-label">Chỉ số, biểu đồ và phân bổ là dữ liệu minh họa riêng, không tính từ {transactions.length} giao dịch mẫu. Không kết nối máy chủ; ghi chú sẽ mất khi tải lại trang.</p>
+          <div className="payments-analytics"><PaymentOverviewChart /><TransactionBreakdown onType={type => change('type', type)} /></div>
+          <section className="payments-warning"><AlertTriangle size={22} /><div><h2>{issues.length ? `${issues.length} giao dịch mẫu cần rà soát` : 'Không còn giao dịch mẫu chưa được xem'}</h2><ul>{issues.slice(0, 3).map(t => <li key={t.id}>#{t.id}: {t.issue.summary}</li>)}</ul><p>Trạng thái rà soát chỉ áp dụng trong phiên; chưa thực hiện đối soát thực tế.</p></div><button disabled={!issues.length} onClick={reviewIssues}>Xem giao dịch cần xử lý <ChevronRight size={14} /></button></section>
+          {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
+          <section className="payments-toolbar" aria-label="Tìm kiếm và bộ lọc giao dịch"><div className="payments-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm giao dịch" value={filters.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Loại giao dịch<select value={filters.type} onChange={event => change('type', event.target.value)}><option value="">Tất cả loại</option>{Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Phương thức<select value={filters.method} onChange={event => change('method', event.target.value)}><option value="">Tất cả phương thức</option>{Object.entries(methodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><div className="payments-filter-row">{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, label]) => <label key={key}>{label}<input inputMode="numeric" maxLength={10} value={filters[key]} onChange={event => change(key, event.target.value)} aria-describedby={invalidDate || invalidRange ? 'payments-filter-error' : undefined} /></label>)}<button className="payments-text-button" onClick={reset}>Đặt lại</button></div>
+            {(invalidDate || invalidRange) && <p id="payments-filter-error" role="alert" className="users-form-error">{invalidDate ? 'Nhập ngày hợp lệ theo định dạng ngày/tháng/năm.' : 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.'}</p>}
+            <div className="payments-filter-chips" aria-label="Bộ lọc đang áp dụng">{Object.entries(filters).filter(([, value]) => Boolean(value)).map(([key]) => <button key={key} onClick={() => change(key, key === 'issues' ? false : '')} aria-label={`Bỏ bộ lọc ${chipLabels[key]}`}>{chipLabels[key]}<X size={11} /></button>)}</div>
+          </section>
+          <div className={`payments-content-grid ${detail ? 'with-details' : ''}`}><TransactionTable transactions={filtered} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <TransactionDetails transaction={detail} onClose={() => setDetailId(null)} onEscrow={() => open('escrow')} onRefund={() => open('refund')} onReview={() => open('review')} onUser={() => open('user')} onBooking={() => open('booking')} />}</div>
+          {dialog && <PaymentDialogs dialog={dialog} onClose={() => setDialog(null)} onSaveReview={saveReview} />}
+        </>
+      )}
+    </div>
+  )
 }

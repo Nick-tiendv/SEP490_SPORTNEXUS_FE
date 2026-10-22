@@ -1,8 +1,29 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { scanCheckIn } from '../api/lfgApi.js'
+import { checkInTournament } from '../api/tournamentApi.js'
 
-// Danh sách vé mẫu mô phỏng quét QR
+// Danh sách vé mẫu mô phỏng quét QR (Đặt sân, Kèo LFG, Giải đấu)
 const DEMO_TICKETS = [
+  {
+    ticketCode: 'SNX-BK-8849',
+    playerName: 'Nguyễn Văn An (Vé Đặt Sân #SNX-BK-8849)',
+    playerPhone: '0912 345 678',
+    playerAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&h=120&fit=crop',
+    playerRank: 'Gold Member • Uy tín 98%',
+    zoneName: 'SportNexus Arena Q.7 — Cụm Sân Cầu Lông',
+    courtName: 'Sân Cầu Lông BWF Pro 01 – Yonex Mat (Court 3)',
+    sport: 'Cầu lông',
+    sportIcon: 'sports_tennis',
+    timeSlot: '19:30 - 21:00 Hôm nay',
+    date: '24/02/2026',
+    escrowAmount: 330000,
+    status: 'locked_escrow',
+    isCorrectVenue: true,
+    isCorrectTime: true,
+    facilityId: 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45',
+    paymentMethod: 'Ví Escrow SportNexus (Đã khóa 330.000 đ)',
+  },
   {
     ticketCode: 'SNX-89324-CHK',
     playerName: 'Nguyễn Văn An',
@@ -56,6 +77,45 @@ const DEMO_TICKETS = [
     isCorrectVenue: true,
     isCorrectTime: true,
     paymentMethod: 'Ví Escrow SportNexus',
+  },
+  {
+    ticketCode: 'SNX-LFG-88210',
+    playerName: 'Đặng Tuấn Anh (Kèo LFG)',
+    playerPhone: '0988 777 666',
+    playerAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop',
+    playerRank: 'Silver Member • Fairplay 95',
+    zoneName: 'Khu A — Sân Cầu Lông Quốc Tế BWF',
+    courtName: 'Sân A2 (Kèo Ghép Đôi LFG)',
+    sport: 'Cầu lông',
+    sportIcon: 'sports_tennis',
+    timeSlot: '19:30 - 21:00 Hôm nay',
+    date: '10/10/2026',
+    escrowAmount: 85000,
+    status: 'locked_escrow',
+    isCorrectVenue: true,
+    isCorrectTime: true,
+    isLfg: true,
+    paymentMethod: 'Ký quỹ Kèo LFG SportNexus',
+  },
+  {
+    ticketCode: 'SNX-TN-OPEN2026',
+    playerName: 'Đội BWF Star (Vận Động Viên Giải Đấu)',
+    playerPhone: '0977 123 456',
+    playerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop',
+    playerRank: 'Pro Competitor',
+    zoneName: 'Khu A — Sân Thi Đấu Championship',
+    courtName: 'Center Court 01',
+    sport: 'Cầu lông',
+    sportIcon: 'emoji_events',
+    timeSlot: '08:00 - 18:00 Giải đấu',
+    date: '10/10/2026',
+    escrowAmount: 500000,
+    status: 'locked_escrow',
+    isCorrectVenue: true,
+    isCorrectTime: true,
+    isTournament: true,
+    tournamentId: 'tn-2026-badminton-open',
+    paymentMethod: 'Lệ phí Giải Đấu (Tournament Check-in)',
   },
   {
     ticketCode: 'SNX-99001-USED',
@@ -187,12 +247,41 @@ export default function CheckQR() {
   }
 
   // Xác nhận check-in & kích hoạt giải ngân Escrow
-  const handleConfirmCheckInAndDisburse = () => {
+  // 2.7 Bước 2: POST /api/v1/checkin/scan?facilityId=...&qrCode=...
+  const handleConfirmCheckInAndDisburse = async () => {
     if (!scannedTicket) return
 
     if (scannedTicket.status === 'released') {
       showToast('❌ Vé này đã được giải ngân rồi, không thể giải ngân lại!')
       return
+    }
+
+    const facilityId = scannedTicket.facilityId || 'c4a92610-85f0-4cb6-bb7d-bbf37107bf45'
+    const qrCode = scannedTicket.ticketCode || manualCode
+
+    try {
+      if (scannedTicket.isTournament || scannedTicket.tournamentId) {
+        // Giải đấu dùng POST /api/v1/tournaments/{id}/check-in
+        await checkInTournament(scannedTicket.tournamentId || 'tn-2026-badminton-open', {
+          facilityId,
+          qrCode,
+        })
+      } else {
+        // Đặt sân và kèo LFG: POST /api/v1/checkin/scan?facilityId=...&qrCode=...
+        await scanCheckIn(facilityId, qrCode)
+      }
+    } catch (err) {
+      console.warn('[CheckQR] Lỗi khi gọi API check-in:', err)
+      // Nếu 403: facilityId phải là cơ sở của chính chủ sân đang đăng nhập
+      if (err?.status === 403) {
+        showToast('❌ Lỗi 403: Cơ sở này không thuộc quyền quản lý của bạn hoặc vé không thuộc cơ sở này!')
+        return
+      }
+      // Nếu 400: Vé đặt sân / kèo chỉ check-in được từ 1 tiếng trước giờ chơi đến khi hết ca; quét sớm hoặc trễ nhận 400 kèm giờ được phép check-in.
+      if (err?.status === 400) {
+        showToast(`⚠️ Lỗi 400: ${err.message || 'Vé chỉ check-in được từ 1 tiếng trước giờ chơi đến khi hết ca!'}`)
+        return
+      }
     }
 
     const txHash = `0x${Math.random().toString(16).slice(2, 6)}...${Math.random().toString(16).slice(2, 6)}`
@@ -205,6 +294,38 @@ export default function CheckQR() {
     // Cập nhật trạng thái vé
     const updatedTicket = { ...scannedTicket, status: 'released' }
     setScannedTicket(updatedTicket)
+
+    // Lưu trạng thái check-in vào localStorage theo mã vé để giao diện người chơi đồng bộ
+    const checkedCode = scannedTicket.ticketCode || manualCode
+    if (checkedCode) {
+      const cleanCode = checkedCode.replace('#', '').trim()
+      localStorage.setItem(`sportnexus_checked_in_${cleanCode}`, 'true')
+      localStorage.setItem(`sportnexus_checked_in_${checkedCode}`, 'true')
+      if (cleanCode.includes('8849') || checkedCode.includes('8849')) {
+        localStorage.setItem('sportnexus_checked_in_SNX-BK-8849', 'true')
+      }
+      localStorage.setItem('sportnexus_last_scanned_ticket_code', cleanCode)
+
+      // Cập nhật session check-out cho người chơi sau trận
+      const session = {
+        courtId: scannedTicket.courtName || 'Court 3',
+        courtName: `${scannedTicket.zoneName} — ${scannedTicket.courtName}`,
+        sport: scannedTicket.sport || 'Cầu lông',
+        ticketCode: cleanCode,
+        checkInDone: true,
+        checkInTime: nowTime,
+        checkOutDone: false,
+        checkOutTime: null,
+      }
+      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
+
+      // Phát sự kiện toàn cục để giao diện Check-in QR của người chơi tự động làm mờ nút và nhận trạng thái
+      window.dispatchEvent(
+        new CustomEvent('court_owner_checked_in_ticket', {
+          detail: { ticketCode: cleanCode, timestamp: Date.now() },
+        })
+      )
+    }
 
     // Thêm log mới
     const newLogItem = {

@@ -15,6 +15,8 @@ export const ENDPOINTS = {
   FACILITIES: `${serverURL}/api/v1/facilities`,
   BOOKINGS: `${API_BASE_URL}/bookings`,
   WALLET: `${API_BASE_URL}/wallet`,
+  AI: `${serverURL}/api/v1/ai`,
+  LFGS: `${serverURL}/api/v1/lfgs`,
 };
 
 export default {
