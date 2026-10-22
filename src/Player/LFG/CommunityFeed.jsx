@@ -15,6 +15,8 @@ import {
   getLfgCancelReasons,
   getMyFairPlay,
 } from '../../api/player/lfgApi.js'
+import { getWallet } from '../../api/player/walletApi.js'
+import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
 const sanitizeMatch = (m) => {
@@ -42,7 +44,55 @@ const sanitizeMatch = (m) => {
   }
 }
 
+
+const FEED_IMAGES = {
+  badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
+  pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+}
+const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+
+// Chuyển một thẻ LFG từ backend sang dạng thẻ hiển thị trên bảng tin.
+const toFeedMatch = (card) => {
+  const sportName = card.sportName || card.sportCategoryName || card.sport || ''
+  const sport = /pickle/i.test(sportName) ? 'pickleball' : 'badminton'
+  const start = card.startTime ? new Date(card.startTime) : null
+  const hour = start ? start.getHours() : 18
+  const totalSlots = Number(card.totalSlots) || 0
+  const currentSlots = Math.max(0, totalSlots - (Number(card.remainingSlots) || 0))
+  const price = Number(card.pricePerPerson ?? card.price ?? 0)
+  const roster = Array.from({ length: totalSlots }, (_, i) => {
+    const p = (card.participants || [])[i]
+    if (i === 0 && !p && card.hostName) return { initials: card.hostName.slice(0, 2).toUpperCase(), bg: '#15803D', name: card.hostName }
+    if (p) { const name = p.fullName || p.name || 'Người chơi'; return { initials: name.slice(0, 2).toUpperCase(), bg: '#0D9488', name } }
+    return i < currentSlots ? { initials: '•', bg: '#0D9488', name: 'Đã tham gia' } : { initials: '?', bg: 'empty', name: `Slot trống ${i + 1}` }
+  })
+  return {
+    id: card.id || card.cardId,
+    sport,
+    sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
+    subBadge: [card.format, card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
+    levelTag: card.skillLevelTag || card.skillLevel || 'Mọi trình độ',
+    slotTag: `Cần ${Number(card.remainingSlots) || 0} người`,
+    time: start ? start.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—',
+    timeSlot: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening',
+    title: card.title || card.description || `Kèo ${sportName || 'ghép trận'}`,
+    location: [card.courtName, card.facilityName, card.facilityAddress].filter(Boolean).join(', ') || '—',
+    groupDesc: card.hostName ? `Chủ kèo: ${card.hostName}${card.hostFairPlayScore != null ? ` (Fair Play ${card.hostFairPlayScore})` : ''}` : (card.description || ''),
+    requireApproval: Boolean(card.requireApproval),
+    roster,
+    currentSlots,
+    totalSlots,
+    priceLabel: 'Tiền cọc mỗi người:',
+    price,
+    priceDisplay: formatVnd(price),
+    buttonText: 'Chốt Slot Ngay',
+    isFlashClaim: false,
+    image: card.imageUrl || card.facilityImageUrl || FEED_IMAGES[sport],
+  }
+}
+
 function CommunityFeed() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -91,135 +141,27 @@ function CommunityFeed() {
   // Wallet balance sync
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
+    return saved !== null ? Number(saved) : 0
   })
 
   // Matches list
-  const [matches, setMatches] = useState(() => {
-    const defaultList = [
-      {
-        id: 1,
-        sport: 'badminton',
-        sportBadge: 'CẦU LÔNG ĐÔI',
-        subBadge: 'Cầu Yonex AS-40',
-        levelTag: 'Trung bình - Khá',
-        slotTag: 'Cần 2 Người (Nam/Nữ)',
-        time: '18:00 Tối Nay',
-        timeSlot: 'evening',
-        title: '[Cầu Lông Đôi Nam Nữ] Giao lưu vui vẻ, sân thảm xịn (Trung bình - Khá)',
-        location: 'Sân Cầu Lông Tre Xanh, Đinh Bộ Lĩnh, Bình Thạnh',
-        groupDesc: 'Nhóm văn phòng nhiệt tình, thân thiện',
-        roster: [
-          { initials: 'DT', bg: '#0D9488', name: 'Dương Tuấn' },
-          { initials: 'MA', bg: '#15803D', name: 'Minh Anh' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 1' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 2' },
-        ],
-        currentSlots: 2,
-        totalSlots: 4,
-        priceLabel: 'Tiền cọc ký quỹ:',
-        price: 45000,
-        priceDisplay: '45.000 đ',
-        buttonText: 'Chốt Slot Ngay',
-        isFlashClaim: false,
-        image: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
-      },
-      {
-        id: 2,
-        sport: 'pickleball',
-        sportBadge: 'PICKLEBALL ĐÔI',
-        subBadge: '✓ Sân Thảm Tiêu Chuẩn',
-        levelTag: 'Trình Khá',
-        slotTag: 'Còn Trống 1 Chỗ',
-        time: '20:30 Tối nay',
-        timeSlot: 'evening',
-        title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)',
-        location: 'Sân SportNexus Arena, Huỳnh Tấn Phát, Quận 7',
-        groupDesc: 'Đã có 3/4 người (Host: Hoàng Bách)',
-        roster: [
-          { initials: 'HE', bg: '#16A34A', name: 'Hoàng Em' },
-          { initials: 'TL', bg: '#0284C7', name: 'Thanh Long' },
-          { initials: 'NB', bg: '#6366F1', name: 'Ngọc Bích' },
-          { initials: '?', bg: 'empty', name: 'Slot trống' },
-        ],
-        currentSlots: 3,
-        totalSlots: 4,
-        urgencyText: '1 Slot còn lại sẽ khoá sau 12 phút',
-        priceLabel: 'Tiền cọc chia đều:',
-        price: 55000,
-        priceDisplay: '55.000 đ',
-        buttonText: 'Chốt Slot Ngay',
-        isFlashClaim: true,
-        image: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
-      },
-      {
-        id: 3,
-        sport: 'badminton',
-        sportBadge: 'CẦU LÔNG ĐÔI',
-        subBadge: '✓ Sân Thảm Yonex',
-        levelTag: 'Trung bình',
-        slotTag: 'Cần 2 Người (Nam/Nữ)',
-        time: '14:30 Chiều nay',
-        timeSlot: 'afternoon',
-        title: '[Cầu Lông Đôi Nam Nữ] Giao lưu kỹ thuật buổi chiều, sân điều hoà mát rượi',
-        location: 'Sân Cầu Lông Lan Anh, Cách Mạng Tháng 8, Quận 10',
-        groupDesc: 'Nhóm đánh kỹ thuật, bền cầu, ưu tiên giao lưu vui vẻ',
-        roster: [
-          { initials: 'TQ', bg: '#0284C7', name: 'Trần Quân' },
-          { initials: 'VH', bg: '#15803D', name: 'Vũ Hải' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 1' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 2' },
-        ],
-        currentSlots: 2,
-        totalSlots: 4,
-        priceLabel: 'Tiền cọc ký quỹ:',
-        price: 40000,
-        priceDisplay: '40.000 đ',
-        buttonText: 'Chốt Slot Ngay',
-        isFlashClaim: false,
-        image: 'https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=800&h=600&fit=crop',
-      },
-      {
-        id: 4,
-        sport: 'pickleball',
-        sportBadge: 'PICKLEBALL ĐÔI',
-        subBadge: '✓ Sân Acrylic USAPA',
-        levelTag: 'Trình Trung bình - Khá',
-        slotTag: 'Còn Trống 2 Chỗ',
-        time: '19:00 Tối mai',
-        timeSlot: 'evening',
-        title: '[Pickleball Giao Lưu] D-Pickleball Hub Thảo Điền - Đánh vui vẻ, chia tiền sòng phẳng',
-        location: 'D-Pickleball Hub, 28 Thảo Điền, TP. Thủ Đức',
-        groupDesc: 'Nhóm thân thiện, có nước & bóng thi đấu sẵn',
-        roster: [
-          { initials: 'NV', bg: '#0D9488', name: 'Nguyễn Việt' },
-          { initials: 'KL', bg: '#7C3AED', name: 'Khánh Linh' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 1' },
-          { initials: '?', bg: 'empty', name: 'Slot trống 2' },
-        ],
-        currentSlots: 2,
-        totalSlots: 4,
-        priceLabel: 'Tiền cọc chia đều:',
-        price: 50000,
-        priceDisplay: '50.000 đ',
-        buttonText: 'Chốt Slot Ngay',
-        isFlashClaim: false,
-        image: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
-      },
-    ]
+  // Danh sách kèo đang mở lấy từ GET /api/v1/lfgs
+  const [matches, setMatches] = useState([])
+  const [lfgListError, setLfgListError] = useState('')
 
-    try {
-      const custom = localStorage.getItem('lfg_custom_matches')
-      const customList = custom ? JSON.parse(custom) : []
-      const sanitizedCustom = customList.map(sanitizeMatch)
-      if (custom) {
-        localStorage.setItem('lfg_custom_matches', JSON.stringify(sanitizedCustom))
-      }
-      return [...sanitizedCustom, ...defaultList.map(sanitizeMatch)]
-    } catch {
-      return defaultList.map(sanitizeMatch)
-    }
-  })
+  useEffect(() => {
+    let cancelled = false
+    setIsLoadingLfgs(true)
+    getLfgs({ page: 1, pageSize: 50 })
+      .then((res) => {
+        if (cancelled) return
+        setMatches((res?.items || []).map(toFeedMatch).map(sanitizeMatch))
+        setLfgListError('')
+      })
+      .catch((err) => !cancelled && setLfgListError(err?.message || 'Không tải được danh sách kèo.'))
+      .finally(() => !cancelled && setIsLoadingLfgs(false))
+    return () => { cancelled = true }
+  }, [])
 
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
@@ -300,54 +242,10 @@ function CommunityFeed() {
     try {
       const list = await getMyLfgCards(status === 'all' ? undefined : status)
       const apiCards = Array.isArray(list) ? list : []
-      let localCustom = []
-      try {
-        const saved = localStorage.getItem('lfg_custom_matches')
-        if (saved) localCustom = JSON.parse(saved)
-      } catch {}
-
       if (apiCards.length > 0) {
         setMyLfgCards(apiCards)
-      } else if (localCustom.length > 0) {
-        setMyLfgCards(localCustom)
       } else {
-        // Mock data when no cards exist yet on fresh server
-        setMyLfgCards([
-          {
-            id: 'demo-my-card-1',
-            sport: 'badminton',
-            sportName: 'Cầu Lông',
-            title: '[Cầu Lông Đôi Nam Nữ] Giao lưu CLB Tre Xanh Bình Thạnh',
-            courtName: 'Sân Cầu Lông Tre Xanh (Sân số 3)',
-            facilityAddress: '128 Đinh Bộ Lĩnh, P.26, Bình Thạnh, TP.HCM',
-            startTime: '2026-10-22T19:30:00',
-            status: 'OPEN',
-            requireApproval: true,
-            slotsNeeded: 2,
-            totalSlots: 4,
-            currentSlots: 2,
-            pricePerPerson: 45000,
-            description: 'Kèo giao lưu buổi tối, cần thêm 2 bạn trình trung bình khá. Cầu Yonex AS-40.',
-            participants: [
-              {
-                userId: 'user-p1-uuid',
-                name: 'Nguyễn Văn Hải',
-                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-                fairPlayScore: 98,
-                status: 'PENDING',
-                joinedAt: '10 phút trước',
-              },
-              {
-                userId: 'user-p2-uuid',
-                name: 'Trần Thị Mai',
-                avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-                fairPlayScore: 95,
-                status: 'APPROVED',
-                joinedAt: '30 phút trước',
-              },
-            ],
-          },
-        ])
+        setMyLfgCards([])
       }
     } catch (err) {
       console.warn('[CommunityFeed] Lỗi lấy kèo của tôi:', err)
@@ -361,26 +259,7 @@ function CommunityFeed() {
     setIsLoadingJoined(true)
     try {
       const list = await getJoinedLfgs()
-      if (Array.isArray(list) && list.length > 0) {
-        setJoinedLfgCards(list)
-      } else {
-        setJoinedLfgCards([
-          {
-            id: 'demo-joined-card-1',
-            sport: 'pickleball',
-            sportName: 'Pickleball',
-            title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)',
-            courtName: 'Sân SportNexus Arena (Sân VIP 2)',
-            facilityAddress: '35 Huỳnh Tấn Phát, Tân Thuận Đông, Quận 7, TP.HCM',
-            startTime: '2026-10-22T20:30:00',
-            status: 'APPROVED',
-            hostName: 'Hoàng Bách (Fair Play 99.8)',
-            pricePerPerson: 55000,
-            claimStatus: 'APPROVED',
-            ticketCode: 'NX-8839-KYC-VERIFIED',
-          },
-        ])
-      }
+      setJoinedLfgCards(Array.isArray(list) ? list : [])
     } catch (err) {
       console.warn('[CommunityFeed] Lỗi lấy kèo đã tham gia:', err)
     } finally {
@@ -425,7 +304,7 @@ function CommunityFeed() {
     setIsClaiming(true)
     setClaimError(null)
 
-    if (walletBalance < (bookingModal.price || 45000)) {
+    if (walletBalance < (bookingModal.price || 0)) {
       alert('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
       setIsClaiming(false)
       return
@@ -442,11 +321,7 @@ function CommunityFeed() {
       // Image 2: Kèo không cần duyệt: trừ tiền ngay, vào kèo luôn. Kèo cần duyệt: chỉ gửi yêu cầu, tiền bị giữ khi chủ kèo duyệt.
       const isApprovalRequired = Boolean(bookingModal.requireApproval)
       if (!isApprovalRequired) {
-        const cost = bookingModal.price || 45000
-        const newBal = Math.max(0, walletBalance - cost)
-        setWalletBalance(newBal)
-        localStorage.setItem('escrow_balance', newBal.toString())
-        window.dispatchEvent(new Event('escrow_balance_updated'))
+        getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
       }
 
       setToastMessage({
@@ -698,9 +573,9 @@ function CommunityFeed() {
       time: newMatch.time,
       title: newMatch.title,
       location: newMatch.location,
-      groupDesc: 'Host: Minh Minh Minh (99.4 Uy Tín)',
+      groupDesc: `Host: ${currentUser.name || 'Bạn'}`,
       roster: [
-        { initials: 'MMM', bg: '#2D5F3F', name: 'Minh Minh Minh' },
+        { initials: (currentUser.name || 'B').slice(0, 2).toUpperCase(), bg: '#2D5F3F', name: currentUser.name || 'Bạn' },
         ...Array.from({ length: Number(newMatch.slots) }, (_, i) => ({
           initials: '?',
           bg: 'empty',
@@ -1601,7 +1476,7 @@ function CommunityFeed() {
               <div className="flex items-start gap-3.5 mb-4 relative z-10">
                 <div className="relative shrink-0">
                   <div className="w-[58px] h-[58px] rounded-2xl bg-gradient-to-br from-[#1B4D2E] via-[#2D5F3F] to-[#15803D] flex items-center justify-center text-white font-black text-xl shadow-md shadow-[#2D5F3F]/35 ring-4 ring-[#86EFAC]/50 group-hover:scale-105 transition-transform">
-                    MMM
+                    {initialsOf(currentUser.name)}
                   </div>
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#10B981] border-2 border-white flex items-center justify-center text-white shadow-xs">
                     <span className="material-symbols-outlined text-[12px] font-black">check</span>
@@ -1611,7 +1486,7 @@ function CommunityFeed() {
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-black text-[17px] text-[#0F172A] leading-tight whitespace-nowrap">
-                      Minh Minh Minh
+                      {currentUser.name || 'Bạn'}
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
                       Trình: Trung bình - Khá

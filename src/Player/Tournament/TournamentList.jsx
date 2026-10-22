@@ -1,635 +1,246 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { useApi } from '../../hooks/useApi.js'
+import {
+  searchTournaments,
+  getMyRegistrations,
+  getTournament,
+  joinTournament,
+  cancelTournamentRegistration,
+  getMyTeams,
+} from '../../api/player/tournamentApi.js'
+
+const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} đ` : 'Miễn phí')
+const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
+
+const STATUS_LABELS = {
+  OPEN: 'Đang mở đăng ký',
+  REGISTRATION: 'Đang mở đăng ký',
+  UPCOMING: 'Sắp diễn ra',
+  ONGOING: 'Đang diễn ra',
+  INPROGRESS: 'Đang diễn ra',
+  COMPLETED: 'Đã kết thúc',
+  FINISHED: 'Đã kết thúc',
+  CANCELLED: 'Đã hủy',
+}
+const statusLabel = (status) => STATUS_LABELS[String(status).toUpperCase().replace(/[_\s]/g, '')] || status || '—'
+
+function TournamentCard({ tournament, actions }) {
+  return (
+    <article className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">{tournament.name}</h3>
+          <p className="text-sm text-slate-500">
+            {[tournament.sport, tournament.facility].filter(Boolean).join(' • ') || '—'}
+          </p>
+        </div>
+        <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          {statusLabel(tournament.registrationStatus || tournament.status)}
+        </span>
+      </div>
+      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div><dt className="text-slate-500">Bắt đầu</dt><dd className="font-semibold">{date(tournament.starts)}</dd></div>
+        <div><dt className="text-slate-500">Hạn đăng ký</dt><dd className="font-semibold">{date(tournament.deadline)}</dd></div>
+        <div><dt className="text-slate-500">Lệ phí</dt><dd className="font-semibold">{tournament.entryFee == null ? 'Xem chi tiết' : money(tournament.entryFee)}</dd></div>
+        <div>
+          <dt className="text-slate-500">Đã đăng ký</dt>
+          <dd className="font-semibold">{tournament.registered ?? '—'}{tournament.capacity ? ` / ${tournament.capacity}` : ''}</dd>
+        </div>
+      </dl>
+      {tournament.prize > 0 && <p className="text-sm text-slate-600">Tổng giải thưởng: <strong>{money(tournament.prize)}</strong></p>}
+      <div className="flex flex-wrap gap-2 pt-1">{actions}</div>
+    </article>
+  )
+}
 
 function TournamentList() {
   const navigate = useNavigate()
+  const [tab, setTab] = useState('open')
+  const [keyword, setKeyword] = useState('')
+  const [search, setSearch] = useState('')
+  const [registerTarget, setRegisterTarget] = useState(null)
+  const [busyId, setBusyId] = useState(null)
 
-  // State for live score
-  const [liveScore, setLiveScore] = useState({
-    team1: 19,
-    team2: 17,
-    set: 2,
-    set1Score: '21 - 18',
-  })
+  // GET /api/v1/tournaments/search?RegistrationOpen=true
+  const openList = useApi(() => searchTournaments({ keyword: search || undefined, registrationOpen: true, pageSize: 50 }), [search], { initialData: { items: [] } })
+  // GET /api/v1/tournaments/my-registrations
+  const mine = useApi(getMyRegistrations, [], { initialData: [] })
+  const teams = useApi(getMyTeams, [], { initialData: [] })
 
-  // State for registration modal
-  const [showRegisterModal, setShowRegisterModal] = useState(false)
-  const [toastMsg, setToastMsg] = useState(null)
+  // Đăng ký nằm ở bảng con, danh sách tìm kiếm là giải mẹ: so theo id giải mẹ
+  const registeredIds = new Set((mine.data || []).map((t) => t.parentId))
+  const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
+  const current = tab === 'open' ? openList : mine
 
-  // Registration state for upcoming tournament
-  const [isRegistered, setIsRegistered] = useState(false)
-  const [teammateName, setTeammateName] = useState('Bảo Long (Trình Khá)')
-  const [agreedEscrow, setAgreedEscrow] = useState(true)
-
-  // Escrow balance from localStorage
-  const [escrowBalance, setEscrowBalance] = useState(() => {
-    const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
-  })
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      const saved = localStorage.getItem('escrow_balance')
-      if (saved !== null) setEscrowBalance(Number(saved))
+  // Mở form đăng ký: tải chi tiết để biết các nội dung thi đấu (giải con) nếu có
+  const openRegister = async (tournament) => {
+    try {
+      const detail = await getTournament(tournament.id)
+      setRegisterTarget({ tournament: detail, categoryId: detail.children?.[0]?.id || detail.id, teamId: '' })
+    } catch (error) {
+      toast.error(error?.message || 'Không tải được thông tin giải.')
     }
-    window.addEventListener('escrow_balance_updated', handleUpdate)
-    return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
-  }, [])
-
-  // Show toast notification
-  const showToast = (message) => {
-    setToastMsg(message)
-    setTimeout(() => {
-      setToastMsg(null)
-    }, 3500)
   }
 
-  // Handle registration confirmation with escrow deduction
-  const handleConfirmRegistration = () => {
-    const fee = 500000
-    if (escrowBalance < fee) {
-      showToast('⚠️ Số dư ví Escrow không đủ để ký quỹ lệ phí!')
-      return
+  const confirmRegister = async () => {
+    const { categoryId, teamId } = registerTarget
+    setBusyId(categoryId)
+    try {
+      await joinTournament(categoryId, teamId || undefined)
+      toast.success('Đăng ký giải thành công! Lệ phí được giữ trong ví đến khi giải diễn ra.')
+      setRegisterTarget(null)
+      mine.refresh()
+      openList.refresh()
+      window.dispatchEvent(new Event('escrow_balance_updated'))
+    } catch (error) {
+      toast.error(error?.message || 'Không đăng ký được giải.')
+    } finally {
+      setBusyId(null)
     }
-    const newBal = escrowBalance - fee
-    localStorage.setItem('escrow_balance', newBal)
-    setEscrowBalance(newBal)
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-    setIsRegistered(true)
-    setShowRegisterModal(false)
-    showToast('🎉 Đăng ký thành công! Đã ký quỹ 500.000 đ vào hệ thống Smart Escrow.')
   }
 
-  // Handle cancel registration and refund escrow
-  const handleCancelRegistration = () => {
-    const fee = 500000
-    const newBal = escrowBalance + fee
-    localStorage.setItem('escrow_balance', newBal)
-    setEscrowBalance(newBal)
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-    setIsRegistered(false)
-    showToast('↩️ Đã hủy đăng ký. Lệ phí 500.000 đ đã được hoàn lại vào ví Escrow.')
+  const cancelRegister = async (tournament) => {
+    if (!window.confirm(`Hủy đăng ký giải "${tournament.name}"?`)) return
+    setBusyId(tournament.id)
+    try {
+      await cancelTournamentRegistration(tournament.id)
+      toast.success('Đã hủy đăng ký. Lệ phí sẽ được hoàn theo quy định của giải.')
+      mine.refresh()
+      openList.refresh()
+      window.dispatchEvent(new Event('escrow_balance_updated'))
+    } catch (error) {
+      toast.error(error?.message || 'Không hủy được đăng ký.')
+    } finally {
+      setBusyId(null)
+    }
   }
+
+  const children = registerTarget?.tournament.children || []
 
   return (
     <div className="w-full min-h-screen text-[#1e293b] flex flex-col font-sans">
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-3 bg-[#0f172a] text-white px-5 py-3.5 rounded-xl shadow-2xl border border-emerald-500/40 animate-bounce duration-300">
-          <span className="material-symbols-outlined text-emerald-400 text-[22px]">
-            verified
-          </span>
-          <span className="text-sm font-semibold tracking-wide">{toastMsg}</span>
+      <div className="w-full max-w-[1400px] mx-auto px-6 py-6 md:px-10 md:py-8 flex flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-black text-slate-900">Giải đấu</h1>
+          <p className="text-sm text-slate-500">Tìm giải đang mở đăng ký và quản lý các giải bạn đã tham gia.</p>
+        </header>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-2 bg-white border border-slate-200 rounded-xl p-1">
+            {[['open', 'Đang mở đăng ký'], ['mine', `Giải của tôi (${(mine.data || []).length})`]].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTab(value)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === value ? 'bg-[#15803D] text-white' : 'text-slate-600'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === 'open' && (
+            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setSearch(keyword.trim()) }}>
+              <input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Tìm theo tên giải…"
+                className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              />
+              <button type="submit" className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold">Tìm</button>
+            </form>
+          )}
         </div>
-      )}
 
-      {/* Main Content Area */}
-      <div className="w-full max-w-[1400px] mx-auto px-6 py-6 md:px-10 md:py-8 flex flex-col gap-8">
-        
-        {/* ==================== 1. KHUNG THỨ NHẤT: GIẢI ĐẤU ĐANG DIỄN RA (NỔI BẬT) ==================== */}
-        <section className="flex flex-col gap-3">
-          {/* Section Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
-              <h2 className="text-base md:text-lg font-black text-[#0f172a] uppercase tracking-wide flex items-center gap-2">
-                <span>Giải đấu đang diễn ra</span>
-              </h2>
-              <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
-                ● Trực Tiếp Vòng Bán Kết
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-              <span className="material-symbols-outlined text-[15px]">sensors</span>
-              <span>Live Sync thời gian thực</span>
-            </div>
+        {current.loading && <p className="text-slate-500">Đang tải…</p>}
+        {current.error && <p className="text-red-600">{current.error}</p>}
+        {!current.loading && !current.error && list.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-500">
+            {tab === 'open' ? 'Hiện chưa có giải nào mở đăng ký.' : 'Bạn chưa đăng ký giải nào.'}
           </div>
+        )}
 
-          {/* Highlighted Card Container */}
-          <div className="bg-white rounded-3xl border-2 border-emerald-500/40 shadow-xl shadow-emerald-500/5 p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden transition-all hover:border-emerald-500/60">
-            {/* Top decorative accent bar */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500"></div>
-
-            {/* Phân vùng 1: THÔNG TIN CỦA GIẢI ĐẤU */}
-            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-slate-100">
-              <div className="flex-1">
-                {/* Badges row */}
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#dcfce7] text-[#15803d] uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#16a34a] animate-pulse"></span>
-                    VÒNG BÁN KẾT • COURT 01
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px] text-slate-500">
-                      emoji_events
-                    </span>
-                    Cầu Lông Đôi Nam Hạng Pro
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                    Loại Trực Tiếp (BO3 - 21 Điểm)
-                  </span>
-                </div>
-
-                {/* Tournament Big Title */}
-                <h1 className="text-xl sm:text-2xl lg:text-[26px] font-black text-[#0f172a] uppercase tracking-tight leading-snug mb-2">
-                  SPORTNEXUS OPEN CUP 2026 – VÔ ĐỊCH CẦU LÔNG ĐÔI NAM
-                </h1>
-
-                {/* Description */}
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-3xl font-normal">
-                  Giải đấu quy tụ các tay vợt phong trào và bán chuyên hàng đầu. Toàn bộ tiền thưởng được quản lý ký quỹ tự động qua hệ thống Smart Escrow SportNexus, trao thưởng minh bạch 100% ngay sau trận chung kết.
-                </p>
-              </div>
-
-              {/* Tournament Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3 flex-shrink-0">
-                {/* Metric 1 */}
-                <div className="bg-[#f8fafc] border border-slate-200 rounded-2xl p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-[20px]">payments</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      TỔNG GIẢI THƯỞNG
-                    </span>
-                    <span className="text-sm sm:text-base font-extrabold text-[#0f172a]">
-                      20.000.000 đ
-                    </span>
-                  </div>
-                </div>
-
-                {/* Metric 2 */}
-                <div className="bg-[#f8fafc] border border-slate-200 rounded-2xl p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-[20px]">location_on</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      ĐỊA ĐIỂM
-                    </span>
-                    <span className="text-sm sm:text-base font-extrabold text-[#0f172a]">
-                      Arena Q.7
-                    </span>
-                  </div>
-                </div>
-
-                {/* Metric 3 */}
-                <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1 bg-[#f8fafc] border border-slate-200 rounded-2xl p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-[20px]">military_tech</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                      DANH HIỆU
-                    </span>
-                    <span className="text-sm sm:text-base font-extrabold text-[#0f172a]">
-                      Cúp Vàng
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Phân vùng 2: TỈ SỐ HIỆN TẠI (LÀM CỰC KỲ NỔI BẬT) */}
-            <div className="bg-gradient-to-r from-slate-900 via-[#0f172a] to-emerald-950 rounded-2xl p-5 md:p-6 text-white shadow-lg relative overflow-hidden">
-              {/* Status Header of Match */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-white/10">
-                <div className="flex items-center gap-3">
-                  <span className="bg-red-500 text-white font-black px-2.5 py-1 rounded text-xs uppercase tracking-wider shadow-sm animate-pulse">
-                    SET 2 LIVE
-                  </span>
-                  <span className="text-sm font-bold text-slate-200">
-                    Bán Kết 01 • Sân Court 01 SportNexus
-                  </span>
-                </div>
-                <div className="text-xs sm:text-sm font-extrabold text-emerald-400 bg-emerald-900/60 px-3 py-1 rounded-full border border-emerald-500/30">
-                  Tỉ số Set 1: <span className="text-white font-black">21 - 18</span>
-                </div>
-              </div>
-
-              {/* Matchup row with big live scores */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Team 1: Minh Minh Minh / Bảo Long (Serving / Leading) */}
-                <div className="bg-emerald-900/40 border-2 border-emerald-400/80 rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-emerald-500/10">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-md">
-                      1
-                    </div>
-                    <div>
-                      <h4 className="text-base sm:text-lg font-bold text-white tracking-wide">
-                        Minh Minh Minh / Bảo Long
-                      </h4>
-                      <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 mt-0.5">
-                        <span className="material-symbols-outlined text-[15px] animate-bounce">
-                          sports_tennis
-                        </span>
-                        Đang cầm giao cầu
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-4xl sm:text-5xl font-black text-emerald-400 tracking-tight pl-2 drop-shadow-md">
-                    {liveScore.team1}
-                  </div>
-                </div>
-
-                {/* Team 2: Đăng Khoa / Hoàng Khang (Trailing) */}
-                <div className="bg-white/5 border border-white/15 rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-8 h-8 rounded-full bg-slate-600 text-slate-200 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                      2
-                    </div>
-                    <div>
-                      <h4 className="text-base sm:text-lg font-bold text-slate-200 tracking-wide">
-                        Đăng Khoa / Hoàng Khang
-                      </h4>
-                      <p className="text-xs font-normal text-slate-400 mt-0.5">
-                        Đỡ cầu • Tạm hòa 19-17
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-4xl sm:text-5xl font-black text-slate-300 tracking-tight pl-2">
-                    {liveScore.team2}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Phân vùng 3: DƯỚI CÙNG CHỈ HIỂN THỊ TRỌNG TÀI CHÍNH & THỜI LƯỢNG TRẬN ĐẤU */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs sm:text-sm text-slate-600 font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  sports
-                </span>
-                <span>
-                  Trọng tài chính: <strong className="text-slate-900 font-bold">Phan Minh Tâm</strong>
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  schedule
-                </span>
-                <span>
-                  Thời lượng trận đấu: <strong className="text-slate-900 font-bold">34 phút</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== 2. KHUNG THỨ HAI: GIẢI ĐẤU ĐÃ DIỄN RA ==================== */}
-        <section className="flex flex-col gap-3">
-          {/* Section Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="w-5 h-5 rounded-full border border-slate-400 text-slate-600 flex items-center justify-center text-xs font-bold">
-                ✓
-              </span>
-              <h2 className="text-base md:text-lg font-black text-[#0f172a] uppercase tracking-wide">
-                Giải đấu đã diễn ra
-              </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-                1 Trận Đã Có Tỉ Số
-              </span>
-            </div>
-            <span className="text-xs text-slate-400 font-medium">
-              Đã cập nhật kết quả và trả thưởng Escrow
-            </span>
-          </div>
-
-          {/* Finished Tournament Card */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 md:p-7 flex flex-col gap-5 hover:shadow-md transition">
-            {/* Top row */}
-            <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-              <div className="flex items-center gap-2.5">
-                <span className="bg-[#0f172a] text-white font-black px-2.5 py-1 rounded text-xs uppercase tracking-wider">
-                  FT (KẾT THÚC)
-                </span>
-                <span className="text-slate-800 font-bold text-xs sm:text-sm">
-                  Tứ Kết • Sân Court 02 SportNexus Arena
-                </span>
-              </div>
-              <div className="text-emerald-600 font-bold text-xs flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px]">
-                  check_circle
-                </span>
-                Đã xác thực kết quả &amp; giải ngân thưởng
-              </div>
-            </div>
-
-            {/* Matchup row with finished scores */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Winner */}
-              <div className="bg-[#f8fafc] border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="bg-[#00875a] text-white text-xs font-bold px-2.5 py-1 rounded-md flex-shrink-0">
-                    Thắng
-                  </span>
-                  <div>
-                    <h4 className="text-sm sm:text-base font-bold text-[#0f172a]">
-                      Lê Dũng / Hoàng Nam
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Tỉ số set: 21-16, 21-19
-                    </p>
-                  </div>
-                </div>
-                <div className="text-3xl sm:text-4xl font-black text-[#00875a] tracking-tight pl-2">
-                  2
-                </div>
-              </div>
-
-              {/* Loser */}
-              <div className="bg-[#f8fafc] border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="bg-slate-300 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-md flex-shrink-0">
-                    Thua
-                  </span>
-                  <div>
-                    <h4 className="text-sm sm:text-base font-semibold text-slate-700">
-                      Phi Hùng / Quang Huy
-                    </h4>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Dừng bước tại Tứ Kết
-                    </p>
-                  </div>
-                </div>
-                <div className="text-3xl sm:text-4xl font-black text-slate-400 tracking-tight pl-2">
-                  0
-                </div>
-              </div>
-            </div>
-
-            {/* DƯỚI CÙNG CHỈ HIỂN THỊ TRỌNG TÀI CHÍNH & THỜI LƯỢNG TRẬN ĐẤU */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs sm:text-sm text-slate-600 font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  sports
-                </span>
-                <span>
-                  Trọng tài chính: <strong className="text-slate-900 font-bold">Phan Minh Tâm</strong>
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  schedule
-                </span>
-                <span>
-                  Thời lượng trận đấu: <strong className="text-slate-900 font-bold">42 phút</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================== 3. KHUNG THỨ BA: GIẢI ĐẤU SẮP DIỄN RA (NỔI BẬT ĐỂ ĐĂNG KÝ) ==================== */}
-        <section className="flex flex-col gap-3">
-          {/* Section Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="material-symbols-outlined text-[24px] text-emerald-600">
-                military_tech
-              </span>
-              <h2 className="text-base md:text-lg font-black text-[#0f172a] uppercase tracking-wide">
-                Giải đấu sắp diễn ra
-              </h2>
-              <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                🔥 Giải Đấu Hoàn Toàn Mới
-              </span>
-            </div>
-            <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-              Ký quỹ tự động qua ví Smart Escrow
-            </span>
-          </div>
-
-          {/* Brand New Tournament Highlighted Card */}
-          <div className="bg-gradient-to-br from-white via-emerald-50/20 to-teal-50/30 rounded-3xl border-2 border-emerald-500/60 shadow-xl shadow-emerald-600/10 p-6 md:p-8 flex flex-col gap-6 relative overflow-hidden transition-all hover:border-emerald-500">
-            {/* Top decorative accent bar */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-emerald-500 to-teal-500"></div>
-
-            {/* Top status info */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-emerald-700 text-white font-extrabold px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 shadow-sm">
-                  <span className="material-symbols-outlined text-[15px]">event</span>
-                  Khai Mạc: 15/11/2026 - 18/11/2026
-                </span>
-                <span className="bg-amber-100 text-amber-900 font-bold px-3 py-1 rounded-lg text-xs border border-amber-300">
-                  ⏳ Hạn chót đăng ký: 23:59 Ngày 10/11/2026
-                </span>
-                <span className="bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-lg text-xs">
-                  Sân Trung Tâm Court 01 SportNexus Arena
-                </span>
-              </div>
-
-              {/* Slots remaining */}
-              <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-3 py-1 rounded-full text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                <span>Còn lại 3/32 suất hạt giống mở rộng</span>
-              </div>
-            </div>
-
-            {/* Middle Section: Tournament Details & Prominent Registration CTA */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 pt-1">
-              <div className="flex-1">
-                <h3 className="text-xl sm:text-2xl font-black text-[#0f172a] uppercase tracking-tight mb-2">
-                  GIẢI CẦU LÔNG VÔ ĐỊCH MÙA ĐÔNG SPORTNEXUS WINTER CHAMPIONSHIP 2026
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-3xl mb-4 font-normal">
-                  Giải đấu quy mô quốc gia chính thức khởi tranh vào <strong>tháng 11/2026</strong> dành cho các cặp đôi phong trào và bán chuyên. Toàn bộ tiền thưởng được bảo chứng 100% qua Smart Escrow, giải ngân ngay lập tức sau lễ bế mạc trao cúp.
-                </p>
-
-                {/* 3 Key Tournament Parameters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
-                      TỔNG TIỀN THƯỞNG
-                    </span>
-                    <span className="text-base font-black text-emerald-700">
-                      35.000.000 đ
-                    </span>
-                  </div>
-
-                  <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
-                      LỆ PHÍ KÝ QUỸ ESCROW
-                    </span>
-                    <span className="text-base font-black text-[#0f172a]">
-                      500.000 đ / Đôi
-                    </span>
-                  </div>
-
-                  <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
-                      QUY MÔ GIẢI ĐẤU
-                    </span>
-                    <span className="text-base font-black text-slate-800">
-                      32 Cặp Đấu Hạt Giống
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button Area */}
-              <div className="flex flex-col items-center lg:items-end flex-shrink-0">
-                {isRegistered ? (
-                  <div className="flex flex-col items-center lg:items-end gap-2">
-                    <div className="bg-[#dcfce7] text-[#15803d] border-2 border-[#86efac] px-8 py-3.5 rounded-2xl font-black text-base flex items-center gap-2.5 shadow-md">
-                      <span className="material-symbols-outlined text-[22px]">
-                        verified
-                      </span>
-                      Đã Đăng Ký Tham Gia Thành Công
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCancelRegistration}
-                      className="text-xs text-rose-500 hover:text-rose-700 underline font-semibold cursor-pointer"
-                    >
-                      Hủy đăng ký &amp; hoàn ký quỹ 500.000 đ
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {list.map((tournament) => (
+            <TournamentCard
+              key={tournament.id}
+              tournament={tournament}
+              actions={
+                tab === 'open' ? (
+                  registeredIds.has(tournament.id) ? (
+                    <span className="text-sm font-semibold text-emerald-700">Bạn đã đăng ký giải này</span>
+                  ) : (
+                    <button type="button" onClick={() => openRegister(tournament)} className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold">
+                      Đăng ký tham gia
                     </button>
-                  </div>
+                  )
                 ) : (
-                  <div className="flex flex-col items-center lg:items-end gap-2">
+                  <>
                     <button
                       type="button"
-                      onClick={() => setShowRegisterModal(true)}
-                      className="bg-gradient-to-r from-[#15803d] via-emerald-600 to-[#047857] hover:from-[#166534] hover:to-[#065f46] text-white px-9 py-4 rounded-2xl font-black text-base flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-700/25 transition-all hover:scale-[1.03] cursor-pointer"
+                      onClick={() => navigate(`/qr-pass?type=tournament&tournamentId=${encodeURIComponent(tournament.id)}`)}
+                      className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold"
                     >
-                      <span className="material-symbols-outlined text-[22px]">
-                        sports_tennis
-                      </span>
-                      <span>Đăng ký tham gia ngay</span>
+                      Vé check-in
                     </button>
-                    <span className="text-[11px] font-semibold text-slate-500 text-center">
-                      ⚡ Ký quỹ an toàn • Hoàn trả 100% nếu có thay đổi
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* DƯỚI CÙNG CHỈ HIỂN THỊ TRỌNG TÀI CHÍNH & THỜI LƯỢNG TRẬN ĐẤU */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200/80 text-xs sm:text-sm text-slate-600 font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  sports
-                </span>
-                <span>
-                  Trọng tài chính: <strong className="text-slate-900 font-bold">Phan Minh Tâm</strong>
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-slate-500">
-                  schedule
-                </span>
-                <span>
-                  Thời lượng trận đấu: <strong className="text-slate-900 font-bold">45 phút / trận</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
+                    <button
+                      type="button"
+                      disabled={busyId === tournament.id}
+                      onClick={() => cancelRegister(tournament)}
+                      className="px-4 py-2 rounded-lg border border-red-200 text-red-600 text-sm font-bold disabled:opacity-50"
+                    >
+                      Hủy đăng ký
+                    </button>
+                  </>
+                )
+              }
+            />
+          ))}
+        </div>
       </div>
 
-      {/* ==================== MODAL: REGISTER UPCOMING TOURNAMENT ==================== */}
-      {showRegisterModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#15803d] text-[22px]">
-                  sports_tennis
-                </span>
-                <h3 className="font-extrabold text-base text-[#0f172a]">
-                  Đăng Ký Tham Gia Giải Đấu Mới 2026
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowRegisterModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-emerald-800">
-                <p className="font-bold text-xs mb-0.5">
-                  🏆 SportNexus Winter Championship 2026
-                </p>
-                <p className="text-[11px] text-emerald-700">
-                  Thời gian: 15/11/2026 - 18/11/2026 • Sân Arena Q.7 • Trọng tài chính: Phan Minh Tâm
-                </p>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Vận động viên 1 (Bạn):</label>
-                <input
-                  type="text"
-                  disabled
-                  value="Minh Minh Minh (Trình Khá)"
-                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 font-semibold text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Vận động viên 2 (Đồng đội):</label>
-                <input
-                  type="text"
-                  value={teammateName}
-                  onChange={(e) => setTeammateName(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 font-semibold text-slate-800 focus:outline-emerald-500"
-                />
-              </div>
-
-              {/* Escrow deposit breakdown */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                <div className="flex justify-between py-1 text-slate-600">
-                  <span>Lệ phí bảo chứng ký quỹ giải đấu:</span>
-                  <strong className="text-slate-900 font-mono">500.000 đ</strong>
-                </div>
-                <div className="flex justify-between py-1 text-slate-600">
-                  <span>Số dư ví Escrow hiện tại:</span>
-                  <strong className="text-[#15803d] font-mono">
-                    {new Intl.NumberFormat('vi-VN').format(escrowBalance)} đ
-                  </strong>
-                </div>
-                <div className="border-t border-slate-200 my-2 pt-2 flex justify-between font-bold text-[#0f172a]">
-                  <span>Số dư sau khi ký quỹ:</span>
-                  <span className="font-mono text-emerald-700">
-                    {new Intl.NumberFormat('vi-VN').format(Math.max(0, escrowBalance - 500000))} đ
-                  </span>
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2 cursor-pointer select-none text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={agreedEscrow}
-                  onChange={(e) => setAgreedEscrow(e.target.checked)}
-                  className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
-                />
-                <span>
-                  Tôi đồng ý khóa ký quỹ 500.000 đ qua hệ thống Smart Escrow SportNexus và cam kết tham gia thi đấu đúng lịch trình giải đấu Fairplay.
-                </span>
+      {registerTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
+            <h2 className="text-lg font-black">Đăng ký: {registerTarget.tournament.name}</h2>
+            {children.length > 0 && (
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="font-semibold">Nội dung thi đấu</span>
+                <select
+                  value={registerTarget.categoryId}
+                  onChange={(e) => setRegisterTarget({ ...registerTarget, categoryId: e.target.value })}
+                  className="px-3 py-2 rounded-lg border border-slate-200"
+                >
+                  {children.map((child) => (
+                    <option key={child.id} value={child.id}>
+                      {child.name} — {money(child.entryFee)}{child.capacity ? ` (${child.registered ?? 0}/${child.capacity})` : ''}
+                    </option>
+                  ))}
+                </select>
               </label>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
+            )}
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-semibold">Đội (bắt buộc với nội dung đôi / đội)</span>
+              <select
+                value={registerTarget.teamId}
+                onChange={(e) => setRegisterTarget({ ...registerTarget, teamId: e.target.value })}
+                className="px-3 py-2 rounded-lg border border-slate-200"
+              >
+                <option value="">Đăng ký cá nhân</option>
+                {(teams.data || []).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+              </select>
+            </label>
+            <p className="text-xs text-slate-500">Lệ phí được trừ từ ví và giữ ký quỹ đến khi giải diễn ra.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setRegisterTarget(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-bold">Đóng</button>
               <button
                 type="button"
-                onClick={() => setShowRegisterModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs cursor-pointer"
+                disabled={Boolean(busyId)}
+                onClick={confirmRegister}
+                className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold disabled:opacity-50"
               >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                disabled={!agreedEscrow}
-                onClick={handleConfirmRegistration}
-                className="bg-[#15803d] hover:bg-[#166534] disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm"
-              >
-                Xác nhận ký quỹ &amp; Tham gia
+                {busyId ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}
               </button>
             </div>
           </div>

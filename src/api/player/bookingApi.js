@@ -153,6 +153,7 @@ export async function getMyBookings(status) {
       return body.data
     }
     if (Array.isArray(body?.data)) return body.data
+    if (Array.isArray(body?.data?.items)) return body.data.items
     if (Array.isArray(body)) return body
     return []
   } catch (error) {
@@ -279,6 +280,23 @@ export async function cancelBooking(bookingId, payload = {}) {
     return body?.data || body?.result || body
   } catch (error) {
     console.warn(`[bookingApi] Lỗi khi hủy đơn ${bookingId}:`, error)
+    throw normalizeApiError(error)
+  }
+}
+
+/**
+ * Lịch đặt sân sắp tới của người dùng hiện tại
+ * GET /api/v1/bookings/upcoming
+ * @returns {Promise<Array>} Danh sách đơn sắp diễn ra
+ */
+export async function getUpcomingBookings() {
+  try {
+    const body = (await apiClient.get(`${BOOKINGS_ENDPOINT}/upcoming`)).data
+    const data = body?.data ?? body
+    if (Array.isArray(data)) return data
+    if (Array.isArray(data?.items)) return data.items
+    return []
+  } catch (error) {
     throw normalizeApiError(error)
   }
 }

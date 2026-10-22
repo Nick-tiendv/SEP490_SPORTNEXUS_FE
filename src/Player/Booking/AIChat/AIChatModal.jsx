@@ -178,7 +178,13 @@ function AIChatModal({
     }
 
     const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const slotId = isGuidRegex.test(targetSlot.id) ? targetSlot.id : 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
+    if (!isGuidRegex.test(targetSlot.id)) {
+      // Ca do AI gợi ý chưa có mã từ hệ thống: chọn sân trên bản đồ để người dùng chọn ca trống thật.
+      handleApplyCourt(court, null)
+      showToast('Vui lòng chọn ca còn trống trên bản đồ để đặt sân.')
+      return
+    }
+    const slotId = targetSlot.id
     onClose()
     navigate('/split-payment', {
       state: {

@@ -1,35 +1,28 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { forgotPassword } from '../api/auth/authApi.js'
 import './auth-pages.css'
 
 function VerifyAccount() {
   const navigate = useNavigate()
   const location = useLocation()
-  const userEmail = location.state?.email || 'user@email.com'
+  const phone = location.state?.phone || ''
+  const userEmail = phone
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [timer, setTimer] = useState(60)
   const [canResend, setCanResend] = useState(false)
   const [isResending, setIsResending] = useState(false)
-  const [codeVersion, setCodeVersion] = useState(1) // Track code version
   const inputRefs = useRef([])
 
-  // Timer countdown with auto-reset every minute
+  // Đếm ngược 60 giây trước khi cho gửi lại mã
   useEffect(() => {
-    if (timer > 0) {
-      const countdown = setInterval(() => {
-        setTimer((prev) => prev - 1)
-      }, 1000)
-      return () => clearInterval(countdown)
-    } else {
-      // When timer hits 0, reset for next cycle
-      setCanResend(true)
-      // Auto reset after showing "can resend" for a moment
-      const resetTimeout = setTimeout(() => {
-        setTimer(60)
-        setCodeVersion(prev => prev + 1)
-      }, 100)
-      return () => clearTimeout(resetTimeout)
-    }
+    if (timer <= 0) return undefined
+    const countdown = setTimeout(() => {
+      setTimer((prev) => prev - 1)
+      if (timer === 1) setCanResend(true)
+    }, 1000)
+    return () => clearTimeout(countdown)
   }, [timer])
 
   const formatTime = (seconds) => {
@@ -75,32 +68,35 @@ function VerifyAccount() {
     if (!canResend || isResending) return
     
     setIsResending(true)
-    // TODO: Call API to resend code
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Reset timer and state
-    setTimer(60)
-    setCanResend(false)
-    setIsResending(false)
-    setCodeVersion(prev => prev + 1)
-    setCode(['', '', '', '', '', '']) // Clear entered code
-    inputRefs.current[0]?.focus() // Focus first input
+    try {
+      // Gửi lại OTP: gọi lại POST /api/auth/forgot-password
+      await forgotPassword(phone)
+      toast.success('Đã gửi lại mã xác thực.')
+      setTimer(60)
+      setCanResend(false)
+      setCode(['', '', '', '', '', ''])
+      inputRefs.current[0]?.focus()
+    } catch (error) {
+      toast.error(error?.message || 'Không gửi lại được mã. Vui lòng thử lại.')
+    } finally {
+      setIsResending(false)
+    }
   }
 
   const handleSubmit = async () => {
     const verificationCode = code.join('')
     if (verificationCode.length !== 6) return
 
-    // TODO: Call API to verify code
-    console.log('Verifying code:', verificationCode)
-    
-    // Navigate to reset password page after successful verification
-    navigate('/reset-password')
+    // Mã OTP được backend kiểm tra cùng lúc đặt mật khẩu mới (POST /api/auth/reset-password)
+    navigate('/reset-password', { state: { phone, otpCode: verificationCode } })
   }
 
   const handleBack = () => {
     navigate(-1)
   }
+
+  // Vào thẳng trang này mà không qua bước nhập số điện thoại
+  if (!phone) return <Navigate to="/forgot-password" replace />
 
   return (
     <div className="min-h-screen flex flex-col sport-animated-bg">
@@ -167,7 +163,7 @@ function VerifyAccount() {
 
           {/* Description */}
           <p className="text-sm text-gray-600 text-center mb-2">
-            Mã xác thực gồm 6 chữ số đã được gửi đến email:
+            Mã xác thực gồm 6 chữ số đã được gửi đến số điện thoại:
           </p>
           <p className="text-sm font-semibold text-gray-800 text-center mb-6">
             {userEmail}

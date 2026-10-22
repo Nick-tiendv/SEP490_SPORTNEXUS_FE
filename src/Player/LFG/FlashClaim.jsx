@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { claimLfgSlot } from '../../api/player/lfgApi.js'
+import { getWallet } from '../../api/player/walletApi.js'
 
 function FlashClaim() {
   const navigate = useNavigate()
@@ -8,12 +9,12 @@ function FlashClaim() {
   const [searchParams] = useSearchParams()
 
   const matchFromState = location.state?.match || null
-  const cardId = searchParams.get('cardId') || matchFromState?.id || 'demo-claim-card-1'
+  const cardId = searchParams.get('cardId') || matchFromState?.id || null
   const isRequireApproval = Boolean(matchFromState?.requireApproval)
 
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
+    return saved !== null ? Number(saved) : 0
   })
 
   const [selectedSide, setSelectedSide] = useState('any')
@@ -21,12 +22,21 @@ function FlashClaim() {
   const [errorMessage, setErrorMessage] = useState(null)
   const [successInfo, setSuccessInfo] = useState(null)
 
-  const depositFee = matchFromState?.price || 55000
+  const depositFee = matchFromState?.price || 0
+
+  // Lấy số dư ví thật khi mở trang
+  useEffect(() => {
+    getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
+  }, [])
 
   // 2.6 Người tham gia Bước 2: POST /api/v1/lfgs/{cardId}/claim
   const handleConfirm = async () => {
     setErrorMessage(null)
     setSuccessInfo(null)
+    if (!cardId) {
+      setErrorMessage('Không xác định được kèo cần nhận suất. Vui lòng chọn kèo từ bảng tin.')
+      return
+    }
 
     if (walletBalance < depositFee) {
       setErrorMessage('Số dư ví Escrow hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
@@ -45,10 +55,7 @@ function FlashClaim() {
       // Kèo không cần duyệt: trừ tiền ngay, vào kèo luôn.
       // Kèo cần duyệt: chỉ gửi yêu cầu, tiền bị giữ khi chủ kèo duyệt.
       if (!isRequireApproval) {
-        const newBal = Math.max(0, walletBalance - depositFee)
-        setWalletBalance(newBal)
-        localStorage.setItem('escrow_balance', newBal.toString())
-        window.dispatchEvent(new Event('escrow_balance_updated'))
+        getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
       }
 
       setSuccessInfo(

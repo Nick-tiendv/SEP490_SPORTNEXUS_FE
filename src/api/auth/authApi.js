@@ -28,3 +28,13 @@ export async function loginUser({ username, password }) {
 export async function registerAdmin(payload) {
   return validateResponse((await apiClient.post('/api/auth/register-admin', registrationPayload(payload))).data)
 }
+
+// ---------- Quên mật khẩu: forgot-password → nhập OTP → reset-password ----------
+// ForgotPasswordRequest: identifier (số điện thoại đã đăng ký). BE gửi mã OTP tới số này.
+export async function forgotPassword(identifier) {
+  return validateResponse((await apiClient.post('/api/auth/forgot-password', { identifier }, { skipAuth: true })).data)
+}
+// ResetPasswordRequest: phone, otpCode, newPassword, confirmPassword. BE kiểm tra OTP trong bước này.
+export async function resetPassword({ phone, otpCode, newPassword, confirmPassword }) {
+  return validateResponse((await apiClient.post('/api/auth/reset-password', { phone, otpCode, newPassword, confirmPassword }, { skipAuth: true })).data)
+}

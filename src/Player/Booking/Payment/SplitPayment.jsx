@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
+import { initialsOf, useCurrentUser } from '../../../hooks/useCurrentUser.js'
 import {
   createBooking,
   getBookingQrTicket,
@@ -27,15 +28,12 @@ import {
 import './SplitPayment.css'
 
 function SplitPayment() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state || {}
 
-  // ID ca sân thực tế khả dụng dự phòng từ cơ sở dữ liệu (ca tối 20:00 - 21:00 chưa qua giờ)
-  const FALLBACK_DEFAULT_SLOT_ID = 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
-  // Ca 18:00 - 19:00 đã qua giờ bắt đầu, tuyệt đối không được gửi lên server
-  const KNOWN_EXPIRED_SLOT_ID = '6868659f-9e00-49ea-91af-456ae04c215d'
-  const [resolvedSlotId, setResolvedSlotId] = useState(null)
+  const [slotError, setSlotError] = useState('')
   const [activeSlotData, setActiveSlotData] = useState(null)
 
   // Đồng bộ số dư ví thực tế từ Backend API
@@ -51,77 +49,28 @@ function SplitPayment() {
     return () => { isMounted = false }
   }, [])
 
-  // Tự động truy vấn ca sân hợp lệ từ API và loại bỏ triệt để ca đã qua giờ
+  // Kiểm tra ca người dùng đã chọn còn trống không. Không tự đổi sang ca khác.
   useEffect(() => {
     let isMounted = true
+    const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const courtId = typeof state.courtId === 'string' && isGuidRegex.test(state.courtId) ? state.courtId : null
+    const slotId = typeof state.courtSlotId === 'string' && isGuidRegex.test(state.courtSlotId) ? state.courtSlotId : null
+    if (!courtId || !slotId) return undefined
 
-    // Dọn dẹp cache nếu chứa ID ca đã qua giờ bắt đầu
-    try {
-      if (localStorage.getItem('sportnexus_selected_slot_id') === KNOWN_EXPIRED_SLOT_ID) {
-        localStorage.removeItem('sportnexus_selected_slot_id')
-      }
-      const rawCached = localStorage.getItem('sportnexus_selected_slot_ids')
-      if (rawCached && rawCached.includes(KNOWN_EXPIRED_SLOT_ID)) {
-        const cleaned = JSON.parse(rawCached).filter((id) => id !== KNOWN_EXPIRED_SLOT_ID)
-        localStorage.setItem('sportnexus_selected_slot_ids', JSON.stringify(cleaned))
-      }
-    } catch {}
-
-    async function fetchLiveSlotIfMissing() {
-      const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      const targetCourtId =
-        typeof state.courtId === 'string' && isGuidRegex.test(state.courtId)
-          ? state.courtId
-          : 'f4d8b134-b950-434e-8de0-0ad9cc37f283'
-      const todayStr = new Date().toISOString().slice(0, 10)
-
-      try {
-        const slots = await getCourtSlots(targetCourtId, todayStr)
-        if (!isMounted) return
-
-        if (Array.isArray(slots) && slots.length > 0) {
-          // 1. Kiểm tra xem ca người dùng truyền qua state có tồn tại và chưa qua giờ không
-          const candidateId =
-            typeof state.courtSlotId === 'string' && isGuidRegex.test(state.courtSlotId)
-              ? state.courtSlotId
-              : null
-          const existingSlot =
-            candidateId && candidateId.toLowerCase() !== KNOWN_EXPIRED_SLOT_ID.toLowerCase()
-              ? slots.find((s) => s.id === candidateId && !s.isPast && s.isBookable && s.status === 'Available')
-              : null
-
-          if (existingSlot) {
-            setResolvedSlotId(existingSlot.id)
-            setActiveSlotData(existingSlot)
-            try {
-              localStorage.setItem('sportnexus_selected_slot_id', existingSlot.id)
-            } catch {}
-            return
-          }
-
-          // 2. Nếu ca cũ đã qua giờ hoặc không khả dụng, tự động chọn ca khả dụng kế tiếp trong hôm nay
-          const nextAvail = slots.find((s) => s.status === 'Available' && !s.isPast && s.isBookable)
-          if (nextAvail && isGuidRegex.test(nextAvail.id)) {
-            setResolvedSlotId(nextAvail.id)
-            setActiveSlotData(nextAvail)
-            try {
-              localStorage.setItem('sportnexus_selected_slot_id', nextAvail.id)
-            } catch {}
-            return
-          }
+    getCourtSlots(courtId, (state.date || new Date().toISOString()).slice(0, 10))
+      .then((slots) => {
+        if (!isMounted || !Array.isArray(slots)) return
+        const slot = slots.find((s) => s.id === slotId)
+        if (slot && !slot.isPast && slot.isBookable !== false && slot.status === 'Available') {
+          setActiveSlotData(slot)
+          setSlotError('')
+        } else {
+          setSlotError('Ca bạn chọn đã được đặt hoặc đã qua giờ. Vui lòng quay lại chọn ca khác.')
         }
-      } catch (err) {
-        console.warn('[SplitPayment] Không thể lấy ca trực tiếp:', err)
-      }
-
-      if (isMounted) {
-        setResolvedSlotId(FALLBACK_DEFAULT_SLOT_ID)
-      }
-    }
-
-    fetchLiveSlotIfMissing()
+      })
+      .catch((err) => console.warn('[SplitPayment] Không thể kiểm tra ca sân:', err))
     return () => { isMounted = false }
-  }, [state.courtId, state.courtSlotId])
+  }, [state.courtId, state.courtSlotId, state.date])
 
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'Cụm Sân SportNexus'
@@ -163,7 +112,7 @@ function SplitPayment() {
   // Wallet balance state (synced with TopBar via localStorage & custom event)
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
+    return saved !== null ? Number(saved) : 0
   })
 
   // Số dư bị đóng băng trong hợp đồng Escrow (frozenBalance) theo Bước 4
@@ -193,11 +142,8 @@ function SplitPayment() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupResult, setLookupResult] = useState(null)
   const [lookupError, setLookupError] = useState(null)
-  const [invitedFriends, setInvitedFriends] = useState(() => [
-    { id: '11111111-1111-1111-1111-111111111111', fullName: 'Lê Hoàng Nam', phone: '0912345678', email: 'hoang.nam@sportnexus.vn', status: 'WAITING' },
-    { id: '22222222-2222-2222-2222-222222222222', fullName: 'Trần Bảo An', phone: '0988777666', email: 'bao.an@sportnexus.vn', status: 'WAITING' },
-    { id: '33333333-3333-3333-3333-333333333333', fullName: 'Phạm Quốc Thịnh', phone: '0903112233', email: 'quoc.thinh@sportnexus.vn', status: 'WAITING' },
-  ])
+  // Bạn chơi được thêm bằng cách tra cứu số điện thoại (GET /api/accounts/lookup).
+  const [invitedFriends, setInvitedFriends] = useState([])
 
   // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
   const [bookingStatus, setBookingStatus] = useState('PAID')
@@ -314,14 +260,8 @@ function SplitPayment() {
 
   const handleDeadlineExpired = () => {
     // Bước 5: Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả
-    const refundedBalance = walletBalance + payableAmount
-    const refundedFrozen = Math.max(0, frozenBalance - payableAmount)
-    setWalletBalance(refundedBalance)
-    setFrozenBalance(refundedFrozen)
-    localStorage.setItem('escrow_balance', refundedBalance.toString())
-    localStorage.setItem('frozen_balance', refundedFrozen.toString())
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-    window.dispatchEvent(new Event('frozen_balance_updated'))
+    // Số dư thật do backend cập nhật: tải lại ví (getWallet tự đồng bộ TopBar và các trang khác).
+    getWallet().catch(() => {})
     setBookingStatus('CANCELLED')
 
     window.dispatchEvent(
@@ -360,7 +300,7 @@ function SplitPayment() {
       const data = await lookupAccountByPhone(cleanPhone)
       if (data) {
         setLookupResult({
-          id: data.id || data.userId || 'f4d8b134-b950-434e-8de0-0ad9cc37f283',
+          id: data.id || data.userId,
           fullName: data.fullName || data.name || data.userName || `Bạn chơi (${cleanPhone})`,
           phone: data.phone || cleanPhone,
           email: data.email || `${cleanPhone}@sportnexus.vn`,
@@ -480,15 +420,8 @@ function SplitPayment() {
         }
       }
 
-      // Trừ số tiền còn thiếu từ ví người tạo
-      const newBal = walletBalance - remainingDue
-      const newFroz = frozenBalance + remainingDue
-      setWalletBalance(newBal)
-      setFrozenBalance(newFroz)
-      localStorage.setItem('escrow_balance', newBal.toString())
-      localStorage.setItem('frozen_balance', newFroz.toString())
-      window.dispatchEvent(new Event('escrow_balance_updated'))
-      window.dispatchEvent(new Event('frozen_balance_updated'))
+      // Số dư thật do backend cập nhật: tải lại ví (getWallet tự đồng bộ TopBar và các trang khác).
+      getWallet().catch(() => {})
 
       // Loại bỏ người chưa góp khỏi đơn và chuyển trạng thái đơn sang PAID
       setInvitedFriends((prev) => prev.filter((f) => f.status === 'PAID'))
@@ -566,16 +499,7 @@ function SplitPayment() {
       }
 
       // Xử lý hoàn tiền
-      if (isEligibleRefund) {
-        const refundedBal = walletBalance + payableAmount
-        const refundedFroz = Math.max(0, frozenBalance - payableAmount)
-        setWalletBalance(refundedBal)
-        setFrozenBalance(refundedFroz)
-        localStorage.setItem('escrow_balance', refundedBal.toString())
-        localStorage.setItem('frozen_balance', refundedFroz.toString())
-        window.dispatchEvent(new Event('escrow_balance_updated'))
-        window.dispatchEvent(new Event('frozen_balance_updated'))
-      }
+      if (isEligibleRefund) getWallet().catch(() => {})
 
       setBookingStatus('CANCELLED')
       setShowCancelModal(false)
@@ -619,14 +543,12 @@ function SplitPayment() {
   // Regex kiểm tra chuỗi có phải UUID/GUID hợp lệ (8-4-4-4-12 hex) và không thuộc ca đã qua giờ bắt đầu
   const isValidGuid = (id) =>
     typeof id === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim()) &&
-    id.trim().toLowerCase() !== KNOWN_EXPIRED_SLOT_ID.toLowerCase()
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim())
 
-  // Hàm tự động xác định ID ca sân hợp lệ (bắt buộc phải là GUID chưa qua giờ) từ live fetch, state hoặc fallback
+  // Xác định ID ca sân người dùng đã chọn (GUID từ API). Trả null nếu không có, không dùng ca mặc định.
   const resolveCurrentSlotId = () => {
     // 1. Ưu tiên cao nhất là ca thực tế đã được verify khả dụng trong hôm nay
     if (activeSlotData && isValidGuid(activeSlotData.id)) return activeSlotData.id
-    if (isValidGuid(resolvedSlotId)) return resolvedSlotId
     if (isValidGuid(state.courtSlotId)) return state.courtSlotId
     if (Array.isArray(state.courtSlotIds)) {
       const found = state.courtSlotIds.find(isValidGuid)
@@ -647,7 +569,7 @@ function SplitPayment() {
     } catch {
       // Bỏ qua lỗi parse
     }
-    return FALLBACK_DEFAULT_SLOT_ID
+    return null
   }
 
   const resolveCurrentSlotIds = () => {
@@ -660,7 +582,6 @@ function SplitPayment() {
       if (valid.length > 0) return valid
     }
     if (activeSlotData && isValidGuid(activeSlotData.id)) return [activeSlotData.id]
-    if (isValidGuid(resolvedSlotId)) return [resolvedSlotId]
     if (isValidGuid(state.courtSlotId)) return [state.courtSlotId]
     try {
       const cachedList = JSON.parse(localStorage.getItem('sportnexus_selected_slot_ids') || '[]')
@@ -674,7 +595,7 @@ function SplitPayment() {
       // Bỏ qua lỗi parse
     }
     const single = resolveCurrentSlotId()
-    return single ? [single] : [FALLBACK_DEFAULT_SLOT_ID]
+    return single ? [single] : []
   }
 
   // Hàm tạo payload đặt sân chuẩn theo đặc tả Bước 2 API
@@ -725,6 +646,10 @@ function SplitPayment() {
         return
       }
 
+      if (slotError) {
+        alert(`❌ ${slotError}`)
+        return
+      }
       const bookingPayload = buildBookingPayload()
       if (!bookingPayload) {
         alert('❌ Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
@@ -762,15 +687,11 @@ function SplitPayment() {
           return
         }
 
-        // BƯỚC 4: Nhận 201 Created
-        const newBalance = walletBalance - payableAmount
-        const newFrozen = frozenBalance + payableAmount
-        setWalletBalance(newBalance)
-        setFrozenBalance(newFrozen)
-        localStorage.setItem('escrow_balance', newBalance.toString())
-        localStorage.setItem('frozen_balance', newFrozen.toString())
+        // BƯỚC 4: Nhận 201 Created. Số dư thật do backend trừ, tải lại ví thay vì tự tính.
+        getWallet()
+          .then((w) => { if (w && typeof w.balance === 'number') setWalletBalance(w.balance) })
+          .catch(() => {})
         window.dispatchEvent(new Event('escrow_balance_updated'))
-        window.dispatchEvent(new Event('frozen_balance_updated'))
         setBookingResult(createdBooking)
         console.log('[SplitPayment] ✅ Đặt sân thành công! Dữ liệu phản hồi từ máy chủ (Response):', createdBooking)
 
@@ -781,6 +702,9 @@ function SplitPayment() {
           createdBooking?.data?.id ||
           createdBooking?.data?.bookingId ||
           (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
+        if (bookingId) {
+          try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
+        }
 
         let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
 
@@ -979,6 +903,9 @@ function SplitPayment() {
         createdBooking?.data?.id ||
         createdBooking?.data?.bookingId ||
         (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
+        if (bookingId) {
+          try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
+        }
 
       let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
 
@@ -1624,9 +1551,9 @@ function SplitPayment() {
               </div>
 
               <div className="sp-user-row">
-                <div className="sp-user-avatar">MMM</div>
+                <div className="sp-user-avatar">{initialsOf(currentUser.name)}</div>
                 <div className="sp-user-details">
-                  <p className="sp-user-name">Minh Minh Minh</p>
+                  <p className="sp-user-name">{currentUser.name || 'Bạn'}</p>
                   <p className="sp-user-contact">0908 ••• 888 • minhm@domain.vn</p>
                 </div>
               </div>
@@ -2235,9 +2162,9 @@ function SplitPayment() {
               </div>
 
               <div className="sp-pass-user-box">
-                <div className="sp-pass-user-avatar">MMM</div>
+                <div className="sp-pass-user-avatar">{initialsOf(currentUser.name)}</div>
                 <div className="sp-pass-user-info">
-                  <p className="sp-pass-user-name">Minh Minh Minh</p>
+                  <p className="sp-pass-user-name">{currentUser.name || 'Bạn'}</p>
                   <p className="sp-pass-user-sub">0908 ••• 888 • minhm@domain.vn</p>
                 </div>
               </div>

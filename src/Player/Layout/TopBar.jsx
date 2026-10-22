@@ -3,8 +3,10 @@ import { Link, useLocation } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import NotificationBell from './NotificationBell.jsx'
 import { getWallet } from '../../api/player/walletApi.js'
+import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
 function TopBar() {
+  const currentUser = useCurrentUser()
   const location = useLocation()
   const isCommunity = location.pathname === '/community'
   const isCreateMatch = location.pathname === '/create-match'
@@ -16,7 +18,7 @@ function TopBar() {
   const activeSportsList = SPORTS_LIST.filter(s => selectedSports?.includes(s.key))
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 2450000
+    return saved !== null ? Number(saved) : 0
   })
 
   const [playerProfile, setPlayerProfile] = useState(() => {
@@ -24,7 +26,7 @@ function TopBar() {
       const saved = localStorage.getItem('player_profile_data')
       if (saved) return JSON.parse(saved)
     } catch (e) {}
-    return { name: 'Minh Minh Minh', username: '@minhminhminh' }
+    return {}
   })
 
   useEffect(() => {
@@ -298,25 +300,19 @@ function TopBar() {
               overflow: 'hidden',
             }}
           >
-            {playerProfile.avatar ? (
-              <img src={playerProfile.avatar} alt={playerProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {currentUser.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              (playerProfile.name || 'MMM')
-                .trim()
-                .split(/\s+/)
-                .map((n) => n[0])
-                .slice(-3)
-                .join('')
-                .toUpperCase()
+              initialsOf(currentUser.name)
             )}
           </div>
           {/* Name + stats - hidden on very small screens */}
           <div className="hidden sm:block" style={{ lineHeight: 1.3 }}>
             <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#1C3524', whiteSpace: 'nowrap' }}>
-              {playerProfile.name || 'Minh Minh Minh'}
+              {currentUser.name || 'Người chơi'}
             </p>
             <p style={{ margin: 0, fontSize: '10.5px', color: '#6B7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              {playerProfile.username || '@minhminhminh'}
+              {currentUser.username}
             </p>
           </div>
           {/* Rating badge */}
@@ -336,7 +332,7 @@ function TopBar() {
             }}
           >
             <span>⭐</span>
-            <span>4.9</span>
+            <span title="Điểm Fair Play">{currentUser.fairPlayScore ?? '—'}</span>
           </div>
         </Link>
       </div>
