@@ -1,0 +1,13 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { UserAvatar } from '../Users/UserDetails.jsx'
+import { LFGStatus } from './LFGDetails.jsx'
+import { sportLabels, number, playDate, playTime, titleOf, shortId } from './lfgData.js'
+
+export default function LFGTable({ lfgs, total, totalPages, loading, detailId, onDetail, page, pageSize, onPage, onPageSize }) {
+  const pages = Math.max(1, totalPages)
+  return <section className="lfg-table-panel" aria-label="Danh sách kèo ghép trận" aria-busy={loading}><header><h2>Danh sách kèo ghép trận <span>{number(total)} kèo</span></h2></header><div className="lfg-table-scroll"><table><thead><tr>{['Mã kèo / tiêu đề', 'Môn thể thao', 'Người tổ chức', 'Cơ sở / sân', 'Ngày / giờ', 'Vị trí', 'Trạng thái'].map(label => <th key={label}>{label}</th>)}</tr></thead>
+    <tbody style={loading ? { opacity: 0.5 } : undefined}>{lfgs.map(lfg => <tr key={lfg.id} className={detailId === lfg.id ? 'is-selected' : ''} onClick={() => onDetail(lfg.id)}><td><button className="lfg-title-button" onClick={() => onDetail(lfg.id)} aria-expanded={detailId === lfg.id}><strong>{titleOf(lfg)}</strong><small>{shortId(lfg.id)}</small></button></td><td>{lfg.sport ? <span className={`lfg-sport ${lfg.sport.toLowerCase()}`}>{sportLabels[lfg.sport] || lfg.sport}</span> : '—'}</td><td><div className="lfg-table-host"><UserAvatar user={lfg.host} /><strong>{lfg.host.name}</strong></div></td><td><strong>{lfg.facility || '—'}</strong><small>{lfg.court}</small></td><td>{playDate(lfg) || '—'}<small>{playTime(lfg)}</small></td><td>{lfg.totalSlots != null ? `${number(lfg.filled ?? 0)}/${number(lfg.totalSlots)}` : lfg.slotsNeeded != null ? `Cần ${number(lfg.slotsNeeded)}` : '—'}</td><td><LFGStatus status={lfg.status} /></td></tr>)}</tbody></table>
+    {loading && !lfgs.length && <p className="lfg-empty">Đang tải kèo ghép trận…</p>}
+    {!loading && !lfgs.length && <p className="lfg-empty">Không có kèo phù hợp. Hãy điều chỉnh hoặc đặt lại bộ lọc.</p>}</div>
+    <footer className="lfg-pagination"><span>Trang {page} / {pages} · {number(total)} kèo</span><label>Số dòng mỗi trang<select value={pageSize} onChange={event => onPageSize(Number(event.target.value))}>{[10, 20, 50].map(size => <option key={size} value={size}>{size} dòng</option>)}</select></label><nav aria-label="Phân trang kèo ghép trận"><button aria-label="Trang trước" disabled={loading || page <= 1} onClick={() => onPage(page - 1)}><ChevronLeft size={13} /></button><button aria-label="Trang sau" disabled={loading || page >= pages} onClick={() => onPage(page + 1)}><ChevronRight size={13} /></button></nav></footer></section>
+}

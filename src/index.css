@@ -1,111 +1,143 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
 body {
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #eef9f1;
+  color: #1f2937;
+  font-family: 'Inter', sans-serif;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
+  width: 100%;
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+}
+
+/* Hide scrollbars globally (Player pages aesthetic) */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* =====================================================================
+   SPORT BACKGROUND - Hình nền thể thao nguyên bản, sắc nét & nổi bật 100%
+   Ảnh gốc: Cầu lông, Pickleball, Tennis, Bóng đá & Hoàng hôn
+   ===================================================================== */
+.sport-animated-bg {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+}
+
+/* Lớp hình nền thể thao cố định toàn màn hình, giữ nguyên 100% độ sắc nét và màu sắc gốc */
+.sport-animated-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url('/sports-bg.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* =====================================================================
+   GLASSMORPHISM - Khung thông tin tính năng nền trong suốt nhìn thấu ảnh nền
+   Đảm bảo chữ sắc nét 100%, không bị che, không mờ hay mất chữ khi cuộn trang
+   ===================================================================== */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.90) !important;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+  color: #0F172A;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.93) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.85) !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  color: #0F172A;
+}
+
+/* Đảm bảo toàn bộ chữ hiển thị trên nền thể thao luôn sắc nét, tương phản cao, không bị mờ hay mất chữ khi kéo trang */
+.sport-animated-bg {
+  color: #0F172A;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* =====================================================================
+   RESPONSIVE LAYOUT & MOBILE FRAME SYNC (ĐỒNG BỘ KHUNG & CHỮ TRÊN MOBILE)
+   ===================================================================== */
+.responsive-page-container {
+  padding: 24px 28px 48px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
   box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.app-main-content-wrapper {
+  padding-left: 260px;
+  min-height: 100vh;
+  width: 100%;
+  transition: padding-left 0.25s ease;
+  box-sizing: border-box;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+.app-topbar {
+  position: fixed;
+  top: 0;
+  left: 260px;
+  right: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.90);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  transition: left 0.25s ease;
+  box-sizing: border-box;
+}
+
+/* Đồng bộ hiển thị chữ và khung trang khi truy cập trên điện thoại */
+@media (max-width: 1023px) {
+  .app-main-content-wrapper {
+    padding-left: 0 !important;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+  .app-topbar {
+    left: 0 !important;
+    padding: 0 12px !important;
+    gap: 8px !important;
   }
-}
-p {
-  margin: 0;
-}
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+  .responsive-page-container {
+    padding: 16px 12px 40px !important;
+  }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  /* Đảm bảo chữ trên mobile không bị xuống dòng vụn vặt hay làm lệch khung */
+  body, p, span, h1, h2, h3, h4, h5, h6, label {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  /* Đảm bảo khung thẻ card co giãn vừa vặn màn hình điện thoại */
+  .grid, .flex {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }

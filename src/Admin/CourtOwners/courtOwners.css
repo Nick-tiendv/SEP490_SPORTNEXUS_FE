@@ -1,0 +1,109 @@
+/* Court Owner Management only; shared sports background and branding are untouched. */
+.owners-page{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;margin:0 auto;align-items:start}
+.owners-page.with-details{grid-template-columns:minmax(0,2fr) minmax(330px,1fr)}
+.owners-main-content{min-width:0}
+.owners-page-heading{background:#fff;border-radius:10px;padding:18px;gap:16px;margin-bottom:20px}
+.owners-page-heading h1{font-size:24px}
+.owners-page-heading h1 span{display:inline-block;background:var(--mint-200);border-radius:20px}
+.owners-heading-actions{gap:8px}
+.owners-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.owners-kpis article{background:#fff;border-radius:9px;padding:17px 12px}
+.owners-kpis article>div{gap:6px}
+.owners-kpis strong{font-size:24px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.owners-kpis strong span{color:var(--sn-green-500)}
+.owners-kpis article.pending strong span{border-radius:12px;background:var(--sn-warning-border);color:var(--sn-warning-solid);padding:3px 5px;line-height:1.2}
+.owners-demo-label{display:inline-block;margin:10px 0;background:#fff;border-radius:5px}
+.owners-pending-banner{display:flex;align-items:center;gap:12px;background:var(--sn-warning-bg);border:1px solid var(--sn-warning-border);border-radius:10px;padding:18px 15px;margin-bottom:20px}
+.owners-pending-banner>svg{color:var(--sn-warning-solid);flex-shrink:0}
+.owners-pending-banner h2{font-size:15px;font-weight:600;line-height:1.4}
+.owners-pending-banner p{font-size:12px;color:#9a8c69;margin-top:5px}
+.owners-pending-banner>span{background:var(--sn-warning-border);padding:5px 7px;border-radius:12px;font-size:12px;color:var(--sn-warning-solid);max-width:60px;text-align:center;margin-left:auto;flex-shrink:0}
+.owners-pending-banner button{display:flex;align-items:center;gap:5px;background:var(--sn-warning-solid);color:#fff;border-radius:7px;padding:9px 12px;font-size:12px;font-weight:600;flex-shrink:0}
+.owners-toolbar{padding:15px;border-radius:9px;background:#fff;margin-bottom:20px}
+.owners-filter-row{display:flex;gap:8px;flex-wrap:wrap}
+.owners-filter-row .users-search{flex:1;min-width:120px}
+.owners-filter-row select{background:var(--sn-gray-50);border-radius:5px;max-width:160px;min-width:0}
+.owners-filter-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:15px;font-size:12px}
+.owners-filter-actions>button{background:none;color:var(--sn-green-600);padding:0;font-size:12px}
+.owners-filter-actions>div{display:flex;gap:7px;margin-left:auto}
+.owners-table-panel{background:#fff;border-radius:10px}
+.owners-table-scroll{overflow-x:auto;scrollbar-width:thin}
+.sn-admin .owners-table-scroll::-webkit-scrollbar{display:block;height:6px}
+.sn-admin .owners-table-scroll::-webkit-scrollbar-thumb{background:var(--sn-gray-300);border-radius:4px}
+.owners-table-panel table{width:100%;min-width:740px;text-align:left}
+.owners-table-panel th{background:var(--sn-info-bg);padding:16px 12px}
+.owners-table-panel td{padding:16px 12px}
+.owners-table-panel tbody tr{cursor:pointer}
+.owners-table-panel tbody tr:hover{background:var(--sn-gray-25)}
+.owners-table-panel input[type=checkbox]{accent-color:var(--sn-green-600);width:14px;height:14px;vertical-align:middle;cursor:pointer}
+.owners-table-profile{display:flex;align-items:center;gap:10px;background:none;color:var(--sn-gray-700);text-align:left;padding:0;min-width:174px}
+.owners-table-profile strong{display:block;font-size:13px}
+.owners-table-profile strong i{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--sn-green-500);margin-left:4px}
+.owners-table-profile small,.owners-table-panel td>small{display:block;margin-top:3px}
+.owners-contact-email{font-size:12px;overflow-wrap:anywhere;min-width:145px;display:block}
+.owners-facility-count{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:var(--sn-info-bg);color:var(--sn-gray-500);padding:4px 6px;border-radius:5px}
+.owners-verification{display:inline-flex;align-items:center;gap:3px;border-radius:10px;padding:3px 6px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--mint-100);color:var(--sn-green-600)}
+.owners-verification.pending{background:var(--sn-warning-bg);color:var(--sn-warning-solid)}
+.owners-verification.rejected{background:var(--sn-danger-bg);color:#cd6975}
+.owners-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px}
+.owners-pagination>span{max-width:145px}
+.owners-pagination label{display:flex;align-items:center;gap:7px}
+.owners-pagination select{padding:6px;border-radius:5px;background:#fff}
+.owners-pagination nav{display:flex;gap:5px}
+.owners-pagination button{background:#fff;border-radius:5px}
+.owners-pagination button.current{border-color:var(--sn-green-500)}
+.owners-details{background:#fff;border-radius:10px}
+.owners-details-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:18px 16px}
+.owners-details-heading h2{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.owners-details-heading h2>svg{color:var(--sn-green-600)}
+.owners-details-heading small{color:var(--sn-gray-400)}
+.owners-details-body{padding:18px 16px;display:flex;flex-direction:column;gap:20px}
+.owners-profile{display:flex;gap:10px;align-items:flex-start}
+.owners-profile .users-avatar{border-radius:12px;width:48px;height:48px;background:var(--mint-200);border:1px solid var(--sn-gray-300);color:var(--sn-green-700);font-size:17px}
+.owners-profile>div{min-width:0}
+.owners-profile h3{font-size:15px;font-weight:700;line-height:1.5}
+.owners-pro-badge{display:inline-block;padding:2px 5px;border-radius:5px;background:var(--mint-100);color:var(--sn-green-600);font-size:11px;vertical-align:middle;font-weight:600}
+.owners-profile p,.owners-profile small{font-size:12px;color:var(--sn-gray-400);margin:3px 0;display:block;overflow-wrap:anywhere}
+.owners-profile-status{display:flex;gap:5px;align-items:center;margin:6px 0}
+.owners-kyc{background:var(--sn-gray-50);border:1px solid var(--sn-gray-200);border-radius:8px;padding:12px}
+.owners-kyc dl{margin:0;display:flex;flex-direction:column;gap:8px}
+.owners-kyc dl>div{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.owners-kyc dt{color:var(--sn-gray-400);flex-shrink:0}
+.owners-kyc dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}
+.owners-kyc .owners-trust{color:var(--sn-green-600)}
+.owners-kyc>small{display:block;margin-top:9px;font-size:11px;color:var(--sn-gray-400)}
+.owners-section-label{font-size:12px;text-transform:uppercase;letter-spacing:.7px;font-weight:500;color:var(--sn-gray-500);margin-bottom:9px!important}
+.owners-performance{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.owners-performance>div{border:1px solid var(--sn-gray-200);border-radius:6px;padding:12px;background:var(--sn-info-bg)}
+.owners-performance small{font-size:12px;color:var(--sn-gray-400);display:block}
+.owners-performance strong{display:block;font-size:19px;font-weight:700;margin-top:6px;letter-spacing:-.3px}
+.owners-performance>div:nth-child(3) strong{color:var(--sn-green-500)}
+.owners-facilities-heading{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.owners-facilities-heading small{font-size:11px;color:var(--sn-green-500)}
+.owners-facilities{display:flex;flex-direction:column;gap:10px}
+.owners-facilities article{padding:12px;border:1px solid var(--sn-gray-200);border-radius:8px}
+.owners-facilities article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.owners-facilities h4{font-size:13px;font-weight:600;line-height:1.5;margin:0}
+.owners-facilities p{font-size:12px;color:var(--sn-gray-400);line-height:1.7;margin-top:5px}
+.owners-facilities footer{display:flex;align-items:center;justify-content:space-between;gap:7px;border-top:1px solid var(--sn-gray-100);padding-top:9px;margin-top:9px;font-size:12px}
+.owners-facilities footer span{color:var(--sn-warning-solid)}
+.owners-facilities button{display:flex;align-items:center;gap:4px;background:none;color:var(--sn-green-600);padding:0;font-size:12px}
+.owners-empty-facilities{font-size:12px;color:var(--sn-gray-400);padding:15px;border:1px dashed var(--sn-gray-200);border-radius:7px}
+.owners-details-actions{display:flex;flex-wrap:wrap;gap:6px;padding:14px 12px;background:var(--sn-gray-50)}
+.owners-details-actions .users-button{flex:1;font-size:12px!important;padding:7px 8px!important}
+.owners-review-fields{margin:0;display:flex;flex-direction:column;gap:12px}
+.owners-review-fields>div{display:flex;justify-content:space-between;gap:16px;font-size:13px}
+.owners-review-fields dt{color:var(--sn-gray-500)}
+.owners-review-fields dd{margin:0;text-align:right;font-weight:600}
+.owners-bulk-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.owners-bulk-list span{display:block;color:var(--sn-gray-400);font-size:12px;margin-top:3px}
+.owners-documents{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.owners-documents>*{display:flex;flex-direction:column;gap:5px;border:1px solid var(--sn-gray-200);border-radius:8px;padding:6px;font-size:11px;color:var(--sn-gray-500);text-decoration:none;min-width:0}
+.owners-documents img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:5px;background:var(--sn-gray-50)}
+.owners-documents span{display:flex;align-items:center;gap:3px;font-weight:600}
+.owners-documents .missing{align-items:center;justify-content:center;aspect-ratio:4/3;background:var(--sn-gray-50);text-align:center}
+.owners-documents .missing small{color:var(--sn-gray-400)}
+.owners-tabs{margin-right:4px}
+@media(max-width:1300px){.owners-page.with-details{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)}.owners-kpis{gap:7px}.owners-kpis article{padding:13px 9px}.owners-kpis strong{font-size:21px}.owners-pending-banner{flex-wrap:wrap}.owners-pending-banner>span{margin-left:0}.owners-pending-banner button{margin-left:auto}.owners-filter-row .users-search{flex-basis:100%}}
+@media(max-width:1000px){.owners-page.with-details{grid-template-columns:minmax(0,1fr)}.owners-details-body{display:grid;grid-template-columns:1fr 1fr;align-items:start}.owners-details-actions{justify-content:flex-end}.owners-details-actions .users-button{flex:0 1 auto}}
+@media(max-width:640px){.owners-page-heading h1{font-size:22px}.owners-kpis{grid-template-columns:1fr 1fr;gap:10px}.owners-kpis strong{font-size:24px}.owners-pending-banner{gap:10px;padding:15px}.owners-pending-banner h2{font-size:13px}.owners-pending-banner>span{display:none}.owners-details-body{display:flex}.owners-filter-row select{max-width:100%;flex:1}.owners-filter-actions>div{margin-left:0}.owners-pagination nav{flex-wrap:wrap}.owners-details-actions .users-button{flex:1}}
