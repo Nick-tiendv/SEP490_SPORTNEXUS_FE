@@ -1,5 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  getLfgs,
+  getLfgById,
+  getMyLfgCards,
+  getJoinedLfgs,
+  claimLfgSlot,
+  getLfgQrTicket,
+  approveLfgParticipant,
+  rejectLfgParticipant,
+  removeLfgParticipant,
+  cancelLfg,
+  leaveLfg,
+  getLfgCancelReasons,
+  getMyFairPlay,
+} from '../../api/lfgApi.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
 const sanitizeMatch = (m) => {
@@ -29,6 +44,29 @@ const sanitizeMatch = (m) => {
 
 function CommunityFeed() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // 3-Tab Main Navigation: 'all' (Sàn ghép trận) | 'my_cards' (Kèo đã tạo - Chủ kèo) | 'joined' (Kèo đã tham gia)
+  const [activeMainTab, setActiveMainTab] = useState(() => searchParams.get('tab') || 'all')
+  const [myStatusFilter, setMyStatusFilter] = useState('all') // 'all' | 'OPEN' | 'FILLED' | 'CANCELLED'
+  const [myLfgCards, setMyLfgCards] = useState([])
+  const [joinedLfgCards, setJoinedLfgCards] = useState([])
+  const [isLoadingMyCards, setIsLoadingMyCards] = useState(false)
+  const [isLoadingJoined, setIsLoadingJoined] = useState(false)
+  const [isLoadingLfgs, setIsLoadingLfgs] = useState(false)
+  const [myFairPlayData, setMyFairPlayData] = useState(null)
+  const [isClaiming, setIsClaiming] = useState(false)
+  const [claimError, setClaimError] = useState(null)
+  const [selectedClaimSide, setSelectedClaimSide] = useState('any')
+  const [qrTicketModal, setQrTicketModal] = useState(null)
+  const [cancelMatchModal, setCancelMatchModal] = useState(null)
+  const [leaveMatchModal, setLeaveMatchModal] = useState(null)
+  const [cancelReasonsList, setCancelReasonsList] = useState([])
+  const [selectedCancelReason, setSelectedCancelReason] = useState('')
+  const [customCancelReason, setCustomCancelReason] = useState('')
+  const [leaveReason, setLeaveReason] = useState('')
+  const [actionLoadingId, setActionLoadingId] = useState(null)
+
   // Sports filter state: 'all' | 'pickleball' | 'badminton'
   const [activeSportFilter, setActiveSportFilter] = useState('badminton')
   const [levelFilter, setLevelFilter] = useState('all')
@@ -256,68 +294,375 @@ function CommunityFeed() {
     }
   }, [toastMessage])
 
-  // Confirm Slot Claim Handler
-  const handleConfirmClaim = () => {
+  // Load My Cards (Chủ kèo) - Bước 2
+  const loadMyCards = async (status = myStatusFilter) => {
+    setIsLoadingMyCards(true)
+    try {
+      const list = await getMyLfgCards(status === 'all' ? undefined : status)
+      const apiCards = Array.isArray(list) ? list : []
+      let localCustom = []
+      try {
+        const saved = localStorage.getItem('lfg_custom_matches')
+        if (saved) localCustom = JSON.parse(saved)
+      } catch {}
+
+      if (apiCards.length > 0) {
+        setMyLfgCards(apiCards)
+      } else if (localCustom.length > 0) {
+        setMyLfgCards(localCustom)
+      } else {
+        // Mock data when no cards exist yet on fresh server
+        setMyLfgCards([
+          {
+            id: 'demo-my-card-1',
+            sport: 'badminton',
+            sportName: 'Cầu Lông',
+            title: '[Cầu Lông Đôi Nam Nữ] Giao lưu CLB Tre Xanh Bình Thạnh',
+            courtName: 'Sân Cầu Lông Tre Xanh (Sân số 3)',
+            facilityAddress: '128 Đinh Bộ Lĩnh, P.26, Bình Thạnh, TP.HCM',
+            startTime: '2026-10-22T19:30:00',
+            status: 'OPEN',
+            requireApproval: true,
+            slotsNeeded: 2,
+            totalSlots: 4,
+            currentSlots: 2,
+            pricePerPerson: 45000,
+            description: 'Kèo giao lưu buổi tối, cần thêm 2 bạn trình trung bình khá. Cầu Yonex AS-40.',
+            participants: [
+              {
+                userId: 'user-p1-uuid',
+                name: 'Nguyễn Văn Hải',
+                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                fairPlayScore: 98,
+                status: 'PENDING',
+                joinedAt: '10 phút trước',
+              },
+              {
+                userId: 'user-p2-uuid',
+                name: 'Trần Thị Mai',
+                avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
+                fairPlayScore: 95,
+                status: 'APPROVED',
+                joinedAt: '30 phút trước',
+              },
+            ],
+          },
+        ])
+      }
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi lấy kèo của tôi:', err)
+    } finally {
+      setIsLoadingMyCards(false)
+    }
+  }
+
+  // Load Joined Cards (Người tham gia)
+  const loadJoinedCards = async () => {
+    setIsLoadingJoined(true)
+    try {
+      const list = await getJoinedLfgs()
+      if (Array.isArray(list) && list.length > 0) {
+        setJoinedLfgCards(list)
+      } else {
+        setJoinedLfgCards([
+          {
+            id: 'demo-joined-card-1',
+            sport: 'pickleball',
+            sportName: 'Pickleball',
+            title: '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)',
+            courtName: 'Sân SportNexus Arena (Sân VIP 2)',
+            facilityAddress: '35 Huỳnh Tấn Phát, Tân Thuận Đông, Quận 7, TP.HCM',
+            startTime: '2026-10-22T20:30:00',
+            status: 'APPROVED',
+            hostName: 'Hoàng Bách (Fair Play 99.8)',
+            pricePerPerson: 55000,
+            claimStatus: 'APPROVED',
+            ticketCode: 'NX-8839-KYC-VERIFIED',
+          },
+        ])
+      }
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi lấy kèo đã tham gia:', err)
+    } finally {
+      setIsLoadingJoined(false)
+    }
+  }
+
+  // Load Fair Play Score - 2.7
+  const loadFairPlay = async () => {
+    try {
+      const data = await getMyFairPlay()
+      if (data) setMyFairPlayData(data)
+    } catch (err) {
+      console.warn('[CommunityFeed] Không lấy được Fair Play:', err)
+    }
+  }
+
+  // Tab switcher
+  const handleTabChange = (newTab) => {
+    setActiveMainTab(newTab)
+    setSearchParams(newTab === 'all' ? {} : { tab: newTab })
+    if (newTab === 'my_cards') {
+      loadMyCards()
+    } else if (newTab === 'joined') {
+      loadJoinedCards()
+    }
+  }
+
+  useEffect(() => {
+    loadFairPlay()
+    if (activeMainTab === 'my_cards') {
+      loadMyCards(myStatusFilter)
+    } else if (activeMainTab === 'joined') {
+      loadJoinedCards()
+    }
+  }, [activeMainTab, myStatusFilter])
+
+  // Confirm Slot Claim Handler - 2.6 Người tham gia Bước 2
+  const handleConfirmClaim = async () => {
     if (!bookingModal) return
 
-    if (walletBalance < bookingModal.price) {
+    setIsClaiming(true)
+    setClaimError(null)
+
+    if (walletBalance < (bookingModal.price || 45000)) {
       alert('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
+      setIsClaiming(false)
       return
     }
 
-    const newBal = walletBalance - bookingModal.price
-    setWalletBalance(newBal)
-    localStorage.setItem('escrow_balance', newBal.toString())
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-    window.dispatchEvent(
-      new CustomEvent('player_new_notification', {
-        detail: {
-          type: 'transaction',
-          icon: 'receipt_long',
-          color: '#0284C7',
-          bg: '#E0F2FE',
-          title: 'Giao dịch ký quỹ Escrow thành công',
-          message: `Chốt slot thành công: ${bookingModal.title}`,
-          details: `Tiền cọc giữ slot: ${bookingModal.priceDisplay} • Bảo chứng 100% Escrow • Mã GD: #ESC-${Date.now().toString().slice(-5)}`,
-          link: '/community',
-          linkText: 'Xem chi tiết kèo',
-        },
+    try {
+      // Gọi API Claim Slot: POST /api/v1/lfgs/{cardId}/claim
+      await claimLfgSlot(bookingModal.id, {
+        side: selectedClaimSide || 'any',
+        friendIds: [],
+        friendPayMode: 'me',
       })
-    )
 
-    // Update match slot
-    setMatches((prev) =>
-      prev.map((m) => {
-        if (m.id === bookingModal.id) {
-          const nextRoster = [...m.roster]
-          const emptyIdx = nextRoster.findIndex((r) => r.bg === 'empty')
-          if (emptyIdx !== -1) {
-            nextRoster[emptyIdx] = {
-              initials: 'MMM',
-              bg: '#2D5F3F',
-              name: 'Minh Minh Minh (Bạn)',
-            }
-          }
-          return {
-            ...m,
-            currentSlots: Math.min(m.totalSlots, m.currentSlots + 1),
-            roster: nextRoster,
-          }
-        }
-        return m
+      // Image 2: Kèo không cần duyệt: trừ tiền ngay, vào kèo luôn. Kèo cần duyệt: chỉ gửi yêu cầu, tiền bị giữ khi chủ kèo duyệt.
+      const isApprovalRequired = Boolean(bookingModal.requireApproval)
+      if (!isApprovalRequired) {
+        const cost = bookingModal.price || 45000
+        const newBal = Math.max(0, walletBalance - cost)
+        setWalletBalance(newBal)
+        localStorage.setItem('escrow_balance', newBal.toString())
+        window.dispatchEvent(new Event('escrow_balance_updated'))
+      }
+
+      setToastMessage({
+        title: isApprovalRequired ? 'Đã Gửi Yêu Cầu Thành Công!' : 'Nhận Suất Thành Công!',
+        desc: isApprovalRequired
+          ? `Kèo này bật chế độ duyệt. Yêu cầu của bạn đã được gửi tới chủ kèo, tiền cọc sẽ được giữ an toàn khi chủ kèo duyệt.`
+          : `Bạn đã vào đội hình trận "${bookingModal.title}". Khoản cọc ${bookingModal.priceDisplay} đã được bảo chứng Escrow.`,
+        type: 'success',
       })
-    )
 
-    setToastMessage({
-      title: 'Giữ Slot Thành Công!',
-      desc: `Đã xác nhận giữ slot cho trận "${bookingModal.title}". Phí cọc ${bookingModal.priceDisplay} đã được tạm giữ an toàn.`,
-      type: 'success',
+      setBookingModal(null)
+      loadJoinedCards()
+      handleTabChange('joined')
+    } catch (err) {
+      console.error('[CommunityFeed] Lỗi nhận suất:', err)
+      // Image 2 spec: "Nhận suất có thể bị từ chối 403 khi điểm Fair Play thấp hơn ngưỡng Admin đặt (mặc định 50/100) hoặc đang bị Admin cấm nhận suất. Hiện nguyên câu message (có điểm hiện tại và ngưỡng)."
+      const errMsg = err?.message || 'Không thể nhận suất kèo này. Vui lòng kiểm tra lại.'
+      setClaimError(errMsg)
+      setToastMessage({
+        title: 'Từ Chối Nhận Suất (Fair Play / Quy định)',
+        desc: errMsg,
+        type: 'error',
+      })
+    } finally {
+      setIsClaiming(false)
+    }
+  }
+
+  // Chủ kèo: Duyệt người tham gia - 2.6 Bước 3
+  const handleApproveParticipant = async (cardId, userId, participantName) => {
+    setActionLoadingId(`${cardId}-${userId}`)
+    try {
+      await approveLfgParticipant(cardId, userId)
+      setToastMessage({
+        title: 'Duyệt thành công!',
+        desc: `Đã duyệt vận động viên ${participantName} vào kèo ghép. Tiền cọc của người tham gia đã được giữ bảo chứng.`,
+        type: 'success',
+      })
+      loadMyCards()
+    } catch (err) {
+      setToastMessage({
+        title: 'Lỗi duyệt thành viên',
+        desc: err.message || 'Không thể duyệt thành viên.',
+        type: 'error',
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  // Chủ kèo: Từ chối người tham gia - 2.6 Bước 3
+  const handleRejectParticipant = async (cardId, userId, participantName) => {
+    setActionLoadingId(`${cardId}-${userId}`)
+    try {
+      await rejectLfgParticipant(cardId, userId)
+      setToastMessage({
+        title: 'Đã từ chối',
+        desc: `Đã từ chối yêu cầu tham gia của ${participantName}.`,
+        type: 'info',
+      })
+      loadMyCards()
+    } catch (err) {
+      setToastMessage({
+        title: 'Lỗi từ chối thành viên',
+        desc: err.message || 'Không thể từ chối thành viên.',
+        type: 'error',
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  // Chủ kèo: Loại người đã vào kèo - 2.6 Bước 4
+  const handleRemoveParticipant = async (cardId, userId, participantName) => {
+    if (!window.confirm(`Xác nhận loại ${participantName} khỏi kèo?\n\nChính sách quy định: Hoàn 100% tiền cho họ và mở lại 1 suất trống cho kèo.`)) {
+      return
+    }
+    setActionLoadingId(`${cardId}-${userId}`)
+    try {
+      await removeLfgParticipant(cardId, userId)
+      setToastMessage({
+        title: 'Đã loại thành viên',
+        desc: `Đã loại ${participantName} khỏi kèo. Hệ thống đã hoàn 100% tiền cho người chơi và mở lại 1 suất trống.`,
+        type: 'success',
+      })
+      loadMyCards()
+    } catch (err) {
+      setToastMessage({
+        title: 'Lỗi loại thành viên',
+        desc: err.message || 'Không thể loại thành viên.',
+        type: 'error',
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  // Chủ kèo: Mở modal hủy kèo - 2.6 Bước 5
+  const handleOpenCancelModal = async (card) => {
+    setCancelMatchModal(card)
+    setSelectedCancelReason('')
+    setCustomCancelReason('')
+    try {
+      const reasons = await getLfgCancelReasons()
+      setCancelReasonsList(Array.isArray(reasons) ? reasons : [])
+      if (Array.isArray(reasons) && reasons.length > 0) {
+        const first = reasons[0]
+        setSelectedCancelReason(typeof first === 'string' ? first : first?.label || first?.reason)
+      }
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi lấy lý do hủy:', err)
+      setCancelReasonsList(['Bận việc đột xuất', 'Thời tiết xấu', 'Không đủ người chơi', 'Lý do khác'])
+      setSelectedCancelReason('Bận việc đột xuất')
+    }
+  }
+
+  // Chủ kèo: Xác nhận hủy kèo - 2.6 Bước 5
+  const handleConfirmCancelMatch = async () => {
+    if (!cancelMatchModal) return
+    const isCustom = selectedCancelReason === 'Lý do khác' || selectedCancelReason === 'Khác (Tự nhập lý do)'
+    const finalReason = isCustom ? customCancelReason.trim() || 'Lý do khác' : selectedCancelReason || 'Bận việc đột xuất'
+
+    setActionLoadingId(cancelMatchModal.id)
+    try {
+      await cancelLfg(cancelMatchModal.id, { reason: finalReason })
+      setToastMessage({
+        title: 'Hủy Kèo Ghép Thành Công',
+        desc: 'Đã hủy kèo. Hoàn 100% tiền cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 24h hoàn 100%).',
+        type: 'success',
+      })
+      setCancelMatchModal(null)
+      loadMyCards()
+    } catch (err) {
+      setToastMessage({
+        title: 'Lỗi hủy kèo',
+        desc: err.message || 'Không thể hủy kèo ghép.',
+        type: 'error',
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  // Người tham gia: Mở modal rời kèo - 2.6 Bước 4
+  const handleOpenLeaveModal = (card) => {
+    setLeaveMatchModal(card)
+    setLeaveReason('')
+  }
+
+  // Người tham gia: Xác nhận rời kèo - 2.6 Bước 4
+  const handleConfirmLeaveMatch = async () => {
+    if (!leaveMatchModal) return
+
+    // Kiểm tra quy định: Không rời được trong vòng 2 giờ trước giờ chơi
+    if (leaveMatchModal.startTime) {
+      const matchTime = new Date(leaveMatchModal.startTime).getTime()
+      const now = Date.now()
+      const diffHours = (matchTime - now) / (1000 * 60 * 60)
+      if (diffHours < 2 && diffHours > 0) {
+        alert('Quy định hệ thống: Không thể rời kèo trong vòng 2 giờ trước giờ chơi!')
+        return
+      }
+    }
+
+    setActionLoadingId(leaveMatchModal.id)
+    try {
+      await leaveLfg(leaveMatchModal.id, { reason: leaveReason.trim() || 'Rút khỏi kèo' })
+      setToastMessage({
+        title: 'Rời Kèo Thành Công',
+        desc: 'Đã rời kèo (hoàn 100% tiền) hoặc rút yêu cầu đang chờ.',
+        type: 'success',
+      })
+      setLeaveMatchModal(null)
+      loadJoinedCards()
+    } catch (err) {
+      setToastMessage({
+        title: 'Lỗi rời kèo',
+        desc: err.message || 'Không thể rời kèo (Lưu ý: Không rời được trong vòng 2 giờ trước giờ chơi).',
+        type: 'error',
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  // Mở vé QR Check-in - 2.6 Bước 3 & 2.7 Bước 1
+  const handleOpenQrTicket = async (cardId, matchInfo = {}) => {
+    setQrTicketModal({
+      isOpen: true,
+      isLoading: true,
+      cardId,
+      title: matchInfo.title || 'Vé QR Check-in Kèo Ghép LFG',
+      courtName: matchInfo.courtName || 'Sân SportNexus',
+      facilityAddress: matchInfo.facilityAddress || 'TP. Hồ Chí Minh',
+      time: matchInfo.time || '19:30 - 21:00',
+      ticketCode: matchInfo.ticketCode || `SNX-LFG-${String(cardId).slice(0, 8)}`,
+      qrCode: null,
     })
-    setBookingModal(null)
 
-    // Quay về trang chủ chính của trang Ghép trận
-    navigate('/community')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    try {
+      const res = await getLfgQrTicket(cardId)
+      setQrTicketModal((prev) => ({
+        ...prev,
+        isLoading: false,
+        ticketData: res,
+        qrCode: res?.qrCode || res?.code || `SNX-LFG-${cardId}`,
+        ticketCode: res?.ticketCode || res?.code || prev.ticketCode,
+      }))
+    } catch (err) {
+      console.warn('[CommunityFeed] Lấy vé QR thất bại hoặc demo fallback:', err)
+      setQrTicketModal((prev) => ({
+        ...prev,
+        isLoading: false,
+        qrCode: `SNX-LFG-${cardId}`,
+      }))
+    }
   }
 
   // Create match submit handler
@@ -482,7 +827,57 @@ function CommunityFeed() {
           </div>
         </div>
 
-        {/* Filter Bar Chips */}
+        {/* ================= 3-TAB MAIN NAVIGATION (2.6 & 2.7) ================= */}
+        <div className="flex items-center gap-3 mb-6 border-b border-gray-200/80 pb-3 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => handleTabChange('all')}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
+              activeMainTab === 'all'
+                ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/80'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">explore</span>
+            <span>Sàn Ghép Trận (Tất Cả)</span>
+          </button>
+
+          <button
+            onClick={() => handleTabChange('my_cards')}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
+              activeMainTab === 'my_cards'
+                ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/80'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">campaign</span>
+            <span>Kèo Tôi Đã Tạo (Chủ Kèo)</span>
+            {myLfgCards.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'my_cards' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
+                {myLfgCards.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => handleTabChange('joined')}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
+              activeMainTab === 'joined'
+                ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/80'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">how_to_reg</span>
+            <span>Kèo Tôi Đã Tham Gia</span>
+            {joinedLfgCards.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'joined' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
+                {joinedLfgCards.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Filter Bar Chips (Hiển thị khi ở Tab Sàn Ghép Trận) */}
+        {activeMainTab === 'all' && (
         <div className="flex items-center gap-2.5 p-2 rounded-2xl bg-white border border-gray-200/80 shadow-sm mb-7 overflow-x-auto scrollbar-none flex-wrap">
           {/* Tất Cả Thể Thao */}
           <button
@@ -596,11 +991,14 @@ function CommunityFeed() {
             </span>
           </div>
         </div>
+        )}
 
         {/* 2-Column Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
           {/* ================= LEFT COLUMN: MATCHES FEED ================= */}
           <div className="lg:col-span-8 flex flex-col gap-6">
+            {activeMainTab === 'all' && (
+              <>
             {/* Flash Queue Banner */}
             <div className="bg-[#EAF7E8] border border-[#C6E7BE] rounded-2xl p-4 flex items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-3.5">
@@ -816,6 +1214,360 @@ function CommunityFeed() {
                   </div>
                 </div>
               ))
+            )}
+            </>
+            )}
+
+            {/* TAB 2: KÈO TÔI ĐÃ TẠO (CHỦ KÈO) - 2.6 CHỦ KÈO */}
+            {activeMainTab === 'my_cards' && (
+              <div className="flex flex-col gap-5">
+                {/* Status Sub-filter Bar (OPEN / FILLED / CANCELLED) */}
+                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Lọc trạng thái:</span>
+                    {[
+                      { key: 'all', label: 'Tất Cả' },
+                      { key: 'OPEN', label: 'Đang Tuyển (OPEN)' },
+                      { key: 'FILLED', label: 'Đã Đủ Người (FILLED)' },
+                      { key: 'CANCELLED', label: 'Đã Hủy (CANCELLED)' },
+                    ].map((st) => (
+                      <button
+                        key={st.key}
+                        onClick={() => {
+                          setMyStatusFilter(st.key)
+                          loadMyCards(st.key)
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          myStatusFilter === st.key
+                            ? 'bg-[#3B6817] text-white shadow-xs'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => navigate('/create-match')}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#EAF7EE] text-[#15803D] hover:bg-[#DCFCE7] text-xs font-black border border-[#86EFAC] cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    <span>Tạo Kèo Mới</span>
+                  </button>
+                </div>
+
+                {/* Policy Notice Box for Host */}
+                <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
+                  <div>
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo: người tham gia được hoàn 100%; tiền sân của chủ kèo hoàn theo chính sách sân (trước 24h hoàn 100%).
+                  </div>
+                </div>
+
+                {isLoadingMyCards ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-[#3B6817] animate-spin">progress_activity</span>
+                    <p className="text-sm font-bold text-gray-700">Đang tải danh sách kèo đã tạo...</p>
+                  </div>
+                ) : myLfgCards.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-[#EAF7EE] flex items-center justify-center text-[#15803D]">
+                      <span className="material-symbols-outlined text-3xl">sports_score</span>
+                    </div>
+                    <p className="font-black text-gray-800 text-base">Bạn chưa tạo kèo ghép nào</p>
+                    <p className="text-xs text-gray-500 max-w-md">
+                      Hãy tạo ngay kèo ghép đầu tiên để hệ thống tự động tìm bạn chơi phù hợp trình độ và chia đều tiền sân qua Smart Escrow!
+                    </p>
+                    <button
+                      onClick={() => navigate('/create-match')}
+                      className="mt-2 px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md cursor-pointer"
+                    >
+                      Đăng Kèo Ghép Ngay
+                    </button>
+                  </div>
+                ) : (
+                  myLfgCards.map((card) => {
+                    const statusColorMap = {
+                      OPEN: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      FILLED: 'bg-blue-50 text-blue-700 border-blue-200',
+                      CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200',
+                    }
+                    const statusTextMap = {
+                      OPEN: 'Đang Tuyển (OPEN)',
+                      FILLED: 'Đã Đủ Người (FILLED)',
+                      CANCELLED: 'Đã Hủy (CANCELLED)',
+                    }
+
+                    return (
+                      <div
+                        key={card.id}
+                        className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-all"
+                      >
+                        {/* Header Row: Title, Status, Approval Mode */}
+                        <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2.5 py-0.5 rounded-md text-xs font-black border ${statusColorMap[card.status] || 'bg-gray-100 text-gray-700'}`}>
+                                {statusTextMap[card.status] || card.status}
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1E40AF]">
+                                {card.sportName || card.sport?.toUpperCase() || 'THỂ THAO'}
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                {card.requireApproval ? '🛡️ Cần Duyệt Người' : '⚡ Tự Động Vào'}
+                              </span>
+                            </div>
+                            <h3 className="font-black text-base text-[#111827] mt-1">{card.title}</h3>
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px] text-[#3B6817]">location_on</span>
+                              <span>{card.courtName} • {card.facilityAddress}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-[11px] text-gray-400 block font-semibold">Giá mỗi người</span>
+                            <span className="text-lg font-black text-[#15803D]">
+                              {card.pricePerPerson ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : 'Chia đều ca'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Mid Row: Participants List (2.6 Bước 3 & Bước 4) */}
+                        <div className="bg-[#FAFBF9] rounded-xl p-4 border border-gray-100">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-black text-gray-800 uppercase tracking-wide">
+                              Danh Sách Thành Viên Tham Gia ({card.participants?.length || 0}/{card.totalSlots || (card.slotsNeeded || 2) + 1})
+                            </span>
+                            <span className="text-[11px] text-gray-500 font-medium">
+                              {card.status === 'OPEN' ? `Cần thêm ${card.slotsNeeded || 1} người` : 'Đã khóa danh sách'}
+                            </span>
+                          </div>
+
+                          {(!card.participants || card.participants.length === 0) ? (
+                            <p className="text-xs text-gray-400 italic py-2">Chưa có người chơi xin vào kèo này.</p>
+                          ) : (
+                            <div className="flex flex-col gap-2.5">
+                              {card.participants.map((p) => {
+                                const isPending = p.status === 'PENDING'
+                                const loadingKey = `${card.id}-${p.userId}`
+                                const isLoadingThis = actionLoadingId === loadingKey
+
+                                return (
+                                  <div
+                                    key={p.userId}
+                                    className="p-2.5 rounded-xl bg-white border border-gray-200/80 flex items-center justify-between gap-3 flex-wrap"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <img
+                                        src={p.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
+                                        alt={p.name}
+                                        className="w-9 h-9 rounded-full object-cover border border-gray-200"
+                                      />
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold text-xs text-[#111827]">{p.name}</span>
+                                          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#EAF7EE] text-[#15803D]">
+                                            Fair Play {p.fairPlayScore || 100}
+                                          </span>
+                                        </div>
+                                        <span className="text-[11px] text-gray-400 block">
+                                          Trạng thái:{' '}
+                                          <strong className={isPending ? 'text-amber-600' : 'text-emerald-700'}>
+                                            {isPending ? 'Đang chờ duyệt' : 'Đã tham gia (Giữ cọc)'}
+                                          </strong>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Actions for Participant */}
+                                    <div className="flex items-center gap-2">
+                                      {/* Bước 3: Approve / Reject (chỉ khi requireApproval = true và pending) */}
+                                      {isPending ? (
+                                        <>
+                                          <button
+                                            disabled={isLoadingThis}
+                                            onClick={() => handleApproveParticipant(card.id, p.userId, p.name)}
+                                            className="px-3 py-1.5 rounded-lg bg-[#3B6817] hover:bg-[#315613] text-white text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                                          >
+                                            <span className="material-symbols-outlined text-[15px]">check</span>
+                                            <span>Duyệt</span>
+                                          </button>
+                                          <button
+                                            disabled={isLoadingThis}
+                                            onClick={() => handleRejectParticipant(card.id, p.userId, p.name)}
+                                            className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                          >
+                                            <span className="material-symbols-outlined text-[15px]">close</span>
+                                            <span>Từ chối</span>
+                                          </button>
+                                        </>
+                                      ) : (
+                                        /* Bước 4: Loại người đã vào kèo (hoàn 100% tiền, mở lại 1 suất) */
+                                        card.status !== 'CANCELLED' && (
+                                          <button
+                                            disabled={isLoadingThis}
+                                            onClick={() => handleRemoveParticipant(card.id, p.userId, p.name)}
+                                            className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1 border border-rose-200 cursor-pointer disabled:opacity-50"
+                                            title="Hoàn 100% tiền cho họ và mở lại 1 suất trống"
+                                          >
+                                            <span className="material-symbols-outlined text-[15px]">person_remove</span>
+                                            <span>Loại người chơi</span>
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Card Bottom Actions */}
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 flex-wrap">
+                          <span className="text-xs text-gray-500 font-medium">
+                            Giờ chơi: <strong>{new Date(card.startTime || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            {/* Mở vé QR Check-in (2.7 Bước 1) */}
+                            <button
+                              onClick={() => handleOpenQrTicket(card.id, card)}
+                              className="px-4 py-2 rounded-xl bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[17px]">qr_code_2</span>
+                              <span>Vé QR Check-in</span>
+                            </button>
+
+                            {/* Hủy kèo (2.6 Bước 5) */}
+                            {card.status !== 'CANCELLED' && (
+                              <button
+                                onClick={() => handleOpenCancelModal(card)}
+                                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[17px]">cancel</span>
+                                <span>Hủy Kèo</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: KÈO TÔI ĐÃ THAM GIA (NGƯỜI THAM GIA) - 2.6 */}
+            {activeMainTab === 'joined' && (
+              <div className="flex flex-col gap-5">
+                {/* Notice Box for Participants */}
+                <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs text-[#1C3524] flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[#15803D] text-[18px] shrink-0 mt-0.5">verified_user</span>
+                  <div>
+                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo được hoàn 100% tiền (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
+                  </div>
+                </div>
+
+                {isLoadingJoined ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-[#3B6817] animate-spin">progress_activity</span>
+                    <p className="text-sm font-bold text-gray-700">Đang tải danh sách kèo đã tham gia...</p>
+                  </div>
+                ) : joinedLfgCards.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
+                      <span className="material-symbols-outlined text-3xl">sports_tennis</span>
+                    </div>
+                    <p className="font-black text-gray-800 text-base">Bạn chưa tham gia kèo ghép nào</p>
+                    <p className="text-xs text-gray-500 max-w-md">
+                      Khám phá sàn ghép trận và chốt slot ngay để giao lưu thể thao cùng các vận động viên khác!
+                    </p>
+                    <button
+                      onClick={() => handleTabChange('all')}
+                      className="mt-2 px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md cursor-pointer"
+                    >
+                      Khám Phá Sàn Ghép Trận
+                    </button>
+                  </div>
+                ) : (
+                  joinedLfgCards.map((card) => {
+                    const isPending = card.claimStatus === 'PENDING'
+                    return (
+                      <div
+                        key={card.id}
+                        className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-md text-xs font-black border ${
+                                  isPending
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                {isPending ? 'Đang Chờ Chủ Kèo Duyệt' : 'Đã Vào Đội Hình'}
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1E40AF]">
+                                {card.sportName || card.sport?.toUpperCase() || 'THỂ THAO'}
+                              </span>
+                            </div>
+                            <h3 className="font-black text-base text-[#111827] mt-1">{card.title}</h3>
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px] text-[#3B6817]">location_on</span>
+                              <span>{card.courtName} • {card.facilityAddress}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-[11px] text-gray-400 block font-semibold">Cọc giữ chỗ Escrow</span>
+                            <span className="text-lg font-black text-[#15803D]">
+                              {new Intl.NumberFormat('vi-VN').format(card.pricePerPerson || 45000)} đ
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 p-3 rounded-xl flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-gray-400">person</span>
+                            <span>Chủ kèo: <strong>{card.hostName || 'Chủ kèo'}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px] text-gray-400">schedule</span>
+                            <span>Giờ thi đấu: <strong>{new Date(card.startTime || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                          </div>
+                        </div>
+
+                        {/* Actions for Participant: Vé QR Check-in & Rời kèo */}
+                        <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 flex-wrap">
+                          {/* Rời kèo (Bước 4) */}
+                          <button
+                            onClick={() => handleOpenLeaveModal(card)}
+                            className="px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">logout</span>
+                            <span>{isPending ? 'Rút yêu cầu' : 'Rời kèo'}</span>
+                          </button>
+
+                          {/* Mở vé QR (Bước 3 & 2.7) */}
+                          {!isPending && (
+                            <button
+                              onClick={() => handleOpenQrTicket(card.id, card)}
+                              className="px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
+                              <span>Mở Vé QR Check-in</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
             )}
           </div>
 
@@ -1173,31 +1925,322 @@ function CommunityFeed() {
               </div>
             </div>
 
-            {/* Protection Guarantee Note */}
-            <div className="bg-[#EAF7EE] p-3 rounded-xl border border-[#C6E7BE] text-xs text-[#1C3524] flex items-start gap-2">
-              <span className="material-symbols-outlined text-[#15803D] text-[18px] shrink-0 mt-0.5">
-                shield
-              </span>
-              <span>
-                Khoản cọc được giữ an toàn tại hợp đồng Escrow SportNexus. Bạn sẽ được cộng{' '}
-                <strong>+1.5 Điểm Fair Play</strong> khi đến sân check-in QR đúng giờ.
-              </span>
+            {/* Chọn Phía / Đội tham gia (A / B / Bất kỳ) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-black uppercase text-gray-500 tracking-wider">
+                Chọn vị trí / Đội hình:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'any', label: 'Bất Kỳ (Ngẫu Nhiên)' },
+                  { key: 'A', label: 'Đội A (Chủ Sân)' },
+                  { key: 'B', label: 'Đội B (Đối Thủ)' },
+                ].map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setSelectedClaimSide(s.key)}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      selectedClaimSide === s.key
+                        ? 'bg-[#EAF7EE] text-[#15803D] border-[#15803D]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Quy chế Duyệt Kèo (2.6 Người tham gia Bước 2) */}
+            <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+              bookingModal.requireApproval
+                ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                : 'bg-[#EAF7EE] border-[#C6E7BE] text-[#1C3524]'
+            }`}>
+              <span className="material-symbols-outlined text-[20px] shrink-0 mt-0.5">
+                {bookingModal.requireApproval ? 'security' : 'bolt'}
+              </span>
+              <div className="leading-relaxed">
+                {bookingModal.requireApproval ? (
+                  <>
+                    <strong className="block mb-0.5">Kèo Cần Chủ Kèo Duyệt (requireApproval = true):</strong>
+                    Chỉ gửi yêu cầu tham gia tới Chủ Kèo. Tiền cọc sẽ được bảo chứng giữ an toàn từ ví khi chủ kèo chính thức duyệt.
+                  </>
+                ) : (
+                  <>
+                    <strong className="block mb-0.5">Kèo Vào Tự Động:</strong>
+                    Trừ tiền cọc ngay lập tức từ ví Smart Escrow và bạn chính thức vào đội hình ngay bây giờ.
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Error Message Banner (403 Fair Play hoặc cấm nhận suất - Image 2) */}
+            {claimError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-800 text-xs flex items-start gap-2.5 animate-shake">
+                <span className="material-symbols-outlined text-rose-600 text-[22px] shrink-0 mt-0.5">gavel</span>
+                <div>
+                  <strong className="block font-black text-rose-900 mb-1">
+                    Từ chối nhận suất (403):
+                  </strong>
+                  <p className="font-semibold leading-relaxed whitespace-pre-wrap">{claimError}</p>
+                  <p className="text-[11px] text-rose-600 mt-1.5 italic">
+                    (Quy định: Nhận suất bị từ chối khi điểm Fair Play thấp hơn ngưỡng quy định hoặc đang bị cấm nhận suất)
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex items-center gap-3 mt-1">
               <button
+                type="button"
                 onClick={() => setBookingModal(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Huỷ bỏ
               </button>
               <button
+                type="button"
+                disabled={isClaiming}
                 onClick={handleConfirmClaim}
-                className="flex-1 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[17px]">check_circle</span>
-                <span>Xác nhận giữ slot</span>
+                {isClaiming ? (
+                  <>
+                    <span className="material-symbols-outlined text-[17px] animate-spin">progress_activity</span>
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[17px]">check_circle</span>
+                    <span>{bookingModal.requireApproval ? 'Gửi Yêu Cầu Vào Kèo' : 'Xác Nhận Nhận Suất'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: VÉ QR CHECK-IN TẠI SÂN (2.6 Bước 3 & 2.7 Bước 1) ================= */}
+      {qrTicketModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 flex flex-col items-center gap-4 text-center">
+            <div className="w-full flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#EAF7EE] text-[#15803D] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">qr_code_scanner</span>
+                </div>
+                <h3 className="font-black text-base text-[#111827]">Vé QR Check-in LFG</h3>
+              </div>
+              <button
+                onClick={() => setQrTicketModal(null)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* QR Code Container */}
+            <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col items-center justify-center w-full">
+              {qrTicketModal.isLoading ? (
+                <div className="w-52 h-52 flex flex-col items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-3xl text-[#3B6817] animate-spin">progress_activity</span>
+                  <span className="text-xs text-gray-500 font-bold">Đang tải mã vé QR...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-52 h-52 bg-white rounded-xl p-3 border-2 border-[#15803D] shadow-sm flex items-center justify-center relative overflow-hidden">
+                    {/* Simulated SVG QR Code */}
+                    <svg className="w-full h-full text-[#111827]" fill="currentColor" viewBox="0 0 100 100">
+                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="5" y="5"></rect>
+                      <rect fill="currentColor" height="14" rx="2" width="14" x="11" y="11"></rect>
+                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="69" y="5"></rect>
+                      <rect fill="currentColor" height="14" rx="2" width="14" x="75" y="11"></rect>
+                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="5" y="69"></rect>
+                      <rect fill="currentColor" height="14" rx="2" width="14" x="11" y="75"></rect>
+                      <rect height="6" rx="1" width="6" x="38" y="8"></rect>
+                      <rect height="6" rx="1" width="10" x="52" y="18"></rect>
+                      <rect height="12" rx="1" width="6" x="42" y="52"></rect>
+                      <rect height="6" rx="1" width="12" x="80" y="38"></rect>
+                      <rect height="12" rx="1" width="6" x="86" y="68"></rect>
+                    </svg>
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#16A34A] animate-pulse"></div>
+                  </div>
+                  <span className="font-mono text-xs font-black px-3 py-1 rounded-md bg-gray-200 text-gray-800 tracking-wider">
+                    {qrTicketModal.ticketCode || 'SNX-LFG-PASS'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Info Details */}
+            <div className="w-full bg-[#FAFBF9] rounded-xl p-3 border border-gray-100 text-xs text-left flex flex-col gap-1.5">
+              <p className="font-black text-[#111827]">{qrTicketModal.title}</p>
+              <p className="text-gray-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px] text-[#3B6817]">stadium</span>
+                <span>{qrTicketModal.courtName}</span>
+              </p>
+              <p className="text-gray-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px] text-[#3B6817]">schedule</span>
+                <span>Khung giờ: {qrTicketModal.time}</span>
+              </p>
+            </div>
+
+            {/* Check-in rules (2.7 Bước 2) */}
+            <div className="w-full p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed text-left flex items-start gap-2">
+              <span className="material-symbols-outlined text-[17px] text-amber-600 shrink-0 mt-0.5">schedule</span>
+              <div>
+                <strong>Quy định Check-in tại sân:</strong> Vé chỉ check-in được từ <strong>1 tiếng trước giờ chơi</strong> đến khi hết ca; quét sớm hoặc trễ hệ thống sẽ từ chối nhận check-in.
+              </div>
+            </div>
+
+            <button
+              onClick={() => setQrTicketModal(null)}
+              className="w-full py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white text-xs font-bold cursor-pointer"
+            >
+              Đóng Vé QR
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: HỦY KÈO GHÉP (2.6 Bước 5) ================= */}
+      {cancelMatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-rose-700">
+                <span className="material-symbols-outlined text-2xl">warning</span>
+                <h3 className="font-black text-base text-[#111827]">Xác Nhận Hủy Kèo Ghép</h3>
+              </div>
+              <button
+                onClick={() => setCancelMatchModal(null)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Bạn đang yêu cầu hủy kèo: <strong>{cancelMatchModal.title}</strong>
+            </p>
+
+            {/* Reason selector */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-gray-700">Lý do hủy kèo:</label>
+              <select
+                value={selectedCancelReason}
+                onChange={(e) => setSelectedCancelReason(e.target.value)}
+                className="p-2.5 rounded-xl border border-gray-300 text-xs bg-white text-gray-800 focus:outline-none focus:border-[#3B6817]"
+              >
+                {cancelReasonsList.map((r, i) => {
+                  const val = typeof r === 'string' ? r : r.label || r.reason || r.name
+                  return (
+                    <option key={i} value={val}>
+                      {val}
+                    </option>
+                  )
+                })}
+              </select>
+
+              {(selectedCancelReason === 'Lý do khác' || selectedCancelReason === 'Khác (Tự nhập lý do)') && (
+                <textarea
+                  rows="2"
+                  placeholder="Nhập lý do chi tiết..."
+                  value={customCancelReason}
+                  onChange={(e) => setCustomCancelReason(e.target.value)}
+                  className="p-2.5 rounded-xl border border-gray-300 text-xs w-full focus:outline-none focus:border-[#3B6817]"
+                />
+              )}
+            </div>
+
+            {/* Refund policy note (2.6 Bước 5) */}
+            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
+              <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
+              <div>
+                <strong>Chính sách hoàn tiền (2.6 Bước 5):</strong> Hoàn 100% tiền cọc cho tất cả người tham gia. Tiền sân của chủ kèo được hoàn theo chính sách hủy đặt sân của cơ sở (trước 24h hoàn 100%).
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCancelMatchModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 cursor-pointer"
+              >
+                Giữ Kèo
+              </button>
+              <button
+                type="button"
+                disabled={actionLoadingId === cancelMatchModal.id}
+                onClick={handleConfirmCancelMatch}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50"
+              >
+                {actionLoadingId === cancelMatchModal.id ? 'Đang hủy...' : 'Xác Nhận Hủy Kèo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: RỜI KÈO (2.6 Bước 4) ================= */}
+      {leaveMatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-amber-700">
+                <span className="material-symbols-outlined text-2xl">logout</span>
+                <h3 className="font-black text-base text-[#111827]">Xác Nhận Rời Kèo</h3>
+              </div>
+              <button
+                onClick={() => setLeaveMatchModal(null)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Bạn có chắc chắn muốn rời kèo ghép <strong>{leaveMatchModal.title}</strong>?
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-gray-700">Lý do rời kèo (tùy chọn):</label>
+              <input
+                type="text"
+                placeholder="Nhập lý do rút khỏi trận..."
+                value={leaveReason}
+                onChange={(e) => setLeaveReason(e.target.value)}
+                className="p-2.5 rounded-xl border border-gray-300 text-xs w-full focus:outline-none focus:border-[#3B6817]"
+              />
+            </div>
+
+            {/* 2-hour window rule (2.6 Bước 4) */}
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed flex items-start gap-2">
+              <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5">timer</span>
+              <div>
+                <strong>Quy định hoàn tiền:</strong> Hoàn 100% tiền cọc (hoặc rút yêu cầu đang chờ). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setLeaveMatchModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 cursor-pointer"
+              >
+                Ở Lại Kèo
+              </button>
+              <button
+                type="button"
+                disabled={actionLoadingId === leaveMatchModal.id}
+                onClick={handleConfirmLeaveMatch}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50"
+              >
+                {actionLoadingId === leaveMatchModal.id ? 'Đang xử lý...' : 'Xác Nhận Rời'}
               </button>
             </div>
           </div>

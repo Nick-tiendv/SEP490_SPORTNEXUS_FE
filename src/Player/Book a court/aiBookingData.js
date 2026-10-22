@@ -405,17 +405,128 @@ export const COURTS = [
 ]
 
 export const SLOT_TEMPLATE = [
+  // Khung giờ sáng (06:00 - 12:00)
+  { id: 's_m1', start: '06:00', end: '08:00', hours: 2, factor: 0.85, status: 'available', note: 'Sáng sớm trong lành' },
+  { id: 's_m2', start: '08:00', end: '10:00', hours: 2, factor: 0.9, status: 'available', note: 'Khung giờ sáng mát mẻ' },
+  { id: 's_m3', start: '10:00', end: '12:00', hours: 2, factor: 0.85, status: 'available', note: 'Khung trưa vắng người' },
+
+  // Khung giờ chiều (12:00 - 17:00)
+  { id: 's_a0', start: '12:00', end: '14:00', hours: 2, factor: 0.85, status: 'available', note: 'Đầu giờ chiều yên tĩnh' },
+  { id: 's_a1', start: '14:00', end: '16:00', hours: 2, factor: 0.95, status: 'available', note: 'Khung giờ chiều mát mẻ' },
   { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã kín lịch' },
+
+  // Khung giờ tối & đêm (17:00 - 23:00)
   { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'FC Sài Gòn Đặt' },
   { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'held', note: 'Đang giữ chỗ 15p' },
   { id: 's4', start: '19:00', end: '19:30', hours: 0.5, factor: 1, status: 'available', note: 'Khung 30p khởi động' },
-  { id: 's5', start: '19:30', end: '21:00', hours: 1.5, factor: 1, status: 'available', note: 'Khung giờ vàng lý tưởng' },
+  { id: 's5', start: '19:30', end: '21:00', hours: 1.5, factor: 1, status: 'available', note: 'Khung giờ vàng tối lý tưởng' },
   { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available', note: 'Giảm 9% giờ đêm' },
   { id: 's7', start: '22:00', end: '23:00', hours: 1, factor: 0.82, status: 'available', note: 'Giảm 18% giờ muộn' },
 ]
 
 export const formatVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`
 export const roundTo10k = (n) => Math.round(n / 10000) * 10000
+
+// Phân tích câu hỏi người dùng để nhận diện yêu cầu về khung giờ (cụ thể hoặc theo buổi)
+export function parseTimeRequirement(query) {
+  if (!query) return null
+  const q = query.toLowerCase()
+
+  // 1. Khoảng giờ cụ thể (vd: "14:00 - 16:00", "14h - 16h", "14-16h", "14h đến 16h", "từ 14:00 đến 16:00")
+  const rangeMatch = q.match(/(\d{1,2})(?:[:h](\d{2}))?\s*(?:h)?\s*(?:-|đến|tới)\s*(\d{1,2})(?:[:h](\d{2}))?\s*(?:h)?/)
+  if (rangeMatch) {
+    const startHour = parseInt(rangeMatch[1], 10)
+    const endHour = parseInt(rangeMatch[3], 10)
+    const startMin = rangeMatch[2] || '00'
+    const endMin = rangeMatch[4] || '00'
+    const startStr = `${String(startHour).padStart(2, '0')}:${startMin}`
+    const endStr = `${String(endHour).padStart(2, '0')}:${endMin}`
+    return {
+      type: 'range',
+      startHour,
+      endHour,
+      label: `${startStr} - ${endStr}`,
+      isAfternoon: startHour >= 12 && startHour < 18,
+      isMorning: startHour < 12,
+      isEvening: startHour >= 18,
+    }
+  }
+
+  // 2. Giờ cụ thể đơn lẻ (vd: "14:00", "14h", "2h chiều", "15:00", "16h")
+  const singleHourMatch = q.match(/(\d{1,2})(?:[:](\d{2})|\s*h(?:(\d{2}))?)/)
+  if (singleHourMatch) {
+    let hour = parseInt(singleHourMatch[1], 10)
+    if (q.includes('chiều') && hour < 12) hour += 12
+    if (q.includes('tối') && hour < 12 && hour <= 11) hour += 12
+    return {
+      type: 'hour',
+      hour,
+      label: `${String(hour).padStart(2, '0')}:00`,
+      isAfternoon: hour >= 12 && hour < 18,
+      isMorning: hour < 12,
+      isEvening: hour >= 18,
+    }
+  }
+
+  // 3. Theo buổi trong ngày
+  if (q.includes('chiều') || q.includes('buổi chiều') || q.includes('chiều nay') || q.includes('chiều mai')) {
+    return { type: 'period', period: 'afternoon', label: 'buổi chiều (13:30 - 17:00)', startHour: 13, endHour: 17, isAfternoon: true }
+  }
+  if (q.includes('sáng') || q.includes('buổi sáng') || q.includes('sáng sớm')) {
+    return { type: 'period', period: 'morning', label: 'buổi sáng (06:00 - 12:00)', startHour: 6, endHour: 12, isMorning: true }
+  }
+  if (q.includes('trưa') || q.includes('buổi trưa')) {
+    return { type: 'period', period: 'noon', label: 'buổi trưa (11:30 - 14:00)', startHour: 11, endHour: 14, isNoon: true }
+  }
+  if (q.includes('tối') || q.includes('buổi tối') || q.includes('tối nay') || q.includes('tối mai') || q.includes('đêm')) {
+    return { type: 'period', period: 'evening', label: 'buổi tối (17:30 - 23:00)', startHour: 17, endHour: 23, isEvening: true }
+  }
+
+  return null
+}
+
+// Tìm ca sân khớp tối ưu với yêu cầu thời gian của người chơi
+export function findBestMatchingSlot(slots, timeReq) {
+  if (!slots || slots.length === 0) return null
+
+  if (!timeReq) {
+    return slots.find((s) => s.id === 's5' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
+  }
+
+  const getH = (tStr) => {
+    if (!tStr) return 0
+    return parseInt(tStr.split(':')[0], 10)
+  }
+
+  let candidates = []
+
+  if (timeReq.type === 'range') {
+    candidates = slots.filter((s) => {
+      const sH = getH(s.start)
+      const eH = getH(s.end)
+      return (sH >= timeReq.startHour && sH < timeReq.endHour) ||
+             (eH > timeReq.startHour && eH <= timeReq.endHour) ||
+             (sH <= timeReq.startHour && eH >= timeReq.endHour)
+    })
+  } else if (timeReq.type === 'hour') {
+    candidates = slots.filter((s) => {
+      const sH = getH(s.start)
+      const eH = getH(s.end)
+      return (timeReq.hour >= sH && timeReq.hour < eH) || Math.abs(sH - timeReq.hour) <= 1
+    })
+  } else if (timeReq.type === 'period') {
+    candidates = slots.filter((s) => {
+      const sH = getH(s.start)
+      return sH >= timeReq.startHour && sH < timeReq.endHour
+    })
+  }
+
+  const availableMatch = candidates.find((s) => s.status === 'available')
+  if (availableMatch) return availableMatch
+  if (candidates.length > 0) return candidates[0]
+
+  return slots.find((s) => s.status === 'available') || slots[0]
+}
 
 // Công thức Haversine tính khoảng cách chuẩn theo tọa độ GPS (km)
 export function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -514,6 +625,18 @@ export function buildWelcomeMessage(userLocation) {
   }
 }
 
+export const DISTRICT_MATCHERS = [
+  { key: 'q10', name: 'Quận 10', terms: ['quận 10', 'q10', 'q.10', 'thành thái', 'bắc hải', 'cách mạng tháng 8'] },
+  { key: 'thuduc', name: 'TP. Thủ Đức', terms: ['thủ đức', 'thu duc', 'tp thủ đức', 'thảo điền', 'tăng nhơn phú', 'lê văn việt', 'đình phong phú'] },
+  { key: 'tanbinh', name: 'Tân Bình', terms: ['tân bình', 'tan binh', 'hoàng hoa thám', 'sân bay', 'bạch đằng'] },
+  { key: 'q7', name: 'Quận 7', terms: ['quận 7', 'q7', 'q.7', 'tân thuận', 'tân quy', 'phú mỹ hưng', 'nguyễn thị thập', 'huỳnh tấn phát'] },
+  { key: 'binhthanh', name: 'Bình Thạnh', terms: ['bình thạnh', 'binh thanh', 'điện biên phủ', 'nguyễn hữu cảnh'] },
+  { key: 'phunhuan', name: 'Phú Nhuận', terms: ['phú nhuận', 'phu nhuan', 'phan xích long', 'hoa phượng'] },
+  { key: 'q1', name: 'Quận 1', terms: ['quận 1', 'q1', 'q.1', 'bến thành', 'tao đàn', 'huyền trân công chúa'] },
+  { key: 'quan8', name: 'Quận 8', terms: ['quận 8', 'q8', 'q.8', 'phạm hùng', 'bông sao'] },
+  { key: 'q3', name: 'Quận 3', terms: ['quận 3', 'q3', 'q.3', 'hồ xuân hương'] },
+]
+
 // =========================================================================
 // BỘ PHÂN TÍCH VÀ TRẢ LỜI CÂU HỎI CHÍNH XÁC, ĐẦY ĐỦ, KHÔNG TRÙNG LẶP
 // =========================================================================
@@ -521,6 +644,9 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
   const query = (rawQuery || '').trim().toLowerCase()
   const loc = userLocation || DISTRICT_CENTERS.q7
   const currentCourt = COURTS.find((c) => c.id === currentCourtId) || COURTS[0]
+
+  // Nhận diện yêu cầu về khung giờ (vd: 14:00 - 16:00, chiều, sáng, tối...)
+  const timeReq = parseTimeRequirement(query)
 
   // Gắn khoảng cách động tính theo vị trí hiện tại của người chơi
   const localizedCourts = COURTS.map((c) => ({
@@ -558,10 +684,119 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     }
   }
 
+  // -------------------------------------------------------------------------
+  // 0. NGƯỜI CHƠI TÌM SÂN THEO KHUNG GIỜ CỤ THỂ (VD: 14:00 - 16:00, CHIỀU, SÁNG...)
+  // -------------------------------------------------------------------------
+  const isGeneralQuestion =
+    query.includes('hủy sân') ||
+    query.includes('hoàn tiền') ||
+    query.includes('escrow') ||
+    query.includes('chia tiền') ||
+    query.includes('split') ||
+    query.includes('mã qr') ||
+    query.includes('vietqr')
+
+  if (timeReq && !isGeneralQuestion) {
+    let pool = localizedCourts
+
+    // Lọc theo môn thể thao nếu có nhắc đến
+    if (query.includes('pickle') || query.includes('pickleball')) {
+      const pCourts = pool.filter((c) => c.sport === 'pickleball')
+      if (pCourts.length > 0) pool = pCourts
+    } else if (query.includes('cầu lông') || query.includes('badminton')) {
+      const bCourts = pool.filter((c) => c.sport === 'badminton')
+      if (bCourts.length > 0) pool = bCourts
+    }
+
+    // Lọc theo quận nếu có nhắc đến
+    for (const d of DISTRICT_MATCHERS) {
+      if (d.terms.some((term) => query.includes(term))) {
+        const inDistrict = pool.filter((c) => c.district === d.key)
+        if (inDistrict.length > 0) {
+          pool = inDistrict
+        }
+        break
+      }
+    }
+
+    // Nếu người chơi hỏi đích danh 1 sân cụ thể
+    if (specificCourtMatch) {
+      pool = [specificCourtMatch]
+    }
+
+    // Sắp xếp các sân theo khoảng cách gần nhất
+    const sortedCourts = [...pool].sort((a, b) => a.distance - b.distance)
+
+    // Tìm sân gần nhất có slot khả dụng (available) khớp với timeReq
+    let bestCourt = null
+    let bestSlot = null
+
+    for (const c of sortedCourts) {
+      const slots = buildSlotsForCourt(c)
+      const slot = findBestMatchingSlot(slots, timeReq)
+      if (slot && slot.status === 'available') {
+        bestCourt = c
+        bestSlot = slot
+        break
+      }
+    }
+
+    if (!bestCourt) {
+      bestCourt = sortedCourts[0] || localizedCourts[0]
+      const slots = buildSlotsForCourt(bestCourt)
+      bestSlot = findBestMatchingSlot(slots, timeReq)
+    }
+
+    // Tìm 2-3 sân lân cận cũng có slot khớp
+    const otherCourts = sortedCourts
+      .filter((c) => c.id !== bestCourt.id)
+      .slice(0, 3)
+      .map((c) => {
+        const slots = buildSlotsForCourt(c)
+        const s = findBestMatchingSlot(slots, timeReq)
+        return { court: c, slot: s }
+      })
+
+    const timeLabel = bestSlot ? `${bestSlot.start} - ${bestSlot.end}` : timeReq.label
+    const sessionName = timeReq.isAfternoon ? 'chiều' : timeReq.isMorning ? 'sáng' : timeReq.isEvening ? 'tối' : ''
+
+    return {
+      title: `Sân còn trống khung giờ ${sessionName ? `${sessionName} ` : ''}${timeLabel}`,
+      text:
+        `Dựa trên vị trí hiện tại của bạn tại **${loc.address || loc.name}**, các cụm sân **đang còn trống đúng khung giờ ${sessionName ? `${sessionName} ` : ''}${timeLabel}** theo yêu cầu:\n\n` +
+        `• **Gợi ý hàng đầu (Gần bạn nhất)**: **${bestCourt.name}** (${bestCourt.sportName})\n` +
+        `  - **Khoảng cách**: Chỉ cách bạn **${bestCourt.distance} km** (${bestCourt.route.eta}).\n` +
+        `  - **Địa chỉ**: ${bestCourt.address}.\n` +
+        `  - **Khung giờ trống**: **${bestSlot.start} - ${bestSlot.end}** (${bestSlot.hours} tiếng thi đấu • *${bestSlot.note}*).\n` +
+        `  - **Giá thuê**: **${formatVnd(bestSlot.price)}** (Đã gồm bảo chứng Escrow & giữ chỗ độc quyền 15 phút).\n` +
+        `  - **Đặc điểm sân**: ${bestCourt.subCourtDesc}.\n\n` +
+        (otherCourts.length > 0
+          ? `• **Các cụm sân lân cận khác cũng còn slot ${timeLabel}**:\n` +
+            otherCourts
+              .map(
+                (item, idx) =>
+                  `  ${idx + 1}. **${item.court.name}** (Cách **${item.court.distance} km**): Khung **${item.slot.start} - ${item.slot.end}** (Giá: **${formatVnd(item.slot.price)}**).`
+              )
+              .join('\n') + '\n\n'
+          : '') +
+        `📌 Bấm **"Chọn Sân Này"** hoặc **"Đặt & Chia Tiền Ngay"** bên dưới để khóa giữ slot **${bestSlot.start} - ${bestSlot.end}** ngay lập tức!`,
+      recommendedCourt: bestCourt,
+      recommendedSlot: bestSlot,
+      priorityBadge: `⏰ CÒN TRỐNG KHUNG GIỜ: ${bestSlot.start} - ${bestSlot.end}`,
+      priorityReason: `Khớp chính xác yêu cầu khung giờ ${timeLabel} của bạn • Cách bạn ${bestCourt.distance} km • Sân chuẩn thi đấu`,
+      quickReplies: [
+        `Chọn Sân ${bestCourt.name}`,
+        `Đặt Slot ${bestSlot.start} - ${bestSlot.end}`,
+        'Xem Sân Gần Khác',
+        'Tìm Kèo Ghép Trận LFG',
+      ],
+    }
+  }
+
   // Nếu người chơi hỏi riêng về tiện ích (xe, máy lạnh, tắm) của một sân cụ thể
   if (specificCourtMatch && (query.includes('xe') || query.includes('ô tô') || query.includes('máy lạnh') || query.includes('tắm') || query.includes('tiện ích') || query.includes('đèn'))) {
     const slots = buildSlotsForCourt(specificCourtMatch)
-    const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
+    const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: `Tiện ích tại ${specificCourtMatch.name}`,
@@ -585,7 +820,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
   if (specificCourtMatch) {
     const slots = buildSlotsForCourt(specificCourtMatch)
     const availableSlots = slots.filter((s) => s.status === 'available')
-    const bestSlot = slots.find((s) => s.id === 's5' && s.status === 'available') || availableSlots[0] || slots[0]
+    const bestSlot = findBestMatchingSlot(slots, timeReq) || availableSlots[0] || slots[0]
 
     return {
       title: `Thông tin chi tiết: ${specificCourtMatch.name}`,
@@ -596,7 +831,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
         `• **Giá thuê**: **${formatVnd(specificCourtMatch.price)}/giờ**.\n` +
         `• **Đặc điểm nổi bật**: ${specificCourtMatch.subCourtDesc}. ${specificCourtMatch.highlights.join(' • ')}.\n` +
         `• **Đánh giá**: **${specificCourtMatch.rating}★** (${specificCourtMatch.reviewsCount} đánh giá từ người chơi).\n` +
-        `• **Khung giờ trống tối nay**: ${availableSlots.map((s) => `**${s.start}-${s.end}** (${formatVnd(s.price)})`).join(', ') || 'Đang cập nhật'}.\n\n` +
+        `• **Khung giờ trống sẵn sàng**: **${bestSlot.start} - ${bestSlot.end}** (${formatVnd(bestSlot.price)}).\n\n` +
         `Bạn có thể bấm **Chọn Sân Này** để áp dụng lên lịch hoặc **Đặt & Chia Tiền** ngay bên dưới!`,
       recommendedCourt: specificCourtMatch,
       recommendedSlot: bestSlot,
@@ -609,18 +844,6 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
   // -------------------------------------------------------------------------
   // 2. NGƯỜI CHƠI HỎI THEO QUẬN / KHU VỰC
   // -------------------------------------------------------------------------
-  const DISTRICT_MATCHERS = [
-    { key: 'q10', name: 'Quận 10', terms: ['quận 10', 'q10', 'q.10', 'thành thái', 'bắc hải', 'cách mạng tháng 8'] },
-    { key: 'thuduc', name: 'TP. Thủ Đức', terms: ['thủ đức', 'thu duc', 'tp thủ đức', 'thảo điền', 'tăng nhơn phú', 'lê văn việt', 'đình phong phú'] },
-    { key: 'tanbinh', name: 'Tân Bình', terms: ['tân bình', 'tan binh', 'hoàng hoa thám', 'sân bay', 'bạch đằng'] },
-    { key: 'q7', name: 'Quận 7', terms: ['quận 7', 'q7', 'q.7', 'tân thuận', 'tân quy', 'phú mỹ hưng', 'nguyễn thị thập', 'huỳnh tấn phát'] },
-    { key: 'binhthanh', name: 'Bình Thạnh', terms: ['bình thạnh', 'binh thanh', 'điện biên phủ', 'nguyễn hữu cảnh'] },
-    { key: 'phunhuan', name: 'Phú Nhuận', terms: ['phú nhuận', 'phu nhuan', 'phan xích long', 'hoa phượng'] },
-    { key: 'q1', name: 'Quận 1', terms: ['quận 1', 'q1', 'q.1', 'bến thành', 'tao đàn', 'huyền trân công chúa'] },
-    { key: 'quan8', name: 'Quận 8', terms: ['quận 8', 'q8', 'q.8', 'phạm hùng', 'bông sao'] },
-    { key: 'q3', name: 'Quận 3', terms: ['quận 3', 'q3', 'q.3', 'hồ xuân hương'] },
-  ]
-
   let matchedDistrict = null
   for (const d of DISTRICT_MATCHERS) {
     if (d.terms.some((term) => query.includes(term))) {
@@ -644,7 +867,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     if (courtsInDistrict.length > 0) {
       const bestCourt = [...courtsInDistrict].sort((a, b) => b.rating - a.rating)[0]
       const bestSlots = buildSlotsForCourt(bestCourt)
-      const targetSlot = bestSlots.find((s) => s.id === 's5' && s.status === 'available') || bestSlots.find((s) => s.status === 'available') || bestSlots[0]
+      const targetSlot = findBestMatchingSlot(bestSlots, timeReq) || bestSlots.find((s) => s.status === 'available') || bestSlots[0]
 
       return {
         title: `Danh sách sân tại ${matchedDistrict.name}`,
@@ -736,7 +959,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     const sortedByDistance = [...pool].sort((a, b) => a.distance - b.distance)
     const nearestCourt = sortedByDistance[0] || localizedCourts[0]
     const slots = buildSlotsForCourt(nearestCourt)
-    const availableSlot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
+    const availableSlot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: 'Sân gần vị trí hiện tại của bạn nhất',
@@ -775,24 +998,24 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     const court = currentCourt || localizedCourts[0]
     const slots = buildSlotsForCourt(court)
     const availableSlots = slots.filter((s) => s.status === 'available')
-    const goldenSlot = slots.find((s) => s.id === 's5' && s.status === 'available') || availableSlots[0] || slots[0]
+    const goldenSlot = findBestMatchingSlot(slots, timeReq) || availableSlots[0] || slots[0]
 
     return {
       title: `Lịch khung giờ trống tại ${court.name}`,
       text:
         `Thông tin thời gian và lịch trống tại **${court.name}**:\n\n` +
         `• **Giờ mở cửa hoạt động**: **06:00 - 23:00** tất cả các ngày trong tuần.\n` +
-        `• **Trạng thái khung giờ tối nay**:\n` +
+        `• **Trạng thái khung giờ khả dụng**:\n` +
         availableSlots
           .map((s) => `  - **${s.start} - ${s.end}** (${s.hours}h): **${formatVnd(s.price)}** — *${s.note}*`)
           .join('\n') +
-        `\n\n📌 **Khung giờ vàng tối ưu**: **${goldenSlot.start} - ${goldenSlot.end}** (1.5h thi đấu lý tưởng).\n` +
+        `\n\n📌 **Khung giờ tối ưu gợi ý**: **${goldenSlot.start} - ${goldenSlot.end}** (${goldenSlot.hours}h thi đấu lý tưởng).\n` +
         `Khi bấm chọn, slot sẽ được **khóa độc quyền 15:00 phút** chống trùng lịch ngay lập tức.`,
       recommendedCourt: court,
       recommendedSlot: goldenSlot,
-      priorityBadge: `⏰ KHUNG GIỜ VÀNG: ${goldenSlot.start} - ${goldenSlot.end}`,
-      priorityReason: 'Khung giờ thể thao cao điểm • Thời lượng 1.5h trọn vẹn • Sẵn sàng giữ chỗ',
-      quickReplies: ['Khóa Slot 19:30 - 21:00', 'Đặt & Chia Tiền Ngay', 'Xem Sân Khác'],
+      priorityBadge: `⏰ KHUNG GIỜ: ${goldenSlot.start} - ${goldenSlot.end}`,
+      priorityReason: 'Khung giờ phù hợp tiêu chí • Thời lượng thi đấu trọn vẹn • Sẵn sàng giữ chỗ',
+      quickReplies: [`Khóa Slot ${goldenSlot.start} - ${goldenSlot.end}`, 'Đặt & Chia Tiền Ngay', 'Xem Sân Khác'],
     }
   }
 
@@ -810,7 +1033,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
   ) {
     const courtToBook = currentCourt || localizedCourts[0]
     const slots = buildSlotsForCourt(courtToBook)
-    const targetSlot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
+    const targetSlot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: `Sẵn sàng đặt sân nhanh: ${courtToBook.name}`,
@@ -850,7 +1073,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
       )
       const topAcCourt = acCourts.sort((a, b) => a.distance - b.distance)[0] || localizedCourts[0]
       const slots = buildSlotsForCourt(topAcCourt)
-      const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots[0]
+      const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
       return {
         title: 'Các cụm sân trang bị máy lạnh điều hòa',
@@ -878,7 +1101,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
       )
       const topCarCourt = carCourts.sort((a, b) => a.distance - b.distance)[0] || localizedCourts[0]
       const slots = buildSlotsForCourt(topCarCourt)
-      const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots[0]
+      const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
       return {
         title: 'Các cụm sân có bãi đỗ xe ô tô & xe máy',
@@ -901,7 +1124,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
 
     const targetCourt = currentCourt || localizedCourts[0]
     const slots = buildSlotsForCourt(targetCourt)
-    const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots[0]
+    const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: `Tiện ích cụm sân ${targetCourt.name}`,
@@ -990,7 +1213,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     const pickleCourts = localizedCourts.filter((c) => c.sport === 'pickleball')
     const bestPickle = pickleCourts.sort((a, b) => a.distance - b.distance)[0] || pickleCourts[0]
     const slots = buildSlotsForCourt(bestPickle)
-    const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots[0]
+    const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: 'Các cụm sân Pickleball tiêu chuẩn',
@@ -1019,7 +1242,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     const badCourts = localizedCourts.filter((c) => c.sport === 'badminton')
     const nearestBad = badCourts.sort((a, b) => a.distance - b.distance)[0] || badCourts[0]
     const slots = buildSlotsForCourt(nearestBad)
-    const slot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots[0]
+    const slot = findBestMatchingSlot(slots, timeReq) || slots.find((s) => s.status === 'available') || slots[0]
 
     return {
       title: 'Các cụm sân Cầu Lông chất lượng cao',
@@ -1028,11 +1251,11 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
         `• **Gần bạn nhất**: **${nearestBad.name}** (Cách **${nearestBad.distance} km** • Giá **${formatVnd(nearestBad.price)}/h**).\n` +
         `• **Phân khúc tiết kiệm**: Sân Huệ An Thủ Đức (140k/h), Sân Bông Sao Q.8 (140k/h), CLB YONEX Bình Thạnh (160k/h).\n` +
         `• **Phân khúc chuẩn thi đấu**: SportNexus Arena Q.7 (220k/h), CLB Lan Anh Q.10 (230k/h), CLB Tao Đàn Q.1 (210k/h).\n\n` +
-        `Khung giờ vàng còn trống tại **${nearestBad.name}**: **${slot.start} - ${slot.end}** (Giá: **${formatVnd(slot.price)}**).`,
+        `Khung giờ còn trống tại **${nearestBad.name}**: **${slot.start} - ${slot.end}** (Giá: **${formatVnd(slot.price)}**).`,
       recommendedCourt: nearestBad,
       recommendedSlot: slot,
       priorityBadge: '🏸 SÂN CẦU LÔNG GẦN BẠN NHẤT',
-      priorityReason: `Thảm thi đấu BWF • Cách bạn ${nearestBad.distance} km • Đang mở slot vàng 19:30 - 21:00`,
+      priorityReason: `Thảm thi đấu BWF • Cách bạn ${nearestBad.distance} km • Đang mở slot ${slot.start} - ${slot.end}`,
       quickReplies: [`Chọn Sân ${nearestBad.name}`, 'Đặt & Chia Tiền Ngay', 'Xem Khung Giờ Khác'],
     }
   }
@@ -1042,7 +1265,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
   // -------------------------------------------------------------------------
   const topNearest = [...localizedCourts].sort((a, b) => a.distance - b.distance)[0] || localizedCourts[0]
   const topSlots = buildSlotsForCourt(topNearest)
-  const topSlot = topSlots.find((s) => s.id === 's5' && s.status === 'available') || topSlots[0]
+  const topSlot = findBestMatchingSlot(topSlots, timeReq) || topSlots.find((s) => s.status === 'available') || topSlots[0]
 
   return {
     title: 'Gợi ý sân thể thao tối ưu từ Trợ lý AI',
@@ -1056,7 +1279,7 @@ export function processAIChatQuery(rawQuery, currentCourtId = 'snx-q7', userLoca
     recommendedCourt: topNearest,
     recommendedSlot: topSlot,
     priorityBadge: `⭐ ĐỀ XUẤT TỐI ƯU • CÁCH BẠN ${topNearest.distance} KM`,
-    priorityReason: `Sân gần nhất từ ${loc.name || 'vị trí hiện tại'} • Chuẩn thi đấu chất lượng cao • Slot 19:30 - 21:00 sẵn sàng`,
+    priorityReason: `Sân gần nhất từ ${loc.name || 'vị trí hiện tại'} • Chuẩn thi đấu chất lượng cao • Slot ${topSlot.start} - ${topSlot.end} sẵn sàng`,
     quickReplies: [
       `Chọn Sân ${topNearest.name}`,
       '💰 Sân cầu lông giá rẻ nhất',

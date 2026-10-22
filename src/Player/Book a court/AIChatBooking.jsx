@@ -56,7 +56,7 @@ function AIChatBooking() {
           setUserLocation(newLoc)
           setMessages([buildWelcomeMessage(newLoc)])
         },
-        () => {},
+        () => { },
         { enableHighAccuracy: true, timeout: 5000 }
       )
     }
@@ -398,25 +398,52 @@ function AIChatBooking() {
                   </div>
 
                   <div className="snx-ai-recom-body">
-                    <div>
+                    <div className="snx-ai-recom-loc-group">
                       <h4 className="snx-ai-recom-title">{msg.recommendedCourt.name}</h4>
-                      <p className="snx-ai-recom-addr">
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#10B981' }}>
+                      
+                      <div className="snx-ai-recom-addr">
+                        <span className="material-symbols-outlined snx-ai-loc-icon">
                           location_on
                         </span>
-                        {msg.recommendedCourt.address} • <strong>Cách {msg.recommendedCourt.distance} km</strong>
-                      </p>
+                        <span className="snx-ai-addr-text">{msg.recommendedCourt.address}</span>
+                      </div>
+
+                      <div className="snx-ai-recom-dist-row">
+                        <span className="snx-ai-dist-badge">
+                          <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                            near_me
+                          </span>
+                          Cách bạn {msg.recommendedCourt.distance} km
+                        </span>
+                        {msg.recommendedCourt.route?.eta && (
+                          <span className="snx-ai-eta-text">• {msg.recommendedCourt.route.eta}</span>
+                        )}
+                      </div>
                     </div>
 
                     {msg.recommendedSlot && (
                       <div className="snx-ai-recom-slot">
-                        <span className="snx-ai-slot-time">
-                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                            schedule
+                        <div className="snx-ai-slot-primary-row">
+                          <span className="snx-ai-slot-time">
+                            <span className="material-symbols-outlined">
+                              schedule
+                            </span>
+                            Khung giờ: {msg.recommendedSlot.start} - {msg.recommendedSlot.end}
                           </span>
-                          Khung giờ vàng: {msg.recommendedSlot.start} - {msg.recommendedSlot.end}
-                        </span>
-                        <span className="snx-ai-slot-price">{formatVnd(msg.recommendedSlot.price)}</span>
+                          <span className="snx-ai-slot-price">{formatVnd(msg.recommendedSlot.price)}</span>
+                        </div>
+
+                        {msg.recommendedSlot.note && (
+                          <div className="snx-ai-slot-secondary-row">
+                            <span className="snx-ai-slot-status-dot" />
+                            <span>{msg.recommendedSlot.note}</span>
+                            {msg.recommendedSlot.hours && (
+                              <span style={{ color: '#047857', opacity: 0.85 }}>
+                                • {msg.recommendedSlot.hours}h thi đấu
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -435,7 +462,7 @@ function AIChatBooking() {
                         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
                           check_circle
                         </span>
-                        Chọn Sân Này Trên Bản Đồ
+                        Chọn Sân Này
                       </button>
 
                       <button
@@ -443,7 +470,7 @@ function AIChatBooking() {
                         className="snx-ai-btn-action snx-ai-btn-book"
                         onClick={() => handleBookNow(msg.recommendedCourt, msg.recommendedSlot)}
                       >
-                        <span>Đặt &amp; Chia Tiền Ngay</span>
+                        <span>Đặt &amp; Chia Tiền</span>
                         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
                           arrow_forward
                         </span>
