@@ -1,0 +1,1205 @@
+/* AIChatModal.css — Giao diện khung chat Trợ lý AI SportNexus Concierge */
+
+.snx-ai-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 24px 28px 90px;
+  animation: snxAiFadeIn 0.25s ease forwards;
+  pointer-events: none;
+}
+
+.snx-ai-overlay.is-expanded {
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: auto;
+}
+
+.snx-ai-widget {
+  pointer-events: auto;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  height: 640px;
+  max-height: calc(100vh - 120px);
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 16px 48px -8px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(45, 95, 63, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: snxAiSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.25s ease;
+  font-family: 'Inter', sans-serif;
+  z-index: 1001;
+}
+
+.snx-ai-widget.is-expanded {
+  width: 780px;
+  height: 80vh;
+  max-height: 800px;
+  box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.35);
+}
+
+@keyframes snxAiSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes snxAiFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Header ---------- */
+.snx-ai-header {
+  background: linear-gradient(135deg, #1C3524 0%, #2D5F3F 100%);
+  color: #ffffff;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.snx-ai-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.snx-ai-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.snx-ai-avatar-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10B981;
+  border: 2px solid #1C3524;
+  box-shadow: 0 0 8px #10B981;
+  animation: snxAiPulse 2s infinite;
+}
+
+@keyframes snxAiPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+.snx-ai-header-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snx-ai-badge-header {
+  font-size: 10px;
+  font-weight: 700;
+  background: #10B981;
+  color: #064E3B;
+  padding: 2px 6px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.snx-ai-header-sub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.snx-ai-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.snx-ai-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.snx-ai-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+/* ---------- Messages Container ---------- */
+.snx-ai-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: #f8faf9;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+.snx-ai-body::-webkit-scrollbar {
+  width: 5px;
+}
+.snx-ai-body::-webkit-scrollbar-thumb {
+  background: rgba(45, 95, 63, 0.2);
+  border-radius: 4px;
+}
+
+/* ---------- Welcome Banner ---------- */
+.snx-ai-welcome-box {
+  background: #ffffff;
+  border: 1px solid rgba(45, 95, 63, 0.12);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(45, 95, 63, 0.04);
+}
+
+.snx-ai-welcome-title {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1C3524;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snx-ai-welcome-text {
+  margin: 0;
+  font-size: 12.5px;
+  color: #4B5563;
+  line-height: 1.5;
+}
+
+/* ---------- Quick Chips Carousel ---------- */
+.snx-ai-chips-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snx-ai-chips-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.snx-ai-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.snx-ai-chip {
+  background: #ffffff;
+  border: 1px solid rgba(45, 95, 63, 0.2);
+  color: #2D5F3F;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+}
+
+.snx-ai-chip:hover {
+  background: #E8F5E9;
+  border-color: #2D5F3F;
+  color: #1C3524;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(45, 95, 63, 0.12);
+}
+
+/* ---------- Chat Messages ---------- */
+.snx-ai-msg {
+  display: flex;
+  gap: 10px;
+  max-width: 90%;
+  animation: snxAiMsgFade 0.2s ease forwards;
+}
+
+@keyframes snxAiMsgFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.snx-ai-msg.is-user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.snx-ai-msg.is-bot {
+  margin-right: auto;
+}
+
+.snx-ai-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #E8F5E9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.snx-ai-msg-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snx-ai-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.snx-ai-msg.is-user .snx-ai-bubble {
+  background: linear-gradient(135deg, #2D5F3F 0%, #15803D 100%);
+  color: #ffffff;
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 4px 12px rgba(45, 95, 63, 0.2);
+}
+
+.snx-ai-msg.is-bot .snx-ai-bubble {
+  background: #ffffff;
+  color: #1F2937;
+  border: 1px solid rgba(45, 95, 63, 0.12);
+  border-radius: 16px 16px 16px 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.snx-ai-bubble p {
+  margin: 0 0 6px;
+}
+.snx-ai-bubble p:last-child {
+  margin-bottom: 0;
+}
+.snx-ai-bubble ul {
+  margin: 4px 0 6px 18px;
+  padding: 0;
+}
+.snx-ai-bubble li {
+  margin-bottom: 3px;
+}
+.snx-ai-bubble strong {
+  color: #1C3524;
+  font-weight: 700;
+}
+.snx-ai-msg.is-user .snx-ai-bubble strong {
+  color: #ffffff;
+}
+
+.snx-ai-time {
+  font-size: 10.5px;
+  color: #9CA3AF;
+  align-self: flex-start;
+}
+.snx-ai-msg.is-user .snx-ai-time {
+  align-self: flex-end;
+}
+
+/* ---------- Priority Recommendation Card ---------- */
+.snx-ai-recom-card {
+  margin-top: 6px;
+  background: #ffffff;
+  border: 1.5px solid #10B981;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.snx-ai-recom-badge {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.snx-ai-recom-media {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+}
+
+.snx-ai-recom-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+.snx-ai-recom-card:hover .snx-ai-recom-img {
+  transform: scale(1.04);
+}
+
+.snx-ai-recom-meta-float {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.snx-ai-tag-pill {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.snx-ai-rating-pill {
+  background: #ffffff;
+  color: #D97706;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.snx-ai-recom-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.snx-ai-recom-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1C3524;
+  line-height: 1.35;
+}
+
+/* Nhóm hiển thị vị trí & khoảng cách: Không dồn cục vào 1 hàng */
+.snx-ai-recom-loc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.snx-ai-recom-addr {
+  margin: 0;
+  font-size: 12px;
+  color: #4B5563;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.45;
+}
+
+.snx-ai-recom-addr .snx-ai-loc-icon {
+  font-size: 16px;
+  color: #10B981;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.snx-ai-addr-text {
+  flex: 1;
+}
+
+.snx-ai-recom-dist-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 22px;
+  font-size: 11.5px;
+  color: #6B7280;
+}
+
+.snx-ai-dist-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid #DCFCE7;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.snx-ai-eta-text {
+  color: #6B7280;
+  font-size: 11.5px;
+}
+
+/* Thẻ khung giờ và giá tiền: Rõ ràng, thoáng đãng, chia 2 tầng logic */
+.snx-ai-recom-slot {
+  background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%);
+  border: 1px solid #BBF7D0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.08);
+}
+
+.snx-ai-slot-primary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.snx-ai-slot-time {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snx-ai-slot-time .material-symbols-outlined {
+  font-size: 17px;
+  color: #10B981;
+  flex-shrink: 0;
+}
+
+.snx-ai-slot-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: #047857;
+  white-space: nowrap; /* Tuyệt đối không cho chữ đ rớt xuống dòng */
+  letter-spacing: -0.2px;
+}
+
+.snx-ai-slot-secondary-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #059669;
+  padding-left: 23px;
+  font-weight: 500;
+}
+
+.snx-ai-slot-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10B981;
+  flex-shrink: 0;
+}
+
+/* Thẻ lý do ưu tiên */
+.snx-ai-recom-reason {
+  font-size: 12px;
+  color: #374151;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+
+.snx-ai-recom-reason strong {
+  color: #1E293B;
+}
+
+/* Nút hành động */
+.snx-ai-recom-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.snx-ai-btn-action {
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.18s ease;
+  border: none;
+  white-space: nowrap;
+}
+
+.snx-ai-btn-select {
+  background: #2D5F3F;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(45, 95, 63, 0.25);
+}
+.snx-ai-btn-select:hover {
+  background: #1C3524;
+  transform: translateY(-1px);
+}
+
+.snx-ai-btn-book {
+  background: #E8F5E9;
+  color: #166534;
+  border: 1px solid #A7F3D0;
+}
+.snx-ai-btn-book:hover {
+  background: #DCFCE7;
+  transform: translateY(-1px);
+}
+
+/* ---------- Typing Indicator ---------- */
+.snx-ai-typing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid rgba(45, 95, 63, 0.12);
+  border-radius: 16px 16px 16px 4px;
+  width: fit-content;
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.snx-ai-dots {
+  display: flex;
+  gap: 4px;
+}
+.snx-ai-dots span {
+  width: 6px;
+  height: 6px;
+  background: #10B981;
+  border-radius: 50%;
+  animation: snxAiDot 1.4s infinite ease-in-out both;
+}
+.snx-ai-dots span:nth-child(1) { animation-delay: -0.32s; }
+.snx-ai-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes snxAiDot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1.1); opacity: 1; }
+}
+
+/* ---------- Footer / Input Area ---------- */
+.snx-ai-footer {
+  padding: 12px 14px;
+  background: #ffffff;
+  border-top: 1px solid rgba(45, 95, 63, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snx-ai-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F9FAFB;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 14px;
+  padding: 4px 6px 4px 12px;
+  transition: all 0.2s ease;
+}
+
+.snx-ai-input-row:focus-within {
+  border-color: #2D5F3F;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(45, 95, 63, 0.12);
+}
+
+.snx-ai-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: #1F2937;
+  padding: 6px 0;
+  font-family: inherit;
+}
+
+.snx-ai-input::placeholder {
+  color: #9CA3AF;
+}
+
+.snx-ai-send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2D5F3F 0%, #15803D 100%);
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 6px rgba(45, 95, 63, 0.25);
+  flex-shrink: 0;
+}
+
+.snx-ai-send-btn:disabled {
+  background: #D1D5DB;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.snx-ai-send-btn:not(:disabled):hover {
+  transform: scale(1.05);
+  background: #1C3524;
+}
+
+.snx-ai-voice-btn {
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.snx-ai-voice-btn:hover {
+  color: #2D5F3F;
+  background: rgba(45, 95, 63, 0.08);
+}
+
+.snx-ai-voice-btn.is-listening {
+  color: #DC2626 !important;
+  background: #FEE2E2 !important;
+  animation: snxAiPulseMic 1.2s infinite ease-in-out;
+}
+
+@keyframes snxAiPulseMic {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.15); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.snx-ai-listening-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #DC2626;
+  font-weight: 600;
+  animation: snxAiFadeIn 0.25s ease;
+}
+
+.snx-ai-listening-dots {
+  display: flex;
+  gap: 3px;
+}
+.snx-ai-listening-dots span {
+  width: 4px;
+  height: 4px;
+  background: #DC2626;
+  border-radius: 50%;
+  animation: snxAiDot 1s infinite ease-in-out both;
+}
+.snx-ai-listening-dots span:nth-child(1) { animation-delay: -0.3s; }
+.snx-ai-listening-dots span:nth-child(2) { animation-delay: -0.15s; }
+
+/* Success toast inside widget */
+.snx-ai-toast {
+  position: absolute;
+  top: 60px;
+  left: 20px;
+  right: 20px;
+  background: #10B981;
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: snxAiSlideDown 0.25s ease forwards;
+  z-index: 1002;
+}
+
+@keyframes snxAiSlideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .snx-ai-overlay {
+    padding: 0;
+  }
+  .snx-ai-widget {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100svh;
+    max-height: 100svh;
+    border-radius: 0;
+  }
+}
+
+/* ==========================================================================
+   AI ASSISTANT 2.11 ENHANCEMENTS: INTENT CHIPS, FACILITIES, LFG, SESSIONS
+   ========================================================================== */
+
+/* Intent & Filter Chips */
+.snx-ai-intent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.snx-ai-intent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.snx-ai-intent-badge.court {
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.snx-ai-intent-badge.lfg {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.snx-ai-intent-badge.help {
+  background: #FDF4FF;
+  color: #86198F;
+  border: 1px solid #F5D0FE;
+}
+
+.snx-ai-intent-badge.other {
+  background: #F3F4F6;
+  color: #4B5563;
+  border: 1px solid #E5E7EB;
+}
+
+.snx-ai-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* Facilities list */
+.snx-ai-facility-card {
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 10px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.snx-ai-facility-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09);
+}
+
+.snx-ai-facility-header {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #FAFAFA;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.snx-ai-facility-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.snx-ai-facility-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.snx-ai-facility-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 4px;
+}
+
+.snx-ai-facility-address {
+  font-size: 12px;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+
+.snx-ai-slots-container {
+  padding: 12px;
+}
+
+.snx-ai-slots-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.snx-ai-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.snx-ai-slot-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: #F0FDF4;
+  border: 1px solid #86EFAC;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.snx-ai-slot-btn:hover {
+  background: #DCFCE7;
+  border-color: #22C55E;
+  transform: scale(1.02);
+}
+
+.snx-ai-slot-time-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.snx-ai-slot-price-text {
+  font-size: 11px;
+  color: #15803D;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* LFG Cards */
+.snx-ai-lfg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.snx-ai-lfg-card {
+  background: #FFFFFF;
+  border: 1px solid #BFDBFE;
+  border-left: 4px solid #2563EB;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);
+}
+
+.snx-ai-lfg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.snx-ai-lfg-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1E3A8A;
+  margin: 0 0 4px;
+}
+
+.snx-ai-lfg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #475569;
+  margin-top: 6px;
+}
+
+.snx-ai-lfg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.snx-ai-lfg-btn-detail {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: #F1F5F9;
+  color: #334155;
+  border: 1px solid #CBD5E1;
+  cursor: pointer;
+}
+
+.snx-ai-lfg-btn-claim {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  background: #2563EB;
+  color: #FFFFFF;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.snx-ai-lfg-btn-claim:hover {
+  background: #1D4ED8;
+}
+
+/* Sessions Drawer */
+.snx-ai-drawer-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+}
+
+.snx-ai-drawer {
+  width: 320px;
+  max-width: 85%;
+  height: 100%;
+  background: #FFFFFF;
+  border-right: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  animation: snxAiDrawerIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes snxAiDrawerIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.snx-ai-drawer-header {
+  padding: 16px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.snx-ai-drawer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snx-ai-session-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.snx-ai-session-item:hover,
+.snx-ai-session-item.is-active {
+  background: #ECFDF5;
+  border-color: #10B981;
+}
+
+.snx-ai-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.snx-ai-session-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snx-ai-session-subtitle {
+  font-size: 11px;
+  color: #64748B;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* Retry / Error container */
+.snx-ai-error-box {
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #B91C1C;
+  font-size: 12.5px;
+}
+
+.snx-ai-btn-retry {
+  background: #DC2626;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.snx-ai-btn-retry:hover {
+  background: #B91C1C;
+}
+
+/* Modal for LFG Detail */
+.snx-ai-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.snx-ai-modal-card {
+  background: #FFFFFF;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 18px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: snxAiSlideUp 0.25s ease forwards;
+}

@@ -1,17 +1,29 @@
 import './auth-pages.css'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { toast } from 'sonner'
+import { forgotPassword } from '../api/auth/authApi.js'
 
 function ForgotPassword() {
   const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const handleSubmit = (e) => {
+  // POST /api/auth/forgot-password: BE gửi mã OTP tới số điện thoại của tài khoản.
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Handle password reset logic here
-    console.log('Reset email sent to:', email)
-    // Navigate to verify account page with email
-    navigate('/verify-account', { state: { email } })
+    const phone = email.trim()
+    if (!phone || loading) return
+    setLoading(true)
+    try {
+      await forgotPassword(phone)
+      toast.success('Đã gửi mã xác thực. Vui lòng kiểm tra tin nhắn.')
+      navigate('/verify-account', { state: { phone } })
+    } catch (error) {
+      toast.error(error?.message || 'Không gửi được mã xác thực. Vui lòng thử lại.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -88,7 +100,7 @@ function ForgotPassword() {
 
             {/* Description */}
             <p className="text-center text-sm text-gray-600 mb-6 leading-relaxed">
-              Đừng lo lắng! Vui lòng nhập email hoặc tên đăng nhập liên kết với tài khoản của bạn để nhận mã khôi phục.
+              Đừng lo lắng! Vui lòng nhập số điện thoại đã đăng ký tài khoản để nhận mã khôi phục.
             </p>
 
             {/* Form */}
@@ -96,7 +108,7 @@ function ForgotPassword() {
               {/* Email Input */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                  Email hoặc tên đăng nhập
+                  Số điện thoại
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -105,7 +117,7 @@ function ForgotPassword() {
                     </svg>
                   </span>
                   <input
-                    type="email"
+                    type="tel"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:border-[#4A7C3E] focus:ring-2 focus:ring-[#A8E6CF]/20 transition-all"
@@ -123,7 +135,7 @@ function ForgotPassword() {
                     </svg>
                   </div>
                   <p className="text-xs text-gray-700 leading-relaxed">
-                    SportNexus sẽ gửi mã xác thực ở chủ sở để lấp mật khẩu mới nhanh chóng và an toàn.
+                    SportNexus sẽ gửi mã xác thực qua tin nhắn tới số điện thoại này để bạn đặt mật khẩu mới nhanh chóng và an toàn.
                   </p>
                 </div>
               </div>
@@ -131,9 +143,10 @@ function ForgotPassword() {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-[#4A7C3E] hover:bg-[#3d6634] text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]"
+                disabled={loading}
+                className="w-full bg-[#4A7C3E] hover:bg-[#3d6634] disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]"
               >
-                Gửi mã xác thực
+                {loading ? 'Đang gửi…' : 'Gửi mã xác thực'}
               </button>
 
               {/* Back to Login Link */}

@@ -1,128 +1,61 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteReadNotifications,
+} from '../../api/player/notificationApi.js'
 
-const DEFAULT_NOTIFICATIONS = [
-  {
-    id: 'notif-1',
-    type: 'booking',
-    icon: 'sports_tennis',
-    color: '#15803D',
-    bg: '#EAF7EE',
-    title: 'Đặt sân thành công!',
-    message: 'Đã xác nhận đặt Sân Pickleball Thảm USAPA #2 tại SportNexus Arena Q.7.',
-    details: 'Khung giờ: 18:00 - 20:00 (Hôm nay) • Mã vé: #BK-78923',
-    time: '5 phút trước',
-    read: false,
-    link: '/checkin',
-    linkText: 'Xem vé QR Pass',
-  },
-  {
-    id: 'notif-checkin-1',
-    type: 'checkin',
-    icon: 'qr_code_scanner',
-    color: '#16A34A',
-    bg: '#DCFCE7',
-    title: 'Mã QR Check-in đã sẵn sàng',
-    message: 'Vé check-in sân Cầu lông Tre Xanh đã kích hoạt mã QR bảo chứng. Quét tại cổng hoặc quầy lễ tân để vào sân.',
-    details: 'Mã vé Token: #SNX-BWF-9982-A81F • Hạn sử dụng: 18:00 - 20:00 hôm nay',
-    time: '20 phút trước',
-    read: false,
-    link: '/checkin',
-    linkText: 'Mở mã QR Check-in',
-  },
-  {
-    id: 'notif-2',
-    type: 'transaction',
-    icon: 'receipt_long',
-    color: '#0284C7',
-    bg: '#E0F2FE',
-    title: 'Giao dịch ký quỹ Escrow thành công',
-    message: 'Thanh toán cọc giữ slot LFG: [Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao.',
-    details: 'Số tiền: -55.000 đ • Trạng thái: Bảo chứng 100% • Mã GD: #ESC-99214',
-    time: '35 phút trước',
-    read: false,
-    link: '/community',
-    linkText: 'Xem chi tiết kèo',
-  },
-  {
-    id: 'notif-3',
-    type: 'checkin',
-    icon: 'share',
-    color: '#7C3AED',
-    bg: '#F3E8FF',
-    title: 'Đã gửi mã check-in cho bạn chơi',
-    message: 'Đã gửi thành công mã QR vé vào sân cho bạn chơi Hoàng Bách & Dương Tuấn.',
-    details: 'Mã vé: #SNX-8821 • Bạn chơi có thể dùng mã này để tự quét QR tại cổng',
-    time: '1 giờ trước',
-    read: false,
-    link: '/split-payment',
-    linkText: 'Xem trạng thái vé nhóm',
-  },
-  {
-    id: 'notif-4',
-    type: 'wallet',
-    icon: 'account_balance_wallet',
-    color: '#15803D',
-    bg: '#DCFCE7',
-    title: 'Nạp tiền vào ví thành công!',
-    message: 'Bạn đã nạp thành công +500.000 đ vào Ví Escrow qua VietQR Napas247.',
-    details: 'Số dư khả dụng: 2.450.000 đ • Mã giao dịch: #TOPUP-55421',
-    time: '3 giờ trước',
-    read: false,
-    link: '/wallet',
-    linkText: 'Xem số dư ví',
-  },
-  {
-    id: 'notif-5',
-    type: 'feedback',
-    icon: 'star',
-    color: '#EA580C',
-    bg: '#FFEDD5',
-    title: 'Được đánh giá tốt: +5 Điểm Fair Play!',
-    message: 'Bạn chơi vừa chấm 5.0★ sau trận cầu lông tại Tre Xanh. Điểm Fair Play của bạn đã tăng lên 99.4/100.',
-    details: 'Nhận xét: "Đánh chuẩn kỹ thuật, đúng giờ, giao lưu nhiệt tình!"',
-    time: 'Hôm qua',
-    read: true,
-    link: '/profile',
-    linkText: 'Xem đánh giá hồ sơ',
-  },
-  {
-    id: 'notif-feedback-2',
-    type: 'feedback',
-    icon: 'rate_review',
-    color: '#D97706',
-    bg: '#FEF3C7',
-    title: 'Yêu cầu gửi Feedback & Đánh giá bạn chơi',
-    message: 'Trận đấu giao lưu LFG lúc 16:00 đã kết thúc. Hãy gửi đánh giá Fair Play cho 3 thành viên trong nhóm.',
-    details: 'Đánh giá đúng hạn giúp tăng độ uy tín tài khoản và nhận ưu đãi đặt sân.',
-    time: 'Hôm qua',
-    read: true,
-    link: '/profile',
-    linkText: 'Đánh giá ngay',
-  },
-  {
-    id: 'notif-6',
-    type: 'wallet',
-    icon: 'assignment_return',
-    color: '#0D9488',
-    bg: '#CCFBF1',
-    title: 'Hoàn tiền cọc Escrow 100%',
-    message: 'Kèo ghép trận LFG đã giải tán trước 48h. Hệ thống đã hoàn +45.000 đ vào ví của bạn.',
-    details: 'Lý do: Không đủ số lượng người chơi theo hạn định.',
-    time: '2 ngày trước',
-    read: true,
-    link: '/wallet',
-    linkText: 'Lịch sử ví',
-  },
-]
+// Icon / màu theo loại thông báo
+const TYPE_STYLES = {
+  booking: { icon: 'sports_tennis', color: '#15803D', bg: '#EAF7EE', link: '/qr-pass', linkText: 'Xem vé QR Pass' },
+  checkin: { icon: 'qr_code_scanner', color: '#16A34A', bg: '#DCFCE7', link: '/qr-pass', linkText: 'Mở mã QR Check-in' },
+  transaction: { icon: 'receipt_long', color: '#0284C7', bg: '#E0F2FE', link: '/wallet', linkText: 'Xem ví Escrow' },
+  payment: { icon: 'receipt_long', color: '#0284C7', bg: '#E0F2FE', link: '/wallet', linkText: 'Xem ví Escrow' },
+  wallet: { icon: 'account_balance_wallet', color: '#15803D', bg: '#EAF7EE', link: '/wallet', linkText: 'Xem ví Escrow' },
+  lfg: { icon: 'groups', color: '#7C3AED', bg: '#F3E8FF', link: '/community', linkText: 'Xem kèo' },
+  tournament: { icon: 'emoji_events', color: '#CA8A04', bg: '#FEF9C3', link: '/tournament', linkText: 'Xem giải đấu' },
+  review: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
+  feedback: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
+  rating: { icon: 'star', color: '#EA580C', bg: '#FFEDD5', link: '/post-match-rating', linkText: 'Xem chi tiết' },
+  team: { icon: 'groups', color: '#0EA5E9', bg: '#E0F2FE', link: '/tournament', linkText: 'Xem chi tiết' },
+  community: { icon: 'forum', color: '#7C3AED', bg: '#F3E8FF', link: '/community', linkText: 'Xem bảng tin' },
+  report: { icon: 'flag', color: '#DC2626', bg: '#FEE2E2', link: '/profile', linkText: 'Xem chi tiết' },
+}
 
+// Mở đúng màn hình theo referenceType + referenceId của thông báo
+const linkFor = (n, style) => {
+  if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
+  if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
+  if (n.referenceType === 'TOURNAMENT') return '/tournament'
+  return style.link
+}
+const DEFAULT_STYLE = { icon: 'notifications', color: '#475569', bg: '#F1F5F9', link: '', linkText: 'Xem chi tiết' }
+
+const timeAgo = (value) => {
+  if (!value) return ''
+  const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60000)
+  if (!Number.isFinite(minutes) || minutes < 1) return 'Vừa xong'
+  if (minutes < 60) return `${minutes} phút trước`
+  if (minutes < 1440) return `${Math.round(minutes / 60)} giờ trước`
+  return new Date(value).toLocaleDateString('vi-VN')
+}
+
+// Thông báo từ API -> dạng hiển thị trong chuông
+const toBellItem = (n) => {
+  const style = TYPE_STYLES[n.type] || DEFAULT_STYLE
+  return { ...style, ...n, details: '', time: timeAgo(n.createdAt), link: linkFor(n, style) }
+}
+
+// Nhóm theo type của BE: BOOKING | LFG | TEAM | TOURNAMENT | REVIEW | COMMUNITY | WALLET | REPORT | SYSTEM
 const FILTER_TABS = [
   { key: 'all', label: 'Tất cả' },
   { key: 'booking', label: 'Đặt sân' },
-  { key: 'transaction', label: 'Giao dịch' },
-  { key: 'wallet', label: 'Ví Escrow' },
-  { key: 'checkin', label: 'Check-in QR' },
-  { key: 'feedback', label: 'Feedback' },
+  { key: 'wallet', label: 'Ví' },
+  { key: 'lfg', label: 'Kèo LFG' },
+  { key: 'tournament', label: 'Giải đấu' },
+  { key: 'review', label: 'Đánh giá' },
 ]
 
 export default function NotificationBell() {
@@ -131,21 +64,28 @@ export default function NotificationBell() {
   const [activeTab, setActiveTab] = useState('all')
   const containerRef = useRef(null)
 
-  const [notifications, setNotifications] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_notifications_v2')
-      if (saved) return JSON.parse(saved)
-    } catch {}
-    return DEFAULT_NOTIFICATIONS
-  })
+  // Thông báo lấy từ GET /api/v1/notifications, tải lại mỗi 60 giây và mỗi lần mở chuông
+  const [notifications, setNotifications] = useState([])
+  const [loadError, setLoadError] = useState('')
 
-  // Lưu vào localStorage khi danh sách thay đổi
-  const saveNotifications = (newList) => {
-    setNotifications(newList)
-    try {
-      localStorage.setItem('player_notifications_v2', JSON.stringify(newList))
-    } catch {}
-  }
+  useEffect(() => {
+    let cancelled = false
+    const load = () =>
+      getNotifications({ pageSize: 30 })
+        .then(({ items }) => {
+          if (cancelled) return
+          // Giữ lại các thông báo tạm phát sinh trong phiên (sự kiện player_new_notification)
+          setNotifications((prev) => [...prev.filter((n) => n.local), ...items.map(toBellItem)])
+          setLoadError('')
+        })
+        .catch((error) => !cancelled && setLoadError(error?.message || 'Không tải được thông báo.'))
+    load()
+    const timer = setInterval(load, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [isOpen])
 
   // Đếm số lượng chưa đọc
   const unreadCount = notifications.filter((n) => !n.read).length
@@ -216,6 +156,7 @@ export default function NotificationBell() {
           : '#EAF7EE')
 
       const item = {
+        local: true,
         id: `notif-${Date.now()}`,
         time: 'Vừa xong',
         read: false,
@@ -229,13 +170,7 @@ export default function NotificationBell() {
         ...e.detail,
       }
 
-      setNotifications((prev) => {
-        const next = [item, ...prev]
-        try {
-          localStorage.setItem('player_notifications_v2', JSON.stringify(next))
-        } catch {}
-        return next
-      })
+      setNotifications((prev) => [item, ...prev])
     }
 
     window.addEventListener('player_new_notification', handleNewNotification)
@@ -246,21 +181,21 @@ export default function NotificationBell() {
 
   // Đánh dấu tất cả đã đọc
   const handleMarkAllAsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }))
-    saveNotifications(updated)
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    markAllNotificationsRead().catch(() => {})
   }
 
   // Xoá tất cả thông báo
   const handleClearAll = () => {
-    saveNotifications([])
+    if (!window.confirm('Xóa tất cả thông báo đã đọc?')) return
+    setNotifications((prev) => prev.filter((n) => !n.read))
+    deleteReadNotifications().catch(() => {})
   }
 
   // Đánh dấu 1 thông báo là đã đọc
   const handleItemClick = (item) => {
-    const updated = notifications.map((n) =>
-      n.id === item.id ? { ...n, read: true } : n
-    )
-    saveNotifications(updated)
+    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)))
+    if (!item.read && !item.local) markNotificationRead(item.id).catch(() => {})
     if (item.link) {
       setIsOpen(false)
       navigate(item.link)
@@ -268,17 +203,7 @@ export default function NotificationBell() {
   }
 
   // Lọc theo tab
-  const filteredNotifications = notifications.filter((n) => {
-    if (activeTab === 'all') return true
-    if (activeTab === 'booking') return n.type === 'booking'
-    if (activeTab === 'transaction') return n.type === 'transaction'
-    if (activeTab === 'wallet') return n.type === 'wallet'
-    if (activeTab === 'checkin')
-      return n.type === 'checkin' || n.type === 'invite' || n.type === 'friend_code'
-    if (activeTab === 'feedback')
-      return n.type === 'feedback' || n.type === 'rating'
-    return true
-  })
+  const filteredNotifications = notifications.filter((n) => activeTab === 'all' || n.type === activeTab)
 
   return (
     <div className="relative" ref={containerRef}>
@@ -474,18 +399,9 @@ export default function NotificationBell() {
 
           {/* Footer Dropdown */}
           <div className="p-3 bg-[#FAFBF9] border-t border-gray-100 flex items-center justify-between text-[11px]">
-            <span className="text-gray-500 font-medium">
-              Đồng bộ dữ liệu thời gian thực
+            <span className={loadError ? 'text-red-600 font-medium' : 'text-gray-500 font-medium'}>
+              {loadError || 'Tự động cập nhật mỗi phút'}
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                saveNotifications(DEFAULT_NOTIFICATIONS)
-              }}
-              className="text-[#15803D] font-bold hover:underline cursor-pointer"
-            >
-              Khôi phục mẫu
-            </button>
           </div>
         </div>
       )}
