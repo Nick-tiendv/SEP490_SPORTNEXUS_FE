@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { getFacilities, getFacilityById } from '../../api/facilityApi.js'
+import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../api/facilityApi.js'
 import { getCourtSlots, getFacilityAvailability } from '../../api/bookingApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
@@ -138,6 +138,51 @@ function CourtDetails() {
   }, [activeCourt?.id, selectedDateStr])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
+
+  // Đánh giá sân từ GET /api/v1/facilities/{facilityId}/reviews
+  const [reviewsList, setReviewsList] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewRatingFilter, setReviewRatingFilter] = useState(0)
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadReviews() {
+      if (!facility?.id) return
+      setReviewsLoading(true)
+      try {
+        const params = { pageSize: 10 }
+        if (reviewRatingFilter > 0) params.rating = reviewRatingFilter
+        const res = await getFacilityReviews(facility.id, params)
+        const items = res?.items || (Array.isArray(res) ? res : [])
+        if (isMounted) setReviewsList(items)
+      } catch (e) {
+        console.warn('CourtDetails: Lỗi tải reviews:', e)
+      } finally {
+        if (isMounted) setReviewsLoading(false)
+      }
+    }
+    loadReviews()
+    return () => { isMounted = false }
+  }, [facility?.id, reviewRatingFilter])
+
+  // Chi tiết sân con từ GET /api/v1/facilities/{facilityId}/courts/{courtId}
+  const [activeCourtDetail, setActiveCourtDetail] = useState(null)
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadCourtDetail() {
+      if (!facility?.id || !activeCourt?.id) return
+      try {
+        const detail = await getFacilityCourtById(facility.id, activeCourt.id)
+        if (isMounted && detail) setActiveCourtDetail(detail)
+      } catch (e) {
+        console.warn('CourtDetails: Lỗi tải chi tiết sân con:', e)
+      }
+    }
+    loadCourtDetail()
+    return () => { isMounted = false }
+  }, [facility?.id, activeCourt?.id])
+
   const formatTimeSlot = (isoString) => {
     if (!isoString) return ''
     try {
@@ -691,7 +736,125 @@ function CourtDetails() {
               </div>
             )}
           </div>
+
+          {/* Chi tiết sân con từ GET /api/v1/facilities/{facilityId}/courts/{courtId} */}
+          {activeCourt && (
+            <div className="p-space-lg rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col gap-space-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-xl">sports_score</span>
+                  <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">
+                    Thông Tin Sân: {activeCourtDetail?.name || activeCourt.name}
+                  </h3>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400">
+                  {activeCourtDetail?.status || activeCourt.status || 'ACTIVE'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mt-1">
+                <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
+                  <span className="text-on-surface-variant">Môn thi đấu</span>
+                  <strong className="text-on-surface font-semibold">{activeCourtDetail?.categoryName || activeCourt.sportName}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
+                  <span className="text-on-surface-variant">Giá mặc định</span>
+                  <strong className="text-primary font-semibold">{(Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice) || 120000).toLocaleString('vi-VN')} đ/h</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
+                  <span className="text-on-surface-variant">Mặt sân</span>
+                  <strong className="text-on-surface font-semibold">{activeCourtDetail?.surfaceType || 'Chuẩn thi đấu quốc tế'}</strong>
+                </div>
+                <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
+                  <span className="text-on-surface-variant">Tình trạng ca</span>
+                  <strong className="text-emerald-400 font-semibold">{courtSlots.length} ca trong ngày</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Đánh giá cơ sở thể thao từ GET /api/v1/facilities/{facilityId}/reviews */}
+          <div className="p-space-lg rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col gap-space-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-400">reviews</span>
+                  Đánh Giá & Nhận Xét ({reviewsList.length})
+                </h3>
+                <span className="text-xs text-on-surface-variant">
+                  Phản hồi chân thực từ các vận động viên và người chơi đã check-in tại sân
+                </span>
+              </div>
+              {/* Star filter buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[0, 5, 4, 3].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRatingFilter(star)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      reviewRatingFilter === star
+                        ? 'bg-amber-500 text-black font-extrabold shadow-sm'
+                        : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {star === 0 ? 'Tất cả' : `${star} ★`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {reviewsLoading ? (
+              <div className="py-6 text-center text-xs text-on-surface-variant">Đang tải đánh giá từ hệ thống...</div>
+            ) : reviewsList.length === 0 ? (
+              <div className="py-6 text-center text-xs text-on-surface-variant bg-surface-container/40 rounded-xl">
+                Chưa có đánh giá nào {reviewRatingFilter > 0 ? `cho mức ${reviewRatingFilter} sao` : 'cho cụm sân này'}. Hãy là người đầu tiên trải nghiệm và chia sẻ nhận xét!
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {reviewsList.map((rev) => (
+                  <div
+                    key={rev.id || Math.random()}
+                    className="p-3.5 rounded-xl bg-surface-container/70 border border-outline-variant/10 flex flex-col gap-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-emerald-800 text-white flex items-center justify-center font-bold text-xs">
+                          {(rev.userFullName || rev.authorName || 'P')[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-sm font-bold text-on-surface">
+                          {rev.userFullName || rev.authorName || 'Người chơi SportNexus'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <span
+                            key={i}
+                            className={`material-symbols-outlined text-[16px] ${
+                              i < (rev.rating || 5) ? 'text-amber-400' : 'text-neutral-600'
+                            }`}
+                          >
+                            star
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {rev.comment && (
+                      <p className="text-xs text-on-surface-variant m-0 leading-relaxed pl-9">
+                        "{rev.comment}"
+                      </p>
+                    )}
+                    {rev.createdAt && (
+                      <span className="text-[10px] text-neutral-500 pl-9">
+                        {new Date(rev.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
 
         {/* Right Column: Checkout Summary */}
         <div className="lg:col-span-4 sticky top-24 flex flex-col gap-space-md">

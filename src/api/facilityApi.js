@@ -159,3 +159,126 @@ export function transformFacilityToCourt(fac) {
     rawFacility: fac,
   }
 }
+
+/**
+ * Tìm kiếm cơ sở thể thao
+ * GET /api/v1/facilities/search
+ * @param {Object} [params]
+ * @param {string} [params.Keyword] - Từ khóa tìm kiếm
+ * @param {number} [params.Lat] - Vĩ độ
+ * @param {number} [params.Lng] - Kinh độ
+ * @param {number} [params.RadiusKm] - Bán kính km
+ * @param {string} [params.CategoryId] - Môn thể thao (Category UUID)
+ * @param {string[]} [params.AmenityIds] - Danh sách tiện ích
+ * @param {string} [params.Province] - Tỉnh / Thành phố
+ * @param {string} [params.District] - Quận / Huyện
+ * @param {number} [params.MinPrice] - Giá tối thiểu
+ * @param {number} [params.MaxPrice] - Giá tối đa
+ * @param {number} [params.MinRating] - Đánh giá tối thiểu
+ * @param {string} [params.SortBy] - Sắp xếp ('distance', 'rating', 'price_asc', 'price_desc')
+ * @param {number} [params.Page=1] - Trang
+ * @param {number} [params.PageSize=20] - Kích thước trang
+ * @returns {Promise<{ items: Array, totalItems: number, page: number, pageSize: number }>}
+ */
+export async function searchFacilities(params = {}) {
+  try {
+    const cleanParams = {}
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '' && val !== 'all') {
+        cleanParams[key] = val
+      }
+    })
+    const response = await apiClient.get(`${FACILITIES_ENDPOINT}/search`, {
+      params: cleanParams,
+      skipAuth: true,
+    })
+    const body = response.data
+    const data = body?.data || body?.result || body
+    if (data && Array.isArray(data.items)) return data
+    if (Array.isArray(data)) return { items: data, totalItems: data.length, page: 1, pageSize: data.length }
+    return { items: [], totalItems: 0, page: 1, pageSize: 20 }
+  } catch (error) {
+    console.warn('[facilityApi] Lỗi khi tìm kiếm cơ sở:', error)
+    throw normalizeApiError(error)
+  }
+}
+
+/**
+ * Lấy danh sách địa điểm/khu vực có sân (tỉnh thành, quận huyện)
+ * GET /api/v1/facilities/locations
+ * @returns {Promise<Array>} Danh sách địa điểm
+ */
+export async function getFacilityLocations() {
+  try {
+    const response = await apiClient.get(`${FACILITIES_ENDPOINT}/locations`, { skipAuth: true })
+    const body = response.data
+    const data = body?.data || body?.result || body
+    if (Array.isArray(data)) return data
+    return []
+  } catch (error) {
+    console.warn('[facilityApi] Lỗi khi lấy danh sách địa điểm:', error)
+    return []
+  }
+}
+
+/**
+ * Lấy danh sách đánh giá của cơ sở thể thao
+ * GET /api/v1/facilities/{facilityId}/reviews
+ * @param {string} facilityId - UUID của cơ sở
+ * @param {Object} [params]
+ * @param {number} [params.rating] - Lọc theo số sao
+ * @param {number} [params.page=1]
+ * @param {number} [params.pageSize=10]
+ * @returns {Promise<{ items: Array, totalItems: number, averageRating?: number, totalReviews?: number }>}
+ */
+export async function getFacilityReviews(facilityId, params = {}) {
+  if (!facilityId) return { items: [], totalItems: 0 }
+  try {
+    const response = await apiClient.get(`${FACILITIES_ENDPOINT}/${facilityId}/reviews`, {
+      params,
+      skipAuth: true,
+    })
+    const body = response.data
+    const data = body?.data || body?.result || body
+    if (data && Array.isArray(data.items)) return data
+    if (Array.isArray(data)) return { items: data, totalItems: data.length }
+    return { items: [], totalItems: 0 }
+  } catch (error) {
+    console.warn(`[facilityApi] Lỗi khi lấy đánh giá cơ sở ${facilityId}:`, error)
+    return { items: [], totalItems: 0 }
+  }
+}
+
+/**
+ * Lấy chi tiết sân con trong cơ sở thể thao
+ * GET /api/v1/facilities/{facilityId}/courts/{courtId}
+ * @param {string} facilityId - UUID cơ sở
+ * @param {string} courtId - UUID sân con
+ * @returns {Promise<Object>}
+ */
+export async function getFacilityCourtById(facilityId, courtId) {
+  if (!facilityId || !courtId) return null
+  try {
+    const response = await apiClient.get(`${FACILITIES_ENDPOINT}/${facilityId}/courts/${courtId}`, {
+      skipAuth: true,
+    })
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn(`[facilityApi] Lỗi lấy chi tiết sân con ${courtId}:`, error)
+    throw normalizeApiError(error)
+  }
+}
+
+export default {
+  getFacilities,
+  getFacilityById,
+  searchFacilities,
+  getFacilityLocations,
+  getFacilityReviews,
+  getFacilityCourtById,
+  transformFacilityToCourt,
+  categoryToSportKey,
+  detectDistrictFromAddress,
+}
+

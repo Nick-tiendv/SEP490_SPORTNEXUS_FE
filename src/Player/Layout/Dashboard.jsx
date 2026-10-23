@@ -4,7 +4,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
-import { getFacilities } from '../../api/facilityApi.js'
+import { getFacilities, searchFacilities } from '../../api/facilityApi.js'
+import { getUpcomingBookings } from '../../api/bookingApi.js'
+import { getLfgs } from '../../api/lfgApi.js'
 
 const actionCards = [
   {
@@ -1177,7 +1179,12 @@ function Dashboard() {
 
   // Tải danh sách cơ sở thực tế từ API /api/v1/facilities
   const [apiSuggestedCourts, setApiSuggestedCourts] = useState([])
+  const [apiUpcomingMatches, setApiUpcomingMatches] = useState([])
+  const [apiLfgMatches, setApiLfgMatches] = useState([])
+  const [courtSearchKeyword, setCourtSearchKeyword] = useState('')
+  const [isSearchingCourts, setIsSearchingCourts] = useState(false)
 
+  // 1. Tải danh sách cơ sở ban đầu
   useEffect(() => {
     let isMounted = true
     async function fetchApiFacilities() {
@@ -1230,12 +1237,164 @@ function Dashboard() {
     return () => { isMounted = false }
   }, [])
 
+  // 2. Tải danh sách trận sắp tới (GET /api/v1/bookings/upcoming)
+  useEffect(() => {
+    let isMounted = true
+    async function loadUpcoming() {
+      try {
+        const raw = await getUpcomingBookings()
+        if (isMounted && Array.isArray(raw) && raw.length > 0) {
+          const mapped = raw.map((b) => {
+            const sportStr = String(b.sportName || b.court?.categoryName || b.categoryName || '').toLowerCase()
+            const sport = sportStr.includes('cầu lông') || sportStr.includes('badminton') ? 'badminton'
+              : sportStr.includes('pickleball') ? 'pickleball'
+              : sportStr.includes('bóng đá') || sportStr.includes('football') ? 'football'
+              : sportStr.includes('bóng rổ') || sportStr.includes('basketball') ? 'basketball'
+              : sportStr.includes('tennis') ? 'tennis'
+              : 'badminton'
+            const emoji = sport === 'badminton' ? '🏸' : sport === 'pickleball' ? '🏓' : sport === 'football' ? '⚽' : sport === 'basketball' ? '🏀' : '🎾'
+            return {
+              id: b.id || b.bookingId || `up-api-${Math.random()}`,
+              bookingId: b.id || b.bookingId,
+              sport,
+              sportName: b.sportName || b.court?.categoryName || 'Sân thể thao',
+              sportEmoji: emoji,
+              sportBadgeBg: '#EAF7EE',
+              sportBadgeColor: '#15803D',
+              time: `${b.startTime ? b.startTime.slice(0, 5) : '19:30'} ${b.playDate || 'Sắp tới'} (${b.durationMinutes || 90} phút)`,
+              type: b.courtName || b.courtSlot?.name || 'Đặt Sân SportNexus',
+              surface: b.facilityName || 'Mặt sân thi đấu chuẩn',
+              deposit: `Tổng tiền: ${(Number(b.totalPrice || b.depositAmount) || 60000).toLocaleString('vi-VN')} đ`,
+              title: `${b.facilityName || 'Cụm sân'} — ${b.courtName || 'Sân thi đấu'}`,
+              address: b.facilityAddress || 'TP. Hồ Chí Minh',
+              img: b.facilityImage || 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop',
+              qrCode: b.qrCode || `SNX-BK-${String(b.id || '').slice(0, 8)}`,
+              isFromApi: true,
+            }
+          })
+          setApiUpcomingMatches(mapped)
+        }
+      } catch (e) {
+        console.warn('Dashboard: Không thể tải upcoming bookings:', e)
+      }
+    }
+    loadUpcoming()
+    return () => { isMounted = false }
+  }, [])
+
+  // 3. Tải danh sách kèo ghép gợi ý (GET /api/v1/lfgs)
+  useEffect(() => {
+    let isMounted = true
+    async function loadLfgs() {
+      try {
+        const res = await getLfgs({ PageSize: 8 })
+        const items = res?.items || (Array.isArray(res) ? res : [])
+        if (isMounted && Array.isArray(items) && items.length > 0) {
+          const mapped = items.map((l) => {
+            const cat = String(l.categoryName || l.sportName || '').toLowerCase()
+            const sport = cat.includes('cầu lông') ? 'badminton'
+              : cat.includes('pickleball') ? 'pickleball'
+              : cat.includes('bóng đá') ? 'football'
+              : cat.includes('bóng rổ') ? 'basketball'
+              : cat.includes('tennis') ? 'tennis'
+              : 'badminton'
+            const emoji = sport === 'badminton' ? '🏸' : sport === 'pickleball' ? '🏓' : sport === 'football' ? '⚽' : sport === 'basketball' ? '🏀' : '🎾'
+            const rem = l.remainingSlots != null ? l.remainingSlots : (l.slotsNeeded || 2)
+            return {
+              id: l.id,
+              sport,
+              sportName: l.title || l.categoryName || 'Kèo ghép trận LFG',
+              sportEmoji: emoji,
+              missing: `Thiếu ${rem} người`,
+              missingColor: rem <= 1 ? '#DC2626' : '#D97706',
+              time: `${l.startTime ? l.startTime.slice(0, 5) : '18:00'} ${l.playDate || 'Hôm nay'} • ${l.facilityName || 'CLB SportNexus'}`,
+              price: `${(Number(l.pricePerPerson) || 50000).toLocaleString('vi-VN')} đ / người`,
+              host: `Host ${l.hostName || 'Người chơi'} (${l.skillLevelTag || 'Trung bình - Khá'})`,
+              img: l.facilityImage || (sport === 'pickleball' ? 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=100&h=100&fit=crop' : 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&h=100&fit=crop'),
+              badge: l.skillLevelTag || 'Cộng Đồng',
+              isFromApi: true,
+              rawLfg: l,
+            }
+          })
+          setApiLfgMatches(mapped)
+        }
+      } catch (e) {
+        console.warn('Dashboard: Không thể tải suggested lfgs:', e)
+      }
+    }
+    loadLfgs()
+    return () => { isMounted = false }
+  }, [])
+
+  // 4. Tìm kiếm cơ sở thể thao (GET /api/v1/facilities/search)
+  const handleFacilitySearch = async (e) => {
+    if (e) e.preventDefault()
+    setIsSearchingCourts(true)
+    try {
+      const searchRes = await searchFacilities({
+        Keyword: courtSearchKeyword.trim(),
+        PageSize: 12,
+      })
+      const results = searchRes?.items || (Array.isArray(searchRes) ? searchRes : [])
+      if (Array.isArray(results) && results.length > 0) {
+        const transformed = results.map((fac) => {
+          const firstCourt = fac.courts?.[0]
+          const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
+            ? 'badminton'
+            : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
+            ? 'pickleball'
+            : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
+            ? 'football'
+            : firstCourt?.categoryName?.toLowerCase().includes('tennis')
+            ? 'tennis'
+            : 'badminton'
+          const emoji = sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : '⚽'
+          const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
+          const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
+          return {
+            id: fac.id,
+            sport: sportKey,
+            sports: [sportKey],
+            sportEmoji: emoji,
+            slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
+            dist: fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : 'TP. HCM',
+            name: fac.name,
+            surface: fac.description || 'Sân đạt chuẩn thi đấu',
+            price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
+            rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★`,
+            img: thumb,
+            isFromApi: true,
+            rawFacility: fac,
+          }
+        })
+        setApiSuggestedCourts(transformed)
+      } else {
+        // Nếu không có kết quả tìm kiếm, gọi lại danh sách mặc định
+        const all = await getFacilities()
+        if (Array.isArray(all)) setApiSuggestedCourts(all)
+      }
+    } catch (err) {
+      console.warn('Dashboard: Lỗi tìm kiếm cơ sở:', err)
+    } finally {
+      setIsSearchingCourts(false)
+    }
+  }
+
+  // Kết hợp danh sách từ API hoặc fallback
+  const effectiveUpcomingMatches = useMemo(() => {
+    return apiUpcomingMatches.length > 0 ? apiUpcomingMatches : upcomingMatchesData
+  }, [apiUpcomingMatches])
+
+  const effectiveLfgMatches = useMemo(() => {
+    return apiLfgMatches.length > 0 ? apiLfgMatches : allLfgMatches
+  }, [apiLfgMatches])
+
   // Lọc dữ liệu theo môn đang chọn
-  const filteredUpcomingMatches = upcomingMatchesData.filter((m) =>
+  const filteredUpcomingMatches = effectiveUpcomingMatches.filter((m) =>
     isSportActive(m.sport)
   )
 
-  const filteredLfgMatches = allLfgMatches.filter((m) =>
+  const filteredLfgMatches = effectiveLfgMatches.filter((m) =>
     isSportActive(m.sport)
   )
 
@@ -1249,6 +1408,7 @@ function Dashboard() {
     }
     return isSportActive(c.sport)
   })
+
 
   return (
     <div
@@ -2036,6 +2196,85 @@ function Dashboard() {
               Mở bản đồ sân ›
             </Link>
           </div>
+
+          {/* Thanh tìm kiếm nhanh cơ sở theo từ khóa GET /api/v1/facilities/search */}
+          <form
+            onSubmit={handleFacilitySearch}
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '14px',
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#FFFFFF',
+                borderRadius: '12px',
+                border: '1px solid #E5E7EB',
+                padding: '6px 12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="Tìm cụm sân theo tên, địa chỉ hoặc quận huyện (vd: Tre Xanh, Thủ Đức, Quận 7)..."
+                value={courtSearchKeyword}
+                onChange={(e) => setCourtSearchKeyword(e.target.value)}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  width: '100%',
+                  fontSize: '13px',
+                  color: '#1F2937',
+                  background: 'transparent',
+                }}
+              />
+              {courtSearchKeyword && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCourtSearchKeyword('')
+                    getFacilities().then((all) => Array.isArray(all) && setApiSuggestedCourts(all))
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: '#9CA3AF',
+                    padding: 0,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={isSearchingCourts}
+              style={{
+                background: '#15803D',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '0 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {isSearchingCourts ? 'Đang tìm...' : 'Tìm kiếm'}
+            </button>
+          </form>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filteredCourts.length === 0 ? (

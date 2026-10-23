@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { getCancellationReasons, cancelBooking, getBookingQrTicket } from '../../api/bookingApi.js'
+import { getCancellationReasons, cancelBooking, getBookingQrTicket, getMyBookings, getUpcomingBookings } from '../../api/bookingApi.js'
 import { cancelLfg, rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/lfgApi.js'
 import { getTournamentQrTicket, checkInTournament } from '../../api/tournamentApi.js'
 
@@ -144,6 +144,53 @@ function CheckInQR() {
     loadTicket()
     return () => { isMounted = false }
   }, [ticketType, searchParams])
+
+  // Danh sách vé của tôi: GET /api/v1/bookings/my-bookings và GET /api/v1/bookings/upcoming
+  const [myBookingsList, setMyBookingsList] = useState([])
+  const [upcomingBookingsList, setUpcomingBookingsList] = useState([])
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false)
+  const [showTicketsModal, setShowTicketsModal] = useState(false)
+  const [ticketTab, setTicketTab] = useState('upcoming') // 'upcoming' | 'all'
+
+  useEffect(() => {
+    let isMounted = true
+    const fetchUserTickets = async () => {
+      setIsLoadingBookings(true)
+      try {
+        const [myRes, upcomingRes] = await Promise.allSettled([
+          getMyBookings(),
+          getUpcomingBookings(),
+        ])
+        if (isMounted) {
+          if (myRes.status === 'fulfilled' && Array.isArray(myRes.value)) {
+            setMyBookingsList(myRes.value)
+          }
+          if (upcomingRes.status === 'fulfilled' && Array.isArray(upcomingRes.value)) {
+            setUpcomingBookingsList(upcomingRes.value)
+          }
+        }
+      } catch (err) {
+        console.warn('[CheckInQR] Không thể tải danh sách vé của tôi:', err)
+      } finally {
+        if (isMounted) setIsLoadingBookings(false)
+      }
+    }
+    fetchUserTickets()
+    return () => { isMounted = false }
+  }, [])
+
+  const handleSelectBookingTicket = (booking) => {
+    const bId = booking.id || booking.bookingId || booking._id
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('type', 'booking')
+      next.set('bookingId', bId)
+      return next
+    })
+    setTicketType('booking')
+    setShowTicketsModal(false)
+  }
+
 
   // Cập nhật URL param khi đổi tab loại vé
   const handleSelectTicketType = (type) => {
@@ -1026,7 +1073,86 @@ function CheckInQR() {
             <span>Vé Giải Đấu (Tournament)</span>
           </button>
         </div>
+
+        {/* Nút mở danh sách vé của tôi: GET /api/v1/bookings/my-bookings & upcoming */}
+        <button
+          type="button"
+          onClick={() => setShowTicketsModal(true)}
+          style={{
+            marginLeft: 'auto',
+            padding: '7px 14px',
+            borderRadius: '10px',
+            border: '1px solid #10B981',
+            background: '#ECFDF5',
+            color: '#065F46',
+            fontWeight: 700,
+            fontSize: '12.5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.15s',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#10B981' }}>confirmation_number</span>
+          <span>Danh Sách Vé Của Tôi ({upcomingBookingsList.length > 0 ? upcomingBookingsList.length : myBookingsList.length})</span>
+        </button>
       </div>
+
+      {/* Dải gợi ý nhanh các trận sắp tới nếu có */}
+      {upcomingBookingsList.length > 0 && (
+        <div
+          style={{
+            marginBottom: '20px',
+            background: '#F0FDF4',
+            border: '1px solid #BBF7D0',
+            borderRadius: '14px',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            overflowX: 'auto',
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: 800, color: '#166534', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span>⚡</span> Trận sắp tới của bạn:
+          </span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
+            {upcomingBookingsList.slice(0, 5).map((b, idx) => {
+              const bId = b.id || b.bookingId || idx
+              const cName = b.courtName || b.court?.courtName || 'Sân đấu'
+              const fName = b.facilityName || b.facility?.name || 'SportNexus'
+              const time = b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : (b.timeSlot || 'Hôm nay')
+              return (
+                <button
+                  key={bId}
+                  type="button"
+                  onClick={() => handleSelectBookingTicket(b)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #86EFAC',
+                    background: '#ffffff',
+                    color: '#15803D',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <span style={{ color: '#047857' }}>⏰ {time}</span>
+                  <span>•</span>
+                  <span>{cName} ({fName})</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ===================== MAIN TWO-COLUMN LAYOUT ===================== */}
       <div
@@ -4509,6 +4635,240 @@ function CheckInQR() {
                 </span>
                 <span>{isCanceling ? 'Đang xử lý hủy...' : 'Xác Nhận Hủy Đơn'}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: DANH SÁCH VÉ CỦA TÔI (MY-BOOKINGS & UPCOMING) ===================== */}
+      {showTicketsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setShowTicketsModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '680px',
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              overflow: 'hidden',
+              animation: 'scaleIn 0.25s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid #F3F4F6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className="material-symbols-outlined" style={{ color: '#10B981', fontSize: '28px' }}>
+                  confirmation_number
+                </span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827' }}>
+                    Danh Sách Vé Của Tôi
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>
+                    Chọn một vé để nạp mã QR check-in &amp; quản lý đơn
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTicketsModal(false)}
+                style={{
+                  background: '#F3F4F6',
+                  border: 'none',
+                  borderRadius: '10px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#4B5563',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Tabs filter: Upcoming vs All */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                padding: '12px 24px',
+                background: '#F9FAFB',
+                borderBottom: '1px solid #E5E7EB',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setTicketTab('upcoming')}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: ticketTab === 'upcoming' ? '#10B981' : '#E5E7EB',
+                  color: ticketTab === 'upcoming' ? '#ffffff' : '#374151',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Trận Sắp Tới ({upcomingBookingsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTicketTab('all')}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: ticketTab === 'all' ? '#10B981' : '#E5E7EB',
+                  color: ticketTab === 'all' ? '#ffffff' : '#374151',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Tất Cả Vé Đặt ({myBookingsList.length})
+              </button>
+            </div>
+
+            {/* List Content */}
+            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {isLoadingBookings ? (
+                <div style={{ textAlign: 'center', padding: '36px', color: '#6B7280' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '32px', animation: 'spinSlow 1.5s linear infinite' }}>
+                    sync
+                  </span>
+                  <div style={{ marginTop: '8px', fontSize: '13px' }}>Đang tải danh sách vé...</div>
+                </div>
+              ) : (
+                (() => {
+                  const currentList = ticketTab === 'upcoming' ? upcomingBookingsList : myBookingsList
+                  if (!currentList || currentList.length === 0) {
+                    return (
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '48px', color: '#D1D5DB' }}>
+                          event_busy
+                        </span>
+                        <div style={{ marginTop: '12px', fontSize: '14px', fontWeight: 600 }}>
+                          {ticketTab === 'upcoming' ? 'Bạn chưa có trận đấu nào sắp tới' : 'Chưa có lịch sử đặt sân nào'}
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>
+                          Hãy đặt sân mới hoặc tham gia kèo LFG trên SportNexus ngay!
+                        </p>
+                      </div>
+                    )
+                  }
+
+                  return currentList.map((item, index) => {
+                    const id = item.id || item.bookingId || index
+                    const courtName = item.courtName || item.court?.courtName || 'Sân thể thao'
+                    const facilityName = item.facilityName || item.facility?.name || 'SportNexus Arena'
+                    const date = item.playDate || item.bookingDate || item.date || 'Hôm nay'
+                    const time = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.timeSlot || '19:30 - 21:00')
+                    const amount = item.totalAmount || item.totalPrice || item.price || 0
+                    const status = item.status || 'CONFIRMED'
+
+                    return (
+                      <div
+                        key={id}
+                        style={{
+                          border: '1px solid #E5E7EB',
+                          borderRadius: '14px',
+                          padding: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '16px',
+                          background: '#ffffff',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: status === 'CONFIRMED' ? '#DCFCE7' : status === 'CANCELLED' ? '#FEE2E2' : '#EFF6FF',
+                                color: status === 'CONFIRMED' ? '#15803D' : status === 'CANCELLED' ? '#B91C1C' : '#1D4ED8',
+                              }}
+                            >
+                              {status === 'CONFIRMED' ? 'ĐÃ XÁC NHẬN' : status === 'CANCELLED' ? 'ĐÃ HỦY' : status}
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
+                              📅 {date} • ⏰ {time}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>
+                            {courtName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
+                            📍 {facilityName}
+                          </div>
+                          {amount > 0 && (
+                            <div style={{ fontSize: '12.5px', color: '#047857', fontWeight: 700, marginTop: '4px' }}>
+                              {Number(amount).toLocaleString('vi-VN')} đ
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSelectBookingTicket(item)}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#10B981',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            fontSize: '12.5px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 2px 6px rgba(16,185,129,0.3)',
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>qr_code_2</span>
+                          <span>Xem Mã QR</span>
+                        </button>
+                      </div>
+                    )
+                  })
+                })()
+              )}
             </div>
           </div>
         </div>

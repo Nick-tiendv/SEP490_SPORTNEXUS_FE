@@ -1,9 +1,23 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getMySports, updateMySports } from '../../api/authApi.js'
 
 function OnBoarding() {
   const navigate = useNavigate()
   const [selectedSports, setSelectedSports] = useState(['badminton'])
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Tải danh sách môn thể thao đã lưu từ máy chủ: GET /api/auth/me/sports
+  useEffect(() => {
+    getMySports()
+      .then((serverSports) => {
+        if (Array.isArray(serverSports) && serverSports.length > 0) {
+          const keys = serverSports.map((s) => (typeof s === 'string' ? s : s.id || s.key || s.sportKey)).filter(Boolean)
+          if (keys.length > 0) setSelectedSports(keys)
+        }
+      })
+      .catch((err) => console.warn('[OnBoarding] Không thể tải môn thể thao:', err))
+  }, [])
   const SKILL_TIERS = [
     { label: 'Mới tập chơi', sub: 'Căn bản, làm quen môn thể thao' },
     { label: 'Mới chơi - Đang tiến bộ', sub: 'Nắm chắc luật, giao lưu vui vẻ' },
@@ -25,8 +39,9 @@ function OnBoarding() {
     }
   }
 
-  const handleCompleteSetup = () => {
-    // Lưu các môn đã chọn kèm trình độ ban đầu vào localStorage
+  // Hoàn tất lưu môn thể thao: PUT /api/auth/me/sports
+  const handleCompleteSetup = async () => {
+    setIsSaving(true)
     const sportMetadata = {
       badminton: { name: 'Cầu Lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
       pickleball: { name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
@@ -50,8 +65,16 @@ function OnBoarding() {
         bgColor: meta.bgColor,
       }
     })
+
+    // Đồng bộ lên server và lưu localStorage
+    try {
+      await updateMySports(selectedSports)
+    } catch (e) {
+      console.warn('[OnBoarding] Lỗi đồng bộ server (tiếp tục lưu local):', e)
+    }
     localStorage.setItem('player_sports_data', JSON.stringify(newSportsData))
     localStorage.setItem('sportnexus_selected_sports', JSON.stringify(selectedSports))
+    setIsSaving(false)
     navigate('/dashboard')
   }
 

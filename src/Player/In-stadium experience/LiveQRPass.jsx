@@ -1,14 +1,15 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { getBookingQrTicket } from '../../api/bookingApi.js'
+import { getBookingQrTicket, getUpcomingBookings, getMyBookings } from '../../api/bookingApi.js'
 import { getLfgQrTicket } from '../../api/lfgApi.js'
 
 function LiveQRPass() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [seconds, setSeconds] = useState(29)
   const [ticketData, setTicketData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [upcomingList, setUpcomingList] = useState([])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -21,8 +22,21 @@ function LiveQRPass() {
     let isMounted = true
     const fetchPass = async () => {
       setIsLoading(true)
-      const bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_selected_slot_id') || localStorage.getItem('sportnexus_last_booking_id')
+      let bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_selected_slot_id') || localStorage.getItem('sportnexus_last_booking_id')
       const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id')
+
+      try {
+        // Tải danh sách các trận sắp tới để hiển thị nhanh (GET /api/v1/bookings/upcoming)
+        const upcoming = await getUpcomingBookings().catch(() => [])
+        if (isMounted && Array.isArray(upcoming) && upcoming.length > 0) {
+          setUpcomingList(upcoming)
+          if (!bookingId && !cardId) {
+            bookingId = upcoming[0].id || upcoming[0].bookingId
+          }
+        }
+      } catch (e) {
+        console.warn('[LiveQRPass] Không thể tải danh sách upcoming bookings:', e)
+      }
 
       try {
         if (cardId) {
@@ -37,6 +51,7 @@ function LiveQRPass() {
               locker: '#L-28',
               allowedWindow: '18:30 - 21:00',
             })
+            if (isMounted) setIsLoading(false)
             return
           }
         }
@@ -53,6 +68,7 @@ function LiveQRPass() {
               locker: '#L-42',
               allowedWindow: '18:30 - 21:00',
             })
+            if (isMounted) setIsLoading(false)
             return
           }
         }
@@ -123,6 +139,29 @@ function LiveQRPass() {
             Mở Check-in QR
           </button>
         </div>
+
+        {/* Danh sách trận sắp tới (GET /api/v1/bookings/upcoming) */}
+        {upcomingList.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto py-1">
+            <span className="text-xs font-bold text-on-surface-variant shrink-0">Trận sắp tới của bạn:</span>
+            {upcomingList.map((item, idx) => {
+              const bId = item.id || item.bookingId || idx
+              const cName = item.courtName || item.court?.courtName || 'Sân đấu'
+              const time = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.timeSlot || 'Hôm nay')
+              return (
+                <button
+                  key={bId}
+                  onClick={() => setSearchParams({ bookingId: bId })}
+                  className="px-3 py-1 rounded-lg text-xs font-semibold bg-surface-container-high hover:bg-emerald-500/10 border border-outline-variant/30 text-on-surface flex items-center gap-1.5 shrink-0 transition-colors"
+                >
+                  <span className="text-primary-container">⏰ {time}</span>
+                  <span>•</span>
+                  <span>{cName}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">

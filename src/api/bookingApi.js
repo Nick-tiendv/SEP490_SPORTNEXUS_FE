@@ -162,6 +162,25 @@ export async function getMyBookings(status) {
 }
 
 /**
+ * Lấy danh sách các trận/đơn đặt sân sắp tới của tôi
+ * GET /api/v1/bookings/upcoming
+ * @returns {Promise<Array>} Danh sách trận sắp tới
+ */
+export async function getUpcomingBookings() {
+  try {
+    const response = await apiClient.get(`${BOOKINGS_ENDPOINT}/upcoming`)
+    const body = response.data
+    const data = body?.data || body?.result || body
+    if (Array.isArray(data)) return data
+    if (data && Array.isArray(data.items)) return data.items
+    return []
+  } catch (error) {
+    console.warn('[bookingApi] Lỗi khi lấy danh sách trận sắp tới:', error)
+    return []
+  }
+}
+
+/**
  * Bước 3 (Chia tiền): Người được mời tham gia góp tiền cho đơn đặt sân
  * POST /api/v1/bookings/{bookingId}/join
  * Mỗi người trả phần của mình (tiền giữ trong ví chính họ). Đủ người trả thì đơn chuyển PAID.
@@ -281,4 +300,20 @@ export async function cancelBooking(bookingId, payload = {}) {
     console.warn(`[bookingApi] Lỗi khi hủy đơn ${bookingId}:`, error)
     throw normalizeApiError(error)
   }
+}
+
+export default {
+  getCourtSlots,
+  getFacilityAvailability,
+  createBooking,
+  getBookingQrTicket,
+  lookupAccountByPhone,
+  getBookingById,
+  getMyBookings,
+  getUpcomingBookings,
+  joinBooking,
+  payRemainingBooking,
+  addBookingParticipants,
+  getCancellationReasons,
+  cancelBooking,
 }

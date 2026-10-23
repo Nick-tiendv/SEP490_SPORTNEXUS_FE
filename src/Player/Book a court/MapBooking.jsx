@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
-import { getFacilities, transformFacilityToCourt } from '../../api/facilityApi.js'
+import { getFacilities, searchFacilities, getFacilityLocations, transformFacilityToCourt } from '../../api/facilityApi.js'
 import { getCourtSlots } from '../../api/bookingApi.js'
 import AIChatModal from './AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -1402,6 +1402,24 @@ function MapBooking() {
   const [apiFacilities, setApiFacilities] = useState([])
   const [isLoadingApi, setIsLoadingApi] = useState(true)
   const [apiStatus, setApiStatus] = useState('connecting')
+  const [apiLocations, setApiLocations] = useState([])
+
+  // Lấy danh sách địa điểm / khu vực từ GET /api/v1/facilities/locations
+  useEffect(() => {
+    let isMounted = true
+    async function loadLocations() {
+      try {
+        const locs = await getFacilityLocations()
+        if (isMounted && Array.isArray(locs) && locs.length > 0) {
+          setApiLocations(locs)
+        }
+      } catch (e) {
+        console.warn('MapBooking: Không thể tải locations:', e)
+      }
+    }
+    loadLocations()
+    return () => { isMounted = false }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -1432,6 +1450,37 @@ function MapBooking() {
     loadBackendFacilities()
     return () => { isMounted = false }
   }, [])
+
+  // Tìm kiếm cơ sở trực tiếp bằng API GET /api/v1/facilities/search khi người chơi gõ từ khóa
+  useEffect(() => {
+    if (!query || query.trim().length < 2) return
+    let isMounted = true
+    const timer = setTimeout(async () => {
+      try {
+        const searchRes = await searchFacilities({
+          Keyword: query.trim(),
+          PageSize: 15,
+        })
+        const items = searchRes?.items || (Array.isArray(searchRes) ? searchRes : [])
+        if (isMounted && Array.isArray(items) && items.length > 0) {
+          const transformed = items.map(transformFacilityToCourt).filter(Boolean)
+          setApiFacilities((prev) => {
+            const foundIds = new Set(transformed.map((t) => t.id))
+            const remaining = prev.filter((p) => !foundIds.has(p.id))
+            return [...transformed, ...remaining]
+          })
+        }
+      } catch (e) {
+        console.warn('MapBooking: Tìm kiếm sân qua API notice:', e)
+      }
+    }, 400)
+
+    return () => {
+      clearTimeout(timer)
+      isMounted = false
+    }
+  }, [query])
+
 
   // Danh sách cụm sân trực tiếp từ Backend API GET /api/v1/facilities (fallback sang COURTS nếu API chưa tải xong hoặc rỗng)
   const localizedCourts = useMemo(() => {
