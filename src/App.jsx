@@ -43,6 +43,7 @@ import TournamentManagement from './Admin/Tournaments/TournamentManagement.jsx'
 import PaymentManagement from './Admin/Payments/PaymentManagement.jsx'
 import ReviewsReportsPage from './Admin/Reviews/ReviewsReportsPage.jsx'
 import NotificationManagement from './Admin/Notifications/NotificationManagement.jsx'
+import MasterDataManagement from './Admin/MasterData/MasterDataManagement.jsx'
 import SystemSettings from './Admin/Settings/SystemSettings.jsx'
 
 // Court Owner pages
@@ -116,6 +117,7 @@ function App() {
             <Route path="tournaments" element={<TournamentManagement />} />
             <Route path="payments" element={<PaymentManagement />} />
             <Route path="reviews-reports" element={<ReviewsReportsPage />} />
+            <Route path="master-data" element={<MasterDataManagement />} />
             <Route path="notifications" element={<NotificationManagement />} />
             <Route path="settings" element={<SystemSettings />} />
           </Route>

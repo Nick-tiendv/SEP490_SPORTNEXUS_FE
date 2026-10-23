@@ -1,34 +1,75 @@
 import apiClient from '../apiClient.js'
-import { pick, toList, unwrap } from './dashboardApi.js'
+import { toList, unwrap } from './dashboardApi.js'
 
-const ENDPOINT = '/api/v1/admin/notifications'
 const clean = params => Object.fromEntries(Object.entries(params || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+const path = value => encodeURIComponent(value)
+const toNumber = value => (value === undefined || value === null || value === '' || !Number.isFinite(Number(value)) ? 0 : Number(value))
+const asArray = value => (Array.isArray(value) ? value : [])
 
-// Swagger chưa mô tả schema response nên thử nhiều tên field.
-export const toBroadcast = raw => ({
-  id: String(pick(raw, 'id', 'broadcastId') ?? ''),
-  title: pick(raw, 'title') || '—',
-  body: pick(raw, 'body', 'message', 'content') || '',
-  target: pick(raw, 'target', 'audience') || 'Tất cả',
-  status: String(pick(raw, 'status') || '').toUpperCase(),
-  recipients: Number(pick(raw, 'recipientCount', 'targetUserCount')) || 0,
-  readCount: Number(pick(raw, 'readCount', 'totalRead')) || 0,
-  scheduledAt: pick(raw, 'scheduledAt') || '',
-  sentAt: pick(raw, 'sentAt') || '',
-  createdAt: pick(raw, 'createdAt') || '',
-  createdBy: pick(raw, 'createdByName', 'adminName', 'createdBy') || '',
-})
+// BroadcastResponse (docs 41).
+export function toBroadcast(raw) {
+  return {
+    id: String(raw?.id ?? ''),
+    title: raw?.title || '',
+    body: raw?.body || '',
+    target: String(raw?.target ?? '').toUpperCase(),
+    targetUserCount: toNumber(raw?.targetUserCount),
+    referenceType: raw?.referenceType || '',
+    referenceId: raw?.referenceId ? String(raw.referenceId) : '',
+    status: String(raw?.status ?? '').toUpperCase(),
+    scheduledAt: raw?.scheduledAt || null,
+    sentAt: raw?.sentAt || null,
+    recalledAt: raw?.recalledAt || null,
+    recipientCount: toNumber(raw?.recipientCount),
+    readCount: toNumber(raw?.readCount),
+    readRate: toNumber(raw?.readRate),
+    createdByName: raw?.createdByName || '—',
+    createdAt: raw?.createdAt || null,
+  }
+}
 
-// GET /api/v1/admin/notifications/broadcasts?Status&Page&PageSize
-export async function listBroadcasts({ status, page = 1, pageSize = 20 } = {}) {
-  const data = unwrap((await apiClient.get(`${ENDPOINT}/broadcasts`, { params: clean({ Status: status, Page: page, PageSize: pageSize }) })).data)
-  const { items, total, totalPages } = toList(data)
+// ---------- GET /api/v1/admin/notifications/broadcasts?status&page&pageSize ----------
+export async function listBroadcasts(params) {
+  const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/admin/notifications/broadcasts', { params: clean(params) })).data))
   return { items: items.map(toBroadcast), total, totalPages }
 }
-export const getBroadcast = async id => toBroadcast(unwrap((await apiClient.get(`${ENDPOINT}/broadcasts/${encodeURIComponent(id)}`)).data))
-export const deleteBroadcast = async id => unwrap((await apiClient.delete(`${ENDPOINT}/broadcasts/${encodeURIComponent(id)}`)).data)
-// CreateBroadcastRequest: title, body, target, userIds, referenceType, referenceId, scheduledAt
-export const createBroadcast = async ({ title, body, target, userIds, scheduledAt }) =>
-  unwrap((await apiClient.post(`${ENDPOINT}/broadcast`, clean({ title, body, target, userIds: userIds?.length ? userIds : undefined, scheduledAt }))).data)
-// GET /api/v1/admin/notifications/statistics?days
-export const getNotificationStatistics = async (days = 30) => unwrap((await apiClient.get(`${ENDPOINT}/statistics`, { params: { days } })).data) || {}
+export async function getBroadcast(id) {
+  return toBroadcast(unwrap((await apiClient.get(`/api/v1/admin/notifications/broadcasts/${path(id)}`)).data))
+}
+
+// CreateBroadcastRequest: title, body, target (ALL | PLAYER | OWNER | USERS), userIds, referenceType, referenceId, scheduledAt.
+// Trả kèm message của BE ("Đã gửi thông báo tới N người." / "Đã hẹn gửi thông báo lúc ...").
+export async function createBroadcast({ title, body, target, userIds, referenceType, referenceId, scheduledAt }) {
+  const response = (await apiClient.post('/api/v1/admin/notifications/broadcast', {
+    title,
+    body,
+    target,
+    userIds: target === 'USERS' ? userIds : null,
+    referenceType: referenceType || null,
+    referenceId: referenceType ? referenceId : null,
+    scheduledAt: scheduledAt || null,
+  })).data
+  return { data: toBroadcast(unwrap(response)), message: response?.message || '' }
+}
+
+// Hủy đợt hẹn giờ (SCHEDULED) hoặc thu hồi đợt đã gửi (SENT).
+export async function cancelBroadcast(id) {
+  const response = (await apiClient.delete(`/api/v1/admin/notifications/broadcasts/${path(id)}`)).data
+  unwrap(response)
+  return response?.message || ''
+}
+
+// ---------- GET /api/v1/admin/notifications/statistics?days (1–90, mặc định 30) ----------
+export async function getNotificationStatistics(days = 30) {
+  const data = unwrap((await apiClient.get('/api/v1/admin/notifications/statistics', { params: { days } })).data) || {}
+  return {
+    days: toNumber(data.days) || days,
+    totalSent: toNumber(data.totalSent),
+    totalRead: toNumber(data.totalRead),
+    readRate: toNumber(data.readRate),
+    broadcastsSent: toNumber(data.broadcastsSent),
+    broadcastsScheduled: toNumber(data.broadcastsScheduled),
+    byType: asArray(data.byType).map(item => ({ type: String(item.type ?? '').toUpperCase(), total: toNumber(item.total), read: toNumber(item.read), readRate: toNumber(item.readRate) })),
+    daily: asArray(data.daily).map(item => ({ date: item.date, sent: toNumber(item.sent), read: toNumber(item.read) })),
+  }
+}

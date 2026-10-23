@@ -1,149 +1,123 @@
-import { mockSummary, recipients } from './notificationData.js'
+// Nhãn và hàm thuần cho trang Quản lý thông báo (docs 41). Dữ liệu thật lấy qua src/api/admin/notificationApi.js.
 
-const adminDisplayLabels = {
-  "Confirmed": "Đã xác nhận",
-  "Completed": "Đã hoàn thành",
-  "Recruiting": "Đang tìm người",
-  "Announcement": "Thông báo chung",
-  "Maintenance": "Bảo trì",
-  "General": "Chung",
-  "Admin": "Quản trị",
-  "Administrator": "Quản trị viên",
-  "Player": "Người chơi",
-  "Court Owner": "Chủ sân",
-  "CourtOwner": "Chủ sân",
-  "Booking": "Đặt sân",
-  "Payment": "Thanh toán",
-  "Tournament": "Giải đấu",
-  "System": "Hệ thống",
-  "Broadcast": "Thông báo hàng loạt",
-  "LFG": "Tìm nhóm chơi",
-  "Registration": "Đăng ký",
-  "Active": "Đang hoạt động",
-  "Inactive": "Ngừng hoạt động",
-  "Pending": "Đang chờ xử lý",
-  "Read": "Đã đọc",
-  "Delivered": "Đã giao",
-  "Failed": "Thất bại",
-  "Sent": "Đã gửi",
-  "Sending": "Đang gửi",
-  "Draft": "Bản nháp",
-  "Scheduled": "Đã lên lịch",
-  "Cancelled": "Đã hủy",
-  "In-App": "Trong ứng dụng",
-  "Push Notification": "Thông báo đẩy",
-  "All Users": "Tất cả người dùng",
-  "Players": "Người chơi",
-  "Court Owners": "Chủ sân",
-  "Admins": "Quản trị viên",
-  "Selected Users": "Người dùng được chọn",
-  "All": "Tất cả"
+export const MAX_TITLE = 255
+export const MAX_BODY = 2000
+export const MAX_USERS = 1000
+const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
+const MINUTE = 60 * 1000
+const DAY = 24 * 60 * MINUTE
+
+export const targetLabels = {
+  ALL: 'Tất cả (người chơi + chủ sân)',
+  PLAYER: 'Người chơi',
+  OWNER: 'Chủ sân',
+  USERS: 'Người dùng được chọn',
 }
 
+// tone = class màu có sẵn trong notification.css (.nt-<tone>).
+export const statusLabels = {
+  SCHEDULED: { label: 'Đã hẹn giờ', tone: 'scheduled' },
+  SENT: { label: 'Đã gửi', tone: 'read' },
+  CANCELLED: { label: 'Đã hủy', tone: 'cancelled' },
+  RECALLED: { label: 'Đã thu hồi', tone: 'draft' },
+}
+export const statusFilters = ['SCHEDULED', 'SENT', 'CANCELLED', 'RECALLED']
 
-export const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase()
-export const formatNumber = value => value.toLocaleString('vi-VN')
-export const formatTime = value => value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Chưa có'
-export function localDate(value) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value))
-}
-export function scheduleInput(value) {
-  return value ? `${localDate(value)}T${new Date(value).toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })}` : ''
+// Nhóm thông báo trong thống kê byType (docs 21).
+export const typeLabels = {
+  BOOKING: 'Đặt sân',
+  LFG: 'Tìm nhóm chơi',
+  TEAM: 'Đội',
+  TOURNAMENT: 'Giải đấu',
+  REVIEW: 'Đánh giá',
+  COMMUNITY: 'Cộng đồng',
+  WALLET: 'Ví',
+  REPORT: 'Khiếu nại',
+  SYSTEM: 'Hệ thống',
 }
 
-export function filterNotifications(records, filters) {
-  return records.filter(record => {
-    const text = [record.id, record.title, record.type, record.recipient.name, record.recipient.username, record.recipient.email].join(' ')
-    const day = localDate(record.sentAt)
-    return normalize(text).includes(normalize(filters.search.trim())) &&
-      (!filters.type || record.type === filters.type) && (!filters.status || record.status === filters.status) &&
-      (!filters.audience || record.recipient.role === filters.audience) &&
-      (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to)
-  })
+// referenceType hợp lệ (docs 21) để app người dùng mở đúng màn hình khi bấm thông báo.
+export const referenceTypes = {
+  TOURNAMENT: 'Giải đấu',
+  FACILITY: 'Cơ sở thể thao',
+  BOOKING: 'Đơn đặt sân',
+  LFG_CARD: 'Kèo tìm nhóm',
+  TEAM: 'Đội',
+  COMMUNITY_POST: 'Bài viết cộng đồng',
+  FACILITY_REVIEW: 'Đánh giá cơ sở',
+  REPORT: 'Khiếu nại',
+  WALLET: 'Ví',
 }
-export function filterManagement(records, filters, tab) {
-  return records.filter(record => normalize([record.id, record.name, record.title, record.eventKey, record.message].filter(Boolean).join(' ')).includes(normalize(filters.search.trim())) &&
-    (!filters.status || record.status === filters.status) &&
-    (!filters.type || (tab === 'triggers' ? record.category : record.type) === filters.type) &&
-    (!filters.audience || record.audience === filters.audience))
+
+export const STATS_PERIODS = [7, 30, 90]
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export const formatNumber = value => new Intl.NumberFormat('vi-VN').format(Number(value) || 0)
+export const formatPercent = value => `${(Number(value) || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
+export function formatTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('vi-VN', { timeZone: VN_TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
-export function toggleTrigger(records, id) {
-  return records.map(record => record.id === id ? { ...record, status: record.status === 'Active' ? 'Inactive' : 'Active' } : record)
+
+// Bỏ dấu để tìm kiếm không phân biệt dấu / hoa thường.
+export const normalize = value => String(value ?? '').toLocaleLowerCase('vi').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
+
+// Giá trị cho <input type="datetime-local"> theo giờ Việt Nam: 'yyyy-MM-ddTHH:mm'.
+export function vnLocalInput(time) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: VN_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(time)).map(part => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}`
 }
-export function paginate(records, page, pageSize = 10) {
-  const pages = Math.max(1, Math.ceil(records.length / pageSize))
-  const current = Math.min(Math.max(1, page), pages)
-  return { rows: records.slice((current - 1) * pageSize, current * pageSize), page: current, pages }
-}
-export function notificationSummary(notifications, today = mockSummary.date) {
-  const added = notifications.filter(record => record.source === 'created')
-  const total = mockSummary.total + added.length
-  const successful = added.filter(record => ['Delivered', 'Read'].includes(record.status)).length
-  return {
-    total, sentToday: mockSummary.sentToday + added.filter(record => record.status !== 'Pending' && localDate(record.sentAt) === today).length,
-    unread: mockSummary.unread + added.filter(record => record.status !== 'Read' && record.status !== 'Failed').length,
-    rate: (mockSummary.delivered + successful) / total * 100,
+// 'yyyy-MM-ddTHH:mm' (giờ Việt Nam) → ISO DateTimeOffset gửi lên BE.
+export const vnLocalToIso = value => (value ? `${value}:00+07:00` : null)
+
+export const blankBroadcast = { title: '', body: '', target: 'ALL', userIds: [], referenceType: '', referenceId: '', sendMode: 'now', scheduledLocal: '' }
+
+// Kiểm tra trước khi gửi, theo đúng các ràng buộc 400 của docs 41. Trả '' nếu hợp lệ.
+export function validateBroadcast(form, now = Date.now()) {
+  const title = form.title.trim()
+  const body = form.body.trim()
+  if (!title || !body) return 'Vui lòng nhập tiêu đề và nội dung.'
+  if (title.length > MAX_TITLE) return `Tiêu đề tối đa ${MAX_TITLE} ký tự.`
+  if (body.length > MAX_BODY) return `Nội dung tối đa ${formatNumber(MAX_BODY)} ký tự.`
+  if (!targetLabels[form.target]) return 'Vui lòng chọn đối tượng nhận.'
+  if (form.target === 'USERS') {
+    if (!form.userIds.length) return 'Vui lòng chọn ít nhất 1 người nhận.'
+    if (form.userIds.length > MAX_USERS) return `Tối đa ${formatNumber(MAX_USERS)} người nhận cho mỗi đợt.`
   }
-}
-export function deliveryTimeline(notification) {
-  const entries = [
-    { title: notification.source === 'created' ? "Được tạo bởi quản trị viên" : `Kích hoạt bởi hệ thống ${adminDisplayLabels[notification.type] || notification.type}`, detail: 'Sự kiện đã được ghi nhận trong dữ liệu mẫu.', tone: 'success' },
-    { title: "Đã chuẩn bị thông báo", detail: `Kênh cấu hình: ${notification.channels.map(channel => adminDisplayLabels[channel] || channel).join(' & ')}`, tone: 'success' },
-  ]
-  if (notification.status === 'Pending') entries.push({ title: "Đang chờ gửi", detail: 'Đang chờ gửi; chưa xác nhận giao thành công.', tone: 'warning' })
-  if (notification.status === 'Failed') entries.push({ title: "Gửi thông báo thất bại", detail: notification.error || 'Không có thông tin nguyên nhân.', tone: 'danger' })
-  if (notification.status === 'Sent') entries.push({ title: "Đã gửi thông báo", detail: 'Đã gửi; chưa có xác nhận từ thiết bị người nhận.', tone: 'info' })
-  if (['Delivered', 'Read'].includes(notification.status)) entries.push({ title: "Đã giao thông báo", detail: 'Đã có xác nhận giao thông báo trong dữ liệu mẫu.', tone: 'success' })
-  if (notification.status === 'Read') entries.push({ title: "Người nhận đã đọc thông báo", detail: 'Người nhận đã mở thông báo (mẫu).', tone: 'success' })
-  return entries.map((entry, index) => ({ ...entry, at: new Date(new Date(notification.sentAt).getTime() + index * 60000).toISOString() }))
-}
-export function resolveRecipients(form) {
-  const audienceRoles = { Players: 'Player', 'Court Owners': 'Court Owner', Admins: 'Admin' }
-  return recipients.filter(person => form.audience === 'All Users' ||
-    (form.audience === 'Selected Users' ? form.selectedUsers.includes(person.id) : person.role === audienceRoles[form.audience]))
-}
-export function validateNotification(form, mode, now = Date.now()) {
-  if (!form.title.trim() || form.title.trim().length > 120) return 'Tiêu đề phải có từ 1 đến 120 ký tự.'
-  if (!form.message.trim() || form.message.trim().length > 2000) return 'Nội dung phải có từ 1 đến 2.000 ký tự.'
-  if (!form.audience || !resolveRecipients(form).length) return 'Vui lòng chọn đối tượng và ít nhất một người nhận mẫu.'
-  if (!form.channels.length) return 'Phải chọn ít nhất một kênh gửi.'
-  if (mode === 'schedule' && (!form.scheduleAt || !Number.isFinite(Date.parse(form.scheduleAt)) || Date.parse(form.scheduleAt) <= now)) return 'Thời gian lên lịch phải ở tương lai (giờ Việt Nam, UTC+7).'
+  const referenceId = form.referenceId.trim()
+  if (form.referenceType && !referenceId) return 'Vui lòng nhập ID đối tượng liên kết.'
+  if (!form.referenceType && referenceId) return 'Vui lòng chọn loại đối tượng liên kết.'
+  if (referenceId && !UUID.test(referenceId)) return 'ID đối tượng liên kết phải là mã UUID.'
+  if (form.sendMode === 'later') {
+    const time = Date.parse(vnLocalToIso(form.scheduledLocal) || '')
+    if (!Number.isFinite(time)) return 'Vui lòng chọn thời gian hẹn gửi.'
+    if (time < now + MINUTE) return 'Thời gian hẹn gửi phải sau thời điểm hiện tại ít nhất 1 phút.'
+    if (time > now + 30 * DAY) return 'Chỉ hẹn gửi trong vòng 30 ngày.'
+  }
   return ''
 }
-export function createNotifications(form, now = new Date(), id = crypto.randomUUID()) {
-  return resolveRecipients(form).map((recipient, index) => ({
-    id: `NOTIF-${id}-${index + 1}`, title: form.title.trim(), message: form.message.trim(),
-    type: ['Announcement', 'Maintenance', 'General'].includes(form.type) ? 'Broadcast' : form.type,
-    subtype: form.type, recipient, channels: [...form.channels], status: 'Sent', sentAt: now.toISOString(),
-    related: null, error: '', source: 'created',
-  }))
-}
-export function saveBroadcast(records, form, mode, id = crypto.randomUUID()) {
-  const record = { ...form, id: form.id || `BCAST-${id}`, title: form.title.trim(), message: form.message.trim(),
-    channels: [...form.channels], selectedUsers: [...form.selectedUsers],
-    status: mode === 'draft' ? 'Draft' : 'Scheduled', scheduleAt: mode === 'draft' ? '' : form.scheduleAt,
-    estimatedRecipients: resolveRecipients(form).length,
+
+export function toBroadcastPayload(form) {
+  return {
+    title: form.title.trim(),
+    body: form.body.trim(),
+    target: form.target,
+    userIds: form.target === 'USERS' ? form.userIds : null,
+    referenceType: form.referenceType || null,
+    referenceId: form.referenceType ? form.referenceId.trim() : null,
+    scheduledAt: form.sendMode === 'later' ? vnLocalToIso(form.scheduledLocal) : null,
   }
-  return form.id ? records.map(item => item.id === form.id ? record : item) : [record, ...records]
 }
-export function broadcastAction(records, id, action, newId = crypto.randomUUID()) {
-  const source = records.find(record => record.id === id)
-  if (!source) return records
-  if (action === 'delete' && source.status === 'Draft') return records.filter(record => record.id !== id)
-  if (action === 'cancel' && source.status === 'Scheduled') return records.map(record => record.id === id ? { ...record, status: 'Cancelled' } : record)
-  if (action === 'duplicate') return [{ ...source, id: `BCAST-${newId}`, title: `${source.title} (bản sao)`.slice(0, 120), status: 'Draft', scheduleAt: '', channels: [...source.channels], selectedUsers: [...source.selectedUsers] }, ...records]
-  return records
-}
-function csvRows(rows) {
-  const escape = value => `"${String(value ?? '').replace(/^[=+@\-\t\r]/, "'$&").replace(/"/g, '""')}"`
-  return '\uFEFF' + rows.map(row => row.map(escape).join(',')).join('\r\n')
-}
-export function notificationsCsv(records) {
-  const rows = [["ID thông báo", "Tiêu đề", "Loại", "Người nhận", "Trạng thái", "Thời gian gửi"],
-    ...records.map(record => [record.id, record.title, record.type, record.recipient.name, record.status, record.sentAt])]
-  return csvRows(rows)
-}
-export function managementCsv(records, tab) {
-  const columns = tab === 'triggers' ? ['id', 'name', 'eventKey', 'category', 'channels', 'status', 'lastTriggered'] : ['id', 'title', 'audience', 'channels', 'scheduleAt', 'status']
-  return csvRows([columns, ...records.map(record => columns.map(column => Array.isArray(record[column]) ? record[column].join(' & ') : record[column]))])
+
+// Thao tác được phép: hủy đợt hẹn giờ, thu hồi đợt đã gửi.
+export const broadcastAction = status => (status === 'SCHEDULED' ? 'cancel' : status === 'SENT' ? 'recall' : null)
+
+const csvCell = value => `"${String(value ?? '').replaceAll('"', '""')}"`
+export function broadcastsCsv(rows) {
+  const header = ['ID', 'Tiêu đề', 'Nội dung', 'Đối tượng', 'Số người nhận', 'Đã đọc', 'Tỷ lệ đọc (%)', 'Trạng thái', 'Hẹn gửi', 'Đã gửi', 'Thu hồi', 'Người tạo']
+  const lines = rows.map(row => [row.id, row.title, row.body, targetLabels[row.target] || row.target, row.recipientCount, row.readCount, row.readRate, statusLabels[row.status]?.label || row.status, formatTime(row.scheduledAt), formatTime(row.sentAt), formatTime(row.recalledAt), row.createdByName])
+  return '﻿' + [header, ...lines].map(line => line.map(csvCell).join(',')).join('\n')
 }

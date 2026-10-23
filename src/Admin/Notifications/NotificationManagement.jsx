@@ -1,146 +1,142 @@
-import { useState } from 'react'
-import { Bell, CalendarClock, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Bell, CalendarClock, Download, Eye, Megaphone, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
-import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { usePagedList } from '../components/listHooks.js'
-import { useApi } from '../../hooks/useApi.js'
-import { createBroadcast, deleteBroadcast, getNotificationStatistics, listBroadcasts } from '../../api/admin/notificationApi.js'
+import { DemoDialog } from '../Users/UserDialogs.jsx'
+import { cancelBroadcast, createBroadcast, getBroadcast, getNotificationStatistics, listBroadcasts } from '../../api/admin/notificationApi.js'
+import { STATS_PERIODS, broadcastsCsv, formatNumber, formatPercent, statusFilters, statusLabels, targetLabels } from './notificationHelpers.js'
+import { NotificationPagination } from './NotificationUI.jsx'
+import NotificationTable from './NotificationTable.jsx'
+import { BroadcastInspector, TypeStats } from './NotificationInspector.jsx'
+import CreateNotificationModal from './CreateNotificationModal.jsx'
 import '../Users/users.css'
 import './notification.css'
-
-// target theo BE: ALL (Player + Owner) | PLAYER | OWNER | USERS (kèm userIds)
-const TARGETS = [
-  { value: 'ALL', label: 'Tất cả người dùng' },
-  { value: 'PLAYER', label: 'Người chơi' },
-  { value: 'OWNER', label: 'Chủ sân' },
-  { value: 'USERS', label: 'Người dùng cụ thể (nhập ID)' },
-]
-const STATUS_LABELS = { SCHEDULED: 'Đã hẹn giờ', SENT: 'Đã gửi', CANCELLED: 'Đã hủy', RECALLED: 'Đã thu hồi' }
-const number = value => new Intl.NumberFormat('vi-VN').format(Number(value) || 0)
-const time = value => (value ? new Date(value).toLocaleString('vi-VN') : '—')
-const emptyForm = { title: '', body: '', target: 'ALL', userIds: '', scheduledAt: '' }
-
-function ComposeDialog({ onClose, onSent }) {
-  const [form, setForm] = useState(emptyForm)
-  const [sending, setSending] = useState(false)
-  const change = (key, value) => setForm(previous => ({ ...previous, [key]: value }))
-
-  const submit = async event => {
-    event.preventDefault()
-    if (!form.title.trim() || !form.body.trim()) { toast.error('Vui lòng nhập tiêu đề và nội dung.'); return }
-    const userIds = form.target === 'USERS' ? form.userIds.split(/[\s,;]+/).filter(Boolean) : []
-    if (form.target === 'USERS' && userIds.length === 0) { toast.error('Vui lòng nhập ít nhất một ID người dùng.'); return }
-    setSending(true)
-    try {
-      await createBroadcast({
-        title: form.title.trim(),
-        body: form.body.trim(),
-        target: form.target,
-        userIds,
-        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : undefined,
-      })
-      toast.success(form.scheduledAt ? 'Đã lên lịch gửi thông báo.' : 'Đã gửi thông báo.')
-      onSent()
-    } catch (error) {
-      toast.error(error?.message || 'Không gửi được thông báo.')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return <DemoDialog title="Gửi thông báo hệ thống" onClose={onClose}>
-    <form onSubmit={submit}>
-      <div className="users-form">
-        <label>Tiêu đề<input maxLength={255} value={form.title} onChange={event => change('title', event.target.value)} /></label>
-        <label>Nội dung<textarea rows={5} maxLength={2000} value={form.body} onChange={event => change('body', event.target.value)} /></label>
-        <label>Người nhận<select value={form.target} onChange={event => change('target', event.target.value)}>{TARGETS.map(target => <option key={target.value} value={target.value}>{target.label}</option>)}</select></label>
-        {form.target === 'USERS' && <label>ID người dùng (cách nhau bởi dấu phẩy)<textarea rows={2} value={form.userIds} onChange={event => change('userIds', event.target.value)} /></label>}
-        <label>Hẹn giờ gửi (để trống = gửi ngay)<input type="datetime-local" value={form.scheduledAt} onChange={event => change('scheduledAt', event.target.value)} /></label>
-      </div>
-      <div className="users-details-actions">
-        <button type="button" className="users-button" onClick={onClose}>Hủy</button>
-        <button type="submit" className="users-button users-primary" disabled={sending}><Send size={13} />{sending ? 'Đang gửi…' : form.scheduledAt ? 'Lên lịch' : 'Gửi ngay'}</button>
-      </div>
-    </form>
-  </DemoDialog>
-}
 
 export default function NotificationManagement() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [reload, setReload] = useState(0)
+  const [days, setDays] = useState(30)
+  const [selectedId, setSelectedId] = useState(null)
   const [composing, setComposing] = useState(false)
+  const [confirmation, setConfirmation] = useState(null) // { action: 'cancel' | 'recall', broadcast }
+  const [busy, setBusy] = useState(false)
+
+  // GET /api/v1/admin/notifications/broadcasts — lọc trạng thái, phân trang phía server.
+  const params = useMemo(() => ({ Status: status, Page: page, PageSize: pageSize }), [status, page, pageSize])
+  const list = usePagedList(listBroadcasts, params, reload)
+  const rows = list.items
+  const pages = Math.max(1, list.totalPages || Math.ceil(list.total / pageSize))
+
+  // GET /api/v1/admin/notifications/statistics?days
+  const statsKey = `${days}|${reload}`
+  const [stats, setStats] = useState({ key: '', data: null, error: '' })
+  useEffect(() => {
+    let cancelled = false
+    const key = `${days}|${reload}`
+    getNotificationStatistics(days)
+      .then(data => !cancelled && setStats({ key, data, error: '' }))
+      .catch(error => !cancelled && setStats(previous => ({ ...previous, key, error: error.message })))
+    return () => { cancelled = true }
+  }, [days, reload])
+  const statsLoading = stats.key !== statsKey
+  const s = stats.data
+
+  // Chi tiết đợt đang chọn: GET /broadcasts/{id} (mặc định chọn dòng đầu tiên của trang).
+  const activeId = rows.some(row => row.id === selectedId) ? selectedId : rows[0]?.id || null
+  const detailKey = activeId ? `${activeId}|${reload}` : ''
+  const [detail, setDetail] = useState({ key: '', data: null, error: '' })
+  useEffect(() => {
+    if (!detailKey) return
+    let cancelled = false
+    getBroadcast(detailKey.split('|')[0])
+      .then(data => !cancelled && setDetail({ key: detailKey, data, error: '' }))
+      .catch(error => !cancelled && setDetail({ key: detailKey, data: null, error: error.message }))
+    return () => { cancelled = true }
+  }, [detailKey])
+  const selected = (detail.key === detailKey && detail.data) || rows.find(row => row.id === activeId) || null
+
   const refresh = () => setReload(value => value + 1)
+  const changeStatus = value => { setStatus(value); setPage(1); setSelectedId(null) }
 
-  // GET /api/v1/admin/notifications/statistics?days=30
-  const stats = useApi(() => getNotificationStatistics(30), [reload], { initialData: {} })
-  // GET /api/v1/admin/notifications/broadcasts
-  const list = usePagedList(listBroadcasts, { status, page, pageSize: 20, PageSize: 20 }, reload)
-  const s = stats.data || {}
-  const show = value => (stats.loading ? '…' : number(value))
+  const submitBroadcast = async payload => {
+    const { data, message } = await createBroadcast(payload)
+    toast.success(message || 'Đã tạo đợt thông báo.')
+    setComposing(false)
+    setStatus(''); setPage(1); setSelectedId(data.id)
+    refresh()
+  }
 
-  const remove = async broadcast => {
-    const action = broadcast.status === 'SCHEDULED' ? 'Hủy đợt hẹn giờ' : 'Thu hồi thông báo (ẩn khỏi hộp thư người nhận)'
-    if (!window.confirm(`${action}: "${broadcast.title}"?`)) return
+  // DELETE /broadcasts/{id}: hủy đợt hẹn giờ hoặc thu hồi đợt đã gửi.
+  const confirmAction = async () => {
+    setBusy(true)
     try {
-      await deleteBroadcast(broadcast.id)
-      toast.success(broadcast.status === 'SCHEDULED' ? 'Đã hủy đợt hẹn giờ.' : 'Đã thu hồi thông báo.')
+      const message = await cancelBroadcast(confirmation.broadcast.id)
+      toast.success(message || (confirmation.action === 'cancel' ? 'Đã hủy đợt thông báo hẹn giờ.' : 'Đã thu hồi thông báo.'))
+      setConfirmation(null)
       refresh()
     } catch (error) {
-      toast.error(error?.message || 'Không xóa được thông báo.')
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
     }
   }
 
-  return <div className="users-page">
-    <header className="users-page-heading admin-page-header">
-      <div><h1>Quản lý thông báo</h1><p>Gửi và theo dõi các thông báo hệ thống tới người dùng SportNexus.</p></div>
-      <div className="users-heading-actions">
-        <button className="users-button" onClick={refresh}><RefreshCw size={13} />Làm mới</button>
-        <button className="users-button users-primary" onClick={() => setComposing(true)}><Plus size={13} />Tạo thông báo</button>
-      </div>
-    </header>
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([broadcastsCsv(rows)], { type: 'text/csv;charset=utf-8;' }))
+    const anchor = document.createElement('a')
+    anchor.href = url; anchor.download = `sportnexus-thong-bao-trang-${page}.csv`; anchor.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success(`Đã xuất ${rows.length} đợt thông báo của trang hiện tại.`)
+  }
 
-    <div className="users-kpis">
-      <StatCard label="Thông báo đã gửi (30 ngày)" value={show(s.totalSent)} icon={Send} supporting={`Đã đọc ${show(s.totalRead)} · ${stats.loading ? '…' : `${Math.round(Number(s.readRate) || 0)}%`}`} />
-      <StatCard label="Đợt thông báo đã gửi" value={show(s.broadcastsSent)} icon={Bell} />
-      <StatCard label="Đợt đang hẹn giờ" value={show(s.broadcastsScheduled)} icon={CalendarClock} />
+  const show = value => (statsLoading ? '…' : stats.error && !s ? '—' : value)
+  const cards = [
+    ['Thông báo đã gửi', show(formatNumber(s?.totalSent)), Bell, `Mọi loại thông báo, ${days} ngày gần nhất`],
+    ['Đã đọc', show(formatNumber(s?.totalRead)), Eye, s ? `Tỷ lệ đọc ${formatPercent(s.readRate)}` : ''],
+    ['Đợt hệ thống đã gửi', show(formatNumber(s?.broadcastsSent)), Megaphone, 'Do quản trị viên gửi'],
+    ['Đợt đang hẹn giờ', show(formatNumber(s?.broadcastsScheduled)), CalendarClock, 'Chờ đến giờ gửi'],
+  ]
+  const target = confirmation?.broadcast
+
+  return <div className="nt-page">
+    <div className="nt-page-heading admin-page-header">
+      <div><div className="nt-title-row"><h1>Quản lý thông báo</h1><span className="nt-overview-badge">{list.loading && !list.total ? '…' : `${formatNumber(list.total)} đợt`}</span></div><p>Gửi thông báo hệ thống tới người chơi và chủ sân, hẹn giờ, theo dõi tỷ lệ đọc và thu hồi khi cần.</p></div>
+      <div className="nt-heading-actions">
+        <label className="nt-muted">Thống kê <select value={days} onChange={event => setDays(Number(event.target.value))}>{STATS_PERIODS.map(value => <option key={value} value={value}>{value} ngày</option>)}</select></label>
+        <button className="nt-button" onClick={refresh} disabled={list.loading}><RefreshCw size={14} />Làm mới</button>
+        <button className="nt-button" onClick={exportCsv} disabled={!rows.length}><Download size={14} />Xuất CSV</button>
+        <button className="nt-button primary" onClick={() => setComposing(true)}><Plus size={15} />Tạo thông báo</button>
+      </div>
     </div>
-    {stats.error && <div className="users-notice" role="alert"><span>Không tải được thống kê: {stats.error}</span></div>}
-    {list.error && <div className="users-notice" role="alert"><span>Không tải được danh sách: {list.error}</span></div>}
+    {stats.error && !statsLoading && <p className="nt-error" role="alert">Không tải được thống kê: {stats.error}</p>}
+    <div className="nt-stats">{cards.map(([label, value, icon, trend]) => <StatCard key={label} label={label} value={value} icon={icon} trend={trend} />)}</div>
 
-    <section className="users-toolbar" aria-label="Bộ lọc">
-      <label>Trạng thái<select value={status} onChange={event => { setStatus(event.target.value); setPage(1) }}>
-        <option value="">Tất cả</option>
-        {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select></label>
-    </section>
+    <div className="nt-tabs" role="tablist" aria-label="Lọc theo trạng thái">
+      {['', ...statusFilters].map(value => <button key={value || 'all'} role="tab" aria-selected={status === value} className={status === value ? 'active' : ''} onClick={() => changeStatus(value)}>{value ? statusLabels[value].label : 'Tất cả'}</button>)}
+    </div>
 
-    <section className="users-table-panel">
-      <div className="users-table-scroll">
-        <table>
-          <thead><tr><th>Tiêu đề</th><th>Người nhận</th><th>Trạng thái</th><th>Số người nhận</th><th>Hẹn giờ / Đã gửi</th><th /></tr></thead>
-          <tbody>
-            {list.loading && <tr><td colSpan={6}>Đang tải…</td></tr>}
-            {!list.loading && list.items.length === 0 && <tr><td colSpan={6} className="users-empty">Chưa có thông báo nào.</td></tr>}
-            {!list.loading && list.items.map(broadcast => <tr key={broadcast.id}>
-              <td><strong>{broadcast.title}</strong><br /><small>{broadcast.body.slice(0, 80)}</small></td>
-              <td>{TARGETS.find(target => target.value === broadcast.target)?.label || broadcast.target}</td>
-              <td>{STATUS_LABELS[broadcast.status] || broadcast.status || '—'}</td>
-              <td>{number(broadcast.recipients)} · đọc {number(broadcast.readCount)}</td>
-              <td>{time(broadcast.sentAt || broadcast.scheduledAt || broadcast.createdAt)}</td>
-              <td><button className="users-button" aria-label={`Xóa ${broadcast.title}`} onClick={() => remove(broadcast)}><Trash2 size={13} /></button></td>
-            </tr>)}
-          </tbody>
-        </table>
+    <div className="nt-content-grid">
+      <section className="nt-panel nt-list" aria-label="Lịch sử đợt thông báo">
+        <NotificationTable rows={rows} loading={list.loading} error={list.error} selectedId={activeId} onSelect={setSelectedId} onAction={(action, broadcast) => setConfirmation({ action, broadcast })} />
+        <NotificationPagination total={list.total} page={page} pages={pages} pageSize={pageSize} loading={list.loading} onPage={value => { setPage(value); setSelectedId(null) }} onPageSize={value => { setPageSize(value); setPage(1); setSelectedId(null) }} />
+      </section>
+      <div className="nt-inspector-column">
+        <BroadcastInspector broadcast={selected} loading={list.loading} error={detail.key === detailKey ? detail.error : ''} onAction={(action, broadcast) => setConfirmation({ action, broadcast })} />
+        <TypeStats stats={s} loading={statsLoading} error={stats.error} />
       </div>
-      <div className="users-pagination">
-        <button className="users-button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Trước</button>
-        <span>Trang {page} / {list.totalPages || 1}</span>
-        <button className="users-button" disabled={page >= (list.totalPages || 1)} onClick={() => setPage(value => value + 1)}>Sau</button>
-      </div>
-    </section>
+    </div>
 
-    {composing && <ComposeDialog onClose={() => setComposing(false)} onSent={() => { setComposing(false); setPage(1); refresh() }} />}
+    {composing && <CreateNotificationModal onClose={() => setComposing(false)} onSubmit={submitBroadcast} />}
+    {confirmation && <DemoDialog title={confirmation.action === 'cancel' ? 'Hủy đợt hẹn giờ' : 'Thu hồi thông báo'} onClose={busy ? () => {} : () => setConfirmation(null)}>
+      <div className="nt-modal-content">
+        <p>{confirmation.action === 'cancel'
+          ? <>Hủy đợt “<strong>{target.title}</strong>”? Thông báo sẽ không được gửi.</>
+          : <>Thu hồi đợt “<strong>{target.title}</strong>” khỏi hộp thư của {formatNumber(target.recipientCount)} người nhận ({targetLabels[target.target] || target.target})? Không thể hoàn tác.</>}</p>
+        <footer><button className="nt-button" onClick={() => setConfirmation(null)} disabled={busy}>Quay lại</button><button className="nt-button danger" onClick={confirmAction} disabled={busy}>{busy ? 'Đang xử lý…' : confirmation.action === 'cancel' ? 'Hủy đợt' : 'Thu hồi'}</button></footer>
+      </div>
+    </DemoDialog>}
   </div>
 }
