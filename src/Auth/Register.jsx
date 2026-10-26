@@ -4,6 +4,7 @@ import './auth-pages.css'
 
 import { toast } from 'sonner'
 import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
+import SocialLoginButtons from './SocialLoginButtons.jsx'
 
 // Trình độ theo BE: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL
 const SKILL_LEVELS = [
@@ -591,25 +592,9 @@ function Register() {
               <div className="flex-grow border-t border-gray-300" />
             </div>
             
-            {/* Social Auth Buttons */}
-            <div className="grid grid-cols-2 gap-4">
-              <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors font-medium text-gray-700" type="button">
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" fill="#EA4335" />
-                  <path d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z" fill="#4285F4" />
-                  <path d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.5s.7 4.8 1.9 7.2l3.7-2.9z" fill="#FBBC05" />
-                  <path d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 17C3.7 20.7 7.5 24 12 24z" fill="#34A853" />
-                </svg>
-                <span>Google</span>
-              </button>
-              <button className="flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors font-medium text-gray-700" type="button">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                <span>Facebook</span>
-              </button>
-            </div>
-            
+            {/* Đăng ký nhanh bằng Google / Facebook: tạo tài khoản theo vai trò đang chọn */}
+            <SocialLoginButtons mode="register" role={role === 'court_owner' ? 'Owner' : 'Player'} />
+
             {/* Bottom Sign In Link */}
             <div className="mt-8 text-center">
               <p className="text-sm text-gray-600">
