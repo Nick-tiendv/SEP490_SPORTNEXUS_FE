@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { cancelOwnerBooking, checkInBooking, createWalkInBooking, getCancellationReasons, getFacilitySlots, updateSlotStatus } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 // Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
@@ -261,6 +262,22 @@ export default function ViewCourtBookingSchedule() {
     )
   }
 
+  // Đổi giá 1 ca trống: PUT /slots/{id}/status { status: Available, price }
+  // priceDraft gắn với id ca đang sửa để tự bỏ khi mở ca khác.
+  const [priceDraft, setPriceDraft] = useState(null) // { slotId, value }
+  const handleChangeSlotPrice = (slot) => {
+    const price = Number(priceDraft?.value)
+    if (!Number.isFinite(price) || price < 1000) {
+      showToast('Giá ca phải từ 1.000 đ trở lên.', 'error')
+      return
+    }
+    runAction(
+      () => updateSlotStatus(slot.id, { status: SLOT_STATUS_CODE.AVAILABLE, price }),
+      `Đã đổi giá ca ${toClockVN(slot.startTime)} thành ${formatVND(price)}.`,
+      () => { setPriceDraft(null); setWalkinSlot(null) },
+    )
+  }
+
   // Khóa / mở lại ca trống: PUT /slots/{id}/status
   const handleToggleSlotLock = (slot, lock) => {
     runAction(
@@ -307,14 +324,8 @@ export default function ViewCourtBookingSchedule() {
 
   if (!layoutLoading && !layoutError && !facilityId) {
     return (
-      <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{ ...panelStyle, padding: '48px 28px', textAlign: 'center' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '44px', color: '#10B981' }}>domain_add</span>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0F172A', margin: '12px 0 6px' }}>Bạn chưa có cơ sở nào</h2>
-          <p style={{ margin: 0, color: '#475569', fontSize: '14px', fontWeight: 600 }}>
-            Hãy đăng ký cơ sở thể thao và chờ quản trị viên phê duyệt để xem lịch đặt sân.
-          </p>
-        </div>
+      <div className="snx-page">
+        <NoFacilityState what="nhận lịch đặt sân" />
       </div>
     )
   }
@@ -933,7 +944,17 @@ export default function ViewCourtBookingSchedule() {
                 <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                   Bắt đầu: <strong>{toClockVN(walkinSlot.slot.startTime)}</strong> ngày {formatDateVN(selectedDate)} • Giá:{' '}
                   <strong>{formatVND(walkinSlot.slot.price)}</strong>/ca
+                  {priceDraft?.slotId !== walkinSlot.slot.id && (
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" style={{ marginLeft: 6 }} onClick={() => setPriceDraft({ slotId: walkinSlot.slot.id, value: String(walkinSlot.slot.price ?? '') })}>Đổi giá</button>
+                  )}
                 </div>
+                {priceDraft?.slotId === walkinSlot.slot.id && (
+                  <div className="snx-row" style={{ marginTop: 8 }}>
+                    <input className="snx-input" style={{ width: 160 }} type="number" min={1000} step={1000} value={priceDraft.value} onChange={(e) => setPriceDraft({ ...priceDraft, value: e.target.value })} aria-label="Giá mới của ca" />
+                    <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busy} onClick={() => handleChangeSlotPrice(walkinSlot.slot)}>Lưu giá</button>
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setPriceDraft(null)}>Hủy</button>
+                  </div>
+                )}
               </div>
             )}
 

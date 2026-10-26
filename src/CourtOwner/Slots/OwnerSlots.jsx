@@ -13,6 +13,7 @@ import {
   getFacilitySlotsRange,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 import { WEEK_DAYS, addDays, formatDate, formatTime, formatVND, statusBadge, toDateKey, toTimeSpan } from '../shared.js'
 
 const BULK_ACTIONS = [
@@ -242,7 +243,7 @@ export default function OwnerSlots() {
     return (
       <div className="snx-stack">
         <PageHeader eyebrow="Cơ sở & sân" eyebrowIcon="event_repeat" title="Ca sân" />
-        <div className="snx-empty"><span className="material-symbols-outlined">domain_add</span>Bạn chưa có cơ sở. <Link to="/owner/facilities">Tạo cơ sở</Link></div>
+        <NoFacilityState what="sinh ca và mở bán sân" />
       </div>
     )
   }
