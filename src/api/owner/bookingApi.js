@@ -1,7 +1,18 @@
-import { get, getList, path, post } from './request.js'
+import { get, getList, path, post, toList } from './request.js'
 
 // Query: FacilityId, CourtId, Date, DateFrom, DateTo, Status, Search, Page, PageSize.
 export const getOwnerBookings = params => getList('/api/v1/bookings/owner', params)
+// Như trên nhưng giữ cả số liệu tổng (totalActiveRevenue, paidCount, checkedInCount, cancelledCount).
+export async function getOwnerBookingsPage(params) {
+  const data = await get('/api/v1/bookings/owner', params)
+  return {
+    ...toList(data),
+    revenue: Number(data?.totalActiveRevenue) || 0,
+    paidCount: Number(data?.paidCount) || 0,
+    checkedInCount: Number(data?.checkedInCount) || 0,
+    cancelledCount: Number(data?.cancelledCount) || 0,
+  }
+}
 export const getOwnerBooking = bookingId => get(`/api/v1/bookings/owner/${path(bookingId)}`)
 export const getFacilityBookings = (facilityId, { date, status } = {}) => get(`/api/v1/facilities/${path(facilityId)}/bookings`, { date, status })
 

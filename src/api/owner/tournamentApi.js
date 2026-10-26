@@ -9,6 +9,8 @@ export const getFacilityTournaments = async facilityId => (await getList(`/api/v
 export const getTournament = id => get(url(id))
 // CreateTournamentRequest: facilityId, categoryId, name, children[{ name, categoryType, maxParticipants, entryFee, prizes, minTeamSize, maxTeamSize }].
 export const createTournament = payload => post('/api/v1/tournaments', payload)
+// UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Dùng id giải mẹ hoặc bảng con.
+export const updateTournamentInfo = (id, payload) => put(url(id), payload)
 export const deleteTournament = id => del(url(id))
 export const cancelTournament = (id, reason) => patch(`${url(id)}/cancel-tournament`, { reason })
 

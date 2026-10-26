@@ -26,13 +26,24 @@ const readSavedFacilityId = () => {
   try { return localStorage.getItem(FACILITY_STORAGE_KEY) } catch { return null }
 }
 
-const navItems = [
-  { label: 'Trang Chủ', path: '/owner/dashboard', icon: 'home', description: 'Tổng quan vận hành cơ sở' },
-  { label: 'Quản Lý Cụm Sân', path: '/owner/courts', icon: 'domain', description: 'Cụm phức hợp & Định giá động' },
-  { label: 'Quét QR Check-in', path: '/owner/check-qr', icon: 'qr_code_scanner', description: 'Xác nhận & Giải ngân' },
-  { label: 'Lịch Đặt Sân Tích Hợp', path: '/owner/schedule', icon: 'calendar_month', description: 'Lưới lịch đa bộ môn' },
-  { label: 'Giải Đấu Tự Động', path: '/owner/tournament', icon: 'emoji_events', description: 'Tự bốc thăm & Sơ đồ nhánh đấu' },
-  { label: 'Báo Cáo & Rút Tiền', path: '/owner/settlement', icon: 'account_balance_wallet', description: 'Doanh thu & Quyết toán' },
+// Vận hành hằng ngày / Cơ sở & sân / Kinh doanh & khách hàng
+const operationItems = [
+  { label: 'Trang chủ', path: '/owner/dashboard', icon: 'home', description: 'Tổng quan vận hành cơ sở' },
+  { label: 'Lịch đặt sân', path: '/owner/schedule', icon: 'calendar_month', description: 'Lưới lịch theo ngày, khách vãng lai' },
+  { label: 'Đơn đặt sân', path: '/owner/bookings', icon: 'receipt_long', description: 'Danh sách & chi tiết đơn' },
+  { label: 'Quét QR check-in', path: '/owner/check-qr', icon: 'qr_code_scanner', description: 'Xác nhận khách vào sân' },
+]
+const facilityItems = [
+  { label: 'Cơ sở của tôi', path: '/owner/facilities', icon: 'domain', description: 'Thông tin, ảnh, tiện ích' },
+  { label: 'Sân & giá', path: '/owner/courts', icon: 'sports_tennis', description: 'Sân con, giá chuẩn, giờ mở cửa' },
+  { label: 'Ca sân', path: '/owner/slots', icon: 'event_repeat', description: 'Sinh ca, khóa / mở, đổi giá' },
+]
+const businessItems = [
+  { label: 'Giải đấu', path: '/owner/tournament', icon: 'emoji_events', description: 'Tạo giải, bốc thăm, xếp sân' },
+  { label: 'Quảng bá', path: '/owner/promotions', icon: 'campaign', description: 'Gói đẩy tin' },
+  { label: 'Đánh giá', path: '/owner/reviews', icon: 'reviews', description: 'Phản hồi đánh giá của khách' },
+  { label: 'Khiếu nại', path: '/owner/reports', icon: 'report', description: 'Giải trình, hoàn tiền' },
+  { label: 'Doanh thu & rút tiền', path: '/owner/settlement', icon: 'account_balance_wallet', description: 'Doanh thu & quyết toán' },
 ]
 
 export default function CourtOwnerLayout() {
@@ -86,15 +97,21 @@ export default function CourtOwnerLayout() {
   const displayName = profile?.fullName || profile?.username || 'Chủ sân'
 
   // Xác định tiêu đề hiển thị trên header tương ứng với trang
-  const getCurrentPageTitle = () => {
-    if (location.pathname.includes('/owner/profile')) return { title: 'Hồ Sơ Chủ Sân & Doanh Nghiệp', sub: 'Thông tin cá nhân & Quản trị tài khoản' }
-    if (location.pathname.includes('/owner/courts')) return { title: 'Quản Lý Cụm Sân Phức Hợp', sub: 'Cấu hình Lưới giờ & Định giá động' }
-    if (location.pathname.includes('/owner/check-qr')) return { title: 'Quét Mã QR Check-in', sub: 'Mở khóa giải ngân Smart Escrow tức thì' }
-    if (location.pathname.includes('/owner/schedule')) return { title: 'Lịch Đặt Sân Tích Hợp', sub: 'Lưới hiển thị toàn bộ 14 sân con' }
-    if (location.pathname.includes('/owner/tournament')) return { title: 'Giải Đấu Tự Động', sub: 'Tự bốc thăm & Sơ đồ nhánh đấu Knockout' }
-    if (location.pathname.includes('/owner/settlement')) return { title: 'Báo Cáo Doanh Thu & Quyết Toán', sub: 'Rút tiền nhanh Napas 24/7' }
-    return { title: 'Trang Chủ Quản Trị Cơ Sở', sub: 'Cụm thể thao phức hợp SportNexus Arena' }
-  }
+  const PAGE_TITLES = [
+    ['/owner/profile', 'Hồ sơ chủ sân'],
+    ['/owner/facilities', 'Cơ sở của tôi'],
+    ['/owner/courts', 'Sân & giá'],
+    ['/owner/slots', 'Ca sân'],
+    ['/owner/check-qr', 'Quét QR check-in'],
+    ['/owner/schedule', 'Lịch đặt sân'],
+    ['/owner/bookings', 'Đơn đặt sân'],
+    ['/owner/tournament', 'Giải đấu'],
+    ['/owner/promotions', 'Quảng bá'],
+    ['/owner/reviews', 'Đánh giá'],
+    ['/owner/reports', 'Khiếu nại'],
+    ['/owner/settlement', 'Doanh thu & rút tiền'],
+  ]
+  const getCurrentPageTitle = () => ({ title: PAGE_TITLES.find(([prefix]) => location.pathname.startsWith(prefix))?.[1] || 'Trang chủ' })
 
   const pageInfo = getCurrentPageTitle()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -126,7 +143,9 @@ export default function CourtOwnerLayout() {
             {facility ? `${facility.sportCount} khu vực • ${facility.activeCourtCount}/${facility.courtCount} sân hoạt động` : '0 sân'}
           </div>
         </div>
-        <SidebarNav title="Chức năng quản trị" items={navItems} />
+        <SidebarNav title="Vận hành" items={operationItems} />
+        <SidebarNav title="Cơ sở & sân" items={facilityItems} />
+        <SidebarNav title="Kinh doanh" items={businessItems} />
       </AppSidebar>
 
       <div className="snx-workspace">
