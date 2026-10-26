@@ -11,3 +11,8 @@
 @media(min-width:1500px){.rr-excerpt{max-width:220px}}
 @media(max-width:1200px){.rr-content{grid-template-columns:minmax(0,1fr)}.rr-inspector{max-width:none}.rr-stats{gap:10px}.rr-stats .admin-stat-card{padding:12px}.rr-stats .admin-stat-value,.rr-stats .admin-stat-card:nth-child(5) .admin-stat-value{font-size:23px}}
 @media(max-width:760px){.rr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.rr-title h1{font-size:22px}.rr-tabs{gap:8px}.rr-tabs>small{width:100%;margin:0 0 8px}.rr-priority{flex-wrap:wrap;padding:12px}.rr-priority p{flex:1}.rr-priority .rr-button{width:100%}.rr-header-actions{width:100%}.rr-header-actions .rr-button{flex:1}.rr-content{gap:16px}.rr-inspector{padding:14px}.rr-filters label{min-width:120px}.rr-stats .admin-stat-card{min-height:140px}.rr-page-heading{gap:16px}}
+
+/* Badge trạng thái báo cáo theo enum BE */
+.rr-pending{background:var(--sn-warning-bg);color:var(--sn-warning-text)}
+.rr-resolved_refunded,.rr-resolved_no_refund{background:var(--mint-100);color:var(--sn-green-700)}
+.rr-rejected,.rr-withdrawn{background:var(--sn-gray-100);color:var(--sn-gray-600)}

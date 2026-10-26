@@ -1,7 +1,7 @@
 import { X, MapPin, CalendarDays, Clock3, FileText, MessageSquare, Ban } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { UserAvatar } from '../Users/UserDetails.jsx'
-import { bookingStatusLabels, paymentStatusLabels, sportLabels, money, date, bookingTotal, canCancel } from './bookingData.js'
+import { bookingStatusLabels, bookingStatusTone, paymentStatusLabels, sportLabels, money, date, bookingTotal, canCancel } from './bookingData.js'
 
 export function PaymentBadge({ status }) {
   if (!status) return <span className="bookings-payment">—</span>
@@ -14,7 +14,7 @@ export function BookingBreakdown({ booking }) {
 
 export default function BookingDetails({ booking, loading, error, onClose, onProfile, onReceipt, onReason, onCancel }) {
   const paid = booking.members.filter(member => member.paid).length
-  return <aside className="bookings-details" aria-label="Chi tiết đơn đặt sân" aria-busy={loading}><header><div><h2>#{booking.id} <StatusBadge status={booking.status} label={bookingStatusLabels[booking.status]} /></h2><p><PaymentBadge status={booking.payment} />{booking.createdDate && `Tạo lúc ${date(booking.createdDate)}${booking.createdTime ? ` · ${booking.createdTime}` : ''}`}</p></div><button aria-label="Đóng chi tiết đơn đặt sân" onClick={onClose}><X size={17} /></button></header>
+  return <aside className="bookings-details" aria-label="Chi tiết đơn đặt sân" aria-busy={loading}><header><div><h2>#{booking.id} <StatusBadge status={bookingStatusTone[booking.status] || 'Pending'} label={bookingStatusLabels[booking.status] || booking.status} /></h2><p><PaymentBadge status={booking.payment} />{booking.createdDate && `Tạo lúc ${date(booking.createdDate)}${booking.createdTime ? ` · ${booking.createdTime}` : ''}`}</p></div><button aria-label="Đóng chi tiết đơn đặt sân" onClick={onClose}><X size={17} /></button></header>
     <div className="bookings-detail-body">
       {loading && <p className="bookings-demo-note">Đang tải chi tiết đơn…</p>}
       {error && <p className="users-form-error" role="alert">Không tải được chi tiết: {error}</p>}

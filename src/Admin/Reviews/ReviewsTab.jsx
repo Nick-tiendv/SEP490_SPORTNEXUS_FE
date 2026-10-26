@@ -3,7 +3,7 @@ import { Star, Search, EyeOff, Eye, MessageSquare, Building2, Users, ChevronLeft
 import StatCard from '../components/StatCard.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
-import { getFacilityReviewStatistics, hideFacilityReview, listFacilityReviews, unhideFacilityReview } from '../../api/admin/facilityReviewApi.js'
+import { getFacilityReview, getFacilityReviewStatistics, hideFacilityReview, listFacilityReviews, unhideFacilityReview } from '../../api/admin/facilityReviewApi.js'
 import { getFairPlayStatistics, hideFairPlayRating, listFairPlayRatings, unhideFairPlayRating } from '../../api/admin/fairPlayApi.js'
 
 const PAGE_SIZE = 20
@@ -60,7 +60,17 @@ function FacilityReviews() {
   const list = usePagedList(listFacilityReviews, params, reload)
   const stats = useStats(getFacilityReviewStatistics, reload)
   const s = stats.value
-  const review = list.items.find(item => item.id === selectedId)
+  const listItem = list.items.find(item => item.id === selectedId)
+  // Chi tiết (email người viết, chủ sân, người ẩn): GET /api/v1/admin/facility-reviews/{id}; trong lúc tải dùng dòng danh sách.
+  const [detail, setDetail] = useState({ key: '', value: null })
+  const detailKey = selectedId ? `${selectedId}#${reload}` : ''
+  useEffect(() => {
+    if (!detailKey) return undefined
+    let cancelled = false
+    getFacilityReview(detailKey.split('#')[0]).then(value => !cancelled && setDetail({ key: detailKey, value })).catch(() => !cancelled && setDetail({ key: detailKey, value: null }))
+    return () => { cancelled = true }
+  }, [detailKey])
+  const review = listItem && detail.key === detailKey && detail.value ? { ...listItem, ...detail.value } : listItem
   const change = (key, value) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1) }
 
   return <>
@@ -78,12 +88,12 @@ function FacilityReviews() {
       <ListState list={list} empty="Chưa có đánh giá cơ sở nào" /><Pager page={page} list={list} onPage={setPage} /></section>
       <aside className="rr-inspector">{review ? <>
         <header><h2><Star size={17} />Chi tiết đánh giá</h2><button className="rr-button" aria-label="Đóng" onClick={() => setSelectedId(null)}><X size={14} /></button></header>
-        <div className="rr-reviewer"><div className="rr-card-title"><small>NGƯỜI ĐÁNH GIÁ</small><VisibilityBadge hidden={review.hidden} /></div><div className="rr-person"><span className="rr-avatar">{review.user.slice(0, 1)}</span><div><strong>{review.user}</strong><small>{date(review.createdAt)}</small></div></div></div>
-        <div className="rr-target"><small>CƠ SỞ</small><div><Building2 size={16} /><strong>{review.facility}</strong></div></div>
+        <div className="rr-reviewer"><div className="rr-card-title"><small>NGƯỜI ĐÁNH GIÁ</small><VisibilityBadge hidden={review.hidden} /></div><div className="rr-person"><span className="rr-avatar">{review.user.slice(0, 1)}</span><div><strong>{review.user}</strong><small>{[review.userEmail, date(review.createdAt)].filter(Boolean).join(' · ')}</small></div></div></div>
+        <div className="rr-target"><small>CƠ SỞ</small><div><Building2 size={16} /><strong>{review.facility}</strong></div>{review.ownerName && <small>Chủ sân: {review.ownerName}</small>}</div>
         <div className="rr-rating"><span>{stars(review.rating)}</span><strong>{review.rating ?? '—'}<small> / 5</small></strong></div>
         <blockquote>{review.comment || 'Không có nội dung.'}</blockquote>
         {review.reply && <div className="rr-note"><small>Chủ sân phản hồi · {date(review.repliedAt)}</small><p>{review.reply}</p></div>}
-        {review.hidden && review.hiddenReason && <div className="rr-warning">Lý do ẩn: {review.hiddenReason}</div>}
+        {review.hidden && (review.hiddenReason || review.hiddenBy) && <div className="rr-warning">Lý do ẩn: {review.hiddenReason || '—'}{review.hiddenBy ? ` · bởi ${review.hiddenBy}` : ''}{review.hiddenAt ? ` · ${date(review.hiddenAt)}` : ''}</div>}
         <div className="rr-actions" style={{ marginTop: 16 }}><button className="rr-button" onClick={() => setDialog({ item: review, hide: !review.hidden })}>{review.hidden ? <><Eye size={14} />Hiện lại</> : <><EyeOff size={14} />Ẩn đánh giá</>}</button></div>
       </> : <div className="rr-empty"><Star size={28} /><h2>Chọn một đánh giá</h2><p>Xem nội dung, phản hồi của chủ sân và ẩn đánh giá vi phạm.</p></div>}</aside></div>
     {dialog && <VisibilityDialog {...dialog} noun="đánh giá cơ sở" requireReason onHide={hideFacilityReview} onUnhide={unhideFacilityReview} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1) }} />}

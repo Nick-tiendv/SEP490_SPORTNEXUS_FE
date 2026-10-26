@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Download, UserPlus, Filter, Users, UserRoundCheck, UserRoundPlus, UserRoundX, RefreshCw } from 'lucide-react'
+import { Search, Download, UserPlus, Filter, Users, UserRoundCheck, UserRoundPlus, UserRoundX, RefreshCw, PhoneCall } from 'lucide-react'
 import { emptyFilters, filterUsers, pageItems, usersCsv, userStats, roleOptions, roleLabel, roleTone, statusLabels } from './usersData.js'
 import UserDetails, { UserAvatar, AccountStatus } from './UserDetails.jsx'
-import { UserFormDialog, SuspensionDialog, DeleteUserDialog } from './UserDialogs.jsx'
+import { UserFormDialog, SuspensionDialog, DeleteUserDialog, PhoneLookupDialog } from './UserDialogs.jsx'
 import { getAccount, getMyAccount, listAccounts } from '../../api/admin/accountApi.js'
 import FairPlayTab from './FairPlayTab.jsx'
 import './users.css'
@@ -104,7 +104,7 @@ export default function UserManagement() {
   return (
     <div className={`users-page ${detailUser ? 'with-details' : ''}`}>
       <div className="users-main-content">
-        <header className="users-page-heading admin-page-header"><div><h1>Quản lý người dùng <span>Tổng cộng {users.length.toLocaleString('vi-VN')}</span></h1><p>Quản lý người dùng đã đăng ký, vai trò và trạng thái tài khoản trên SportNexus.</p></div><div className="users-heading-actions">{tabs}<button className="users-button" onClick={() => setReload(value => value + 1)} disabled={loading}><RefreshCw size={16} /><span>Làm mới</span></button><button className="users-button" onClick={() => exportCsv(filtered)} disabled={!filtered.length}><Download size={16} /><span>Xuất CSV</span></button><button className="users-button primary" onClick={() => setDialog({ type: 'add' })} disabled={!roles.length}><UserPlus size={18} /><span>Thêm người dùng</span></button></div></header>
+        <header className="users-page-heading admin-page-header"><div><h1>Quản lý người dùng <span>Tổng cộng {users.length.toLocaleString('vi-VN')}</span></h1><p>Quản lý người dùng đã đăng ký, vai trò và trạng thái tài khoản trên SportNexus.</p></div><div className="users-heading-actions">{tabs}<button className="users-button" onClick={() => setReload(value => value + 1)} disabled={loading}><RefreshCw size={16} /><span>Làm mới</span></button><button className="users-button" onClick={() => setDialog({ type: 'phone' })}><PhoneCall size={16} /><span>Tra cứu SĐT</span></button><button className="users-button" onClick={() => exportCsv(filtered)} disabled={!filtered.length}><Download size={16} /><span>Xuất CSV</span></button><button className="users-button primary" onClick={() => setDialog({ type: 'add' })} disabled={!roles.length}><UserPlus size={18} /><span>Thêm người dùng</span></button></div></header>
         <div className="users-kpis">{userStats(users).map((stat, index) => { const Icon = statIcons[index]; return <article key={stat.label} className={`users-kpi ${stat.tone}`}><small>{stat.label}</small><div><strong>{loading && !users.length ? '…' : stat.value.toLocaleString('vi-VN')}</strong><Icon size={23} /></div><p>{stat.trend}</p></article> })}</div>
         {data.error && <div className="users-notice" role="alert">Không tải được danh sách người dùng: {data.error}<button onClick={() => setReload(value => value + 1)} aria-label="Thử lại">↻</button></div>}
         <section className="users-toolbar" aria-label="Bộ lọc người dùng">
@@ -123,6 +123,7 @@ export default function UserManagement() {
       </div>
       {detailUser && <UserDetails user={detailUser} loading={detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} isSelf={detailUser.id === meId} onClose={() => setDetailId(null)} onEdit={() => setDialog({ type: 'edit', user: detailUser })} onSuspend={() => setDialog({ type: 'suspend', users: [detailUser], restore: detailUser.status === 'Suspended' })} onDelete={() => setDialog({ type: 'delete', user: detailUser })} />}
       {dialog?.type === 'suspend' && <SuspensionDialog users={dialog.users} restore={dialog.restore} onClose={closeDialog} onDone={done} />}
+      {dialog?.type === 'phone' && <PhoneLookupDialog onClose={closeDialog} onOpen={id => { closeDialog(); setDetailId(id) }} />}
       {dialog?.type === 'delete' && <DeleteUserDialog user={dialog.user} onClose={closeDialog} onDone={afterDelete} />}
       {(dialog?.type === 'add' || dialog?.type === 'edit') && <UserFormDialog key={dialog.user?.id || 'add'} user={dialog.user} users={users} roles={roles} isSelf={Boolean(dialog.user) && dialog.user.id === meId} onClose={closeDialog} onDone={done} />}
     </div>

@@ -59,3 +59,7 @@ export async function toggleAccountStatus(id) {
 export async function deleteAccount(id) {
   return unwrap((await apiClient.delete(`/api/accounts/${encodeURIComponent(id)}`)).data)
 }
+// GET /api/accounts/admin/by-phone?phone= : tra cứu đầy đủ tài khoản theo SĐT (có thể trả nhiều tài khoản).
+export async function findAccountsByPhone(phone) {
+  return toList(unwrap((await apiClient.get('/api/accounts/admin/by-phone', { params: { phone } })).data)).items.map(toAccount)
+}
