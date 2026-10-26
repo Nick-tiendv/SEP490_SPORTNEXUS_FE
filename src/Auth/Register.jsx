@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 import { toast } from 'sonner'
-import { registerUser, sendOtp, verifyOtp } from '../api/auth/authApi.js'
+import { registerUser, sendOtp } from '../api/auth/authApi.js'
 
 function Register() {
   const [role, setRole] = useState('player') // 'player' | 'court_owner'
@@ -11,10 +11,10 @@ function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  // Xác thực số điện thoại bằng OTP (không bắt buộc nếu BE không yêu cầu)
+  // Xác thực SĐT bắt buộc: gửi mã qua send-otp (REGISTER) rồi gửi kèm otpCode khi đăng ký.
+  // Không gọi verify-otp trước, vì BE sẽ đánh dấu mã đã dùng và đăng ký sẽ báo mã sai.
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
-  const [otpVerified, setOtpVerified] = useState(false)
   const [otpBusy, setOtpBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
@@ -48,6 +48,9 @@ function Register() {
     }
     if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
       nextErrors.email = 'Email không hợp lệ.'
+    }
+    if (!payload.otpCode) {
+      nextErrors.otp = otpSent ? 'Vui lòng nhập mã OTP đã gửi tới số điện thoại.' : 'Vui lòng bấm "Gửi mã OTP" để xác thực số điện thoại.'
     }
     if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
     if (!confirmPassword || password !== confirmPassword) {
@@ -84,24 +87,10 @@ function Register() {
     try {
       const res = await sendOtp(phone.trim(), 'REGISTER')
       setOtpSent(true)
-      setOtpVerified(false)
+      setOtpCode('')
       toast.success(res?.devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${res.devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
     } catch (error) {
       toast.error(error?.message || 'Không gửi được mã OTP.')
-    } finally {
-      setOtpBusy(false)
-    }
-  }
-
-  const handleVerifyOtp = async () => {
-    if (!otpCode.trim()) return
-    setOtpBusy(true)
-    try {
-      await verifyOtp({ phone: phone.trim(), otpCode: otpCode.trim(), type: 'REGISTER' })
-      setOtpVerified(true)
-      toast.success('Đã xác thực số điện thoại.')
-    } catch (error) {
-      toast.error(error?.message || 'Mã OTP không đúng hoặc đã hết hạn.')
     } finally {
       setOtpBusy(false)
     }
@@ -319,13 +308,10 @@ function Register() {
                       {otpSent ? 'Gửi lại mã OTP' : 'Gửi mã OTP'}
                     </button>
                     {otpSent && (
-                      <>
-                        <input className="snx-input" style={{ flex: '1 1 110px', minHeight: 32, height: 32 }} inputMode="numeric" maxLength={6} placeholder="Mã OTP" aria-label="Mã OTP" value={otpCode} onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpVerified(false) }} />
-                        <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={otpBusy || otpCode.length < 4} onClick={handleVerifyOtp}>Xác thực</button>
-                      </>
+                        <input className="snx-input" style={{ flex: '1 1 110px', minHeight: 32, height: 32 }} inputMode="numeric" maxLength={6} placeholder="Mã OTP" aria-label="Mã OTP" value={otpCode} aria-invalid={!!errors.otp} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} />
                     )}
-                    {otpVerified && <span className="snx-badge snx-badge--green">Đã xác thực</span>}
                   </div>
+                  {errors.otp && <p role="alert" className="mt-1 text-sm text-red-600">{errors.otp}</p>}
                 </div>
 
                 {/* Email Field */}
