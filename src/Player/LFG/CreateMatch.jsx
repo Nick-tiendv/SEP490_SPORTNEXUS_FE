@@ -531,7 +531,7 @@ function CreateMatch() {
 
   return (
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="snx-page">
         {/* Main Large White Card Container */}
         <div className="bg-white rounded-3xl border border-gray-200/90 p-6 sm:p-8 md:p-10 shadow-sm">
           {/* Header Section */}
@@ -542,7 +542,7 @@ function CreateMatch() {
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="text-2xl sm:text-[28px] font-black text-[#111827] tracking-tight">
+                  <h1 className="snx-page-title">
                     {isEditMode ? 'Chỉnh Sửa Kèo Ghép (PUT /api/v1/lfgs)' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] border border-[#C6E7BE] text-[11px] font-extrabold uppercase tracking-wide">

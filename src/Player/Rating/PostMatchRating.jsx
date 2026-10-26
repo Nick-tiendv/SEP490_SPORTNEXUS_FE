@@ -469,14 +469,7 @@ function PostMatchRating() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: 'calc(100vh - 60px)',
-        background: '#F8FAFC',
-        padding: '28px 36px 60px 36px',
-        color: '#111827',
-      }}
-    >
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -554,45 +547,20 @@ function PostMatchRating() {
       </div>
 
       {/* Header Banner */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: '20px',
-          border: '1px solid #E5E7EB',
-          padding: '24px 28px',
-          boxShadow: '0 2px 14px rgba(0, 0, 0, 0.03)',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '16px',
-        }}
-      >
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span
-              style={{
-                background: '#DCFCE7',
-                color: '#15803D',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.4px',
-              }}
-            >
+            <span className="snx-page-eyebrow">
               HỆ THỐNG FAIRPLAY SPORTNEXUS
             </span>
             <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
               Vé #TK-8849 • Sân Cầu Lông BWF Pro 01
             </span>
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#111827', margin: 0 }}>
+          <h1 className="snx-page-title">
             Đánh Giá Sau Trận Đấu Cho Người Chơi Cùng Sân
           </h1>
-          <p style={{ fontSize: '13.5px', color: '#4B5563', margin: '6px 0 0 0', fontWeight: 500 }}>
+          <p className="snx-page-subtitle">
             Quy định: Người chơi chỉ được phép đánh giá bằng hình thức <strong>viết nhận xét</strong> và{' '}
             <strong>chấm điểm sao</strong> cho người chơi cùng sân sau khi <strong style={{ color: '#15803D' }}>check-in thành công</strong>.
           </p>

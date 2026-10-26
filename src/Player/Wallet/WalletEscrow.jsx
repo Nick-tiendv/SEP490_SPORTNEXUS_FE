@@ -515,12 +515,12 @@ export default function WalletEscrow() {
   /* ============================== RENDER ============================== */
   return (
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
-      <div className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-12">
+      <div className="snx-page">
         {/* ---------- Header ---------- */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        <header className="snx-page-header">
           <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]/60">
+            <div className="snx-page-eyebrow-row">
+              <span className="snx-page-eyebrow">
                 Cổng thanh toán PayOS
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]/60">
@@ -528,7 +528,7 @@ export default function WalletEscrow() {
                 VietQR • Napas 24/7
               </span>
             </div>
-            <h1 className="text-2xl md:text-[32px] font-extrabold text-[#111827] tracking-tight leading-snug">Ví Escrow &amp; Nạp tiền</h1>
+            <h1 className="snx-page-title">Ví Escrow &amp; Nạp tiền</h1>
           </div>
           <button
             id="wallet-refresh-btn"

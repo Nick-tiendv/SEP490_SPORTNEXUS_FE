@@ -1,13 +1,15 @@
 import { Outlet } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import TopBar from './TopBar.jsx'
 import TopSideBar from './TopSideBar.jsx'
-import PlayerFooter from './PlayerFooter.jsx'
+import { AppFooter } from '../../components/layout/AppShell.jsx'
 import { SportProvider } from '../Context/SportContext.jsx'
 import AIChatModal from '../Booking/AIChat/AIChatModal.jsx'
 
 function PlayerLayout() {
   const [aiOpen, setAiOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
 
   // Lắng nghe sự kiện mở chat AI từ các trang con
   useEffect(() => {
@@ -18,31 +20,15 @@ function PlayerLayout() {
 
   return (
     <SportProvider>
-      <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif" }} className="sport-animated-bg">
-      {/* Fixed Sidebar */}
-      <TopSideBar />
+      <div style={{ minHeight: '100vh' }} className="sport-animated-bg">
+      <TopSideBar open={menuOpen} onClose={closeMenu} />
 
-      {/* Main area: offset by sidebar width on desktop, 0 on mobile */}
-      <div className="app-main-content-wrapper">
-        {/* Fixed Topbar */}
-        <TopBar />
-
-        {/* Page content */}
-        <main
-          style={{
-            width: '100%',
-            paddingTop: '60px',
-            minHeight: '100vh',
-            boxSizing: 'border-box',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <div style={{ flex: 1, width: '100%' }}>
-            <Outlet />
-          </div>
-          <PlayerFooter />
+      <div className="snx-workspace">
+        <TopBar onMenu={() => setMenuOpen(true)} />
+        <main className="snx-main">
+          <Outlet />
         </main>
+        <AppFooter />
       </div>
 
       {/* Full-featured SportNexus AI Concierge Modal */}

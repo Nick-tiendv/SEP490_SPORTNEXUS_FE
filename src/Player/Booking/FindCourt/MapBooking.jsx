@@ -418,6 +418,9 @@ function MapBooking() {
     return () => { isMounted = false }
   }, [])
 
+  // Khai báo trước effect tìm kiếm bên dưới (effect dùng query trong mảng phụ thuộc)
+  const [query, setQuery] = useState('')
+
   // Tìm kiếm cơ sở trực tiếp bằng API GET /api/v1/facilities/search khi người chơi gõ từ khóa
   useEffect(() => {
     if (!query || query.trim().length < 2) return
@@ -459,7 +462,6 @@ function MapBooking() {
     }))
   }, [apiFacilities, effectiveOrigin, gpsCoords])
 
-  const [query, setQuery] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const [priceRange, setPriceRange] = useState([PRICE_MIN, PRICE_MAX])
   const [priceEdit, setPriceEdit] = useState(null) // { idx, text } khi đang gõ giá
@@ -977,9 +979,9 @@ function MapBooking() {
   return (
     <div className="mb-page">
       {/* ===================== HEADER ===================== */}
-      <header className="mb-header">
+      <header className="mb-header snx-page-header">
         <div>
-          <h1 className="mb-title">Đặt Sân Trực Tuyến &amp; Giữ Chỗ Thời Gian Thực</h1>
+          <h1 className="snx-page-title">Đặt Sân Trực Tuyến &amp; Giữ Chỗ Thời Gian Thực</h1>
         </div>
         <div className="mb-header-chips">
           {/* Nút Hỏi Trợ Lý AI */}
