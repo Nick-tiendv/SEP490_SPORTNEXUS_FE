@@ -1,9 +1,27 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 import { toast } from 'sonner'
-import { registerUser, sendOtp, verifyOtp } from '../api/auth/authApi.js'
+import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
+
+// Trình độ theo BE: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL
+const SKILL_LEVELS = [
+  { value: 'BEGINNER', label: 'Mới chơi' },
+  { value: 'INTERMEDIATE', label: 'Trung bình' },
+  { value: 'ADVANCED', label: 'Khá' },
+  { value: 'PROFESSIONAL', label: 'Chuyên nghiệp' },
+]
+const sportEmoji = (name = '') => {
+  const n = name.toLowerCase()
+  if (n.includes('cầu lông') || n.includes('badminton')) return '🏸'
+  if (n.includes('pickle')) return '🏓'
+  if (n.includes('bóng rổ') || n.includes('basket')) return '🏀'
+  if (n.includes('bóng đá') || n.includes('football') || n.includes('soccer')) return '⚽'
+  if (n.includes('tennis') || n.includes('quần vợt')) return '🎾'
+  if (n.includes('bóng chuyền') || n.includes('volley')) return '🏐'
+  return '🏅'
+}
 
 function Register() {
   const [role, setRole] = useState('player') // 'player' | 'court_owner'
@@ -11,17 +29,20 @@ function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  // Xác thực số điện thoại bằng OTP (không bắt buộc nếu BE không yêu cầu)
+  // Xác thực SĐT bắt buộc: gửi mã qua send-otp (REGISTER) rồi gửi kèm otpCode khi đăng ký.
+  // Không gọi verify-otp trước, vì BE sẽ đánh dấu mã đã dùng và đăng ký sẽ báo mã sai.
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
-  const [otpVerified, setOtpVerified] = useState(false)
   const [otpBusy, setOtpBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const submitting = useRef(false)
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
-  const [selectedSports, setSelectedSports] = useState([])
+  // Môn yêu thích lấy từ /api/v1/master-data/sports; chọn môn kèm trình độ (BE: sports[{ sportCategoryId, skillLevel }])
+  const [sportOptions, setSportOptions] = useState([])
+  const [sportsLoading, setSportsLoading] = useState(true)
+  const [selectedSports, setSelectedSports] = useState({}) // { [sportCategoryId]: skillLevel }
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
@@ -39,7 +60,7 @@ function Register() {
       // Vai trò theo BE: Player | Owner
       role: role === 'court_owner' ? 'Owner' : 'Player',
       otpCode: otpCode.trim() || undefined,
-      sports: selectedSports,
+      sports: Object.entries(selectedSports).map(([sportCategoryId, skillLevel]) => ({ sportCategoryId, skillLevel })),
     }
 
     const nextErrors = {}
@@ -48,6 +69,9 @@ function Register() {
     }
     if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
       nextErrors.email = 'Email không hợp lệ.'
+    }
+    if (!payload.otpCode) {
+      nextErrors.otp = otpSent ? 'Vui lòng nhập mã OTP đã gửi tới số điện thoại.' : 'Vui lòng bấm "Gửi mã OTP" để xác thực số điện thoại.'
     }
     if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
     if (!confirmPassword || password !== confirmPassword) {
@@ -84,7 +108,8 @@ function Register() {
     try {
       const res = await sendOtp(phone.trim(), 'REGISTER')
       setOtpSent(true)
-      setOtpVerified(false)
+      setOtpCode('')
+      setErrors((prev) => ({ ...prev, otp: undefined }))
       toast.success(res?.devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${res.devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
     } catch (error) {
       toast.error(error?.message || 'Không gửi được mã OTP.')
@@ -93,27 +118,24 @@ function Register() {
     }
   }
 
-  const handleVerifyOtp = async () => {
-    if (!otpCode.trim()) return
-    setOtpBusy(true)
-    try {
-      await verifyOtp({ phone: phone.trim(), otpCode: otpCode.trim(), type: 'REGISTER' })
-      setOtpVerified(true)
-      toast.success('Đã xác thực số điện thoại.')
-    } catch (error) {
-      toast.error(error?.message || 'Mã OTP không đúng hoặc đã hết hạn.')
-    } finally {
-      setOtpBusy(false)
-    }
-  }
+  useEffect(() => {
+    let alive = true
+    getPublicSports()
+      .then((list) => { if (alive) setSportOptions(list) })
+      .catch(() => { if (alive) setSportOptions([]) })
+      .finally(() => { if (alive) setSportsLoading(false) })
+    return () => { alive = false }
+  }, [])
 
-  const toggleSport = (sport) => {
-    setSelectedSports(prev => 
-      prev.includes(sport) 
-        ? prev.filter(s => s !== sport)
-        : [...prev, sport]
-    )
+  const toggleSport = (id) => {
+    setSelectedSports((prev) => {
+      const next = { ...prev }
+      if (next[id]) delete next[id]
+      else next[id] = 'BEGINNER'
+      return next
+    })
   }
+  const setSportLevel = (id, level) => setSelectedSports((prev) => ({ ...prev, [id]: level }))
 
   // Tính độ mạnh mật khẩu
   const calculatePasswordStrength = (pass) => {
@@ -176,9 +198,11 @@ function Register() {
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {/* Player Card */}
-                  <div
+                  <button
+                    type="button"
+                    aria-pressed={role === 'player'}
                     onClick={() => setRole('player')}
-                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'player'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
                         : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
@@ -205,12 +229,14 @@ function Register() {
                         </svg>
                       </div>
                     )}
-                  </div>
+                  </button>
 
                   {/* Court Owner Card */}
-                  <div
+                  <button
+                    type="button"
+                    aria-pressed={role === 'court_owner'}
                     onClick={() => setRole('court_owner')}
-                    className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
+                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
                       role === 'court_owner'
                         ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
                         : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
@@ -237,7 +263,7 @@ function Register() {
                         </svg>
                       </div>
                     )}
-                  </div>
+                  </button>
                 </div>
               </div>
 
@@ -319,13 +345,10 @@ function Register() {
                       {otpSent ? 'Gửi lại mã OTP' : 'Gửi mã OTP'}
                     </button>
                     {otpSent && (
-                      <>
-                        <input className="snx-input" style={{ flex: '1 1 110px', minHeight: 32, height: 32 }} inputMode="numeric" maxLength={6} placeholder="Mã OTP" aria-label="Mã OTP" value={otpCode} onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpVerified(false) }} />
-                        <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={otpBusy || otpCode.length < 4} onClick={handleVerifyOtp}>Xác thực</button>
-                      </>
+                        <input className="snx-input" style={{ flex: '1 1 110px', minHeight: 32, height: 32 }} inputMode="numeric" maxLength={6} placeholder="Mã OTP" aria-label="Mã OTP" value={otpCode} aria-invalid={!!errors.otp} onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setErrors((prev) => ({ ...prev, otp: undefined })) }} />
                     )}
-                    {otpVerified && <span className="snx-badge snx-badge--green">Đã xác thực</span>}
                   </div>
+                  {errors.otp && <p role="alert" className="mt-1 text-sm text-red-600">{errors.otp}</p>}
                 </div>
 
                 {/* Email Field */}
@@ -357,153 +380,49 @@ function Register() {
                 </div>
               </div>
 
-              {/* Sports Interest - Đầy đủ 5 môn */}
+              {/* Môn thể thao quan tâm (không bắt buộc) */}
               <div>
                 <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Bộ môn thể thao quan tâm
                 </label>
-                <div className="text-xs text-gray-500 mb-3">(Có thể chọn nhiều môn)</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {/* Cầu Lông */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSport('badminton')}
-                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
-                      selectedSports.includes('badminton')
-                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      selectedSports.includes('badminton') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-lg">🏸</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Cầu Lông</div>
-                      <div className="text-[11px] text-gray-500 truncate">Badminton</div>
-                    </div>
-                    {selectedSports.includes('badminton') && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Pickleball */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSport('pickleball')}
-                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
-                      selectedSports.includes('pickleball')
-                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      selectedSports.includes('pickleball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-lg">🏓</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Pickleball</div>
-                      <div className="text-[11px] text-gray-500 truncate">Trending</div>
-                    </div>
-                    {selectedSports.includes('pickleball') && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Bóng Đá */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSport('football')}
-                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
-                      selectedSports.includes('football')
-                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      selectedSports.includes('football') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-lg">⚽</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Đá</div>
-                      <div className="text-[11px] text-gray-500 truncate">Football</div>
-                    </div>
-                    {selectedSports.includes('football') && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Bóng Rổ */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSport('basketball')}
-                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all ${
-                      selectedSports.includes('basketball')
-                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      selectedSports.includes('basketball') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-lg">🏀</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Bóng Rổ</div>
-                      <div className="text-[11px] text-gray-500 truncate">Basketball</div>
-                    </div>
-                    {selectedSports.includes('basketball') && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Tennis */}
-                  <button
-                    type="button"
-                    onClick={() => toggleSport('tennis')}
-                    className={`relative flex items-center gap-2.5 p-3 rounded-xl border-2 transition-all col-span-2 sm:col-span-1 ${
-                      selectedSports.includes('tennis')
-                        ? 'border-[#4A7C59] bg-[#E8F5E3]'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      selectedSports.includes('tennis') ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-lg">🎾</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-semibold text-xs text-[#2D5F3F] truncate">Tennis</div>
-                      <div className="text-[11px] text-gray-500 truncate">Quần vợt</div>
-                    </div>
-                    {selectedSports.includes('tennis') && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A7C59] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                </div>
+                <div className="text-xs text-gray-500 mb-3">(Không bắt buộc, có thể chọn nhiều môn và trình độ của bạn)</div>
+                {sportsLoading ? (
+                  <p className="text-xs text-gray-500">Đang tải danh sách môn...</p>
+                ) : sportOptions.length === 0 ? (
+                  <p className="text-xs text-gray-500">Chưa tải được danh sách môn, bạn có thể chọn sau trong Hồ sơ.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {sportOptions.map((sport) => {
+                      const active = !!selectedSports[sport.id]
+                      return (
+                        <div
+                          key={sport.id}
+                          className={`relative flex flex-col gap-2 p-3 rounded-xl border-2 transition-all ${
+                            active ? 'border-[#4A7C59] bg-[#E8F5E3]' : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <button type="button" aria-pressed={active} onClick={() => toggleSport(sport.id)} className="flex items-center gap-2.5 text-left">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-[#4A7C59] text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              <span className="text-lg">{sportEmoji(sport.name)}</span>
+                            </div>
+                            <span className="font-semibold text-xs text-[#2D5F3F] truncate">{sport.name}</span>
+                          </button>
+                          {active && (
+                            <select
+                              className="snx-select"
+                              style={{ minHeight: 30, height: 30, fontSize: 12 }}
+                              aria-label={`Trình độ ${sport.name}`}
+                              value={selectedSports[sport.id]}
+                              onChange={(e) => setSportLevel(sport.id, e.target.value)}
+                            >
+                              {SKILL_LEVELS.map((lv) => <option key={lv.value} value={lv.value}>{lv.label}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Password Row */}
