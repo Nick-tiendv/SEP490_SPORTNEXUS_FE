@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import AdminSidebar from './AdminSidebar.jsx'
 import AdminHeader from './AdminHeader.jsx'
 import { getMyAccount } from '../../api/admin/accountApi.js'
 import { getAdminDashboard } from '../../api/admin/dashboardApi.js'
+import { lastDaysRange, toApiDate } from '../Dashboard/dashboardData.js'
 // Shared Admin design system: tokens → shell & layout → components. Page CSS loads after these.
 import '../styles/admin-theme.css'
 import '../styles/admin-layout.css'
@@ -22,9 +23,14 @@ export default function AdminLayout() {
     return () => { cancelled = true }
   }, [])
   // Số mục chờ xử lý trên menu (dashboard.pending); tải lại khi chuyển trang để cập nhật sau khi duyệt.
+  // Lần đầu dùng cùng khoảng 30 ngày với biểu đồ Tổng quan để dùng chung request (cache trong dashboardApi).
+  const firstBadgeLoad = useRef(true)
   useEffect(() => {
     let cancelled = false
-    getAdminDashboard().then(({ pending }) => !cancelled && setBadges(pending)).catch(() => {})
+    const { from, to } = lastDaysRange(30)
+    getAdminDashboard({ fromDate: toApiDate(from), toDate: toApiDate(to) }, { fresh: !firstBadgeLoad.current })
+      .then(({ pending }) => !cancelled && setBadges(pending)).catch(() => {})
+    firstBadgeLoad.current = false
     return () => { cancelled = true }
   }, [pathname])
 
@@ -33,8 +39,8 @@ export default function AdminLayout() {
       <AdminSidebar open={menuOpen} onClose={() => setMenuOpen(false)} profile={profile} badges={badges} />
       {menuOpen && <button className="admin-menu-overlay" aria-label="Đóng điều hướng" onClick={() => setMenuOpen(false)} />}
       <div className="admin-workspace">
-        <AdminHeader onMenuToggle={() => setMenuOpen(open => !open)} profile={profile} />
-        <main className="admin-main"><Outlet /></main>
+        <AdminHeader onMenuToggle={() => setMenuOpen(open => !open)} profile={profile} badges={badges} />
+        <main className="admin-main"><Outlet context={{ profile }} /></main>
       </div>
     </div>
   )
