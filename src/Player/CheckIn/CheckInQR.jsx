@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { uid } from '../../utils/ids.js'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getCancellationReasons, cancelBooking, getBookingQrTicket, getBookingById, getMyBookings, getUpcomingBookings } from '../../api/player/bookingApi.js'
-import { rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/player/lfgApi.js'
-import { getTournamentQrTicket, checkInTournament } from '../../api/player/tournamentApi.js'
+import { rateFairPlay, getLfgQrTicket } from '../../api/player/lfgApi.js'
+import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
 
 const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
@@ -32,6 +34,7 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, court
 
 function CheckInQR() {
   const [copied, setCopied] = useState(false)
+  const [toastMessage, setToastMessage] = useState(null)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
 
   // 2.7 Bước 1: Quản lý loại vé QR (đặt sân / kèo LFG / giải đấu)
@@ -43,14 +46,10 @@ function CheckInQR() {
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
 
-  // Bước 1: Gọi API qr-ticket tương ứng khi mở vé QR
-  useEffect(() => {
-    let isMounted = true
-    const loadTicket = async () => {
-      setIsLoadingTicket(true)
-      setTicketError(null)
-      try {
-        if (ticketType === 'booking') {
+  // Bước 1: Tải vé từ API qr-ticket tương ứng (dùng lại cho nút "Kiểm tra trạng thái" và tự hỏi lại)
+  const currentUser = useCurrentUser()
+  const fetchTicket = useCallback(async () => {
+    if (ticketType === 'booking') {
           // Đặt sân: GET /api/v1/bookings/{bookingId}/qr-ticket
           let bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_last_booking_id')
           if (!bookingId) {
@@ -61,9 +60,10 @@ function CheckInQR() {
           if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
           // qr-ticket trả về chuỗi mã QR; chi tiết đơn lấy từ GET /api/v1/bookings/{bookingId}
           const [qr, detail] = await Promise.all([getBookingQrTicket(bookingId), getBookingById(bookingId)])
-          if (isMounted) {
-            const me = (detail?.participants || []).find((p) => p.isHost) || {}
-            setTicketData(toTicket({
+          {
+            const participants = detail?.participants || []
+            const me = participants.find((p) => String(p.userId) === String(currentUser.id)) || participants.find((p) => p.isHost) || {}
+            return toTicket({
               id: bookingId,
               qrCode: typeof qr === 'string' ? qr : qr?.qrCode,
               facilityId: detail?.facilityId,
@@ -73,17 +73,17 @@ function CheckInQR() {
               sportName: detail?.sportName,
               startTime: detail?.startTime,
               endTime: detail?.endTime,
-              status: me.isCheckedIn ? 'CHECKED_IN' : detail?.bookingStatus,
+              status: me.isCheckedIn || String(detail?.bookingStatus).toUpperCase() === 'CHECKED_IN' ? 'CHECKED_IN' : detail?.bookingStatus,
               amount: detail?.paidAmount ?? detail?.totalAmount,
-            }))
+            })
           }
         } else if (ticketType === 'lfg') {
           // Kèo LFG: GET /api/v1/lfgs/{cardId}/qr-ticket
           const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id')
           if (!cardId) throw new Error('Bạn chưa tham gia kèo LFG nào có vé check-in.')
           const res = await getLfgQrTicket(cardId)
-          if (isMounted) {
-            setTicketData(toTicket({
+          {
+            return toTicket({
               id: res?.lfgCardId || cardId,
               qrCode: res?.qrCode,
               facilityName: res?.facilityName,
@@ -92,15 +92,15 @@ function CheckInQR() {
               endTime: res?.endTime,
               status: res?.isCheckedIn ? 'CHECKED_IN' : 'PENDING_CHECKIN',
               sportType: 'KÈO GHÉP TRẬN LFG',
-            }))
+            })
           }
         } else if (ticketType === 'tournament') {
           // Giải đấu: GET /api/v1/tournaments/{id}/qr-ticket
           const tournamentId = searchParams.get('tournamentId') || localStorage.getItem('sportnexus_current_tournament_id')
           if (!tournamentId) throw new Error('Bạn chưa đăng ký giải đấu nào có vé check-in.')
           const res = await getTournamentQrTicket(tournamentId)
-          if (isMounted) {
-            setTicketData(toTicket({
+          {
+            return toTicket({
               id: res?.tournamentId || tournamentId,
               qrCode: res?.qrCode,
               facilityId: res?.facilityId,
@@ -109,22 +109,26 @@ function CheckInQR() {
               courtName: res?.teamName || res?.fullName,
               sportType: res?.tournamentName || 'GIẢI ĐẤU',
               status: res?.tournamentStatus,
-            }))
+            })
           }
         }
-      } catch (err) {
-        console.warn(`[CheckInQR] Không thể tải vé từ API (${ticketType}):`, err)
-        if (isMounted) {
-          setTicketData(null)
-          setTicketError(err?.message || 'Không tải được vé check-in.')
-        }
-      } finally {
-        if (isMounted) setIsLoadingTicket(false)
-      }
-    }
-    loadTicket()
+    return null
+  }, [ticketType, searchParams, currentUser.id])
+
+  useEffect(() => {
+    let isMounted = true
+    setIsLoadingTicket(true)
+    setTicketError(null)
+    fetchTicket()
+      .then((ticket) => isMounted && setTicketData(ticket))
+      .catch((err) => {
+        if (!isMounted) return
+        setTicketData(null)
+        setTicketError(err?.message || 'Không tải được vé check-in.')
+      })
+      .finally(() => isMounted && setIsLoadingTicket(false))
     return () => { isMounted = false }
-  }, [ticketType, searchParams])
+  }, [fetchTicket])
 
   // Danh sách vé của tôi: GET /api/v1/bookings/my-bookings và GET /api/v1/bookings/upcoming
   const [myBookingsList, setMyBookingsList] = useState([])
@@ -183,92 +187,41 @@ function CheckInQR() {
     })
   }
 
-  // 2.7 Bước 2: Quét check-in qua cổng IoT hoặc máy quét chủ sân
+  // 2.7 Bước 2: Chủ sân quét QR trên máy của họ (POST /checkin/scan là API của chủ sân).
+  // Người chơi chỉ kiểm tra lại trạng thái vé từ BE.
   const handleGateScanCheckIn = async () => {
     setIsScanningCheckIn(true)
     setScanError(null)
-    const facilityId = ticketData?.facilityId
-    // Chỉ dùng mã QR thật do BE cấp (ticketCode chỉ là nhãn hiển thị)
-    const qrCode = ticketData?.qrCode
-    if (!ticketData?.id || !qrCode) {
-      setScanError('Chưa có vé hợp lệ để check-in.')
-      setIsScanningCheckIn(false)
-      return
-    }
-
     try {
-      if (ticketType === 'tournament') {
-        // Giải đấu dùng POST /api/v1/tournaments/{id}/check-in
-        await checkInTournament(ticketData.id, { facilityId, qrCode })
-      } else {
-        // Đặt sân và kèo LFG: POST /api/v1/checkin/scan?facilityId=...&qrCode=...
-        await scanCheckIn(facilityId, qrCode)
+      const ticket = await fetchTicket()
+      if (ticket) setTicketData(ticket)
+      if (String(ticket?.status).toUpperCase() !== 'CHECKED_IN') {
+        setScanError('Vé chưa được check-in. Hãy đưa mã QR (hoặc mã vé dự phòng) cho chủ sân quét tại quầy.')
+        return
       }
-
-      setCheckInDone(true)
-      const currentCode = ticketData?.ticketCode || '—'
-      const cleanCode = currentCode.replace('#', '').trim()
-      localStorage.setItem(`sportnexus_checked_in_${cleanCode}`, 'true')
-      localStorage.setItem(`sportnexus_checked_in_${currentCode}`, 'true')
-
-      const session = {
-        courtId: ticketData?.gate || '—',
-        courtName: ticketData?.courtName || '—',
-        sport: ticketData?.sport || '—',
+      const cleanCode = (ticket.ticketCode || '').replace('#', '').trim()
+      // Phiên chơi lưu trên máy để mở phần đánh giá sau trận
+      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify({
+        courtId: ticket.gate || '—',
+        courtName: ticket.courtName || '—',
+        sport: ticket.sport || '—',
         ticketCode: cleanCode,
         checkInDone: true,
         checkInTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         checkOutDone: false,
         checkOutTime: null,
-        coPlayers: matchParticipants.map((p) => ({
-          id: p.id,
-          name: p.name || p.email.split('@')[0],
-          email: p.email,
-          role: p.role || 'Bạn chơi cùng sân',
-        })),
-      }
-      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
-      setToastMessage('🎉 Check-in thành công qua API! Barie đã mở, chào mừng bạn vào sân.')
+        coPlayers: matchParticipants.map((p) => ({ id: p.id, name: p.name || p.email.split('@')[0], email: p.email, role: p.role || 'Bạn chơi cùng sân' })),
+      }))
+      setToastMessage('🎉 Vé đã được check-in. Chúc bạn chơi vui!')
     } catch (err) {
-      console.warn('[CheckInQR] Lỗi khi gọi API check-in:', err)
-      if (err?.status === 403) {
-        setScanError('❌ Lỗi 403: Cơ sở này không thuộc quyền quản lý của chủ sân hoặc vé không thuộc cơ sở này!')
-      } else if (err?.status === 400) {
-        setScanError(`⚠️ Lỗi 400: ${err?.message || 'Vé chỉ check-in được từ 1 tiếng trước giờ chơi đến khi hết ca!'}`)
-      } else {
-        // Fallback demo trong môi trường offline
-        setCheckInDone(true)
-        const session = {
-          courtId: ticketData?.gate || '—',
-          courtName: ticketData?.courtName || '—',
-          sport: ticketData?.sport || '—',
-          checkInDone: true,
-          checkInTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          checkOutDone: false,
-          checkOutTime: null,
-          coPlayers: matchParticipants.map((p) => ({
-            id: p.id,
-            name: p.name || p.email.split('@')[0],
-            email: p.email,
-            role: p.role || 'Bạn chơi cùng sân',
-          })),
-        }
-        localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
-        setToastMessage('🎉 Check-in thành công (Mô phỏng máy quét cổng)!')
-      }
+      setScanError(err?.message || 'Không kiểm tra được trạng thái vé, vui lòng thử lại.')
     } finally {
       setIsScanningCheckIn(false)
     }
   }
 
   // Hủy đơn và hoàn tiền (Image 2)
-  const [isCancelled, setIsCancelled] = useState(() => {
-    try {
-      return localStorage.getItem('sportnexus_last_booking_cancelled') === 'true'
-    } catch {
-      return false
-    }
-  })
+  const isCancelled = String(ticketData?.status || '').toUpperCase() === 'CANCELLED'
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancellationReasons, setCancellationReasons] = useState([])
   const [selectedReasonCode, setSelectedReasonCode] = useState(1)
@@ -327,14 +280,13 @@ function CheckInQR() {
       // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
       if (isEligibleRefund) window.dispatchEvent(new Event('escrow_balance_updated'))
 
-      setIsCancelled(true)
-      localStorage.setItem('sportnexus_last_booking_cancelled', 'true')
+      setTicketData((prev) => (prev ? { ...prev, status: 'CANCELLED' } : prev))
       setShowCancelModal(false)
 
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
           detail: {
-            id: `cancel_${Date.now()}`,
+            id: uid('cancel'),
             type: 'booking',
             icon: 'cancel',
             color: '#DC2626',
@@ -369,76 +321,38 @@ function CheckInQR() {
   // Trạng thái Check-in & Check-out:
   // Banner / Nút "Đã check-in" chỉ bị làm mờ khi chủ sân scan QR từ tài khoản của chủ sân.
   // Khi người chơi chưa check-in thì nút vẫn sáng.
-  const [checkInDone, setCheckInDone] = useState(false)
+  // Đã check-in: theo trạng thái vé từ BE (chủ sân quét QR trên máy của họ)
+  const checkInDone = String(ticketData?.status || '').toUpperCase() === 'CHECKED_IN'
   const [checkOutDone, setCheckOutDone] = useState(false)
 
-  // Đồng bộ trạng thái theo từng mã vé cụ thể
+  // Trạng thái check-out (phiên đánh giá sau trận lưu trên máy) theo mã vé đang xem
   useEffect(() => {
-    if (!ticketData?.ticketCode) return
-    const code = ticketData.ticketCode
-    const cleanCode = code.replace('#', '').trim()
-
-    const isOwnerCheckedIn =
-      localStorage.getItem(`sportnexus_checked_in_${cleanCode}`) === 'true' ||
-      localStorage.getItem(`sportnexus_checked_in_${code}`) === 'true' ||
-      ticketData?.status === 'CHECKED_IN'
-
-    setCheckInDone(Boolean(isOwnerCheckedIn))
-
-    // Trạng thái check-out trả sân chỉ kích hoạt khi đã check-in
-    if (isOwnerCheckedIn) {
-      try {
-        const saved = localStorage.getItem('sportnexus_last_checkout_session')
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (parsed?.ticketCode === cleanCode) {
-            setCheckOutDone(Boolean(parsed?.checkOutDone))
-          }
-        }
-      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    } else {
+    if (!checkInDone || !ticketData?.ticketCode) {
       setCheckOutDone(false)
+      return
     }
-  }, [ticketData?.ticketCode, ticketData?.status])
+    const cleanCode = ticketData.ticketCode.replace('#', '').trim()
+    try {
+      const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || 'null')
+      setCheckOutDone(Boolean(saved?.ticketCode === cleanCode && saved?.checkOutDone))
+    } catch { /* bỏ qua: dữ liệu cũ hỏng thì coi như chưa check-out */ }
+  }, [checkInDone, ticketData?.ticketCode])
 
-  // Lắng nghe sự kiện chủ sân quét mã QR từ tài khoản chủ sân theo thời gian thực
+  // Tự hỏi lại BE mỗi 20 giây khi vé chưa check-in (chủ sân quét trên máy của họ)
   useEffect(() => {
-    const handleTicketScanned = (e) => {
-      const scannedCode = e?.detail?.ticketCode
-      const currentCode = ticketData?.ticketCode
-      if (!currentCode || !scannedCode) return
-
-      const cleanScanned = scannedCode.replace('#', '').trim().toUpperCase()
-      const cleanCurrent = currentCode.replace('#', '').trim().toUpperCase()
-
-      if (cleanScanned === cleanCurrent || cleanScanned.includes(cleanCurrent) || cleanCurrent.includes(cleanScanned)) {
-        setCheckInDone(true)
-        setToastMessage('🎉 Chủ sân đã quét mã QR thành công từ tài khoản chủ sân! Vé đã chuyển sang trạng thái Đã Check-in.')
-      }
-    }
-
-    const handleStorageChange = (e) => {
-      if (e.key && e.key.startsWith('sportnexus_checked_in_')) {
-        const currentCode = ticketData?.ticketCode
-        if (currentCode) {
-          const cleanCurrent = currentCode.replace('#', '').trim()
-          if (
-            localStorage.getItem(`sportnexus_checked_in_${cleanCurrent}`) === 'true' ||
-            localStorage.getItem(`sportnexus_checked_in_${currentCode}`) === 'true'
-          ) {
-            setCheckInDone(true)
-          }
-        }
-      }
-    }
-
-    window.addEventListener('court_owner_checked_in_ticket', handleTicketScanned)
-    window.addEventListener('storage', handleStorageChange)
-    return () => {
-      window.removeEventListener('court_owner_checked_in_ticket', handleTicketScanned)
-      window.removeEventListener('storage', handleStorageChange)
-    }
-  }, [ticketData?.ticketCode])
+    const status = String(ticketData?.status || '').toUpperCase()
+    if (!ticketData?.id || ['CHECKED_IN', 'CANCELLED'].includes(status)) return undefined
+    const timer = setInterval(() => {
+      fetchTicket()
+        .then((ticket) => {
+          if (!ticket) return
+          setTicketData(ticket)
+          if (String(ticket.status).toUpperCase() === 'CHECKED_IN') setToastMessage('🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
+        })
+        .catch(() => { /* lỗi mạng tạm thời: thử lại ở lượt sau */ })
+    }, 20000)
+    return () => clearInterval(timer)
+  }, [ticketData?.id, ticketData?.status, fetchTicket])
 
   // Modal Check-out và Đánh giá sau trận
   const [showCheckOutModal, setShowCheckOutModal] = useState(false)
@@ -489,14 +403,23 @@ function CheckInQR() {
     { id: '3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', isSelected: false },
   ])
   const [emailInput, setEmailInput] = useState('')
-  const [toastMessage, setToastMessage] = useState(null)
 
 
-  // Copy OTP handler
-  const handleCopyOTP = () => {
-    navigator.clipboard.writeText('894201')
-    setToastMessage('Đã sao chép mã OTP dự phòng: 894 - 201')
-    setTimeout(() => setToastMessage(null), 3000)
+  // Mã dự phòng khi camera của chủ sân lỗi: chính là mã QR của vé (chủ sân nhập tay ở trang Quét QR)
+  const handleCopyOTP = async () => {
+    if (!ticketData?.qrCode) {
+      setToastMessage('⚠️ Chưa có mã vé để sao chép.')
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(ticketData.qrCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setToastMessage('⚠️ Trình duyệt chặn sao chép, hãy đọc mã cho chủ sân.')
+      setTimeout(() => setToastMessage(null), 3000)
+    }
   }
 
   // Add participant
@@ -578,7 +501,7 @@ function CheckInQR() {
     }
 
     const newParticipant = {
-      id: `partner_${Date.now()}`,
+      id: uid('partner'),
       name: trimmed,
       email: `${trimmed.toLowerCase().replace(/\s+/g, '')}@guest.local`,
       role: doublesPartnerRole,
@@ -654,18 +577,6 @@ function CheckInQR() {
     }
   }
 
-  // Mở modal đánh giá người chơi cụ thể
-  const handleOpenRateModal = (player) => {
-    if (!checkInDone) {
-      setToastMessage('⚠️ Bạn chỉ được phép đánh giá sau khi check-in thành công (Cả hai phải đã check-in)!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-    setSelectedCoPlayer(player)
-    setWrittenReview('')
-    setRateStars(5)
-    setShowRateModal(true)
-  }
 
   // Xử lý gửi đánh giá sau trận (chỉ cho phép sau khi check-in thành công - Image 2.7)
   const handleSubmitRateCoPlayer = async (e) => {
@@ -1753,19 +1664,20 @@ function CheckInQR() {
                   letterSpacing: '0.6px',
                 }}
               >
-                MÃ OTP DỰ PHÒNG (NẾU CAMERA LỖI)
+                MÃ VÉ DỰ PHÒNG (NẾU CAMERA LỖI)
               </div>
               <div
                 style={{
-                  fontSize: '20px',
+                  fontSize: '15px',
                   fontWeight: 800,
                   color: '#111827',
-                  letterSpacing: '2px',
+                  letterSpacing: '1px',
+                  wordBreak: 'break-all',
                   fontFamily: 'monospace',
                   marginTop: '2px',
                 }}
               >
-                894 - 201
+                {ticketData?.qrCode || '—'}
               </div>
             </div>
 
@@ -3254,7 +3166,7 @@ function CheckInQR() {
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
                       {isScanningCheckIn ? 'sync' : 'sensors'}
                     </span>
-                    <span>{isScanningCheckIn ? 'Đang gửi mã...' : 'Mô Phỏng Quét Check-in'}</span>
+                    <span>{isScanningCheckIn ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái check-in'}</span>
                   </button>
                 </div>
               </>

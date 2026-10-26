@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { useSport } from '../Context/SportContext.jsx'
+import { useSport } from '../Context/sportContext.js'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
@@ -50,7 +50,7 @@ const actionCards = [
 // =========================================================================
 // QUY CHUẨN THÔNG SỐ SÂN THỰC TẾ THEO TIÊU CHUẨN THI ĐẤU QUỐC TẾ CHÍNH THỨC
 // =========================================================================
-export const SPORT_COURT_STANDARDS = {
+const SPORT_COURT_STANDARDS = {
   badminton: {
     sportName: 'Cầu Lông',
     federation: 'BWF (Badminton World Federation)',
@@ -819,28 +819,6 @@ function Dashboard() {
     } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
   }, [navigate])
 
-  const [playerProfile, setPlayerProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) return JSON.parse(saved)
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return {}
-  })
-
-  useEffect(() => {
-    const handleProfileUpdate = () => {
-      try {
-        const saved = localStorage.getItem('player_profile_data')
-        if (saved) setPlayerProfile(JSON.parse(saved))
-      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    }
-    window.addEventListener('player-profile-updated', handleProfileUpdate)
-    window.addEventListener('storage', handleProfileUpdate)
-    return () => {
-      window.removeEventListener('player-profile-updated', handleProfileUpdate)
-      window.removeEventListener('storage', handleProfileUpdate)
-    }
-  }, [])
 
   const {
     selectedSports,

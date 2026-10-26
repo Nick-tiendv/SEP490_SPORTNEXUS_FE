@@ -1,16 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-
-export const SportContext = createContext()
-
-export const SPORTS_LIST = [
-  { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', color: '#2D5F3F' },
-  { key: 'pickleball', label: 'Pickleball', emoji: '🏓', color: '#1B6A45' },
-  { key: 'football', label: 'Bóng Đá', emoji: '⚽', color: '#1E5631' },
-  { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', color: '#C2410C' },
-  { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#65A30D' },
-]
-
-export const ALL_SPORTS_KEYS = SPORTS_LIST.map((s) => s.key)
+import { useState, useEffect } from 'react'
+import { ALL_SPORTS_KEYS, SPORTS_LIST, SportContext } from './sportContext.js'
 
 export function SportProvider({ children }) {
   const [selectedSports, setSelectedSports] = useState(() => {
@@ -60,8 +49,6 @@ export function SportProvider({ children }) {
         return next.length === SPORTS_LIST.length ? ALL_SPORTS_KEYS : next
       }
 
-      // Nếu môn này chưa có: thêm môn đó vào danh sách (cho phép chọn 2, 3, 4 môn riêng)
-      return [...prev, key]
     })
   }
 
@@ -91,21 +78,4 @@ export function SportProvider({ children }) {
       {children}
     </SportContext.Provider>
   )
-}
-
-export function useSport() {
-  const context = useContext(SportContext)
-  if (!context) {
-    return {
-      selectedSports: ALL_SPORTS_KEYS,
-      setSelectedSports: () => {},
-      toggleSport: () => {},
-      selectOnlySport: () => {},
-      selectAllSports: () => {},
-      isSportActive: () => true,
-      isAllActive: true,
-      SPORTS_LIST,
-    }
-  }
-  return context
 }

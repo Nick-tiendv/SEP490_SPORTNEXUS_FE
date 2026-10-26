@@ -33,11 +33,10 @@ import {
   getReportReasons,
   createReport,
   getMyReports,
-  getReportById,
   withdrawReport,
 } from '../../api/player/reportApi.js'
 
-export const PRESET_SPORTS_CATALOG = [
+const PRESET_SPORTS_CATALOG = [
   { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
   { key: 'pickleball', name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
   { key: 'football', name: 'Bóng đá', icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' },
@@ -150,7 +149,6 @@ export default function Profile() {
   const [newReportForm, setNewReportForm] = useState({ reasonId: '', description: '', bookingId: '', evidence: [] })
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
-  const [selectedReportDetail, setSelectedReportDetail] = useState(null)
 
   // 4. Tài khoản & Bảo mật (POST /change-password, POST /me/phone, POST /me/email/send-otp, POST /me/email/verify, POST /set-password, DELETE /api/auth/me)
   const [showSecurityModal, setShowSecurityModal] = useState(false)

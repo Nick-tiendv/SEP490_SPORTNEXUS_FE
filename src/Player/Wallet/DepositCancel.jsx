@@ -10,7 +10,8 @@ import {
   normalizeDepositStatus,
   readPendingDeposit,
 } from '../../api/player/walletApi.js'
-import DepositResultCard, { PrimaryButton, SecondaryButton, formatVND } from './DepositResultCard.jsx'
+import DepositResultCard, { PrimaryButton, SecondaryButton } from './DepositResultCard.jsx'
+import { formatVND } from './depositUtils.js'
 
 /**
  * Trang cancelUrl của PayOS: /wallet/deposit-cancel?code=00&id=...&cancel=true&status=CANCELLED&orderCode=...

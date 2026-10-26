@@ -1,5 +1,6 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
 import { useEffect, useState } from 'react'
+import { uid, nowMs } from '../../../utils/ids.js'
 import { confirmDialog } from '../../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -37,19 +38,6 @@ function SplitPayment() {
 
   const [slotError, setSlotError] = useState('')
   const [activeSlotData, setActiveSlotData] = useState(null)
-
-  // Đồng bộ số dư ví thực tế từ Backend API
-  useEffect(() => {
-    let isMounted = true
-    getWallet()
-      .then((w) => {
-        if (isMounted && w && typeof w.balance === 'number') {
-          setWalletBalance(w.balance)
-        }
-      })
-      .catch(() => {})
-    return () => { isMounted = false }
-  }, [])
 
   // Kiểm tra ca người dùng đã chọn còn trống không. Không tự đổi sang ca khác.
   useEffect(() => {
@@ -117,6 +105,19 @@ function SplitPayment() {
     return saved !== null ? Number(saved) : 0
   })
 
+  // Đồng bộ số dư ví thực tế từ Backend API
+  useEffect(() => {
+    let isMounted = true
+    getWallet()
+      .then((w) => {
+        if (isMounted && w && typeof w.balance === 'number') {
+          setWalletBalance(w.balance)
+        }
+      })
+      .catch(() => {})
+    return () => { isMounted = false }
+  }, [])
+
   // Số dư bị đóng băng trong hợp đồng Escrow (frozenBalance) theo Bước 4
   const [frozenBalance, setFrozenBalance] = useState(() => {
     const saved = localStorage.getItem('frozen_balance')
@@ -144,7 +145,6 @@ function SplitPayment() {
 
   // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
   const [bookingStatus, setBookingStatus] = useState('PAID')
-  const [paymentDeadline, setPaymentDeadline] = useState(null)
   const [deadlineSeconds, setDeadlineSeconds] = useState(30 * 60) // 30 phút theo Bước 2
   const [isPayingRemaining, setIsPayingRemaining] = useState(false)
 
@@ -241,17 +241,9 @@ function SplitPayment() {
 
   // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
   useEffect(() => {
-    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return
-    const timer = setInterval(() => {
-      setDeadlineSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleDeadlineExpired()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return undefined
+    // Chỉ đếm ngược trong updater; việc xử lý hết hạn nằm ở effect bên dưới (updater phải thuần)
+    const timer = setInterval(() => setDeadlineSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000)
     return () => clearInterval(timer)
   }, [step, bookingStatus])
 
@@ -264,7 +256,7 @@ function SplitPayment() {
     window.dispatchEvent(
       new CustomEvent('player_new_notification', {
         detail: {
-          id: `expired_${Date.now()}`,
+          id: uid('expired'),
           type: 'booking',
           icon: 'timer_off',
           color: '#DC2626',
@@ -281,6 +273,12 @@ function SplitPayment() {
     )
     toast.error(`Đã hết hạn góp tiền (PaymentDeadline)!\n\nĐơn đặt sân đã tự động hủy. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
+
+  // Hết hạn góp tiền khi đơn vẫn PENDING: cập nhật giao diện 1 lần
+  useEffect(() => {
+    if (step === 'ticket_pass' && bookingStatus === 'PENDING' && deadlineSeconds === 0) handleDeadlineExpired()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi đồng hồ về 0
+  }, [deadlineSeconds, step, bookingStatus])
 
   // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
   const handleSearchFriend = async (e) => {
@@ -429,7 +427,7 @@ function SplitPayment() {
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
           detail: {
-            id: `pay_remaining_${Date.now()}`,
+            id: uid('pay_remaining'),
             type: 'booking',
             icon: 'check_circle',
             color: '#15803D',
@@ -506,7 +504,7 @@ function SplitPayment() {
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
           detail: {
-            id: `cancel_${Date.now()}`,
+            id: uid('cancel'),
             type: 'booking',
             icon: 'cancel',
             color: '#DC2626',
@@ -738,9 +736,6 @@ function SplitPayment() {
         // Cập nhật trạng thái đơn theo Bước 2 (isSplitPayment -> PENDING, người tạo trả phần của mình ngay, hạn 30 phút)
         if (paymentMode === 'split') {
           setBookingStatus('PENDING')
-          const now = Date.now()
-          const thirtyMins = now + 30 * 60 * 1000
-          setPaymentDeadline(new Date(thirtyMins))
           setDeadlineSeconds(30 * 60)
         } else {
           setBookingStatus('PAID')
@@ -750,7 +745,7 @@ function SplitPayment() {
         window.dispatchEvent(
           new CustomEvent('player_new_notification', {
             detail: {
-              id: `book_${Date.now()}`,
+              id: uid('book'),
               type: 'booking',
               icon: 'sports_tennis',
               color: paymentMode === 'split' ? '#D97706' : '#15803D',
@@ -843,7 +838,7 @@ function SplitPayment() {
         accountName: depRes?.accountName || 'PAYOS CỔNG THANH TOÁN',
         accountNumber: depRes?.accountNumber || '',
         description: depRes?.description || `SPORTNEXUS ${orderCode}`,
-        expiresAt: depRes?.expiredAt ? (typeof depRes.expiredAt === 'number' ? (depRes.expiredAt < 1e12 ? depRes.expiredAt * 1000 : depRes.expiredAt) : Date.parse(depRes.expiredAt)) : Date.now() + 15 * 60 * 1000,
+        expiresAt: depRes?.expiredAt ? (typeof depRes.expiredAt === 'number' ? (depRes.expiredAt < 1e12 ? depRes.expiredAt * 1000 : depRes.expiredAt) : Date.parse(depRes.expiredAt)) : nowMs() + 15 * 60 * 1000,
       })
       setStep('bank_qr')
     } catch (err) {
@@ -941,9 +936,6 @@ function SplitPayment() {
 
       if (paymentMode === 'split') {
         setBookingStatus('PENDING')
-        const now = Date.now()
-        const thirtyMins = now + 30 * 60 * 1000
-        setPaymentDeadline(new Date(thirtyMins))
         setDeadlineSeconds(30 * 60)
       } else {
         setBookingStatus('PAID')
@@ -953,7 +945,7 @@ function SplitPayment() {
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
           detail: {
-            id: `book_${Date.now()}`,
+            id: uid('book'),
             type: 'booking',
             icon: 'sports_tennis',
             color: paymentMode === 'split' ? '#D97706' : '#15803D',
@@ -975,7 +967,7 @@ function SplitPayment() {
       window.dispatchEvent(
         new CustomEvent('player_new_notification', {
           detail: {
-            id: `tx_${Date.now()}`,
+            id: uid('tx'),
             type: 'transaction',
             icon: 'receipt_long',
             color: '#0284C7',
@@ -2234,7 +2226,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Đơn Đặt Sân (Booking ID):</span>
                   <strong style={{ fontFamily: 'monospace', color: '#0f172a', background: '#e2e8f0', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {bookingResult?.id || bookingResult?.bookingId || (typeof bookingResult === 'string' ? bookingResult : 'SNX-' + Date.now())}
+                    {bookingResult?.id || bookingResult?.bookingId || (typeof bookingResult === 'string' ? bookingResult : '—')}
                   </strong>
                 </div>
 

@@ -348,7 +348,6 @@ function CreateMatch() {
   })
 
   // Auto court lock checkbox
-  const [autoLockCourt, setAutoLockCourt] = useState(true)
 
   // Escrow reassurance pill state
   const [showEscrowPill, setShowEscrowPill] = useState(true)
@@ -366,7 +365,7 @@ function CreateMatch() {
   const isEditMode = Boolean(editCardId)
   // Kèo LFG phải gắn với một ca sân thật, truyền sang từ màn hình chọn ca.
   const initialSlotId = location.state?.courtSlotId || location.state?.slotId || null
-  const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
+  const [courtSlotId] = useState(initialSlotId)
   const [slotsNeeded, setSlotsNeeded] = useState(3)
   const [pricePerPerson, setPricePerPerson] = useState('')
   const [requireApproval, setRequireApproval] = useState(false)
@@ -422,7 +421,7 @@ function CreateMatch() {
     currentDistrictData.courts.find((c) => c.id === selectedCourtId) || currentDistrictData.courts[0]
 
   // Filtered districts based on user search query (by district name or court name/address)
-  const filteredDistricts = Object.entries(DISTRICT_DATA).filter(([key, item]) => {
+  const filteredDistricts = Object.entries(DISTRICT_DATA).filter(([, item]) => {
     if (!districtSearchQuery.trim()) return true
     const q = districtSearchQuery.toLowerCase().trim()
     const matchName = item.name.toLowerCase().includes(q)

@@ -1,5 +1,6 @@
 // AIChatModal.jsx — Khung chat thông minh giữa Người chơi và Trợ lý AI SportNexus
 import { useEffect, useRef, useState } from 'react'
+import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
   DISTRICT_CENTERS,
@@ -122,7 +123,7 @@ function AIChatModal({
 
     const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     const userMsg = {
-      id: `user-${Date.now()}`,
+      id: uid('user'),
       sender: 'user',
       text,
       time: nowStr,
@@ -140,7 +141,7 @@ function AIChatModal({
       })
       const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Dưới đây là gợi ý từ AI:'
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         text: botReply,
@@ -156,7 +157,7 @@ function AIChatModal({
         setActiveCourtId(response.recommendedCourt.id)
       }
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         ...response,

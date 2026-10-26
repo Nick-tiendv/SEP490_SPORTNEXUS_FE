@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getLfgs,
-  getLfgById,
   getMyLfgCards,
   getJoinedLfgs,
   claimLfgSlot,
@@ -16,7 +15,6 @@ import {
   cancelLfg,
   leaveLfg,
   getLfgCancelReasons,
-  getMyFairPlay,
   acceptLfgInvitation,
   declineLfgInvitation,
   removeLfgGroupMember,
@@ -35,7 +33,7 @@ const sanitizeMatch = (m) => {
     if (!str || typeof str !== 'string') return str
     return str
       .replace(/\s*\((?:Elo|DUPR|DURP)[^)]*\)/gi, '')
-      .replace(/\b(?:Elo|DUPR|DURP)\s*[:•\-]?\s*[\d.><+\s-]+/gi, '')
+      .replace(/\b(?:Elo|DUPR|DURP)\s*[:•-]?\s*[\d.><+\s-]+/gi, '')
       .replace(/\b(?:Elo|DUPR|DURP)\b/gi, '')
       .replace(/•\s*•/g, '•')
       .replace(/\s*•\s*$/g, '')
@@ -114,7 +112,6 @@ function CommunityFeed() {
   const [isLoadingMyCards, setIsLoadingMyCards] = useState(false)
   const [isLoadingJoined, setIsLoadingJoined] = useState(false)
   const [isLoadingLfgs, setIsLoadingLfgs] = useState(false)
-  const [myFairPlayData, setMyFairPlayData] = useState(null)
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
   const [selectedClaimSide, setSelectedClaimSide] = useState('any')
@@ -177,10 +174,12 @@ function CommunityFeed() {
   // Danh sách kèo đang mở lấy từ GET /api/v1/lfgs
   const [matches, setMatches] = useState([])
   const [lfgListError, setLfgListError] = useState('')
+  const [lfgReload, setLfgReload] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     setIsLoadingLfgs(true)
+    setLfgListError('')
     getLfgs({ page: 1, pageSize: 50 })
       .then((res) => {
         if (cancelled) return
@@ -190,7 +189,7 @@ function CommunityFeed() {
       .catch((err) => !cancelled && setLfgListError(err?.message || 'Không tải được danh sách kèo.'))
       .finally(() => !cancelled && setIsLoadingLfgs(false))
     return () => { cancelled = true }
-  }, [])
+  }, [lfgReload])
 
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
@@ -296,15 +295,6 @@ function CommunityFeed() {
     }
   }
 
-  // Load Fair Play Score - 2.7
-  const loadFairPlay = async () => {
-    try {
-      const data = await getMyFairPlay()
-      if (data) setMyFairPlayData(data)
-    } catch (err) {
-      console.warn('[CommunityFeed] Không lấy được Fair Play:', err)
-    }
-  }
 
   // Tab switcher
   const handleTabChange = (newTab) => {
@@ -628,7 +618,6 @@ function CommunityFeed() {
   }
 
   useEffect(() => {
-    loadFairPlay()
     if (activeMainTab === 'my_cards') {
       loadMyCards(myStatusFilter)
     } else if (activeMainTab === 'joined') {
@@ -1258,7 +1247,14 @@ function CommunityFeed() {
             </div>
 
             {/* Match Cards List */}
-            {filteredMatches.length === 0 ? (
+            {lfgListError ? (
+              <div className="bg-white rounded-2xl border border-red-200 p-8 text-center">
+                <p className="font-bold text-red-700">{lfgListError}</p>
+                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" style={{ marginTop: 10 }} onClick={() => setLfgReload((value) => value + 1)}>Thử lại</button>
+              </div>
+            ) : isLoadingLfgs && matches.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-sm text-gray-500">Đang tải danh sách kèo…</div>
+            ) : filteredMatches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
                 <span className="material-symbols-outlined text-4xl text-gray-400 mb-2">
                   search_off
@@ -1674,7 +1670,7 @@ function CommunityFeed() {
                         {/* Card Bottom Actions */}
                         <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 flex-wrap">
                           <span className="text-xs text-gray-500 font-medium">
-                            Giờ chơi: <strong>{new Date(card.startTime || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>
+                            Giờ chơi: <strong>{card.startTime ? new Date(card.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</strong>
                           </span>
 
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1810,7 +1806,7 @@ function CommunityFeed() {
                           </div>
                           <div className="flex items-center gap-1.5">
                             <span className="material-symbols-outlined text-[16px] text-gray-400">schedule</span>
-                            <span>Giờ thi đấu: <strong>{new Date(card.startTime || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                            <span>Giờ thi đấu: <strong>{card.startTime ? new Date(card.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</strong></span>
                           </div>
                         </div>
 

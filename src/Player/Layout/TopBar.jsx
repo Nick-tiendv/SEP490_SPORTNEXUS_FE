@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { useSport } from '../Context/SportContext.jsx'
+import { useSport } from '../Context/sportContext.js'
 import NotificationBell from './NotificationBell.jsx'
 import { getWallet } from '../../api/player/walletApi.js'
 import { logoutApi } from '../../api/player/profileApi.js'

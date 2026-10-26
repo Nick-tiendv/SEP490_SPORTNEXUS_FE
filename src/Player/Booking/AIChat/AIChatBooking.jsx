@@ -1,5 +1,6 @@
 // AIChatBooking.jsx — Giao diện Toàn trang Trợ lý AI SportNexus Concierge
 import { useEffect, useRef, useState } from 'react'
+import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
   DISTRICT_CENTERS,
@@ -172,7 +173,7 @@ function AIChatBooking() {
 
     const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     const userMsg = {
-      id: `user-${Date.now()}`,
+      id: uid('user'),
       sender: 'user',
       text,
       time: nowStr,
@@ -206,7 +207,7 @@ function AIChatBooking() {
 
       const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Xin chào! Tôi có thể giúp gì cho bạn?'
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         text: botReply,
@@ -222,7 +223,7 @@ function AIChatBooking() {
         setActiveCourtId(response.recommendedCourt.id)
       }
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         ...response,
@@ -468,6 +469,7 @@ function AIChatBooking() {
           {sessionsList.length > 0 && (
             <select
               value={currentSessionId || ''}
+              disabled={isLoadingSession}
               onChange={(e) => handleSelectSession(e.target.value)}
               className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 border border-gray-300 text-gray-800 outline-none"
               title="Chọn phiên hội thoại"
