@@ -1,10 +1,12 @@
 // Nhãn hiển thị và hàm tiện ích cho trang Quản lý đặt sân (dữ liệu thật lấy qua src/api/admin/bookingApi.js).
 
-// Giá trị Status gửi lên API /api/v1/bookings/admin. Cần đối chiếu lại với enum thật của BE.
-export const bookingStatusLabels = { Pending: 'Đang chờ xử lý', Confirmed: 'Đã xác nhận', CheckedIn: 'Đã check-in', Completed: 'Đã hoàn thành', Cancelled: 'Đã hủy' }
+// BookingStatus của BE (cũng là giá trị Status gửi lên /api/v1/bookings/admin): PENDING | PAID | CHECKED_IN | CANCELLED.
+export const bookingStatusLabels = { PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CHECKED_IN: 'Đã check-in', CANCELLED: 'Đã hủy' }
+// Màu badge (class admin-status-*) theo trạng thái.
+export const bookingStatusTone = { PENDING: 'Pending', PAID: 'Confirmed', CHECKED_IN: 'Completed', CANCELLED: 'Cancelled' }
 export const paymentStatusLabels = { Paid: 'Đã thanh toán', Partial: 'Thanh toán một phần', PartiallyPaid: 'Thanh toán một phần', Unpaid: 'Chưa thanh toán', Pending: 'Chờ thanh toán', Refunded: 'Đã hoàn tiền', Failed: 'Thất bại' }
 export const sportLabels = { Pickleball: 'Pickleball', Badminton: 'Cầu lông', Tennis: 'Quần vợt', Football: 'Bóng đá', Basketball: 'Bóng rổ' }
-export const canCancel = booking => !/cancel|complete/i.test(booking.status)
+export const canCancel = booking => ['PENDING', 'PAID'].includes(booking.status)
 
 export const number = value => (Number(value) || 0).toLocaleString('vi-VN')
 export const money = value => `${number(value)} ₫`

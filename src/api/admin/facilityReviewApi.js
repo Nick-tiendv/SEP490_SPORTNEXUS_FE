@@ -24,6 +24,11 @@ export function toFacilityReview(raw) {
     hidden: typeof hiddenFlag === 'boolean' ? hiddenFlag : /hidden/i.test(status),
     hiddenReason: pick(raw, 'hiddenReason', 'hideReason') || '',
     createdAt: pick(raw, 'createdAt') || '',
+    // Chỉ có ở GET /admin/facility-reviews/{id} (AdminFacilityReviewResponse)
+    userEmail: pick(raw, 'userEmail') || '',
+    ownerName: pick(raw, 'facilityOwnerName') || '',
+    hiddenAt: pick(raw, 'hiddenAt') || '',
+    hiddenBy: pick(raw, 'hiddenByName') || '',
   }
 }
 // Query: FacilityId, UserId, Rating, Keyword, FromDate, ToDate, Status, Replied, Page, PageSize.

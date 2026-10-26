@@ -8,7 +8,7 @@ import '../Users/users.css'
 import './reviews.css'
 import ReviewsTab from './ReviewsTab.jsx'
 import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport } from '../../api/admin/reportApi.js'
-import { decisionOptions, emptyFilters, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv } from './reviewsData.js'
+import { decisionOptions, emptyFilters, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
 
 const PAGE_SIZE = 10
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
@@ -22,27 +22,29 @@ function GuidelinesDialog({ onClose }) {
 
 // POST /api/v1/reports/admin/{reportId}/resolve
 function ResolveDialog({ report, onClose, onDone }) {
-  const [values, setValues] = useState({ decision: decisionOptions[0].value, adminNote: '', refund: report.requestedRefund != null ? String(report.requestedRefund) : '', lockSlot: false, deduct: '', deletePost: false })
+  const [values, setValues] = useState({ decision: decisionOptions[0].value, adminNote: '', refund: report.requestedRefund ? String(report.requestedRefund) : '100', lockSlot: false, deduct: '', deletePost: false })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }))
-  const approving = values.decision === decisionOptions[0].value
+  // REFUND cần % hoàn (1-100); trừ điểm fair-play / xóa bài chỉ áp dụng khi không bác bỏ.
+  const refunding = values.decision === 'REFUND'
+  const approving = values.decision !== 'REJECT'
   const submit = async event => {
     event.preventDefault()
     const refund = values.refund === '' ? null : Number(values.refund)
     const deduct = values.deduct === '' ? null : Number(values.deduct)
     if (!values.adminNote.trim()) return setError('Vui lòng ghi chú lý do quyết định.')
-    if (refund != null && (!Number.isInteger(refund) || refund < 0 || refund > 100)) return setError('Tỷ lệ hoàn tiền phải là số nguyên từ 0 đến 100.')
+    if (refunding && (refund == null || !Number.isInteger(refund) || refund < 1 || refund > 100)) return setError('Tỷ lệ hoàn tiền phải là số nguyên từ 1 đến 100.')
     if (deduct != null && (!Number.isFinite(deduct) || deduct < 0)) return setError('Số điểm fair-play bị trừ phải lớn hơn hoặc bằng 0.')
     setSubmitting(true); setError('')
     try {
       await resolveAdminReport(report.uuid, {
         decision: values.decision,
         adminNote: values.adminNote.trim(),
-        refundPercentage: approving ? refund : null,
-        lockSlotForMaintenance: approving && values.lockSlot,
+        refundPercentage: refunding ? refund : null,
+        lockSlotForMaintenance: refunding && values.lockSlot,
         deductTargetUserFairPlayPoints: approving ? deduct : null,
-        deleteCommunityPost: approving && values.deletePost,
+        deleteCommunityPost: approving && report.targetType === 'COMMUNITY_POST' && values.deletePost,
       })
       onDone(`Đã xử lý báo cáo ${report.id}.`)
     } catch (err) {
@@ -54,14 +56,16 @@ function ResolveDialog({ report, onClose, onDone }) {
     <p>{report.reporter} báo cáo <strong>{report.entity}</strong> · {report.reason}</p>
     <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{decisionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
     <label>Ghi chú quản trị (bắt buộc)<textarea rows={3} maxLength={1000} value={values.adminNote} onChange={event => set('adminNote', event.target.value)} placeholder="Nhập nội dung xác minh hoặc lý do quyết định..." required /></label>
-    {approving && <>
-      <label>Tỷ lệ hoàn tiền cho người báo cáo (%){report.requestedRefund != null && ` — người báo cáo yêu cầu ${report.requestedRefund}%`}<input type="number" min={0} max={100} step={1} value={values.refund} onChange={event => set('refund', event.target.value)} placeholder="Để trống nếu không hoàn tiền" /></label>
-      <label>Trừ điểm fair-play của người bị báo cáo<input type="number" min={0} step={1} value={values.deduct} onChange={event => set('deduct', event.target.value)} placeholder="Để trống nếu không trừ" /></label>
+    {refunding && <>
+      <label>Tỷ lệ hoàn tiền cho người báo cáo (%){report.requestedRefund != null && ` — người báo cáo yêu cầu ${report.requestedRefund}%`}<input type="number" min={1} max={100} step={1} value={values.refund} onChange={event => set('refund', event.target.value)} placeholder="1 – 100" /></label>
       <label style={check}><input type="checkbox" checked={values.lockSlot} onChange={event => set('lockSlot', event.target.checked)} />Khóa khung giờ để bảo trì sân</label>
-      <label style={check}><input type="checkbox" checked={values.deletePost} onChange={event => set('deletePost', event.target.checked)} />Xóa bài viết cộng đồng bị báo cáo</label>
+    </>}
+    {approving && <>
+      <label>Trừ điểm fair-play của người bị báo cáo<input type="number" min={0} step={1} value={values.deduct} onChange={event => set('deduct', event.target.value)} placeholder="Để trống nếu không trừ" /></label>
+      {report.targetType === 'COMMUNITY_POST' && <label style={check}><input type="checkbox" checked={values.deletePost} onChange={event => set('deletePost', event.target.checked)} />Xóa bài viết cộng đồng bị báo cáo</label>}
     </>}
     {error && <p className="rr-error" role="alert">{error}</p>}
-    <footer><button type="button" className="rr-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`rr-button ${approving ? 'primary' : 'danger'}`} disabled={submitting}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
+    <footer><button type="button" className="rr-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`rr-button ${values.decision === 'REJECT' ? 'danger' : 'primary'}`} disabled={submitting}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
   </form></DemoDialog>
 }
 
@@ -84,7 +88,7 @@ export default function ReviewsReportsPage() {
   const [tab, setTab] = useState('reports')
   // ?status=Pending (từ Dashboard) → mở sẵn bộ lọc trạng thái.
   const [searchParams] = useSearchParams()
-  const [filters, setFilters] = useState(() => ({ ...emptyFilters, status: reportStatusLabels[searchParams.get('status')] ? searchParams.get('status') : '' }))
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, status: reportStatusLabels[toEnumKey(searchParams.get('status'))] ? toEnumKey(searchParams.get('status')) : '' }))
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
@@ -114,10 +118,11 @@ export default function ReviewsReportsPage() {
   // Thống kê: ưu tiên /reports/admin/statistics, thiếu field nào thì đếm bằng danh sách theo trạng thái.
   useEffect(() => {
     let cancelled = false
-    Promise.allSettled([getReportStatistics({}), countAdminReports({}), countAdminReports({ Status: 'Pending' }), countAdminReports({ Status: 'Resolved' }), countAdminReports({ Status: 'Rejected' })])
+    Promise.allSettled([getReportStatistics({}), countAdminReports({}), countAdminReports({ Status: 'PENDING' }), countAdminReports({ Status: 'RESOLVED_REFUNDED' }), countAdminReports({ Status: 'REJECTED' }), countAdminReports({ Status: 'RESOLVED_NO_REFUND' })])
       .then(results => {
         if (cancelled) return
-        const [statistics, total, pending, resolved, rejected] = results.map(settled)
+        const [statistics, total, pending, refunded, rejected, noRefund] = results.map(settled)
+        const resolved = Number.isFinite(refunded) || Number.isFinite(noRefund) ? (refunded || 0) + (noRefund || 0) : undefined
         setStats({ key: reload, total: statistics?.total ?? total, pending: statistics?.pending ?? pending, resolved: statistics?.resolved ?? resolved, rejected: statistics?.rejected ?? rejected })
       })
     return () => { cancelled = true }
@@ -141,7 +146,7 @@ export default function ReviewsReportsPage() {
 
   const change = (key, value) => { setFilters(f => ({ ...f, [key]: value })); if (key !== 'search') setPage(1) }
   const resetFilters = () => { setFilters({ ...emptyFilters }); setSearch(''); setPage(1) }
-  const showPending = () => { setTab('reports'); setFilters({ ...emptyFilters, status: 'Pending' }); setSearch(''); setPage(1) }
+  const showPending = () => { setTab('reports'); setFilters({ ...emptyFilters, status: 'PENDING' }); setSearch(''); setPage(1) }
   const done = message => { setDialog(null); toast.success(message); setReload(value => value + 1) }
   const exportCsv = () => {
     const url = URL.createObjectURL(new Blob([toCsv(list.items)], { type: 'text/csv;charset=utf-8;' }))

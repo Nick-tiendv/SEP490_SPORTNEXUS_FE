@@ -3,13 +3,12 @@ import { CalendarDays, CheckCircle2, BadgeCheck, CircleX, Banknote, Download, Se
 import BookingTable from './BookingTable.jsx'
 import BookingDetails from './BookingDetails.jsx'
 import BookingDialogs from './BookingDialogs.jsx'
-import { countAdminBookings, getAdminBooking, getBookingStatistics, getFacilityOptions, listAdminBookings } from '../../api/admin/bookingApi.js'
+import { getAdminBooking, getBookingStatistics, getFacilityOptions, listAdminBookings } from '../../api/admin/bookingApi.js'
 import { bookingStatusLabels, number, exportBookings, parseBookingDate } from './bookingData.js'
 import '../Users/users.css'
 import './booking.css'
 
 const emptyFilters = { search: '', status: '', facility: '', from: '', to: '' }
-const settled = result => (result.status === 'fulfilled' ? result.value : undefined)
 
 export default function BookingManagement() {
   const [filters, setFilters] = useState(emptyFilters)
@@ -48,17 +47,12 @@ export default function BookingManagement() {
     return () => { cancelled = true }
   }, [listKey])
 
-  // Chỉ số toàn nền tảng: số đơn theo trạng thái + doanh thu từ API thống kê.
+  // Chỉ số toàn nền tảng: GET /api/v1/bookings/admin/statistics (đã có sẵn số đơn theo từng trạng thái).
   useEffect(() => {
     let cancelled = false
-    Promise.allSettled([countAdminBookings({}), countAdminBookings({ Status: 'Confirmed' }), countAdminBookings({ Status: 'Completed' }), countAdminBookings({ Status: 'Cancelled' }), getBookingStatistics({})])
-      .then(results => {
-        if (cancelled) return
-        const [total, confirmed, completed, cancelledCount, statistics] = results.map(settled)
-        const names = ['Tổng đơn', 'Đã xác nhận (Status=Confirmed)', 'Hoàn thành (Status=Completed)', 'Đã hủy (Status=Cancelled)', 'Doanh thu (/admin/statistics)']
-        const errors = results.map((result, index) => result.status === 'rejected' && `${names[index]}: ${result.reason?.message || 'lỗi không xác định'}`).filter(Boolean)
-        setStats({ key: reload, total: statistics?.totalBookings ?? total, confirmed, completed, cancelled: cancelledCount, revenue: statistics?.totalRevenue, errors })
-      })
+    getBookingStatistics({})
+      .then(statistics => !cancelled && setStats({ key: reload, total: statistics.totalBookings, paid: statistics.paid, checkedIn: statistics.checkedIn, cancelled: statistics.cancelled, revenue: statistics.totalRevenue, extra: statistics, errors: [] }))
+      .catch(error => !cancelled && setStats({ key: reload, errors: [`Thống kê đặt sân: ${error.message}`] }))
     return () => { cancelled = true }
   }, [reload])
 
@@ -88,8 +82,8 @@ export default function BookingManagement() {
   const statsLoading = stats.key !== reload
   const kpis = [
     { label: 'Tổng đơn đặt sân', value: stats.total, icon: CalendarDays, className: 'total' },
-    { label: 'Đã xác nhận', value: stats.confirmed, icon: CheckCircle2, className: 'confirmed' },
-    { label: 'Hoàn thành', value: stats.completed, icon: BadgeCheck, className: 'completed' },
+    { label: 'Đã thanh toán', value: stats.paid, icon: CheckCircle2, className: 'confirmed' },
+    { label: 'Đã check-in', value: stats.checkedIn, icon: BadgeCheck, className: 'completed' },
     { label: 'Đã hủy', value: stats.cancelled, icon: CircleX, className: 'cancelled' },
     { label: 'Doanh thu đặt sân', value: stats.revenue, icon: Banknote, className: 'revenue' },
   ]
@@ -98,6 +92,7 @@ export default function BookingManagement() {
   return <div className={`bookings-page ${detail ? 'with-details' : ''}`}><section className="bookings-main-content">
     <header className="bookings-page-heading admin-page-header"><div><h1>Quản lý đặt sân <span>{Number.isFinite(stats.total) ? `${number(stats.total)} đơn` : '…'}</span></h1><p>Theo dõi đơn đặt sân, lịch sử sử dụng và thông tin thanh toán trên SportNexus.</p></div><div className="bookings-heading-actions"><button className="users-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="users-button" onClick={download} disabled={!list.items.length}><Download size={14} />Xuất CSV</button></div></header>
     <div className="bookings-kpis">{kpis.map(({ label, value, icon: Icon, className }) => <article key={label} className={className}><div><small>{label}</small><Icon size={23} /></div><strong>{statsLoading ? '…' : Number.isFinite(value) ? number(value) : '—'}{className === 'revenue' && Number.isFinite(value) && <span className="bookings-currency">đ</span>}</strong><p>{className === 'total' || className === 'revenue' ? 'Toàn nền tảng' : ratio(value)}</p></article>)}</div>
+    {!statsLoading && stats.extra && <p className="bookings-stats-hint">Tỉ lệ hủy {number(stats.extra.cancellationRate)}% · tỉ lệ check-in {number(stats.extra.checkInRate)}% · {number(stats.extra.walkIn)} đơn tại quầy · đã hoàn {number(stats.extra.refunded)} ₫ · giữ phạt {number(stats.extra.penalty)} ₫</p>}
     {!statsLoading && stats.errors?.length > 0 && <div className="users-notice" role="alert"><span>Một số chỉ số không tải được — {stats.errors.join(' · ')}</span></div>}
     {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
     <section className="bookings-toolbar" aria-label="Tìm kiếm và bộ lọc đơn đặt sân"><div className="bookings-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm đơn đặt sân" placeholder="Mã đơn, người đặt, cơ sở…" value={filters.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(bookingStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)}><option value="">Tất cả cơ sở</option>{facilities.map(venue => <option key={venue.id} value={venue.id}>{venue.name}</option>)}</select></label></div>

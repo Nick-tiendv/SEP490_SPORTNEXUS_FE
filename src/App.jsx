@@ -41,6 +41,8 @@ import FacilityManagement from './Admin/Facilities/FacilityManagement.jsx'
 import BookingManagement from './Admin/Bookings/BookingManagement.jsx'
 import LFGManagement from './Admin/LFG/LFGManagement.jsx'
 import TournamentManagement from './Admin/Tournaments/TournamentManagement.jsx'
+import TeamManagement from './Admin/Teams/TeamManagement.jsx'
+import PromotionManagement from './Admin/Promotions/PromotionManagement.jsx'
 import PaymentManagement from './Admin/Payments/PaymentManagement.jsx'
 import ReviewsReportsPage from './Admin/Reviews/ReviewsReportsPage.jsx'
 import NotificationManagement from './Admin/Notifications/NotificationManagement.jsx'
@@ -119,6 +121,8 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="court-owners" element={<CourtOwnerManagement />} />
+            <Route path="teams" element={<TeamManagement />} />
+            <Route path="promotions" element={<PromotionManagement />} />
             <Route path="facilities" element={<FacilityManagement />} />
             <Route path="bookings" element={<BookingManagement />} />
             <Route path="lfg" element={<LFGManagement />} />

@@ -83,6 +83,14 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
     totalBookings: toNumber(pick(data, 'totalBookings', 'totalBooking', 'bookingCount', 'total', 'count')),
     // activeRevenue = doanh thu đơn chưa hủy (docs 11: AdminBookingStatisticsResponse).
     totalRevenue: toNumber(pick(data, 'activeRevenue', 'grossBookingVolume', 'totalRevenue', 'revenue', 'totalAmount', 'grossRevenue', 'platformRevenue')),
+    paid: toNumber(data.paidBookingsCount),
+    checkedIn: toNumber(data.checkedInBookingsCount),
+    cancelled: toNumber(data.cancelledBookingsCount),
+    walkIn: toNumber(data.walkInBookingsCount),
+    cancellationRate: toNumber(data.cancellationRatePercent),
+    checkInRate: toNumber(data.checkInRatePercent),
+    refunded: toNumber(data.totalRefundedAmount),
+    penalty: toNumber(data.totalPenaltyRetainedAmount),
   }
 }
 

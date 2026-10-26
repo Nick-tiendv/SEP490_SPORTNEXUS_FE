@@ -56,7 +56,8 @@ export function toAdminBooking(raw) {
       address: base.location,
       owner: pick(raw, 'ownerName', 'facility.ownerName', 'owner.fullName', 'facility.owner.fullName') || '',
     },
-    status: base.status,
+    // 'CheckedIn' / 'checked_in' / 'CHECKED_IN' -> 'CHECKED_IN' (enum BookingStatus của BE)
+    status: String(base.status || 'PENDING').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
     payment: base.payment,
     date: toIsoDate(base.date),
     start,
