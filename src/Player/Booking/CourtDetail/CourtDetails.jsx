@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
 import { getCourtSlots, getFacilityAvailability } from '../../../api/player/bookingApi.js'
+import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
 function getNext7Days() {
@@ -138,6 +139,17 @@ function CourtDetails() {
   }, [activeCourt?.id, selectedDateStr])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
+
+  // Giải đấu tổ chức tại cơ sở: GET /api/v1/facilities/{facilityId}/tournaments
+  const [facilityTournaments, setFacilityTournaments] = useState([])
+  useEffect(() => {
+    if (!facility?.id) return undefined
+    let cancelled = false
+    getFacilityTournaments(facility.id)
+      .then((list) => !cancelled && setFacilityTournaments(list))
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [facility?.id])
 
   // Đánh giá sân từ GET /api/v1/facilities/{facilityId}/reviews
   const [reviewsList, setReviewsList] = useState([])
@@ -768,6 +780,25 @@ function CourtDetails() {
                   <span className="text-on-surface-variant">Tình trạng ca</span>
                   <strong className="text-emerald-400 font-semibold">{courtSlots.length} ca trong ngày</strong>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Giải đấu tại cơ sở này */}
+          {facilityTournaments.length > 0 && (
+            <div className="snx-card snx-stack" style={{ gap: 10 }}>
+              <h3 className="snx-card-title" style={{ fontSize: 17 }}>Giải đấu tại sân này ({facilityTournaments.length})</h3>
+              <div className="snx-list">
+                {facilityTournaments.slice(0, 5).map((t) => (
+                  <div key={t.id} className="snx-list-item">
+                    <span className="material-symbols-outlined" style={{ color: '#ca8a04' }}>emoji_events</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={{ fontSize: 14 }}>{t.name}</strong>
+                      <div className="snx-muted">{t.sport} · {t.starts ? new Date(t.starts).toLocaleDateString('vi-VN') : '—'}</div>
+                    </div>
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => navigate('/tournament')}>Xem</button>
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -1,7 +1,7 @@
 import { useAuth } from '../../context/authContext.js'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getMyProfile, updateMyProfile, logoutApi, getMySports, updateMySports, getSportCategories, skillLabel } from '../../api/player/profileApi.js'
+import { getMyProfile, updateMyProfile, logoutApi, logoutAllDevices, getMySports, updateMySports, getSportCategories, skillLabel } from '../../api/player/profileApi.js'
 import {
   uploadAvatar,
   changePassword,
@@ -14,6 +14,7 @@ import {
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
+import { uploadImage } from '../../api/player/uploadApi.js'
 import {
   getMyFacilityReviews,
   getFacilityReviewById,
@@ -139,7 +140,8 @@ export default function Profile() {
   const [myReports, setMyReports] = useState([])
   const [loadingReports, setLoadingReports] = useState(false)
   const [supportTab, setSupportTab] = useState('info') // 'info' | 'create_report' | 'my_reports'
-  const [newReportForm, setNewReportForm] = useState({ reasonId: '', description: '', bookingId: '' })
+  const [newReportForm, setNewReportForm] = useState({ reasonId: '', description: '', bookingId: '', evidence: [] })
+  const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [submittingReport, setSubmittingReport] = useState(false)
   const [selectedReportDetail, setSelectedReportDetail] = useState(null)
 
@@ -187,7 +189,7 @@ export default function Profile() {
     setLoadingReports(true)
     try {
       const [reasons, reports] = await Promise.all([
-        getReportReasons().catch(() => []),
+        getReportReasons('BOOKING').catch(() => []),
         getMyReports().catch(() => []),
       ])
       if (Array.isArray(reasons)) setReportReasons(reasons)
@@ -305,6 +307,18 @@ export default function Profile() {
     }
   }
 
+  // Đăng xuất khỏi tất cả thiết bị: POST /api/auth/logout-all
+  const handleLogoutAll = async () => {
+    if (!window.confirm('Đăng xuất tài khoản khỏi tất cả thiết bị (kể cả thiết bị này)?')) return
+    try {
+      await logoutAllDevices()
+      logout()
+      navigate('/login')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể đăng xuất các thiết bị'}`)
+    }
+  }
+
   // Xóa tài khoản vĩnh viễn: DELETE /api/auth/me
   const handleDeleteAccount = async () => {
     if (!window.confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản SportNexus không? Dữ liệu không thể khôi phục!')) return
@@ -324,15 +338,27 @@ export default function Profile() {
       triggerToast('⚠️ Vui lòng nhập mô tả khiếu nại tối thiểu 10 ký tự!')
       return
     }
+    if (!newReportForm.bookingId) {
+      triggerToast('⚠️ Vui lòng chọn đơn đặt sân cần khiếu nại!')
+      return
+    }
+    const reason = newReportForm.reasonId || reportReasons[0]?.code
+    if (!reason) {
+      triggerToast('⚠️ Vui lòng chọn lý do khiếu nại!')
+      return
+    }
     setSubmittingReport(true)
     try {
+      // POST /api/v1/reports: CreateReportRequest { targetType, bookingId, reason (mã lý do), description, evidenceImageUrls }
       await createReport({
-        reasonId: newReportForm.reasonId || reportReasons[0]?.id || 'SERVICE_QUALITY',
+        targetType: 'BOOKING',
+        bookingId: newReportForm.bookingId,
+        reason,
         description: newReportForm.description.trim(),
-        bookingId: newReportForm.bookingId || undefined,
+        evidenceImageUrls: newReportForm.evidence,
       })
       triggerToast('🎉 Đã gửi khiếu nại thành công tới Ban Quản Trị!')
-      setNewReportForm({ reasonId: '', description: '', bookingId: '' })
+      setNewReportForm({ reasonId: '', description: '', bookingId: '', evidence: [] })
       loadReportData()
       setSupportTab('my_reports')
     } catch (err) {
@@ -5309,8 +5335,8 @@ export default function Profile() {
                     <option value="">-- Chọn lý do phản ánh --</option>
                     {reportReasons.length > 0 ? (
                       reportReasons.map((r) => (
-                        <option key={r.id || r.code} value={r.id || r.code}>
-                          {r.name || r.title || r.description || r.code}
+                        <option key={r.code || r.id} value={r.code || r.id}>
+                          {r.title || r.name || r.label || r.code}
                         </option>
                       ))
                     ) : (
@@ -5343,10 +5369,10 @@ export default function Profile() {
                         background: '#FFFFFF',
                       }}
                     >
-                      <option value="">-- Không liên quan mã đặt sân cụ thể --</option>
+                      <option value="">-- Chọn đơn đặt sân --</option>
                       {myBookings.map((b) => (
-                        <option key={b.id || b.bookingId} value={b.id || b.bookingId}>
-                          #{b.id || b.bookingId} - {b.facilityName || b.courtName || 'Đặt sân'} ({b.bookingDate || b.date || ''})
+                        <option key={b.bookingId || b.id} value={b.bookingId || b.id}>
+                          {b.facilityName || 'Đặt sân'}{b.courtName ? ` · ${b.courtName}` : ''} ({b.startTime ? new Date(b.startTime).toLocaleString('vi-VN') : ''})
                         </option>
                       ))}
                     </select>
@@ -5389,6 +5415,48 @@ export default function Profile() {
                       boxSizing: 'border-box',
                     }}
                   />
+                </div>
+
+                {/* Ảnh bằng chứng: POST /api/v1/uploads/images?purpose=report */}
+                <div>
+                  <span style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Ảnh bằng chứng (không bắt buộc, tối đa 5 ảnh):
+                  </span>
+                  <div className="snx-row">
+                    {newReportForm.evidence.map((url) => (
+                      <span key={url} className="snx-feed-image" style={{ width: 72 }}>
+                        <img src={url} alt="Bằng chứng" />
+                        <button type="button" className="snx-feed-image-remove" aria-label="Bỏ ảnh" onClick={() => setNewReportForm((f) => ({ ...f, evidence: f.evidence.filter((u) => u !== url) }))}>
+                          <span className="material-symbols-outlined">close</span>
+                        </button>
+                      </span>
+                    ))}
+                    {newReportForm.evidence.length < 5 && (
+                      <label className="snx-btn snx-btn--secondary snx-btn--sm" style={{ cursor: uploadingEvidence ? 'wait' : 'pointer' }}>
+                        <span className="material-symbols-outlined">add_photo_alternate</span>{uploadingEvidence ? 'Đang tải…' : 'Thêm ảnh'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          hidden
+                          disabled={uploadingEvidence}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''
+                            if (!file) return
+                            setUploadingEvidence(true)
+                            try {
+                              const url = await uploadImage(file, 'report')
+                              if (url) setNewReportForm((f) => ({ ...f, evidence: [...f.evidence, url] }))
+                            } catch (err) {
+                              triggerToast(`⚠️ ${err?.message || 'Không tải được ảnh'}`)
+                            } finally {
+                              setUploadingEvidence(false)
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
@@ -6023,6 +6091,10 @@ export default function Profile() {
                     Hành động này sẽ xóa toàn bộ lịch sử đấu, số dư ví SportNexus, thông tin môn thể thao và các đánh giá uy tín của bạn. Bạn sẽ không thể khôi phục tài khoản này sau khi xác nhận.
                   </p>
                 </div>
+                <button type="button" className="snx-btn snx-btn--secondary" onClick={handleLogoutAll}>
+                  <span className="material-symbols-outlined">devices</span>
+                  Đăng xuất khỏi tất cả thiết bị
+                </button>
                 <button
                   type="button"
                   onClick={handleDeleteAccount}

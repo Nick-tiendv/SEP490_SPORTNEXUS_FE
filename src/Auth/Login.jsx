@@ -26,12 +26,12 @@ function Login() {
     setIsLoading(true)
 
     try {
-      const { token, userId, fullName, role } = await loginUser({ username: identifier.trim(), password })
+      const { token, refreshToken, userId, fullName, role } = await loginUser({ username: identifier.trim(), password })
       const targetRoute = roleDestination(role)
       if (!targetRoute) {
         throw new Error('Vai trò tài khoản chưa được cấu hình. Vui lòng liên hệ quản trị viên.')
       }
-      contextLogin({ token, role })
+      contextLogin({ token, role, refreshToken })
 
       const profileRole = targetRoute === '/owner/dashboard' ? 'court_owner'
         : targetRoute === '/admin/dashboard' ? 'admin' : 'player'

@@ -73,10 +73,26 @@ export async function getMyRegistrations() {
 export const joinTournament = (id, teamId) => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/join${teamId ? `?teamId=${encodeURIComponent(teamId)}` : ''}`)
 // POST /api/v1/tournaments/{id}/cancel: hủy đăng ký của tôi
 export const cancelTournamentRegistration = id => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/cancel`)
-// GET /api/v1/teams/my-teams: đội của tôi (để đăng ký nội dung đôi / đội)
-export async function getMyTeams() {
-  const { items } = await getList('/api/v1/teams/my-teams')
-  return items.map(raw => ({ id: String(raw.id ?? raw.teamId ?? ''), name: raw.name || raw.teamName || 'Đội' }))
+// GET /api/v1/tournaments?facilityId&categoryId&status: danh sách giải công khai
+export async function getTournaments({ facilityId, categoryId, status } = {}) {
+  const { items } = await getList(TOURNAMENTS_ENDPOINT, { facilityId, categoryId, status })
+  return items.map(toTournament)
+}
+// GET /api/v1/facilities/{facilityId}/tournaments: giải tổ chức tại một cơ sở
+export const getFacilityTournaments = async facilityId =>
+  (await getList(`/api/v1/facilities/${encodeURIComponent(facilityId)}/tournaments`)).items.map(toTournament)
+
+// GET /api/v1/tournaments/my-matches?from&to: lịch thi đấu của tôi
+// MyMatchResponse: matchId, tournamentName, parentTournamentName, roundName, status, startTime, endTime, courtName, facilityName, mySideName, opponentName, winnerName
+export const getMyMatches = async ({ from, to } = {}) => (await getList(`${TOURNAMENTS_ENDPOINT}/my-matches`, { from, to })).items
+
+// GET /api/v1/tournaments/{id}/court-schedule: các khung giờ sân đã giữ và các trận đã xếp sân
+export const getCourtSchedule = id => get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/court-schedule`)
+
+// GET /api/v1/matches/{matchId}: BE trả MẢNG MatchDetailResponse (lấy phần tử đầu)
+export async function getMatch(matchId) {
+  const data = await get(`/api/v1/matches/${encodeURIComponent(matchId)}`)
+  return Array.isArray(data) ? data[0] || null : data
 }
 
 export default {

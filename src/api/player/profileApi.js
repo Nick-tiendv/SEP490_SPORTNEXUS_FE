@@ -8,6 +8,8 @@ export const uploadMyAvatar = file => upload('/api/auth/me/avatar', 'file', file
 // ChangePasswordRequest: oldPassword, newPassword, confirmPassword
 export const changePassword = ({ oldPassword, newPassword, confirmPassword }) => post('/api/auth/change-password', { oldPassword, newPassword, confirmPassword })
 export const logoutApi = () => post('/api/auth/logout')
+// POST /api/auth/logout-all: thu hồi mọi phiên đăng nhập trên tất cả thiết bị
+export const logoutAllDevices = () => post('/api/auth/logout-all')
 
 // ---------- Môn thể thao của tôi: /api/auth/me/sports ----------
 export const getSportCategories = async () => (await getList('/api/v1/master-data/sports')).items.map(item => ({

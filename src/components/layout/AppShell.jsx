@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import '../../styles/app-shell.css'
+import '../../styles/ui-kit.css'
 
 // Khung giao diện dùng chung cho Player, Chủ sân (Admin dùng cùng kích thước qua admin-layout.css).
 // AppSidebar · SidebarNav · AppTopbar · UserMenu · AppFooter · PageHeader

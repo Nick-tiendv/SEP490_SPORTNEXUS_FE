@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -9,96 +9,247 @@ import {
   getTournament,
   joinTournament,
   cancelTournamentRegistration,
-  getMyTeams,
+  getMyMatches,
+  getCourtSchedule,
+  getMatch,
 } from '../../api/player/tournamentApi.js'
+import { getMyTeams } from '../../api/player/teamApi.js'
+import TeamsPanel from './TeamsPanel.jsx'
 
 const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} đ` : 'Miễn phí')
 const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
+const dateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—')
 
-const STATUS_LABELS = {
-  OPEN: 'Đang mở đăng ký',
-  REGISTRATION: 'Đang mở đăng ký',
-  UPCOMING: 'Sắp diễn ra',
-  ONGOING: 'Đang diễn ra',
-  INPROGRESS: 'Đang diễn ra',
-  COMPLETED: 'Đã kết thúc',
-  FINISHED: 'Đã kết thúc',
-  CANCELLED: 'Đã hủy',
+const STATUS = {
+  OPEN: ['Đang mở đăng ký', 'green'],
+  REGISTRATION: ['Đang mở đăng ký', 'green'],
+  UPCOMING: ['Sắp diễn ra', 'blue'],
+  ONGOING: ['Đang diễn ra', 'amber'],
+  INPROGRESS: ['Đang diễn ra', 'amber'],
+  COMPLETED: ['Đã kết thúc', 'gray'],
+  FINISHED: ['Đã kết thúc', 'gray'],
+  CANCELLED: ['Đã hủy', 'red'],
+  PAID: ['Đã thanh toán', 'green'],
+  PENDING: ['Chờ thanh toán', 'amber'],
+  REFUNDED: ['Đã hoàn tiền', 'gray'],
 }
-const statusLabel = (status) => STATUS_LABELS[String(status).toUpperCase().replace(/[_\s]/g, '')] || status || '—'
+function StatusBadge({ value }) {
+  const [label, tone] = STATUS[String(value || '').toUpperCase().replace(/[_\s]/g, '')] || [value || '—', 'gray']
+  return <span className={`snx-badge snx-badge--${tone}`}>{label}</span>
+}
 
-function TournamentCard({ tournament, actions }) {
+const TABS = [
+  { key: 'open', label: 'Đang mở đăng ký', icon: 'event_available' },
+  { key: 'mine', label: 'Giải của tôi', icon: 'how_to_reg' },
+  { key: 'matches', label: 'Lịch thi đấu', icon: 'sports_score' },
+  { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
+]
+
+function TournamentCard({ tournament, actions, onOpen }) {
   return (
-    <article className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-bold text-slate-900">{tournament.name}</h3>
-          <p className="text-sm text-slate-500">
-            {[tournament.sport, tournament.facility].filter(Boolean).join(' • ') || '—'}
-          </p>
+    <article className="snx-card snx-stack" style={{ gap: 12 }}>
+      <div className="snx-row" style={{ alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <button type="button" onClick={onOpen} style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <h3 className="snx-card-title">{tournament.name}</h3>
+          </button>
+          <p className="snx-card-subtitle">{[tournament.sport, tournament.facility].filter(Boolean).join(' · ') || '—'}</p>
         </div>
-        <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-          {statusLabel(tournament.registrationStatus || tournament.status)}
-        </span>
+        <StatusBadge value={tournament.registrationStatus || tournament.status} />
       </div>
-      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-        <div><dt className="text-slate-500">Bắt đầu</dt><dd className="font-semibold">{date(tournament.starts)}</dd></div>
-        <div><dt className="text-slate-500">Hạn đăng ký</dt><dd className="font-semibold">{date(tournament.deadline)}</dd></div>
-        <div><dt className="text-slate-500">Lệ phí</dt><dd className="font-semibold">{tournament.entryFee == null ? 'Xem chi tiết' : money(tournament.entryFee)}</dd></div>
-        <div>
-          <dt className="text-slate-500">Đã đăng ký</dt>
-          <dd className="font-semibold">{tournament.registered ?? '—'}{tournament.capacity ? ` / ${tournament.capacity}` : ''}</dd>
-        </div>
+      <dl className="snx-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, margin: 0, fontSize: 13 }}>
+        <div><dt className="snx-muted">Bắt đầu</dt><dd style={{ margin: 0, fontWeight: 600 }}>{date(tournament.starts)}</dd></div>
+        <div><dt className="snx-muted">Hạn đăng ký</dt><dd style={{ margin: 0, fontWeight: 600 }}>{date(tournament.deadline)}</dd></div>
+        <div><dt className="snx-muted">Lệ phí</dt><dd style={{ margin: 0, fontWeight: 600 }}>{tournament.entryFee == null ? 'Xem chi tiết' : money(tournament.entryFee)}</dd></div>
+        {tournament.teamName && <div><dt className="snx-muted">Đội</dt><dd style={{ margin: 0, fontWeight: 600 }}>{tournament.teamName}</dd></div>}
       </dl>
-      {tournament.prize > 0 && <p className="text-sm text-slate-600">Tổng giải thưởng: <strong>{money(tournament.prize)}</strong></p>}
-      <div className="flex flex-wrap gap-2 pt-1">{actions}</div>
+      <div className="snx-row">
+        <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={onOpen}><span className="material-symbols-outlined">info</span>Chi tiết</button>
+        <span className="snx-spacer" />
+        {actions}
+      </div>
     </article>
+  )
+}
+
+// Chi tiết giải: các bảng đấu, giải thưởng, lịch các trận (court-schedule) và chi tiết trận
+function TournamentDetailModal({ id, onClose, onRegister }) {
+  const detail = useApi(() => getTournament(id), [id])
+  const schedule = useApi(() => getCourtSchedule(id), [id], { initialData: null })
+  const [matchId, setMatchId] = useState(null)
+  const match = useApi(() => getMatch(matchId), [matchId], { enabled: Boolean(matchId) })
+  const t = detail.data
+
+  return (
+    <div className="snx-modal-backdrop" role="presentation">
+      <div className="snx-modal snx-modal--wide" role="dialog" aria-modal="true" aria-labelledby="tournament-detail-title">
+        <div className="snx-modal-head">
+          <div>
+            <h2 id="tournament-detail-title" className="snx-card-title">{t?.name || 'Đang tải…'}</h2>
+            <p className="snx-card-subtitle">{[t?.sport, t?.facility, t?.format].filter(Boolean).join(' · ')}</p>
+          </div>
+          <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
+        </div>
+        {detail.error && <div className="snx-alert snx-alert--error">{detail.error}</div>}
+        {t && (
+          <div className="snx-stack">
+            <div className="snx-row"><StatusBadge value={t.status} /><span className="snx-muted">{date(t.starts)} – {date(t.ends)} · Hạn đăng ký {date(t.deadline)}</span></div>
+
+            <section>
+              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Nội dung thi đấu</h3>
+              <div className="snx-list">
+                {(t.children.length ? t.children : [t]).map((child) => (
+                  <div key={child.id} className="snx-list-item">
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ fontSize: 14 }}>{child.name}</strong>
+                      <div className="snx-muted">{money(child.entryFee)} · {child.registered ?? 0}{child.capacity ? `/${child.capacity}` : ''} đã đăng ký</div>
+                    </div>
+                    <StatusBadge value={child.status} />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {t.prize > 0 && <p style={{ margin: 0, fontSize: 14 }}>Tổng giải thưởng: <strong>{money(t.prize)}</strong></p>}
+
+            {schedule.data?.matches?.length > 0 && (
+              <section>
+                <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Lịch các trận</h3>
+                <div className="snx-list">
+                  {schedule.data.matches.map((m) => (
+                    <button key={m.matchId} type="button" className="snx-list-item" style={{ border: 0, borderBottom: '1px solid #eef2f1', background: 'transparent', cursor: 'pointer', textAlign: 'left' }} onClick={() => setMatchId(m.matchId)}>
+                      <span className="material-symbols-outlined" style={{ color: '#15803d' }}>sports_score</span>
+                      <div style={{ flex: 1 }}><strong style={{ fontSize: 14 }}>{m.roundName || 'Trận đấu'}</strong><div className="snx-muted">{m.courtName || 'Chưa xếp sân'} · {dateTime(m.startTime)}</div></div>
+                      <StatusBadge value={m.status} />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {matchId && match.data && (
+              <section className="snx-card" style={{ padding: 16 }}>
+                <div className="snx-row"><strong>{match.data.roundName}</strong><span className="snx-spacer" /><button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setMatchId(null)}>Đóng</button></div>
+                <p style={{ margin: '8px 0', fontSize: 15 }}>
+                  <strong>{match.data.participant1Name || 'Chờ xác định'}</strong> <span className="snx-muted">vs</span> <strong>{match.data.participant2Name || 'Chờ xác định'}</strong>
+                </p>
+                {match.data.scores?.length > 0 && <p className="snx-muted" style={{ margin: 0 }}>Tỉ số: {match.data.scores.map((s) => `${s.scoreP1}-${s.scoreP2}`).join(', ')}</p>}
+                {match.data.winnerName && <p style={{ margin: '6px 0 0', fontSize: 14 }}>Thắng: <strong>{match.data.winnerName}</strong></p>}
+                <p className="snx-muted" style={{ margin: '6px 0 0' }}>{match.data.courtName || 'Chưa xếp sân'} · {dateTime(match.data.startTime)}</p>
+              </section>
+            )}
+          </div>
+        )}
+        <div className="snx-modal-foot">
+          <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Đóng</button>
+          {onRegister && t && <button type="button" className="snx-btn snx-btn--primary" onClick={() => onRegister(t)}>Đăng ký tham gia</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RegisterModal({ target, teams, onClose, onDone }) {
+  const [categoryId, setCategoryId] = useState(target.children?.[0]?.id || target.id)
+  const [teamId, setTeamId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const children = target.children || []
+
+  const confirm = async () => {
+    setBusy(true)
+    try {
+      // POST /api/v1/tournaments/{id}/join?teamId= : trừ lệ phí và giữ trong ví
+      await joinTournament(categoryId, teamId || undefined)
+      toast.success('Đăng ký giải thành công! Lệ phí được giữ trong ví đến khi giải diễn ra.')
+      window.dispatchEvent(new Event('escrow_balance_updated'))
+      onDone()
+    } catch (error) {
+      toast.error(error?.message || 'Không đăng ký được giải.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="snx-modal-backdrop" role="presentation">
+      <div className="snx-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
+        <div className="snx-modal-head">
+          <div><h2 id="register-title" className="snx-card-title">Đăng ký: {target.name}</h2><p className="snx-card-subtitle">Lệ phí được trừ từ ví và giữ ký quỹ đến khi giải diễn ra.</p></div>
+          <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
+        </div>
+        <div className="snx-stack">
+          {children.length > 0 && (
+            <label className="snx-field">Nội dung thi đấu
+              <select className="snx-select" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                {children.map((child) => <option key={child.id} value={child.id}>{child.name} — {money(child.entryFee)}{child.capacity ? ` (${child.registered ?? 0}/${child.capacity})` : ''}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="snx-field">Đội (bắt buộc với nội dung đôi / đội)
+            <select className="snx-select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Đăng ký cá nhân</option>
+              {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+            </select>
+          </label>
+          {teams.length === 0 && <p className="snx-muted" style={{ margin: 0 }}>Chưa có đội? Tạo đội ở tab “Đội của tôi”.</p>}
+        </div>
+        <div className="snx-modal-foot">
+          <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Hủy</button>
+          <button type="button" className="snx-btn snx-btn--primary" disabled={busy} onClick={confirm}>{busy ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MyMatches() {
+  const matches = useApi(() => getMyMatches(), [], { initialData: [] })
+  if (matches.loading) return <p className="snx-muted">Đang tải…</p>
+  if (matches.error) return <div className="snx-alert snx-alert--error">{matches.error}</div>
+  if (!matches.data.length) return <div className="snx-empty"><span className="material-symbols-outlined">sports_score</span>Bạn chưa có trận đấu nào được xếp lịch.</div>
+  return (
+    <div className="snx-card">
+      <div className="snx-list">
+        {matches.data.map((m) => (
+          <div key={m.matchId} className="snx-list-item" style={{ alignItems: 'flex-start' }}>
+            <div style={{ minWidth: 92 }}><strong style={{ fontSize: 14 }}>{dateTime(m.startTime)}</strong><div className="snx-muted">{m.courtName || 'Chưa xếp sân'}</div></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong style={{ fontSize: 14 }}>{m.mySideName || 'Bạn'} <span className="snx-muted">vs</span> {m.opponentName || 'Chờ xác định'}</strong>
+              <div className="snx-muted">{[m.parentTournamentName, m.tournamentName, m.roundName].filter(Boolean).join(' · ')} · {m.facilityName}</div>
+              {m.winnerName && <div style={{ fontSize: 13, marginTop: 2 }}>Thắng: <strong>{m.winnerName}</strong></div>}
+            </div>
+            <StatusBadge value={m.status} />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
 function TournamentList() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('open')
+  const [params, setParams] = useSearchParams()
+  const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'open'
+  const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
+  const [detailId, setDetailId] = useState(null)
   const [registerTarget, setRegisterTarget] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
-  // GET /api/v1/tournaments/search?RegistrationOpen=true
+  // GET /api/v1/tournaments/search?registrationOpen=true
   const openList = useApi(() => searchTournaments({ keyword: search || undefined, registrationOpen: true, pageSize: 50 }), [search], { initialData: { items: [] } })
   // GET /api/v1/tournaments/my-registrations
   const mine = useApi(getMyRegistrations, [], { initialData: [] })
   const teams = useApi(getMyTeams, [], { initialData: [] })
-
-  // Đăng ký nằm ở bảng con, danh sách tìm kiếm là giải mẹ: so theo id giải mẹ
   const registeredIds = new Set((mine.data || []).map((t) => t.parentId))
-  const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
-  const current = tab === 'open' ? openList : mine
 
-  // Mở form đăng ký: tải chi tiết để biết các nội dung thi đấu (giải con) nếu có
   const openRegister = async (tournament) => {
     try {
-      const detail = await getTournament(tournament.id)
-      setRegisterTarget({ tournament: detail, categoryId: detail.children?.[0]?.id || detail.id, teamId: '' })
+      setRegisterTarget(tournament.children ? tournament : await getTournament(tournament.id))
+      setDetailId(null)
     } catch (error) {
       toast.error(error?.message || 'Không tải được thông tin giải.')
-    }
-  }
-
-  const confirmRegister = async () => {
-    const { categoryId, teamId } = registerTarget
-    setBusyId(categoryId)
-    try {
-      await joinTournament(categoryId, teamId || undefined)
-      toast.success('Đăng ký giải thành công! Lệ phí được giữ trong ví đến khi giải diễn ra.')
-      setRegisterTarget(null)
-      mine.refresh()
-      openList.refresh()
-      window.dispatchEvent(new Event('escrow_balance_updated'))
-    } catch (error) {
-      toast.error(error?.message || 'Không đăng ký được giải.')
-    } finally {
-      setBusyId(null)
     }
   }
 
@@ -118,136 +269,87 @@ function TournamentList() {
     }
   }
 
-  const children = registerTarget?.tournament.children || []
+  const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
+  const current = tab === 'open' ? openList : mine
+  const counts = { mine: mine.data?.length || 0 }
 
   return (
-    <div className="w-full min-h-screen text-[#1e293b] flex flex-col font-sans">
-      <div className="snx-page flex flex-col gap-6">
-        <PageHeader
-          eyebrow="Giải đấu"
-          eyebrowIcon="emoji_events"
-          title="Giải đấu"
-          subtitle="Tìm giải đang mở đăng ký và quản lý các giải bạn đã tham gia."
-        />
+    <div className="snx-page">
+      <PageHeader
+        eyebrow="Giải đấu"
+        eyebrowIcon="emoji_events"
+        title="Giải đấu & Đội"
+        subtitle="Tìm giải đang mở đăng ký, theo dõi lịch thi đấu và quản lý đội của bạn."
+      />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-2 bg-white border border-slate-200 rounded-xl p-1">
-            {[['open', 'Đang mở đăng ký'], ['mine', `Giải của tôi (${(mine.data || []).length})`]].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTab(value)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === value ? 'bg-[#15803D] text-white' : 'text-slate-600'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {tab === 'open' && (
-            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setSearch(keyword.trim()) }}>
-              <input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Tìm theo tên giải…"
-                className="px-3 py-2 rounded-lg border border-slate-200 text-sm"
-              />
-              <button type="submit" className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold">Tìm</button>
-            </form>
-          )}
-        </div>
-
-        {current.loading && <p className="text-slate-500">Đang tải…</p>}
-        {current.error && <p className="text-red-600">{current.error}</p>}
-        {!current.loading && !current.error && list.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-500">
-            {tab === 'open' ? 'Hiện chưa có giải nào mở đăng ký.' : 'Bạn chưa đăng ký giải nào.'}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {list.map((tournament) => (
-            <TournamentCard
-              key={tournament.id}
-              tournament={tournament}
-              actions={
-                tab === 'open' ? (
-                  registeredIds.has(tournament.id) ? (
-                    <span className="text-sm font-semibold text-emerald-700">Bạn đã đăng ký giải này</span>
-                  ) : (
-                    <button type="button" onClick={() => openRegister(tournament)} className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold">
-                      Đăng ký tham gia
-                    </button>
-                  )
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/qr-pass?type=tournament&tournamentId=${encodeURIComponent(tournament.id)}`)}
-                      className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold"
-                    >
-                      Vé check-in
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busyId === tournament.id}
-                      onClick={() => cancelRegister(tournament)}
-                      className="px-4 py-2 rounded-lg border border-red-200 text-red-600 text-sm font-bold disabled:opacity-50"
-                    >
-                      Hủy đăng ký
-                    </button>
-                  </>
-                )
-              }
-            />
+      <div className="snx-row" style={{ marginBottom: 16 }}>
+        <div className="snx-tabs" role="tablist" aria-label="Mục giải đấu">
+          {TABS.map((t) => (
+            <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`snx-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+              <span className="material-symbols-outlined">{t.icon}</span>{t.label}
+              {counts[t.key] > 0 && <span className="snx-tab-count">{counts[t.key]}</span>}
+            </button>
           ))}
         </div>
+        <span className="snx-spacer" />
+        {tab === 'open' && (
+          <form className="snx-row" style={{ flex: '0 1 420px' }} onSubmit={(e) => { e.preventDefault(); setSearch(keyword.trim()) }}>
+            <label className="snx-search"><span className="material-symbols-outlined">search</span><input className="snx-input" placeholder="Tìm theo tên giải…" value={keyword} onChange={(e) => setKeyword(e.target.value)} /></label>
+            <button type="submit" className="snx-btn snx-btn--secondary">Tìm</button>
+          </form>
+        )}
       </div>
 
-      {registerTarget && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
-            <h2 className="text-lg font-black">Đăng ký: {registerTarget.tournament.name}</h2>
-            {children.length > 0 && (
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-semibold">Nội dung thi đấu</span>
-                <select
-                  value={registerTarget.categoryId}
-                  onChange={(e) => setRegisterTarget({ ...registerTarget, categoryId: e.target.value })}
-                  className="px-3 py-2 rounded-lg border border-slate-200"
-                >
-                  {children.map((child) => (
-                    <option key={child.id} value={child.id}>
-                      {child.name} — {money(child.entryFee)}{child.capacity ? ` (${child.registered ?? 0}/${child.capacity})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-semibold">Đội (bắt buộc với nội dung đôi / đội)</span>
-              <select
-                value={registerTarget.teamId}
-                onChange={(e) => setRegisterTarget({ ...registerTarget, teamId: e.target.value })}
-                className="px-3 py-2 rounded-lg border border-slate-200"
-              >
-                <option value="">Đăng ký cá nhân</option>
-                {(teams.data || []).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-              </select>
-            </label>
-            <p className="text-xs text-slate-500">Lệ phí được trừ từ ví và giữ ký quỹ đến khi giải diễn ra.</p>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setRegisterTarget(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-bold">Đóng</button>
-              <button
-                type="button"
-                disabled={Boolean(busyId)}
-                onClick={confirmRegister}
-                className="px-4 py-2 rounded-lg bg-[#15803D] text-white text-sm font-bold disabled:opacity-50"
-              >
-                {busyId ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}
-              </button>
-            </div>
+      {tab === 'teams' && <TeamsPanel />}
+      {tab === 'matches' && <MyMatches />}
+
+      {(tab === 'open' || tab === 'mine') && (
+        <>
+          {current.loading && <p className="snx-muted">Đang tải…</p>}
+          {current.error && <div className="snx-alert snx-alert--error">{current.error}</div>}
+          {!current.loading && !current.error && list.length === 0 && (
+            <div className="snx-empty"><span className="material-symbols-outlined">emoji_events</span>{tab === 'open' ? 'Hiện chưa có giải nào mở đăng ký.' : 'Bạn chưa đăng ký giải nào.'}</div>
+          )}
+          <div className="snx-grid snx-grid--2">
+            {list.map((tournament) => (
+              <TournamentCard
+                key={tournament.id}
+                tournament={tournament}
+                onOpen={() => setDetailId(tab === 'mine' ? tournament.parentId : tournament.id)}
+                actions={
+                  tab === 'open' ? (
+                    registeredIds.has(tournament.id)
+                      ? <span className="snx-badge snx-badge--green">Đã đăng ký</span>
+                      : <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => openRegister(tournament)}>Đăng ký tham gia</button>
+                  ) : (
+                    <>
+                      <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={busyId === tournament.id} onClick={() => cancelRegister(tournament)}>Hủy đăng ký</button>
+                      <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => navigate(`/qr-pass?type=tournament&tournamentId=${encodeURIComponent(tournament.id)}`)}>
+                        <span className="material-symbols-outlined">qr_code_2</span>Vé check-in
+                      </button>
+                    </>
+                  )
+                }
+              />
+            ))}
           </div>
-        </div>
+        </>
+      )}
+
+      {detailId && (
+        <TournamentDetailModal
+          id={detailId}
+          onClose={() => setDetailId(null)}
+          onRegister={tab === 'open' && !registeredIds.has(detailId) ? openRegister : null}
+        />
+      )}
+      {registerTarget && (
+        <RegisterModal
+          target={registerTarget}
+          teams={teams.data || []}
+          onClose={() => setRegisterTarget(null)}
+          onDone={() => { setRegisterTarget(null); mine.refresh(); openList.refresh() }}
+        />
       )}
     </div>
   )

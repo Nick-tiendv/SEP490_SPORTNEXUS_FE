@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/SportContext.jsx'
-import { getFacilities, searchFacilities, getFacilityLocations, transformFacilityToCourt } from '../../../api/player/facilityApi.js'
+import { getFacilities, searchFacilities, getFacilityLocations, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -520,7 +520,7 @@ function MapBooking() {
   //   1. Ưu tiên tìm trong danh sách các cụm sân có sẵn. Không ép lọc theo môn/giá để tránh làm biến mất kết quả sân người chơi đang tìm kiếm!
   //   2. Nếu tên sân người chơi tìm không có trong danh mục mẫu, tự động tạo kết quả Sân Tìm Kiếm Động
   //      để Google Maps & giao diện lập tức hiển thị, ghim và dẫn đường trực tiếp đến sân đó!
-  const filteredCourts = useMemo(() => {
+  const baseFilteredCourts = useMemo(() => {
     const trimmed = query.trim()
     if (!trimmed) {
       return localizedCourts
@@ -582,6 +582,23 @@ function MapBooking() {
     }
     return [dynamicCourt]
   }, [localizedCourts, isSportActive, query, priceRange, gpsCoords])
+
+  // Lọc theo tiện ích (danh mục lấy từ GET /api/v1/master-data/amenities): sân phải có đủ các tiện ích đã chọn
+  const [amenityOptions, setAmenityOptions] = useState([])
+  const [selectedAmenities, setSelectedAmenities] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    getAmenityOptions().then((list) => !cancelled && setAmenityOptions(list)).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const toggleAmenity = (id) => setSelectedAmenities((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  const filteredCourts = useMemo(() => {
+    if (!selectedAmenities.length) return baseFilteredCourts
+    return baseFilteredCourts.filter((c) => {
+      const ids = (c.amenities || []).map((a) => String(a.id ?? a.amenityId ?? ''))
+      return selectedAmenities.every((id) => ids.includes(id))
+    })
+  }, [baseFilteredCourts, selectedAmenities])
 
   // TỰ ĐỘNG ĐỒNG BỘ HIỂN THỊ TRÊN BẢN ĐỒ KHI SEARCH (quận, tên đường hoặc tên sân)
   useEffect(() => {
@@ -1028,6 +1045,15 @@ function MapBooking() {
 
           {/* Filter card */}
           <section className="mb-card" aria-label="Tìm kiếm và lọc sân">
+            {amenityOptions.length > 0 && (
+              <div className="snx-row" style={{ gap: 6, marginBottom: 12 }} aria-label="Lọc theo tiện ích">
+                <span className="snx-muted" style={{ fontWeight: 600 }}>Tiện ích:</span>
+                {amenityOptions.map((a) => (
+                  <button key={a.id} type="button" aria-pressed={selectedAmenities.includes(a.id)} className={`snx-btn snx-btn--sm ${selectedAmenities.includes(a.id) ? 'snx-btn--primary' : 'snx-btn--secondary'}`} onClick={() => toggleAmenity(a.id)}>{a.name}</button>
+                ))}
+                {selectedAmenities.length > 0 && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setSelectedAmenities([])}>Bỏ lọc</button>}
+              </div>
+            )}
 
             {/* Thanh tìm kiếm địa chỉ / tên sân */}
             <div className="mb-search">
