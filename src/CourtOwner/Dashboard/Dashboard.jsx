@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getOwnerBookings, getOwnerDashboard } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 
 // Màu cột: #059669 đạt tương phản >= 3:1 trên nền trắng (#10B981 chỉ 2.47:1).
 const BAR_COLOR = '#059669'
@@ -203,7 +204,7 @@ const PERIOD_OPTIONS = [7, 30, 90]
 const TODAY_LIST_LIMIT = 6
 
 export default function Dashboard() {
-  const { facilityId, facility, facilities, wallet, profile } = useOwnerContext()
+  const { facilityId, facility, facilities, wallet, profile, loading: layoutLoading } = useOwnerContext()
   const [periodDays, setPeriodDays] = useState(30)
 
   // Dữ liệu gắn với khóa (cơ sở + kỳ) để không hiện nhầm số liệu cũ khi đổi cơ sở / kỳ.
@@ -340,6 +341,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {!layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="nhận khách đặt sân" /></div>}
 
       {/* 4 Core Financial & Operation Metric Cards */}
       <div

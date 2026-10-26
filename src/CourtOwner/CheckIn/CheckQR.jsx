@@ -4,6 +4,7 @@ import jsQR from 'jsqr'
 import { checkInBooking, getOwnerBookings, scanQrCode } from '../../api/owner'
 import { pick } from '../../api/owner/request.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const todayVN = () => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE }).format(new Date())
@@ -409,7 +410,7 @@ export default function CheckQR() {
         {/* Right Column: Confirm & Result */}
         <div style={{ ...panelStyle, borderRadius: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           {!facilityId ? (
-            <div style={{ textAlign: 'center', color: '#475569', fontWeight: 600 }}>Chưa có cơ sở để check-in.</div>
+            <NoFacilityState what="check-in khách" />
           ) : pendingCode ? (
             <div>
               <div style={{ fontSize: '12px', fontWeight: 600, color: '#1D4ED8', textTransform: 'uppercase', marginBottom: '8px' }}>Đã đọc được mã vé</div>

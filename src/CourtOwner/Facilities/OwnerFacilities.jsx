@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
@@ -293,7 +293,12 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
 export default function OwnerFacilities() {
   const { facilities, facilityId, selectFacility, refreshFacilities, loading } = useOwnerContext()
   const amenities = useApi(() => getAmenities(), [], { initialData: [] })
-  const [creating, setCreating] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [creating, setCreatingState] = useState(() => searchParams.get('create') === '1')
+  const setCreating = (open) => {
+    setCreatingState(open)
+    if (!open && searchParams.has('create')) setSearchParams({}, { replace: true })
+  }
 
   return (
     <div className="snx-stack">

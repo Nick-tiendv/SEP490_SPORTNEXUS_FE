@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { createCourt, deleteCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
+import CourtFormModal from './CourtFormModal.jsx'
 
 // Màu & icon theo môn (scoringRule của master-data/sports).
 const SPORT_STYLES = {
@@ -89,6 +91,7 @@ function toCourt(raw) {
     isIndoor: raw.isIndoor ?? null,
     surfaceType: raw.surfaceType ?? null,
     maxPlayers: raw.maxPlayers ?? null,
+    teamSize: raw.teamSize ?? null,
   }
 }
 
@@ -116,6 +119,7 @@ const courtPayload = (court, changes) => ({
   isIndoor: court.isIndoor,
   surfaceType: court.surfaceType,
   maxPlayers: court.maxPlayers,
+  teamSize: court.teamSize,
   ...changes,
 })
 
@@ -137,11 +141,8 @@ export default function CourtManage() {
 
   const [activeTab, setActiveTab] = useState('zones') // 'zones' | 'pricing' | 'timegrid'
   const [selectedZoneId, setSelectedZoneId] = useState(null)
-  const [showAddCourtModal, setShowAddCourtModal] = useState(false)
-  const [newCourtName, setNewCourtName] = useState('')
-  const [newCourtFloor, setNewCourtFloor] = useState('')
-  const [newCourtSportId, setNewCourtSportId] = useState('')
-  const [newCourtPrice, setNewCourtPrice] = useState('')
+  // Hộp thoại thêm / sửa sân: null | { court (null = thêm mới), sportId, price }
+  const [courtForm, setCourtForm] = useState(null)
 
   // Giá chỉnh tay theo khu: { [categoryId]: { basePrice, peakPrice } }
   const [zonePrices, setZonePrices] = useState({})
@@ -242,36 +243,26 @@ export default function CourtManage() {
     }
   }
 
-  // Mở modal thêm sân: mặc định môn của khu đang chọn (hoặc chọn môn mới)
+  // Mở hộp thoại thêm sân: mặc định môn của khu đang chọn (hoặc môn chưa có khu)
   const openAddCourtModal = (sportId) => {
     const sportZone = zones.find(zone => zone.id === sportId)
-    setNewCourtSportId(sportId || sports[0]?.id || '')
-    setNewCourtPrice(sportZone ? String(sportZone.basePrice) : '')
-    setShowAddCourtModal(true)
+    setCourtForm({ court: null, sportId: sportId || sports[0]?.id || '', price: sportZone ? sportZone.basePrice : '' })
   }
+  const openEditCourtModal = (court) => setCourtForm({ court, sportId: court.categoryId, price: court.defaultPrice })
 
-  // Thêm sân mới: POST /facilities/{facilityId}/courts
-  const handleAddCourt = async (e) => {
-    e.preventDefault()
-    if (!newCourtName.trim() || !newCourtSportId || busyId) return
-    setBusyId('add-court')
+  // Thêm: POST /facilities/{facilityId}/courts · Sửa: PUT /facilities/{facilityId}/courts/{courtId}
+  const handleSaveCourt = async (payload) => {
+    if (busyId) return
+    const editing = courtForm?.court
+    setBusyId('court-form')
     try {
-      await createCourt(facilityId, {
-        categoryId: newCourtSportId,
-        name: newCourtName.trim(),
-        defaultPrice: Number(newCourtPrice) || 0,
-        courtType: null,
-        isIndoor: null,
-        surfaceType: newCourtFloor.trim() || null,
-        maxPlayers: null,
-      })
+      if (editing) await updateCourt(facilityId, editing.id, { ...courtPayload(editing), ...payload, status: editing.status })
+      else await createCourt(facilityId, payload)
       await reloadCourts()
       syncLayout()
-      setSelectedZoneId(newCourtSportId)
-      showToast(`Đã thêm sân "${newCourtName.trim()}"!`)
-      setNewCourtName('')
-      setNewCourtFloor('')
-      setShowAddCourtModal(false)
+      setSelectedZoneId(payload.categoryId)
+      showToast(editing ? `Đã cập nhật ${payload.name}.` : `Đã thêm sân "${payload.name}".`)
+      setCourtForm(null)
     } catch (error) {
       showToast(error.message, 'error')
     } finally {
@@ -383,18 +374,8 @@ export default function CourtManage() {
 
   if (loading || loadError || !facility) {
     return (
-      <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{ background: 'rgba(255, 255, 255, 0.94)', borderRadius: '20px', padding: '48px 28px', textAlign: 'center', boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '44px', color: loadError ? '#EF4444' : '#10B981' }}>
-            {loading ? 'progress_activity' : loadError ? 'error' : 'domain_add'}
-          </span>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0F172A', margin: '12px 0 6px' }}>
-            {loading ? 'Đang tải dữ liệu cơ sở...' : loadError ? 'Không thể tải dữ liệu cơ sở' : 'Bạn chưa có cơ sở nào'}
-          </h2>
-          <p style={{ margin: 0, color: '#475569', fontSize: '14px', fontWeight: 600 }}>
-            {loading ? 'Vui lòng chờ trong giây lát.' : loadError || 'Hãy đăng ký cơ sở thể thao và chờ quản trị viên phê duyệt để bắt đầu quản lý sân.'}
-          </p>
-        </div>
+      <div className="snx-page">
+        <NoFacilityState loading={loading} error={loadError} what="thêm sân và đặt giá" />
       </div>
     )
   }
@@ -410,6 +391,7 @@ export default function CourtManage() {
           : undefined}
         title="Sân & giá"
         subtitle={`${facility.name} • ${zones.length} khu vực • ${activeCourts}/${totalCourts} sân đang phục vụ`}
+        actions={<button type="button" className="snx-btn snx-btn--primary" onClick={() => openAddCourtModal(selectedZone?.id || '')}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>Thêm sân</button>}
       />
 
       <div className="snx-tabs" role="tablist" aria-label="Mục quản lý sân" style={{ marginBottom: 20 }}>
@@ -812,6 +794,16 @@ export default function CourtManage() {
                             {isActive ? 'pause_circle' : 'play_circle'}
                           </span>
                           {isActive ? 'Tạm ngưng sân' : 'Mở lại sân'}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="snx-btn snx-btn--secondary snx-btn--sm"
+                          onClick={() => openEditCourtModal(court)}
+                          disabled={busyId === court.id}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>edit</span>
+                          Sửa
                         </button>
 
                         <button
@@ -1520,152 +1512,16 @@ export default function CourtManage() {
         </div>
       )}
 
-      {/* Modal: Thêm Sân Con */}
-      {showAddCourtModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: '16px',
-              maxWidth: '480px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>
-                Thêm sân mới
-              </h3>
-              <button
-                onClick={() => setShowAddCourtModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCourt}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Bộ môn (Khu)
-                </label>
-                <select
-                  required
-                  value={newCourtSportId}
-                  onChange={(e) => setNewCourtSportId(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', background: '#FFFFFF' }}
-                >
-                  {sports.map((sport) => (
-                    <option key={sport.id} value={sport.id}>{sport.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Tên sân con (VD: Sân A6 - Sân thảm thi đấu)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nhập tên sân..."
-                  value={newCourtName}
-                  onChange={(e) => setNewCourtName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '14px',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Giá mặc định (VND/giờ)
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  step="1000"
-                  placeholder="VD: 150000"
-                  value={newCourtPrice}
-                  onChange={(e) => setNewCourtPrice(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Loại mặt sàn / trang thiết bị
-                </label>
-                <input
-                  type="text"
-                  placeholder="VD: Thảm Yonex BWF xanh lá chống trượt"
-                  value={newCourtFloor}
-                  onChange={(e) => setNewCourtFloor(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '14px',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCourtModal(false)}
-                  style={{
-                    padding: '10px 18px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    background: '#FFFFFF',
-                    color: '#475569',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={busyId === 'add-court'}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#10B981',
-                    color: '#FFFFFF',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {busyId === 'add-court' ? 'Đang thêm...' : 'Xác nhận thêm sân'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {courtForm && (
+        <CourtFormModal
+          court={courtForm.court}
+          sports={sports}
+          defaultSportId={courtForm.sportId}
+          defaultPrice={courtForm.price}
+          busy={busyId === 'court-form'}
+          onClose={() => setCourtForm(null)}
+          onSubmit={handleSaveCourt}
+        />
       )}
     </div>
   )
