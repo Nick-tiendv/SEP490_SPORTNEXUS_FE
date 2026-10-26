@@ -1,8 +1,14 @@
+import apiClient, { normalizeApiError } from '../apiClient.js'
+
 /**
- * Service quản lý yêu cầu rút tiền của role Player và duyệt bởi role Admin
- * Quy định cốt lõi:
- * - Số dư tài khoản của Player phải có tối thiểu 50.000đ (phí duy trì tài khoản bắt buộc)
- * - Số tiền tối đa có thể rút = availableBalance - 50.000đ
+ * Service quản lý yêu cầu rút tiền và tài khoản ngân hàng của role Player
+ * Backend API:
+ * - GET  /api/v1/wallet/withdrawals
+ * - POST /api/v1/wallet/withdrawals
+ * - POST /api/v1/wallet/withdrawals/{id}/cancel
+ * - GET  /api/v1/wallet/bank-account
+ * - PUT  /api/v1/wallet/bank-account
+ * - GET  /api/v1/wallet/transactions/{transactionId}
  */
 
 export const MIN_MAINTENANCE_FEE = 50000 // 50.000đ phí duy trì tài khoản Player
@@ -11,6 +17,7 @@ export const WITHDRAW_STATUS = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
 }
 
 export const POPULAR_BANKS = [
@@ -29,288 +36,241 @@ export const formatVND = (val) => new Intl.NumberFormat('vi-VN').format(Number(v
 
 const STORAGE_KEY = 'sportnexus_player_withdraw_requests'
 
-const INITIAL_REQUESTS = [
-  {
-    id: 'WD-20261022-001',
-    player: {
-      name: 'Minh Minh Minh',
-      email: 'minh.minh@sportnexus.vn',
-      phone: '0908 123 456',
-      role: 'Player',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop',
-    },
-    amount: 150000,
-    playerBalanceBefore: 250000,
-    maintenanceFeeHeld: 50000,
-    remainingBalance: 100000,
-    bank: {
-      bankName: 'Vietcombank (VCB)',
-      accountNumber: '0071001234567',
-      accountHolder: 'MINH MINH MINH',
-    },
-    createdAt: '2026-10-22 14:30:00',
-    status: 'PENDING',
-    note: 'Rút tiền hoàn cọc trận đấu ngày 21/10',
-  },
-  {
-    id: 'WD-20261022-002',
-    player: {
-      name: 'Hoàng Nam',
-      email: 'hoang.nam.badminton@gmail.com',
-      phone: '0912 345 678',
-      role: 'Player',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop',
-    },
-    amount: 80000,
-    playerBalanceBefore: 130000,
-    maintenanceFeeHeld: 50000,
-    remainingBalance: 50000,
-    bank: {
-      bankName: 'Techcombank (TCB)',
-      accountNumber: '19036789102030',
-      accountHolder: 'HOANG NAM',
-    },
-    createdAt: '2026-10-22 15:10:00',
-    status: 'PENDING',
-    note: 'Rút số dư sau giải đấu giao hữu',
-  },
-  {
-    id: 'WD-20261021-098',
-    player: {
-      name: 'Đức Trần',
-      email: 'duc_tran92@outlook.com',
-      phone: '0938 987 654',
-      role: 'Player',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop',
-    },
-    amount: 200000,
-    playerBalanceBefore: 350000,
-    maintenanceFeeHeld: 50000,
-    remainingBalance: 150000,
-    bank: {
-      bankName: 'MB Bank (Quân Đội)',
-      accountNumber: '0888999888',
-      accountHolder: 'TRAN DUC',
-    },
-    createdAt: '2026-10-21 09:20:00',
-    status: 'APPROVED',
-    approvedAt: '2026-10-21 10:05:00',
-    adminNote: 'Đã chuyển khoản Napas 24/7 thành công. Mã FT: FT2610219842',
-  },
-  {
-    id: 'WD-20261020-045',
-    player: {
-      name: 'Tuấn Kiệt',
-      email: 'tuankiet.sports@gmail.com',
-      phone: '0977 112 233',
-      role: 'Player',
-      avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=120&h=120&fit=crop',
-    },
-    amount: 100000,
-    playerBalanceBefore: 160000,
-    maintenanceFeeHeld: 50000,
-    remainingBalance: 60000,
-    bank: {
-      bankName: 'ACB (Á Châu)',
-      accountNumber: '246813579',
-      accountHolder: 'TUAN KIET',
-    },
-    createdAt: '2026-10-20 16:45:00',
-    status: 'REJECTED',
-    rejectedAt: '2026-10-20 17:15:00',
-    rejectReason: 'Tên chủ tài khoản ngân hàng không khớp với họ tên đã xác minh tài khoản.',
-  },
-]
-
 /**
- * Lấy danh sách tất cả yêu cầu rút tiền
+ * Lấy thông tin tài khoản ngân hàng liên kết của Player
+ * GET /api/v1/wallet/bank-account
+ * @returns {Promise<{ bankName: string, bankAccountNumber: string, bankAccountHolder: string }>}
  */
-export function getWithdrawalRequests() {
+export async function getBankAccount() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_REQUESTS))
-      return INITIAL_REQUESTS
+    const response = await apiClient.get('/api/v1/wallet/bank-account')
+    const body = response.data
+    return body?.data || body?.result || body || null
+  } catch (error) {
+    console.warn('[withdrawApi] Không thể lấy tài khoản ngân hàng từ BE:', error)
+    try {
+      const saved = localStorage.getItem('sportnexus_player_bank_account')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
     }
-    return JSON.parse(saved)
-  } catch (e) {
-    console.error('[withdrawApi] Lỗi đọc yêu cầu rút tiền:', e)
-    return INITIAL_REQUESTS
   }
 }
 
 /**
- * Tạo yêu cầu rút tiền mới cho Player
+ * Cập nhật thông tin tài khoản ngân hàng liên kết của Player
+ * PUT /api/v1/wallet/bank-account
+ * @param {Object} payload
+ * @param {string} payload.bankName
+ * @param {string} payload.bankAccountNumber
+ * @param {string} payload.bankAccountHolder
+ * @returns {Promise<Object>}
  */
-export function createWithdrawalRequest({
-  amount,
-  bankName,
-  accountNumber,
-  accountHolder,
-  note = '',
-  currentBalance = 0,
-  userProfile = null,
-}) {
+export async function updateBankAccount(payload) {
+  if (!payload || !payload.bankAccountNumber) {
+    throw new Error('Số tài khoản không được để trống')
+  }
+  try {
+    const bodyPayload = {
+      bankName: payload.bankName || 'Vietcombank',
+      bankAccountNumber: String(payload.bankAccountNumber).trim(),
+      bankAccountHolder: String(payload.bankAccountHolder || '').trim().toUpperCase(),
+    }
+    const response = await apiClient.put('/api/v1/wallet/bank-account', bodyPayload)
+    const body = response.data
+    try {
+      localStorage.setItem('sportnexus_player_bank_account', JSON.stringify(bodyPayload))
+    } catch {}
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn('[withdrawApi] Lỗi cập nhật tài khoản ngân hàng:', error)
+    try {
+      localStorage.setItem('sportnexus_player_bank_account', JSON.stringify(payload))
+    } catch {}
+    throw normalizeApiError(error)
+  }
+}
+
+/**
+ * Lấy danh sách yêu cầu rút tiền của Player
+ * Hỗ trợ cả đồng bộ (cho Admin UI) và Promise (cho async callers)
+ * GET /api/v1/wallet/withdrawals?page=1&pageSize=20
+ * @param {Object} [params]
+ * @returns {Array & Promise<Array>}
+ */
+export function getWithdrawalRequests(params = {}) {
+  let localData = []
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    localData = raw ? JSON.parse(raw) : []
+  } catch {
+    localData = []
+  }
+
+  const result = [...localData]
+
+  const promise = (async () => {
+    try {
+      const response = await apiClient.get('/api/v1/wallet/withdrawals', { params })
+      const body = response.data
+      const data = body?.data || body?.result || body
+      let items = []
+      if (data && Array.isArray(data.items)) items = data.items
+      else if (Array.isArray(data)) items = data
+      else if (Array.isArray(body)) items = body
+      else items = localData
+
+      if (items.length > 0) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+        } catch {}
+      }
+      return items
+    } catch (error) {
+      console.warn('[withdrawApi] API /api/v1/wallet/withdrawals lỗi, dùng fallback localStorage:', error)
+      return localData
+    }
+  })()
+
+  // Make the returned array a Thenable
+  result.then = promise.then.bind(promise)
+  result.catch = promise.catch.bind(promise)
+  result.finally = promise.finally.bind(promise)
+
+  return result
+}
+
+/**
+ * Phê duyệt yêu cầu rút tiền (Admin)
+ * @param {string} id
+ * @param {string} [adminNote]
+ */
+export function approveWithdrawalRequest(id, adminNote = '') {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    const updated = list.map((r) =>
+      r.id === id ? { ...r, status: WITHDRAW_STATUS.APPROVED, adminNote, approvedAt: new Date().toISOString() } : r
+    )
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    window.dispatchEvent(new CustomEvent('sportnexus_withdraw_requests_updated', { detail: { id, status: 'APPROVED' } }))
+    return true
+  } catch (e) {
+    console.warn('[withdrawApi] Lỗi approveWithdrawalRequest:', e)
+    throw e
+  }
+}
+
+/**
+ * Từ chối yêu cầu rút tiền (Admin)
+ * @param {string} id
+ * @param {string} [rejectReason]
+ */
+export function rejectWithdrawalRequest(id, rejectReason = '') {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const list = raw ? JSON.parse(raw) : []
+    const updated = list.map((r) =>
+      r.id === id ? { ...r, status: WITHDRAW_STATUS.REJECTED, rejectReason, rejectedAt: new Date().toISOString() } : r
+    )
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+    window.dispatchEvent(new CustomEvent('sportnexus_withdraw_requests_updated', { detail: { id, status: 'REJECTED' } }))
+    return true
+  } catch (e) {
+    console.warn('[withdrawApi] Lỗi rejectWithdrawalRequest:', e)
+    throw e
+  }
+}
+
+/**
+ * Tạo yêu cầu rút tiền mới
+ * POST /api/v1/wallet/withdrawals
+ * @param {Object} payload
+ * @param {number} payload.amount - Số tiền muốn rút
+ * @param {Object} [payload.bank] - Thông tin ngân hàng nhận
+ * @returns {Promise<Object>}
+ */
+export async function createWithdrawalRequest({ amount, bank, note }) {
   const numAmount = Number(amount)
   if (!numAmount || numAmount <= 0) {
-    throw new Error('Số tiền yêu cầu rút không hợp lệ.')
+    throw new Error('Số tiền rút phải lớn hơn 0đ')
   }
-
-  if (currentBalance < MIN_MAINTENANCE_FEE) {
-    throw new Error(
-      `Số dư của bạn (${formatVND(currentBalance)}đ) không đủ mức tối thiểu ${formatVND(
-        MIN_MAINTENANCE_FEE
-      )}đ (phí duy trì tài khoản Player bắt buộc).`
-    )
-  }
-
-  const maxWithdrawable = Math.max(0, currentBalance - MIN_MAINTENANCE_FEE)
-  if (numAmount > maxWithdrawable) {
-    throw new Error(
-      `Số tiền yêu cầu rút (${formatVND(numAmount)}đ) vượt quá hạn mức tối đa cho phép (${formatVND(
-        maxWithdrawable
-      )}đ). Bạn phải giữ lại tối thiểu ${formatVND(MIN_MAINTENANCE_FEE)}đ làm phí duy trì tài khoản.`
-    )
-  }
-
-  if (!bankName || !accountNumber || !accountHolder) {
-    throw new Error('Vui lòng điền đầy đủ thông tin ngân hàng thụ hưởng (Ngân hàng, Số tài khoản, Tên chủ thẻ).')
-  }
-
-  const newId = `WD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`
-  const remaining = currentBalance - numAmount
-
-  const newReq = {
-    id: newId,
-    player: {
-      name: userProfile?.name || 'Minh Minh Minh',
-      email: userProfile?.email || 'player@sportnexus.vn',
-      phone: userProfile?.phone || '0908 123 456',
-      role: 'Player',
-      avatar: userProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop',
-    },
-    amount: numAmount,
-    playerBalanceBefore: currentBalance,
-    maintenanceFeeHeld: MIN_MAINTENANCE_FEE,
-    remainingBalance: remaining,
-    bank: {
-      bankName,
-      accountNumber: String(accountNumber).trim(),
-      accountHolder: String(accountHolder).trim().toUpperCase(),
-    },
-    createdAt: new Date().toLocaleString('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }),
-    status: WITHDRAW_STATUS.PENDING,
-    note: note ? note.trim() : 'Yêu cầu rút tiền về tài khoản ngân hàng cá nhân',
-  }
-
-  const currentList = getWithdrawalRequests()
-  const updatedList = [newReq, ...currentList]
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
-    // Trừ số dư khả dụng và ghi nhận tạm giữ
-    const newAvail = Math.max(0, currentBalance - numAmount)
-    localStorage.setItem('available_balance', String(newAvail))
-    localStorage.setItem('escrow_balance', String(newAvail))
-    window.dispatchEvent(new Event('sportnexus_withdraw_requests_updated'))
-    window.dispatchEvent(new Event('escrow_balance_updated'))
-  } catch (e) {
-    console.error(e)
-  }
+    const response = await apiClient.post('/api/v1/wallet/withdrawals', {
+      amount: numAmount,
+    })
+    const body = response.data
+    const resData = body?.data || body?.result || body
 
-  return newReq
+    // Cập nhật ngầm vào localStorage để đồng bộ offline
+    try {
+      const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+      const newReq = {
+        id: resData?.id || `WD-${Date.now()}`,
+        amount: numAmount,
+        bank: bank || { bankName: 'Vietcombank', accountNumber: '•••' },
+        createdAt: new Date().toISOString(),
+        status: resData?.status || 'PENDING',
+        note: note || '',
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([newReq, ...existing]))
+    } catch {}
+
+    return resData
+  } catch (error) {
+    console.warn('[withdrawApi] Lỗi khi tạo yêu cầu rút tiền:', error)
+    throw normalizeApiError(error)
+  }
 }
 
 /**
- * Admin duyệt yêu cầu rút tiền
+ * Hủy yêu cầu rút tiền đang chờ duyệt
+ * POST /api/v1/wallet/withdrawals/{id}/cancel
+ * @param {string} id - UUID yêu cầu rút
+ * @returns {Promise<Object>}
  */
-export function approveWithdrawalRequest(requestId, adminNote = '') {
-  const currentList = getWithdrawalRequests()
-  const target = currentList.find((r) => r.id === requestId)
-  if (!target) {
-    throw new Error(`Không tìm thấy yêu cầu rút tiền #${requestId}`)
+export async function cancelWithdrawalRequest(id) {
+  if (!id) throw new Error('ID yêu cầu rút tiền không được để trống')
+  try {
+    const response = await apiClient.post(`/api/v1/wallet/withdrawals/${id}/cancel`)
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn(`[withdrawApi] Lỗi hủy yêu cầu rút ${id}:`, error)
+    throw normalizeApiError(error)
   }
-
-  if (target.status !== WITHDRAW_STATUS.PENDING) {
-    throw new Error(`Yêu cầu #${requestId} đã ở trạng thái ${target.status}, không thể duyệt lại.`)
-  }
-
-  const updatedList = currentList.map((r) => {
-    if (r.id === requestId) {
-      return {
-        ...r,
-        status: WITHDRAW_STATUS.APPROVED,
-        approvedAt: new Date().toLocaleString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
-        adminNote: adminNote || 'Đã duyệt chi và chuyển khoản thành công tới tài khoản ngân hàng của Player.',
-      }
-    }
-    return r
-  })
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
-  window.dispatchEvent(new Event('sportnexus_withdraw_requests_updated'))
-  return true
 }
 
 /**
- * Admin từ chối yêu cầu rút tiền
+ * Xem chi tiết giao dịch ví theo ID
+ * GET /api/v1/wallet/transactions/{transactionId}
+ * @param {string} transactionId
+ * @returns {Promise<Object>}
  */
-export function rejectWithdrawalRequest(requestId, rejectReason = '') {
-  const currentList = getWithdrawalRequests()
-  const target = currentList.find((r) => r.id === requestId)
-  if (!target) {
-    throw new Error(`Không tìm thấy yêu cầu rút tiền #${requestId}`)
-  }
-
-  if (target.status !== WITHDRAW_STATUS.PENDING) {
-    throw new Error(`Yêu cầu #${requestId} đã ở trạng thái ${target.status}, không thể từ chối.`)
-  }
-
-  const reason = rejectReason ? rejectReason.trim() : 'Yêu cầu không đáp ứng điều kiện hoặc thông tin ngân hàng không hợp lệ.'
-
-  const updatedList = currentList.map((r) => {
-    if (r.id === requestId) {
-      return {
-        ...r,
-        status: WITHDRAW_STATUS.REJECTED,
-        rejectedAt: new Date().toLocaleString('vi-VN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
-        rejectReason: reason,
-      }
-    }
-    return r
-  })
-
-  // Hoàn tiền lại vào ví của người chơi
+export async function getTransactionById(transactionId) {
+  if (!transactionId) return null
   try {
-    const curBalance = Number(localStorage.getItem('available_balance') || target.remainingBalance || 50000)
-    const refundedBalance = curBalance + Number(target.amount)
-    localStorage.setItem('available_balance', String(refundedBalance))
-    localStorage.setItem('escrow_balance', String(refundedBalance))
-  } catch (e) {}
+    const response = await apiClient.get(`/api/v1/wallet/transactions/${transactionId}`)
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn(`[withdrawApi] Lỗi xem giao dịch ${transactionId}:`, error)
+    throw normalizeApiError(error)
+  }
+}
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
-  window.dispatchEvent(new Event('sportnexus_withdraw_requests_updated'))
-  window.dispatchEvent(new Event('escrow_balance_updated'))
-  return true
+export default {
+  MIN_MAINTENANCE_FEE,
+  WITHDRAW_STATUS,
+  POPULAR_BANKS,
+  formatVND,
+  getBankAccount,
+  updateBankAccount,
+  getWithdrawalRequests,
+  createWithdrawalRequest,
+  cancelWithdrawalRequest,
+  getTransactionById,
+  approveWithdrawalRequest,
+  rejectWithdrawalRequest,
 }

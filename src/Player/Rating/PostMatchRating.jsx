@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { rateFairPlay, getMyFairPlay } from '../../api/player/lfgApi.js'
+import {
+  getPendingFairPlayRatings,
+  checkFacilityReviewEligibility,
+  createFacilityReview,
+  rateFacility,
+} from '../../api/reviewApi.js'
 
 function PostMatchRating() {
   const navigate = useNavigate()
@@ -96,6 +102,115 @@ function PostMatchRating() {
       })
       .catch((err) => console.warn('[PostMatchRating] Không thể lấy điểm Fair Play:', err))
   }, [])
+
+  /* ------------------- Pending Fair Play Ratings (GET /api/v1/fair-play/pending-ratings) ------------------- */
+  const [pendingRatings, setPendingRatings] = useState([])
+  const [loadingPending, setLoadingPending] = useState(false)
+
+  const loadPendingRatings = async () => {
+    setLoadingPending(true)
+    try {
+      const data = await getPendingFairPlayRatings()
+      if (Array.isArray(data)) {
+        setPendingRatings(data)
+      }
+    } catch (err) {
+      console.warn('[PostMatchRating] Không thể tải danh sách pending ratings:', err)
+    } finally {
+      setLoadingPending(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPendingRatings()
+  }, [])
+
+  /* ------------------- Tab Switcher: Người chơi (Fair Play) vs Cơ sở (Facility) ------------------- */
+  const [activeRatingTab, setActiveRatingTab] = useState('player') // 'player' | 'facility'
+
+  /* ------------------- Đánh giá cơ sở thể thao ------------------- */
+  const currentFacilityId = checkoutSession?.facilityId || checkoutSession?.facility?.id || 'fac-bwf-01'
+  const currentFacilityName = checkoutSession?.courtName || 'Sân Cầu Lông BWF Pro 01'
+  const [facilityRating, setFacilityRating] = useState(5)
+  const [facilityHoverRating, setFacilityHoverRating] = useState(0)
+  const [facilityComment, setFacilityComment] = useState('')
+  const [facilityEligibility, setFacilityEligibility] = useState({ isEligible: true, message: '' })
+  const [checkingEligibility, setCheckingEligibility] = useState(false)
+  const [submittingFacilityReview, setSubmittingFacilityReview] = useState(false)
+  const [submittedFacilityReviews, setSubmittedFacilityReviews] = useState([])
+
+  // Kiểm tra điều kiện đánh giá cơ sở: GET /api/v1/facility-reviews/eligibility/{facilityId}
+  useEffect(() => {
+    if (currentFacilityId) {
+      setCheckingEligibility(true)
+      checkFacilityReviewEligibility(currentFacilityId)
+        .then((res) => {
+          if (res) setFacilityEligibility(res)
+        })
+        .catch((err) => console.warn('[PostMatchRating] Lỗi kiểm tra eligibility facility:', err))
+        .finally(() => setCheckingEligibility(false))
+    }
+  }, [currentFacilityId])
+
+  // Gửi đánh giá cơ sở: POST /api/v1/facility-reviews hoặc POST /api/v1/reviews/facility
+  const handleSubmitFacilityReview = async (e) => {
+    if (e) e.preventDefault()
+    if (!facilityRating || facilityRating < 1) {
+      triggerToast('⚠️ Vui lòng chọn số sao đánh giá cơ sở (1 - 5 sao)!')
+      return
+    }
+    if (!facilityComment || facilityComment.trim().length < 10) {
+      triggerToast('⚠️ Vui lòng viết nhận xét tối thiểu 10 ký tự cho cơ sở!')
+      return
+    }
+
+    setSubmittingFacilityReview(true)
+    try {
+      await createFacilityReview({
+        facilityId: currentFacilityId,
+        rating: facilityRating,
+        comment: facilityComment.trim(),
+      })
+      triggerToast('🎉 Đã gửi đánh giá cơ sở thể thao thành công!')
+      setSubmittedFacilityReviews((prev) => [
+        {
+          id: Date.now(),
+          facilityName: currentFacilityName,
+          rating: facilityRating,
+          comment: facilityComment.trim(),
+          createdAt: 'Vừa xong',
+        },
+        ...prev,
+      ])
+      setFacilityComment('')
+      setFacilityRating(5)
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể gửi đánh giá cơ sở'}`)
+    } finally {
+      setSubmittingFacilityReview(false)
+    }
+  }
+
+  // Chọn trận từ danh sách Pending Ratings
+  const handleSelectPendingRating = (item) => {
+    if (!item) return
+    const matchSession = {
+      facilityId: item.facilityId || currentFacilityId,
+      courtId: item.courtId || 'Court 1',
+      courtName: item.courtName || item.facilityName || 'Sân thể thao',
+      sport: item.sport || 'Cầu lông',
+      checkInDone: true,
+      checkInTime: item.matchTime || '10:00',
+      contextId: item.contextId || item.bookingId || item.lfgId || `match_${item.id || Date.now()}`,
+      coPlayers: item.coPlayers && item.coPlayers.length > 0 ? item.coPlayers : defaultCoPlayers,
+    }
+    setCheckoutSession(matchSession)
+    if (matchSession.coPlayers && matchSession.coPlayers.length > 0) {
+      setCoPlayers(matchSession.coPlayers)
+      setSelectedPlayerId(matchSession.coPlayers[0]?.id || '')
+    }
+    triggerToast(`Đã chọn trận: ${matchSession.courtName} để chấm điểm!`)
+  }
 
   // Danh sách ID người chơi đã được đánh giá trong phiên này
   const [reviewedPlayers, setReviewedPlayers] = useState(() => {
@@ -531,8 +646,146 @@ function PostMatchRating() {
         </div>
       </div>
 
-      {/* ===================== TRƯỜNG HỢP 1: CHƯA CHECK-IN ===================== */}
-      {!isEligibleToRate && (
+      {/* ===================== BANNER: TRẬN ĐẤU ĐANG CHỜ CHẤM FAIR PLAY (GET /api/v1/fair-play/pending-ratings) ===================== */}
+      {pendingRatings.length > 0 && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)',
+            border: '1.5px solid #86EFAC',
+            borderRadius: '16px',
+            padding: '16px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: '#15803D',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                sports_score
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#14532D' }}>
+                Bạn có {pendingRatings.length} trận đấu đang chờ chấm điểm Fair Play!
+              </div>
+              <div style={{ fontSize: '12px', color: '#166534' }}>
+                GET /api/v1/fair-play/pending-ratings • Hoàn thành đánh giá giúp nâng cao uy tín thể thao cộng đồng.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {pendingRatings.slice(0, 3).map((item, idx) => (
+              <button
+                key={item.id || idx}
+                type="button"
+                onClick={() => handleSelectPendingRating(item)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '10px',
+                  background: '#ffffff',
+                  border: '1px solid #86EFAC',
+                  color: '#15803D',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span>{item.courtName || item.facilityName || `Trận #${idx + 1}`}</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                  arrow_forward
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== TAB CHUYỂN ĐỔI: NGƯỜI CHƠI VS CƠ SỞ ===================== */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '20px',
+          borderBottom: '1px solid #E2E8F0',
+          paddingBottom: '12px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveRatingTab('player')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '12px',
+            background: activeRatingTab === 'player' ? '#15803D' : '#ffffff',
+            color: activeRatingTab === 'player' ? '#ffffff' : '#4B5563',
+            border: activeRatingTab === 'player' ? 'none' : '1px solid #E2E8F0',
+            fontWeight: 800,
+            fontSize: '13.5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+            boxShadow: activeRatingTab === 'player' ? '0 4px 12px rgba(21, 128, 61, 0.25)' : 'none',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+            sports_handball
+          </span>
+          Đánh Giá Bạn Chơi Cùng Sân (Fair Play)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveRatingTab('facility')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '12px',
+            background: activeRatingTab === 'facility' ? '#15803D' : '#ffffff',
+            color: activeRatingTab === 'facility' ? '#ffffff' : '#4B5563',
+            border: activeRatingTab === 'facility' ? 'none' : '1px solid #E2E8F0',
+            fontWeight: 800,
+            fontSize: '13.5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+            boxShadow: activeRatingTab === 'facility' ? '0 4px 12px rgba(21, 128, 61, 0.25)' : 'none',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+            stadium
+          </span>
+          Đánh Giá Chất Lượng Cơ Sở Sân Đấu
+        </button>
+      </div>
+
+      {/* ===================== TAB 1: ĐÁNH GIÁ NGƯỜI CHƠI (FAIR PLAY) ===================== */}
+      {activeRatingTab === 'player' && (
+        <>
+          {/* ===================== TRƯỜNG HỢP 1: CHƯA CHECK-IN ===================== */}
+          {!isEligibleToRate && (
         <div
           style={{
             background: '#ffffff',
@@ -1458,6 +1711,280 @@ function PostMatchRating() {
               </div>
             )}
           </div>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* ===================== TAB 2: ĐÁNH GIÁ CHẤT LƯỢNG CƠ SỞ SÂN ĐẤU ===================== */}
+      {activeRatingTab === 'facility' && (
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '24px',
+            border: '1px solid #E5E7EB',
+            padding: '28px 32px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+            maxWidth: '900px',
+            margin: '0 auto',
+          }}
+        >
+          {/* Header Cơ Sở */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: '20px',
+              borderBottom: '1px solid #F1F5F9',
+              marginBottom: '24px',
+              flexWrap: 'wrap',
+              gap: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  background: '#DCFCE7',
+                  color: '#15803D',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>
+                  stadium
+                </span>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#15803D', textTransform: 'uppercase' }}>
+                  CƠ SỞ THỂ THAO ĐÃ ĐẶT SÂN
+                </div>
+                <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#111827', margin: '2px 0 0 0' }}>
+                  {currentFacilityName}
+                </h2>
+                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                  Mã cơ sở: <span className="font-mono font-semibold">{currentFacilityId}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Trạng thái Eligibility (GET /api/v1/facility-reviews/eligibility/{facilityId}) */}
+            <div
+              style={{
+                background: facilityEligibility?.isEligible ? '#F0FDF4' : '#FFFBEB',
+                border: facilityEligibility?.isEligible ? '1px solid #BBF7D0' : '1px solid #FDE68A',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: '20px',
+                  color: facilityEligibility?.isEligible ? '#15803D' : '#D97706',
+                }}
+              >
+                {facilityEligibility?.isEligible ? 'verified' : 'info'}
+              </span>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: facilityEligibility?.isEligible ? '#166534' : '#92400E' }}>
+                {checkingEligibility
+                  ? 'Đang kiểm tra điều kiện đánh giá...'
+                  : facilityEligibility?.isEligible
+                  ? 'Đủ điều kiện đánh giá (GET /api/v1/facility-reviews/eligibility)'
+                  : facilityEligibility?.message || 'Chưa đủ điều kiện đánh giá cơ sở này'}
+              </div>
+            </div>
+          </div>
+
+          {/* Form đánh giá cơ sở (POST /api/v1/facility-reviews & POST /api/v1/reviews/facility) */}
+          <form onSubmit={handleSubmitFacilityReview} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            {/* Chấm sao cơ sở */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#1E293B', marginBottom: '8px' }}>
+                1. Chấm điểm chất lượng cơ sở (1 - 5 sao) *
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setFacilityRating(star)}
+                    onMouseEnter={() => setFacilityHoverRating(star)}
+                    onMouseLeave={() => setFacilityHoverRating(0)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      fontSize: '34px',
+                      color: (facilityHoverRating || facilityRating) >= star ? '#EAB308' : '#CBD5E1',
+                      transition: 'transform 0.1s',
+                    }}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#15803D', marginLeft: '8px' }}>
+                  {facilityRating === 5
+                    ? '5 sao: Xuất sắc (Sân đẹp, ánh sáng chuẩn, vệ sinh sạch sẽ)'
+                    : facilityRating === 4
+                    ? '4 sao: Rất tốt (Hài lòng với trải nghiệm)'
+                    : facilityRating === 3
+                    ? '3 sao: Trung bình (Cần bảo trì sàn hoặc ánh sáng)'
+                    : facilityRating === 2
+                    ? '2 sao: Kém (Nhiều bất tiện)'
+                    : '1 sao: Rất thất vọng'}
+                </span>
+              </div>
+            </div>
+
+            {/* Gợi ý đánh giá nhanh */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#1E293B', marginBottom: '8px' }}>
+                2. Điểm nổi bật của sân (Nhấn để chèn nhanh vào nhận xét)
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {[
+                  'Mặt thảm chuẩn BWF êm ái, bám tốt 🏸',
+                  'Hệ thống đèn LED sáng đều, không chói mắt 💡',
+                  'Phòng thay đồ & WC sạch sẽ, tiện nghi 🚿',
+                  'Bãi giữ xe rộng rãi, có chỗ đỗ ô tô 🚗',
+                  'Nhân viên hỗ trợ nhiệt tình, chuyên nghiệp 🤝',
+                  'Nước uống lạnh và khu ngồi nghỉ thoáng mát ❄️',
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() =>
+                      setFacilityComment((prev) => (prev.trim() ? `${prev}. ${item}` : item))
+                    }
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      background: '#F1F5F9',
+                      border: '1px solid #E2E8F0',
+                      color: '#334155',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    + {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Nhận xét bằng chữ */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#1E293B', marginBottom: '8px' }}>
+                3. Viết cảm nhận chi tiết về sân đấu (Tối thiểu 10 ký tự) *
+              </label>
+              <textarea
+                rows={4}
+                value={facilityComment}
+                onChange={(e) => setFacilityComment(e.target.value)}
+                placeholder="Chia sẻ trải nghiệm của bạn về chất lượng mặt sân, hệ thống chiếu sáng, không gian và thái độ phục vụ..."
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1.5px solid #CBD5E1',
+                  fontSize: '13.5px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  lineHeight: 1.5,
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
+                <span>Độ dài: {facilityComment.length} ký tự (Tối thiểu 10)</span>
+                <span>POST /api/v1/facility-reviews & POST /api/v1/reviews/facility</span>
+              </div>
+            </div>
+
+            {/* Action Submit */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
+              <button
+                type="submit"
+                disabled={submittingFacilityReview || facilityComment.trim().length < 10}
+                style={{
+                  padding: '12px 28px',
+                  borderRadius: '14px',
+                  background:
+                    facilityComment.trim().length >= 10
+                      ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
+                      : '#CBD5E1',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: facilityComment.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow:
+                    facilityComment.trim().length >= 10 ? '0 4px 14px rgba(22, 163, 74, 0.25)' : 'none',
+                }}
+              >
+                {submittingFacilityReview ? (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px', animation: 'spin 1s linear infinite' }}>
+                      progress_activity
+                    </span>
+                    Đang gửi đánh giá...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      rate_review
+                    </span>
+                    Gửi Đánh Giá Cơ Sở Sân Đấu
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Lịch sử đánh giá cơ sở gần đây */}
+          {submittedFacilityReviews.length > 0 && (
+            <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid #F1F5F9' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#111827', margin: '0 0 12px 0' }}>
+                Đánh Giá Cơ Sở Đã Gửi Của Bạn ({submittedFacilityReviews.length})
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {submittedFacilityReviews.map((rev) => (
+                  <div
+                    key={rev.id}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '12px',
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#1E293B' }}>{rev.facilityName}</span>
+                      <div style={{ color: '#EAB308', fontSize: '14px' }}>
+                        {[...Array(rev.rating || 5)].map((_, i) => (
+                          <span key={i}>★</span>
+                        ))}
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '13px', color: '#475569', fontStyle: 'italic', margin: 0 }}>
+                      "{rev.comment}"
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

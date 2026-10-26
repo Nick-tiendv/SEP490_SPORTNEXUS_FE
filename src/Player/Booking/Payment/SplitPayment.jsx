@@ -10,6 +10,7 @@ import {
   lookupAccountByPhone,
   joinBooking,
   payRemainingBooking,
+  addBookingParticipants,
   getCancellationReasons,
   cancelBooking,
   getBookingById,
@@ -317,7 +318,7 @@ function SplitPayment() {
     }
   }
 
-  const handleAddInvitedFriend = (friend) => {
+  const handleAddInvitedFriend = async (friend) => {
     if (!friend || !friend.id) return
     if (invitedFriends.some((f) => f.id === friend.id)) {
       alert('Bạn này đã có trong danh sách chia tiền rồi!')
@@ -327,6 +328,16 @@ function SplitPayment() {
       alert('Tối đa 8 người chia tiền cho 1 đơn đặt sân.')
       return
     }
+
+    const targetBookingId = bookingResult?.id || bookingResult?.bookingId || location.state?.bookingId
+    if (targetBookingId) {
+      try {
+        await addBookingParticipants(targetBookingId, [friend.id])
+      } catch (err) {
+        console.warn('SplitPayment: Lỗi khi thêm người chia tiền qua API:', err)
+      }
+    }
+
     setInvitedFriends((prev) => [
       ...prev,
       {
@@ -340,6 +351,7 @@ function SplitPayment() {
     setLookupResult(null)
     setLookupPhone('')
   }
+
 
   const handleRemoveInvitedFriend = (id) => {
     setInvitedFriends((prev) => prev.filter((f) => f.id !== id))

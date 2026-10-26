@@ -10,6 +10,14 @@ import {
   formatVnd,
   processAIChatQuery,
 } from './aiBookingData.js'
+import {
+  sendChatMessage,
+  createAiSession,
+  getAiSessions,
+  getAiSessionMessages,
+  sendSessionChatMessage,
+  deleteAiSession,
+} from '../../../api/player/aiApi.js'
 import './AIChatModal.css'
 
 function AIChatBooking() {
@@ -68,9 +76,93 @@ function AIChatBooking() {
   }
 
   const [activeCourtId, setActiveCourtId] = useState('snx-q7')
+  const [sessionsList, setSessionsList] = useState([])
+  const [currentSessionId, setCurrentSessionId] = useState(null)
+  const [isLoadingSession, setIsLoadingSession] = useState(false)
 
-  // Gửi tin nhắn và nhận phản hồi đúng, đủ, không dư thừa từ AI
-  const handleSendMessage = (textToSend) => {
+  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions
+  useEffect(() => {
+    let isMounted = true
+    async function loadSessions() {
+      try {
+        const list = await getAiSessions()
+        if (isMounted && Array.isArray(list)) {
+          setSessionsList(list)
+        }
+      } catch (e) {
+        console.warn('AIChatBooking: Lỗi lấy danh sách sessions:', e)
+      }
+    }
+    loadSessions()
+    return () => { isMounted = false }
+  }, [])
+
+  // Chuyển sang phiên hội thoại khác: GET /api/v1/ai/sessions/{id}/messages
+  const handleSelectSession = async (sessionId) => {
+    if (!sessionId) return
+    setCurrentSessionId(sessionId)
+    setIsLoadingSession(true)
+    try {
+      const msgs = await getAiSessionMessages(sessionId)
+      if (Array.isArray(msgs) && msgs.length > 0) {
+        const mapped = msgs.map((m, idx) => ({
+          id: m.id || `msg-${idx}`,
+          sender: m.sender === 'user' || m.role === 'user' ? 'user' : 'bot',
+          text: m.content || m.message || m.text || '',
+          time: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong',
+          facilities: m.reply?.facilities || m.facilities,
+          lfgCards: m.reply?.lfgCards || m.lfgCards,
+          slots: m.slots,
+        }))
+        setMessages(mapped)
+      } else {
+        setMessages([buildWelcomeMessage(userLocation)])
+      }
+    } catch (e) {
+      console.warn('Lỗi lấy tin nhắn session:', e)
+      showToast('⚠️ Không thể tải lịch sử phiên này')
+    } finally {
+      setIsLoadingSession(false)
+    }
+  }
+
+  // Tạo phiên hội thoại mới: POST /api/v1/ai/sessions
+  const handleCreateNewSession = async () => {
+    try {
+      const newSession = await createAiSession()
+      if (newSession?.id) {
+        setSessionsList((prev) => [newSession, ...prev])
+        setCurrentSessionId(newSession.id)
+      }
+      setMessages([buildWelcomeMessage(userLocation)])
+      showToast('✨ Đã tạo phiên hội thoại mới với AI Concierge')
+    } catch (e) {
+      console.warn('Lỗi tạo session:', e)
+      setCurrentSessionId(null)
+      setMessages([buildWelcomeMessage(userLocation)])
+    }
+  }
+
+  // Xóa phiên hội thoại: DELETE /api/v1/ai/sessions/{id}
+  const handleDeleteSession = async (sessionId) => {
+    const idToDelete = sessionId || currentSessionId
+    if (!idToDelete) return
+    try {
+      await deleteAiSession(idToDelete)
+      setSessionsList((prev) => prev.filter((s) => s.id !== idToDelete))
+      if (currentSessionId === idToDelete) {
+        setCurrentSessionId(null)
+        setMessages([buildWelcomeMessage(userLocation)])
+      }
+      showToast('🗑️ Đã xóa cuộc trò chuyện')
+    } catch (e) {
+      console.warn('Lỗi xóa session:', e)
+      showToast('⚠️ Không thể xóa cuộc trò chuyện')
+    }
+  }
+
+  // Gửi tin nhắn và nhận phản hồi từ Backend AI hoặc local AI
+  const handleSendMessage = async (textToSend) => {
     const text = (textToSend || inputValue).trim()
     if (!text || isTyping) return
 
@@ -91,7 +183,41 @@ function AIChatBooking() {
     setInputValue('')
     setIsTyping(true)
 
-    setTimeout(() => {
+    try {
+      let aiResult = null
+      if (currentSessionId) {
+        // Gửi vào session hiện tại: POST /api/v1/ai/sessions/{id}/chat
+        aiResult = await sendSessionChatMessage(currentSessionId, {
+          message: text,
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+        })
+      } else {
+        // Gửi chung / tạo session: POST /api/v1/ai/chat
+        aiResult = await sendChatMessage({
+          message: text,
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+        })
+        if (aiResult?.sessionId && !currentSessionId) {
+          setCurrentSessionId(aiResult.sessionId)
+          getAiSessions().then((list) => Array.isArray(list) && setSessionsList(list))
+        }
+      }
+
+      const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Xin chào! Tôi có thể giúp gì cho bạn?'
+      const botMsg = {
+        id: `bot-${Date.now()}`,
+        sender: 'bot',
+        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        text: botReply,
+        facilities: aiResult?.reply?.facilities || aiResult?.facilities,
+        lfgCards: aiResult?.reply?.lfgCards || aiResult?.lfgCards,
+        slots: aiResult?.reply?.slots,
+      }
+      setMessages((prev) => [...prev, botMsg])
+    } catch (err) {
+      console.warn('[AIChatBooking] API AI không phản hồi, dùng fallback local engine:', err)
       const response = processAIChatQuery(text, activeCourtId, userLocation)
       if (response.recommendedCourt?.id) {
         setActiveCourtId(response.recommendedCourt.id)
@@ -103,9 +229,11 @@ function AIChatBooking() {
         ...response,
       }
       setMessages((prev) => [...prev, botMsg])
+    } finally {
       setIsTyping(false)
-    }, 500)
+    }
   }
+
 
   // Làm mới đoạn chat & Cập nhật vị trí mới với người chơi ở thời điểm hiện tại
   const handleResetChat = () => {
@@ -337,7 +465,44 @@ function AIChatBooking() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {sessionsList.length > 0 && (
+            <select
+              value={currentSessionId || ''}
+              onChange={(e) => handleSelectSession(e.target.value)}
+              className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 border border-gray-300 text-gray-800 outline-none"
+              title="Chọn phiên hội thoại"
+            >
+              <option value="">-- Phiên trò chuyện mới --</option>
+              {sessionsList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title || `Phiên #${s.id.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCreateNewSession}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 flex items-center gap-1 transition-all"
+            title="Tạo cuộc trò chuyện mới"
+          >
+            <span className="material-symbols-outlined text-[16px]">add_comment</span>
+            Chat Mới
+          </button>
+
+          {currentSessionId && (
+            <button
+              type="button"
+              onClick={() => handleDeleteSession(currentSessionId)}
+              className="px-2 py-1.5 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 flex items-center gap-1 transition-all"
+              title="Xóa phiên chat này"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleResetChat}
@@ -345,7 +510,7 @@ function AIChatBooking() {
             title="Làm mới đoạn chat & cập nhật vị trí hiện tại"
           >
             <span className="material-symbols-outlined text-[16px]">restart_alt</span>
-            Làm mới vị trí &amp; chat
+            Vị trí
           </button>
 
           <button
@@ -353,10 +518,11 @@ function AIChatBooking() {
             className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-900 flex items-center gap-1 transition-all"
           >
             <span className="material-symbols-outlined text-[16px]">map</span>
-            Về Bản Đồ Đặt Sân
+            Bản Đồ
           </button>
         </div>
       </div>
+
 
       {/* Chat Body */}
       <div

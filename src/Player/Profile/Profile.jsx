@@ -1,10 +1,33 @@
 import { useAuth } from '../../context/authContext.js'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getMyProfile, updateMyProfile, logoutApi, getMySports, updateMySports, getSportCategories, skillLabel } from '../../api/player/profileApi.js'
+import {
+  uploadAvatar,
+  changePassword,
+  updatePhone,
+  sendEmailOtp,
+  verifyEmail,
+  setPassword,
+  deleteMyAccount,
+} from '../../api/authApi.js'
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
+import {
+  getMyFacilityReviews,
+  getFacilityReviewById,
+  updateFacilityReview,
+  deleteFacilityReview,
+} from '../../api/reviewApi.js'
+import {
+  getReportReasons,
+  createReport,
+  getMyReports,
+  getReportById,
+  updateReport,
+  withdrawReport,
+} from '../../api/reportApi.js'
 
 export const PRESET_SPORTS_CATALOG = [
   { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
@@ -97,6 +120,285 @@ export default function Profile() {
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
 
+  /* ---------------- API States: Bookings, Reviews, Reports, Security ---------------- */
+  // 1. Đặt sân của tôi (GET /api/v1/bookings/my-bookings)
+  const [myBookings, setMyBookings] = useState([])
+  const [loadingBookings, setLoadingBookings] = useState(false)
+
+  // 2. Đánh giá sân của tôi (GET /api/v1/facility-reviews/my-reviews)
+  const [myFacilityReviews, setMyFacilityReviews] = useState([])
+  const [loadingFacilityReviews, setLoadingFacilityReviews] = useState(false)
+  const [reviewTab, setReviewTab] = useState('fairplay') // 'fairplay' | 'facility'
+  const [selectedFacilityReviewDetail, setSelectedFacilityReviewDetail] = useState(null)
+  const [editingFacilityReview, setEditingFacilityReview] = useState(null)
+  const [editFacilityComment, setEditFacilityComment] = useState('')
+  const [editFacilityRating, setEditFacilityRating] = useState(5)
+
+  // 3. Báo cáo / khiếu nại (GET /api/v1/reports/reasons & GET /reports/my-reports)
+  const [reportReasons, setReportReasons] = useState([])
+  const [myReports, setMyReports] = useState([])
+  const [loadingReports, setLoadingReports] = useState(false)
+  const [supportTab, setSupportTab] = useState('info') // 'info' | 'create_report' | 'my_reports'
+  const [newReportForm, setNewReportForm] = useState({ reasonId: '', description: '', bookingId: '' })
+  const [submittingReport, setSubmittingReport] = useState(false)
+  const [selectedReportDetail, setSelectedReportDetail] = useState(null)
+
+  // 4. Tài khoản & Bảo mật (POST /change-password, POST /me/phone, POST /me/email/send-otp, POST /me/email/verify, POST /set-password, DELETE /api/auth/me)
+  const [showSecurityModal, setShowSecurityModal] = useState(false)
+  const [securityTab, setSecurityTab] = useState('password') // 'password' | 'phone' | 'email' | 'set_pwd' | 'delete'
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
+  const [submittingPassword, setSubmittingPassword] = useState(false)
+  const [phoneInput, setPhoneInput] = useState(profile.phone || '')
+  const [emailOtp, setEmailOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [setPasswordFormData, setSetPasswordFormData] = useState({ newPassword: '', confirmPassword: '' })
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef(null)
+
+  // Tải đặt sân của tôi: GET /api/v1/bookings/my-bookings
+  const loadMyBookings = async () => {
+    setLoadingBookings(true)
+    try {
+      const data = await getMyBookings()
+      if (Array.isArray(data)) setMyBookings(data)
+    } catch (err) {
+      console.warn('[Profile] Lỗi lấy bookings:', err)
+    } finally {
+      setLoadingBookings(false)
+    }
+  }
+
+  // Tải đánh giá cơ sở của tôi: GET /api/v1/facility-reviews/my-reviews
+  const loadMyFacilityReviews = async () => {
+    setLoadingFacilityReviews(true)
+    try {
+      const res = await getMyFacilityReviews()
+      const list = res?.items || res?.data || (Array.isArray(res) ? res : [])
+      setMyFacilityReviews(list)
+    } catch (err) {
+      console.warn('[Profile] Lỗi lấy facility reviews:', err)
+    } finally {
+      setLoadingFacilityReviews(false)
+    }
+  }
+
+  // Tải báo cáo / khiếu nại: GET /api/v1/reports/reasons & GET /reports/my-reports
+  const loadReportData = async () => {
+    setLoadingReports(true)
+    try {
+      const [reasons, reports] = await Promise.all([
+        getReportReasons().catch(() => []),
+        getMyReports().catch(() => []),
+      ])
+      if (Array.isArray(reasons)) setReportReasons(reasons)
+      const rList = reports?.items || (Array.isArray(reports) ? reports : [])
+      setMyReports(rList)
+    } catch (err) {
+      console.warn('[Profile] Lỗi tải dữ liệu khiếu nại:', err)
+    } finally {
+      setLoadingReports(false)
+    }
+  }
+
+  useEffect(() => {
+    loadMyBookings()
+    loadMyFacilityReviews()
+    loadReportData()
+  }, [])
+
+  // Tải avatar lên: POST /api/auth/me/avatar
+  const handleAvatarFileSelected = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    try {
+      const res = await uploadAvatar(file)
+      const newUrl = res?.avatarUrl || res?.url || URL.createObjectURL(file)
+      setProfile((prev) => ({ ...prev, avatarUrl: newUrl }))
+      setEditForm((prev) => ({ ...prev, avatarUrl: newUrl }))
+      triggerToast('🎉 Tải ảnh đại diện thành công!')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể tải ảnh đại diện'}`)
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  // Đổi mật khẩu: POST /api/auth/change-password
+  const handleChangePassword = async (e) => {
+    if (e) e.preventDefault()
+    if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+      triggerToast('⚠️ Vui lòng nhập đầy đủ mật khẩu cũ và mới!')
+      return
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      triggerToast('⚠️ Mật khẩu xác nhận không khớp!')
+      return
+    }
+    setSubmittingPassword(true)
+    try {
+      await changePassword(passwordForm)
+      triggerToast('🎉 Đổi mật khẩu thành công!')
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+      setShowSecurityModal(false)
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể đổi mật khẩu'}`)
+    } finally {
+      setSubmittingPassword(false)
+    }
+  }
+
+  // Cập nhật số điện thoại: POST /api/auth/me/phone
+  const handleUpdatePhone = async () => {
+    if (!phoneInput.trim()) {
+      triggerToast('⚠️ Vui lòng nhập số điện thoại')
+      return
+    }
+    try {
+      await updatePhone({ phone: phoneInput.trim() })
+      setProfile((prev) => ({ ...prev, phone: phoneInput.trim() }))
+      triggerToast('🎉 Đã cập nhật số điện thoại thành công!')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Lỗi cập nhật số điện thoại'}`)
+    }
+  }
+
+  // Gửi OTP email: POST /api/auth/me/email/send-otp
+  const handleSendEmailOtp = async () => {
+    try {
+      await sendEmailOtp()
+      setOtpSent(true)
+      triggerToast('📧 Đã gửi mã OTP đến email của bạn!')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể gửi OTP'}`)
+    }
+  }
+
+  // Xác thực email: POST /api/auth/me/email/verify
+  const handleVerifyEmail = async () => {
+    if (!emailOtp.trim()) return
+    try {
+      await verifyEmail({ otpCode: emailOtp.trim() })
+      triggerToast('🎉 Xác thực email thành công!')
+      setEmailOtp('')
+      setOtpSent(false)
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Mã OTP không hợp lệ'}`)
+    }
+  }
+
+  // Thiết lập mật khẩu mới: POST /api/auth/set-password
+  const handleSetPassword = async (e) => {
+    if (e) e.preventDefault()
+    if (!setPasswordFormData.newPassword) return
+    if (setPasswordFormData.newPassword !== setPasswordFormData.confirmPassword) {
+      triggerToast('⚠️ Mật khẩu xác nhận không khớp!')
+      return
+    }
+    try {
+      await setPassword(setPasswordFormData)
+      triggerToast('🎉 Thiết lập mật khẩu thành công!')
+      setSetPasswordFormData({ newPassword: '', confirmPassword: '' })
+      setShowSecurityModal(false)
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể thiết lập mật khẩu'}`)
+    }
+  }
+
+  // Xóa tài khoản vĩnh viễn: DELETE /api/auth/me
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản SportNexus không? Dữ liệu không thể khôi phục!')) return
+    try {
+      await deleteMyAccount()
+      triggerToast('Tài khoản đã được xóa.')
+      navigate('/login')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể xóa tài khoản'}`)
+    }
+  }
+
+  // Tạo báo cáo / khiếu nại: POST /api/v1/reports
+  const handleCreateReport = async (e) => {
+    if (e) e.preventDefault()
+    if (!newReportForm.description || newReportForm.description.trim().length < 10) {
+      triggerToast('⚠️ Vui lòng nhập mô tả khiếu nại tối thiểu 10 ký tự!')
+      return
+    }
+    setSubmittingReport(true)
+    try {
+      await createReport({
+        reasonId: newReportForm.reasonId || reportReasons[0]?.id || 'SERVICE_QUALITY',
+        description: newReportForm.description.trim(),
+        bookingId: newReportForm.bookingId || undefined,
+      })
+      triggerToast('🎉 Đã gửi khiếu nại thành công tới Ban Quản Trị!')
+      setNewReportForm({ reasonId: '', description: '', bookingId: '' })
+      loadReportData()
+      setSupportTab('my_reports')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể gửi khiếu nại'}`)
+    } finally {
+      setSubmittingReport(false)
+    }
+  }
+
+  // Rút khiếu nại: POST /{reportId}/withdraw
+  const handleWithdrawReport = async (reportId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn rút khiếu nại này không?')) return
+    try {
+      await withdrawReport(reportId)
+      triggerToast('Đã rút khiếu nại thành công.')
+      loadReportData()
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể rút khiếu nại'}`)
+    }
+  }
+
+  // Xóa đánh giá cơ sở: DELETE /api/v1/facility-reviews/{reviewId}
+  const handleDeleteFacilityReview = async (reviewId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa đánh giá cơ sở này không?')) return
+    try {
+      await deleteFacilityReview(reviewId)
+      triggerToast('Đã xóa đánh giá cơ sở.')
+      loadMyFacilityReviews()
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể xóa đánh giá'}`)
+    }
+  }
+
+  // Cập nhật đánh giá cơ sở: PUT /api/v1/facility-reviews/{reviewId}
+  const handleUpdateFacilityReview = async (reviewId) => {
+    if (!editFacilityComment || editFacilityComment.trim().length < 10) {
+      triggerToast('⚠️ Vui lòng nhập nội dung đánh giá tối thiểu 10 ký tự!')
+      return
+    }
+    try {
+      await updateFacilityReview(reviewId, {
+        rating: editFacilityRating,
+        comment: editFacilityComment.trim(),
+      })
+      triggerToast('Đã cập nhật đánh giá cơ sở thành công!')
+      setEditingFacilityReview(null)
+      loadMyFacilityReviews()
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể cập nhật đánh giá'}`)
+    }
+  }
+
+  // Xem chi tiết đánh giá cơ sở: GET /api/v1/facility-reviews/{reviewId}
+  const handleViewFacilityReviewDetail = async (review) => {
+    const rId = review.id || review.reviewId
+    setSelectedFacilityReviewDetail(review)
+    try {
+      if (rId) {
+        const detail = await getFacilityReviewById(rId)
+        if (detail) setSelectedFacilityReviewDetail(detail)
+      }
+    } catch (e) {
+      console.warn('[Profile] getFacilityReviewById notice:', e)
+    }
+  }
+
   // Form edit profile tạm thời
   const [editForm, setEditForm] = useState({ ...profile })
 
@@ -146,7 +448,7 @@ export default function Profile() {
         ...prev,
         name: u.fullName || prev.name,
         username: u.username ? `@${u.username}` : prev.username,
-        phone: u.phone || prev.phone,
+        phone: u.phone || u.phoneNumber || prev.phone,
         email: u.email || prev.email,
         avatarUrl: u.avatarUrl || prev.avatarUrl,
         joinDate: created ? `Tháng ${String(created.getMonth() + 1).padStart(2, '0')}/${created.getFullYear()}` : prev.joinDate,
@@ -156,6 +458,7 @@ export default function Profile() {
         fairPlayScore: fp.fairPlayScore ?? u.fairPlayScore ?? null,
         matchesPlayed: list.filter((b) => /COMPLETED|CHECKED_IN/i.test(b.status || b.bookingStatus || '')).length,
       }))
+      if (u.phone || u.phoneNumber) setPhoneInput(u.phone || u.phoneNumber)
       if (me.status === 'rejected') triggerToast(`⚠️ ${me.reason?.message || 'Không tải được hồ sơ.'}`)
     })
     Promise.all([getMySports(), getSportCategories()])
@@ -516,8 +819,8 @@ export default function Profile() {
     }
   }
 
-  // Xóa môn thể thao khỏi danh sách kỹ năng
-  const handleDeleteSport = (sport) => {
+  // Xóa môn thể thao khỏi danh sách kỹ năng: PUT /api/auth/me/sports
+  const handleDeleteSport = async (sport) => {
     if (sportsData.length <= 1) {
       triggerToast('⚠️ Bạn cần giữ ít nhất một môn thể thao trong hồ sơ!')
       return
@@ -600,8 +903,8 @@ export default function Profile() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            onClick={() => setShowNotificationModal(true)}
-            title="Cài đặt tài khoản"
+            onClick={() => setShowSecurityModal(true)}
+            title="Bảo mật & Cài đặt tài khoản"
             style={{
               width: '42px',
               height: '42px',
@@ -740,9 +1043,18 @@ export default function Profile() {
                   marginBottom: '14px',
                 }}
               >
-                {/* Avatar container - Đồng bộ avatar MMM với TopBar và CommunityFeed */}
+                {/* Avatar container - Đồng bộ avatar với TopBar và CommunityFeed */}
                 <div style={{ position: 'relative' }}>
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    accept="image/*"
+                    onChange={handleAvatarFileSelected}
+                    style={{ display: 'none' }}
+                  />
                   <div
+                    onClick={() => avatarInputRef.current?.click()}
+                    title="Nhấn để tải lên ảnh đại diện mới (POST /api/auth/me/avatar)"
                     style={{
                       width: '88px',
                       height: '88px',
@@ -753,26 +1065,67 @@ export default function Profile() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      overflow: 'hidden',
                     }}
                   >
+                    {profile.avatarUrl ? (
+                      <img
+                        src={profile.avatarUrl}
+                        alt={profile.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          background:
+                            'linear-gradient(135deg, #1B4D2E 0%, #2D5F3F 50%, #15803D 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#FFFFFF',
+                          fontWeight: 900,
+                          fontSize: '28px',
+                          letterSpacing: '-0.5px',
+                          boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.25)',
+                        }}
+                      >
+                        {initialsOf(profile.name)}
+                      </div>
+                    )}
+
+                    {/* Camera icon overlay */}
                     <div
                       style={{
-                        width: '100%',
-                        height: '100%',
-                        borderRadius: '50%',
-                        background:
-                          'linear-gradient(135deg, #1B4D2E 0%, #2D5F3F 50%, #15803D 100%)',
+                        position: 'absolute',
+                        inset: 0,
+                        background: avatarUploading ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: '#FFFFFF',
-                        fontWeight: 900,
-                        fontSize: '28px',
-                        letterSpacing: '-0.5px',
-                        boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.25)',
+                        transition: 'background 0.2s',
+                        color: '#fff',
+                        borderRadius: '50%',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!avatarUploading) e.currentTarget.style.background = 'rgba(0,0,0,0.38)'
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!avatarUploading) e.currentTarget.style.background = 'rgba(0,0,0,0)'
                       }}
                     >
-                      {initialsOf(profile.name)}
+                      <span className="material-symbols-outlined" style={{ fontSize: '20px', opacity: avatarUploading ? 1 : 0.85 }}>
+                        {avatarUploading ? 'progress_activity' : 'photo_camera'}
+                      </span>
                     </div>
                   </div>
                   {/* Chấm tròn online / verified xanh lá góc dưới */}
@@ -1442,7 +1795,56 @@ export default function Profile() {
                 </span>
               </div>
 
-              {/* 5. Đăng xuất */}
+              {/* 5. Bảo mật & Quản lý tài khoản */}
+              <div
+                onClick={() => setShowSecurityModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '14px',
+                  background: '#F9FAFB',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  border: '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#F0FDF4'
+                  e.currentTarget.style.borderColor = '#86EFAC'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#F9FAFB'
+                  e.currentTarget.style.borderColor = 'transparent'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: '#DCFCE7',
+                      color: '#15803D',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
+                      shield
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                    Bảo mật &amp; Quản lý tài khoản
+                  </span>
+                </div>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                  chevron_right
+                </span>
+              </div>
+
+              {/* 6. Đăng xuất */}
               <div
                 onClick={() => setShowLogoutModal(true)}
                 style={{
@@ -3050,39 +3452,43 @@ export default function Profile() {
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Tất cả đánh giá từ người chơi ({reviewsList.length})
+                  Trung tâm Đánh Giá ({reviewTab === 'fairplay' ? reviewsList.length : myFacilityReviews.length})
                 </h3>
                 <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  100% đánh giá xác thực bằng chữ &amp; sao sau khi check-out sân SportNexus
+                  {reviewTab === 'fairplay'
+                    ? '100% đánh giá xác thực bằng chữ & sao sau khi check-out sân SportNexus'
+                    : 'Các nhận xét & đánh giá chất lượng cơ sở sân đấu bạn đã trải nghiệm'}
                 </p>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAllReviewsModal(false)
-                    setShowWriteReviewModal(true)
-                  }}
-                  style={{
-                    background: '#15803D',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '10px',
-                    padding: '6px 12px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                    rate_review
-                  </span>
-                  Viết đánh giá
-                </button>
+                {reviewTab === 'fairplay' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAllReviewsModal(false)
+                      setShowWriteReviewModal(true)
+                    }}
+                    style={{
+                      background: '#15803D',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                      rate_review
+                    </span>
+                    Viết đánh giá
+                  </button>
+                )}
 
                 <button
                   onClick={() => setShowAllReviewsModal(false)}
@@ -3098,101 +3504,495 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Danh sách các review */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {reviewsList.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    borderRadius: '16px',
-                    padding: '14px 16px',
-                    background: '#FAFCFA',
-                    border: '1px solid rgba(45, 95, 63, 0.1)',
-                  }}
-                >
+            {/* TAB CHUYỂN ĐỔI: Đánh giá người chơi vs Đánh giá sân đấu */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginBottom: '16px',
+                background: '#F3F4F6',
+                padding: '4px',
+                borderRadius: '12px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setReviewTab('fairplay')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: reviewTab === 'fairplay' ? '#FFFFFF' : 'transparent',
+                  color: reviewTab === 'fairplay' ? '#15803D' : '#6B7280',
+                  boxShadow: reviewTab === 'fairplay' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  sports_score
+                </span>
+                Bạn chơi Fair Play ({reviewsList.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewTab('facility')
+                  loadMyFacilityReviews()
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: reviewTab === 'facility' ? '#FFFFFF' : 'transparent',
+                  color: reviewTab === 'facility' ? '#15803D' : '#6B7280',
+                  boxShadow: reviewTab === 'facility' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  stadium
+                </span>
+                Đánh giá cơ sở sân ({myFacilityReviews.length})
+              </button>
+            </div>
+
+            {/* TAB 1: REVIEW TỪ BẠN CHƠI FAIR PLAY */}
+            {reviewTab === 'fairplay' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {reviewsList.map((item) => (
                   <div
+                    key={item.id}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '8px',
-                      flexWrap: 'wrap',
-                      gap: '8px',
+                      borderRadius: '16px',
+                      padding: '14px 16px',
+                      background: '#FAFCFA',
+                      border: '1px solid rgba(45, 95, 63, 0.1)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '10px',
-                          background: item.avatarBg,
-                          color: item.avatarColor,
-                          fontWeight: 800,
-                          fontSize: '13px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {item.avatarInitial}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{item.author}</span>
-                          {item.coPlayerRole && (
-                            <span style={{ fontSize: '10.5px', background: '#F3F4F6', color: '#6B7280', padding: '1px 5px', borderRadius: '4px' }}>
-                              {item.coPlayerRole}
-                            </span>
-                          )}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '8px',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            background: item.avatarBg,
+                            color: item.avatarColor,
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {item.avatarInitial}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#6B7280' }}>
-                          {item.matchType} • {item.court} • {item.time}
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{item.author}</span>
+                            {item.coPlayerRole && (
+                              <span style={{ fontSize: '10.5px', background: '#F3F4F6', color: '#6B7280', padding: '1px 5px', borderRadius: '4px' }}>
+                                {item.coPlayerRole}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                            {item.matchType} • {item.court} • {item.time}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            background: '#DCFCE7',
+                            color: '#15803D',
+                            fontSize: '10.5px',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '6px',
+                            border: '1px solid #86EFAC',
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
+                            check_circle
+                          </span>
+                          Đã check-out cùng sân
+                        </span>
+
+                        <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
+                          {[...Array(5)].map((_, i) => (
+                            <span
+                              key={i}
+                              style={{
+                                color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                              }}
+                            >
+                              ★
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
+                    <div style={{ fontSize: '13px', color: '#374151', fontStyle: 'italic', paddingLeft: '4px', borderLeft: '3px solid #15803D' }}>
+                      “{item.content}”
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span
+            {/* TAB 2: ĐÁNH GIÁ CƠ SỞ CỦA TÔI (GET/PUT/DELETE /api/v1/facility-reviews) */}
+            {reviewTab === 'facility' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {loadingFacilityReviews ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: '#6B7280' }}>
+                    <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '28px' }}>
+                      sync
+                    </span>
+                    <p style={{ marginTop: '8px', fontSize: '13px' }}>Đang tải đánh giá cơ sở...</p>
+                  </div>
+                ) : myFacilityReviews.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 20px', background: '#F9FAFB', borderRadius: '16px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '42px', color: '#9CA3AF' }}>
+                      rate_review
+                    </span>
+                    <h4 style={{ margin: '8px 0 4px', fontSize: '15px', color: '#374151' }}>
+                      Chưa có đánh giá cơ sở sân nào
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#6B7280', maxWidth: '360px', marginLeft: 'auto', marginRight: 'auto' }}>
+                      Sau khi hoàn thành buổi chơi tại sân, bạn có thể gửi đánh giá chất lượng mặt sân, ánh sáng và tiện ích tại mục Đánh Giá Trận Đấu.
+                    </p>
+                  </div>
+                ) : (
+                  myFacilityReviews.map((rev, idx) => {
+                    const rId = rev.id || rev.reviewId || idx
+                    const facilityTitle = rev.facilityName || rev.facility?.name || 'Cơ sở SportNexus'
+                    const ratingScore = rev.rating || rev.stars || 5
+                    const commentText = rev.comment || rev.content || 'Đã đánh giá chất lượng sân tốt.'
+                    const reviewDate = rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('vi-VN') : 'Gần đây'
+
+                    return (
+                      <div
+                        key={rId}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          background: '#DCFCE7',
-                          color: '#15803D',
-                          fontSize: '10.5px',
-                          fontWeight: 700,
-                          padding: '2px 6px',
-                          borderRadius: '6px',
-                          border: '1px solid #86EFAC',
+                          borderRadius: '16px',
+                          padding: '14px 16px',
+                          background: '#FFFFFF',
+                          border: '1px solid #E5E7EB',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                         }}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
-                          check_circle
-                        </span>
-                        Đã check-out cùng sân
-                      </span>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '8px',
+                            flexWrap: 'wrap',
+                            gap: '8px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                background: '#E0F2FE',
+                                color: '#0284C7',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                                stadium
+                              </span>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
+                                {facilityTitle}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                                Ngày đánh giá: {reviewDate}
+                              </div>
+                            </div>
+                          </div>
 
-                      <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
-                        {[...Array(5)].map((_, i) => (
-                          <span
-                            key={i}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', color: '#EAB308', fontSize: '13px' }}>
+                              {[...Array(5)].map((_, i) => (
+                                <span key={i} style={{ color: i < ratingScore ? '#EAB308' : '#D1D5DB' }}>
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#1F2937' }}>
+                              {ratingScore}/5
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '13px', color: '#374151', padding: '8px 12px', background: '#F9FAFB', borderRadius: '10px', marginBottom: '10px' }}>
+                          “{commentText}”
+                        </div>
+
+                        {rev.response && (
+                          <div style={{ fontSize: '12px', color: '#15803D', background: '#F0FDF4', padding: '8px 12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '3px solid #15803D' }}>
+                            <strong>Phản hồi từ chủ sân:</strong> {rev.response}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleViewFacilityReviewDetail(rev)}
                             style={{
-                              color: i < Math.floor(item.rating) ? '#EAB308' : '#D1D5DB',
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              border: '1px solid #D1D5DB',
+                              background: '#FFFFFF',
+                              color: '#374151',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
                             }}
                           >
-                            ★
-                          </span>
-                        ))}
+                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                              visibility
+                            </span>
+                            Xem chi tiết
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFacilityReview(rev)
+                              setEditFacilityRating(ratingScore)
+                              setEditFacilityComment(commentText)
+                            }}
+                            style={{
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              border: '1px solid #93C5FD',
+                              background: '#EFF6FF',
+                              color: '#2563EB',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                              edit
+                            </span>
+                            Chỉnh sửa
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFacilityReview(rId)}
+                            style={{
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              border: '1px solid #FECACA',
+                              background: '#FEF2F2',
+                              color: '#DC2626',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                              delete
+                            </span>
+                            Xóa
+                          </button>
+                        </div>
                       </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* MODAL CON: CHI TIẾT ĐÁNH GIÁ CƠ SỞ (GET /api/v1/facility-reviews/{id}) */}
+            {selectedFacilityReviewDetail && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '16px',
+                  borderRadius: '16px',
+                  background: '#F0FDF4',
+                  border: '1px solid #86EFAC',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#15803D', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      info
+                    </span>
+                    Chi Tiết Đánh Giá: {selectedFacilityReviewDetail.facilityName || 'Cơ sở'}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFacilityReviewDetail(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+                  </button>
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#374151', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div><strong>Mã đánh giá:</strong> #{selectedFacilityReviewDetail.id || selectedFacilityReviewDetail.reviewId}</div>
+                  <div><strong>Điểm sao:</strong> {selectedFacilityReviewDetail.rating || 5}/5 ⭐</div>
+                  <div><strong>Nội dung:</strong> “{selectedFacilityReviewDetail.comment || selectedFacilityReviewDetail.content}”</div>
+                  {selectedFacilityReviewDetail.tags && (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {(Array.isArray(selectedFacilityReviewDetail.tags) ? selectedFacilityReviewDetail.tags : [selectedFacilityReviewDetail.tags]).map((t, idx) => (
+                        <span key={idx} style={{ fontSize: '11px', background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                          #{t}
+                        </span>
+                      ))}
                     </div>
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#374151', fontStyle: 'italic', paddingLeft: '4px', borderLeft: '3px solid #15803D' }}>
-                    “{item.content}”
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* MODAL CON: CHỈNH SỬA ĐÁNH GIÁ CƠ SỞ (PUT /api/v1/facility-reviews/{id}) */}
+            {editingFacilityReview && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '16px',
+                  borderRadius: '16px',
+                  background: '#EFF6FF',
+                  border: '1px solid #93C5FD',
+                }}
+              >
+                <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 800, color: '#1D4ED8' }}>
+                  Chỉnh sửa đánh giá cơ sở #{editingFacilityReview.id || editingFacilityReview.reviewId}
+                </h4>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                    Chọn số sao:
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setEditFacilityRating(star)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '22px',
+                          color: star <= editFacilityRating ? '#EAB308' : '#D1D5DB',
+                        }}
+                      >
+                        ★
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                    Nội dung nhận xét (tối thiểu 10 ký tự):
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editFacilityComment}
+                    onChange={(e) => setEditFacilityComment(e.target.value)}
+                    placeholder="Nhập cảm nhận của bạn về mặt sân, ánh sáng, dịch vụ..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingFacilityReview(null)}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #D1D5DB',
+                      background: '#FFFFFF',
+                      color: '#4B5563',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateFacilityReview(editingFacilityReview.id || editingFacilityReview.reviewId)}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#2563EB',
+                      color: '#FFFFFF',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Lưu cập nhật
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
               <button
@@ -3915,77 +4715,151 @@ export default function Profile() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
-                {
-                  id: 1,
-                  sport: 'Cầu lông',
-                  opponent: 'Lê Nam & Tuấn Kiệt',
-                  court: 'Sân Q7 (Sân số 3)',
-                  score: '21 - 18, 21 - 15',
-                  result: 'Thắng',
-                  date: 'Hôm qua, 18:30',
-                },
-                {
-                  id: 2,
-                  sport: 'Pickleball',
-                  opponent: 'Trần Hùng & Bảo Long',
-                  court: 'Sân Nam Sài Gòn (Sân 2)',
-                  score: '11 - 8, 11 - 9',
-                  result: 'Thắng',
-                  date: '03/10/2026, 19:00',
-                },
-                {
-                  id: 3,
-                  sport: 'Cầu lông',
-                  opponent: 'Đặng Tuấn (Khá)',
-                  court: 'Sân Tân Phong Q7',
-                  score: '19 - 21, 20 - 22',
-                  result: 'Thua',
-                  date: '28/09/2026, 20:00',
-                },
-              ].map((m) => (
-                <div
-                  key={m.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 16px',
-                    borderRadius: '16px',
-                    background: '#F9FAFB',
-                    border: '1px solid #E5E7EB',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span
+              {loadingBookings ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#6B7280', fontSize: '13px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
+                    progress_activity
+                  </span>
+                  <p style={{ margin: '8px 0 0 0' }}>Đang tải lịch đặt sân từ máy chủ (GET /api/v1/bookings/my-bookings)...</p>
+                </div>
+              ) : myBookings.length > 0 ? (
+                myBookings.map((b) => (
+                  <div
+                    key={b.id || b.bookingId}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 16px',
+                      borderRadius: '16px',
+                      background: '#F9FAFB',
+                      border: '1px solid #E5E7EB',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            background: b.status === 'CONFIRMED' || b.status === 'COMPLETED' ? '#DCFCE7' : '#FEF3C7',
+                            color: b.status === 'CONFIRMED' || b.status === 'COMPLETED' ? '#15803D' : '#B45309',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '8px',
+                          }}
+                        >
+                          {b.status || 'CONFIRMED'}
+                        </span>
+                        <strong style={{ fontSize: '14px', color: '#1F2937' }}>
+                          {b.courtName || b.facilityName || 'Sân thể thao SportNexus'}
+                        </strong>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
+                        {b.bookingDate || b.date || 'Hôm nay'} • {b.startTime || '08:00'} - {b.endTime || '09:00'}
+                        {b.orderCode && <span className="font-mono"> • #{b.orderCode}</span>}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
+                        {(Number(b.totalPrice) || 0).toLocaleString('vi-VN')} đ
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMatchesModal(false)
+                          navigate('/check-in')
+                        }}
                         style={{
-                          background: m.result === 'Thắng' ? '#DCFCE7' : '#FEE2E2',
-                          color: m.result === 'Thắng' ? '#15803D' : '#DC2626',
+                          marginTop: '4px',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #BBF7D0',
+                          background: '#F0FDF4',
+                          color: '#15803D',
                           fontSize: '11px',
-                          fontWeight: 800,
-                          padding: '2px 8px',
-                          borderRadius: '8px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
                         }}
                       >
-                        {m.result}
-                      </span>
-                      <strong style={{ fontSize: '14px', color: '#1F2937' }}>
-                        {m.sport}: {m.opponent}
-                      </strong>
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
-                      {m.court} • {m.date}
+                        Vé QR →
+                      </button>
                     </div>
                   </div>
+                ))
+              ) : (
+                [
+                  {
+                    id: 1,
+                    sport: 'Cầu lông',
+                    opponent: 'Lê Nam & Tuấn Kiệt',
+                    court: 'Sân Q7 (Sân số 3)',
+                    score: '21 - 18, 21 - 15',
+                    result: 'Thắng',
+                    date: 'Hôm qua, 18:30',
+                  },
+                  {
+                    id: 2,
+                    sport: 'Pickleball',
+                    opponent: 'Trần Hùng & Bảo Long',
+                    court: 'Sân Nam Sài Gòn (Sân 2)',
+                    score: '11 - 8, 11 - 9',
+                    result: 'Thắng',
+                    date: '03/10/2026, 19:00',
+                  },
+                  {
+                    id: 3,
+                    sport: 'Cầu lông',
+                    opponent: 'Đặng Tuấn (Khá)',
+                    court: 'Sân Tân Phong Q7',
+                    score: '19 - 21, 20 - 22',
+                    result: 'Thua',
+                    date: '28/09/2026, 20:00',
+                  },
+                ].map((m) => (
+                  <div
+                    key={m.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 16px',
+                      borderRadius: '16px',
+                      background: '#F9FAFB',
+                      border: '1px solid #E5E7EB',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            background: m.result === 'Thắng' ? '#DCFCE7' : '#FEE2E2',
+                            color: m.result === 'Thắng' ? '#15803D' : '#DC2626',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '8px',
+                          }}
+                        >
+                          {m.result}
+                        </span>
+                        <strong style={{ fontSize: '14px', color: '#1F2937' }}>
+                          {m.sport}: {m.opponent}
+                        </strong>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
+                        {m.court} • {m.date}
+                      </div>
+                    </div>
 
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1C3524' }}>
-                      {m.score}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1C3524' }}>
+                        {m.score}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
             <div style={{ marginTop: '20px', textAlign: 'center' }}>
@@ -4254,7 +5128,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* 7. MODAL TRUNG TÂM HỖ TRỢ */}
+      {/* 7. MODAL TRUNG TÂM HỖ TRỢ & KHIẾU NẠI (POST /api/v1/reports, GET /api/v1/reports/reasons, GET /reports/my-reports, POST /{id}/withdraw) */}
       {showHelpModal && (
         <div
           style={{
@@ -4273,11 +5147,13 @@ export default function Profile() {
             style={{
               background: '#FFFFFF',
               borderRadius: '24px',
-              maxWidth: '480px',
+              maxWidth: '620px',
               width: '100%',
               padding: '24px',
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
               border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
             }}
           >
             <div
@@ -4290,9 +5166,14 @@ export default function Profile() {
                 paddingBottom: '12px',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                Trung tâm trợ giúp SportNexus
-              </h3>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                  Trung tâm Trợ giúp &amp; Khiếu nại
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Tiếp nhận phản ánh, hỗ trợ sự cố đặt sân và giải quyết tranh chấp người chơi
+                </p>
+              </div>
               <button
                 onClick={() => setShowHelpModal(false)}
                 style={{
@@ -4306,17 +5187,389 @@ export default function Profile() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13.5px', color: '#374151' }}>
-              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
-                <strong>📞 Hotline khẩn cấp 24/7:</strong> 1900 8899 (Hỗ trợ khiếu nại cọc sân, sự cố giờ chơi)
-              </div>
-              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
-                <strong>💬 Trợ lý AI Concierge:</strong> Nhấn nút robot góc dưới bên phải màn hình để được giải đáp tức thì.
-              </div>
-              <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px' }}>
-                <strong>📧 Email tiếp nhận tranh chấp:</strong> support@sportnexus.vn
-              </div>
+            {/* TAB CHUYỂN ĐỔI: Hotline/Thông tin vs Gửi Khiếu nại vs Khiếu nại của tôi */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginBottom: '16px',
+                background: '#F3F4F6',
+                padding: '4px',
+                borderRadius: '12px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSupportTab('info')}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: supportTab === 'info' ? '#FFFFFF' : 'transparent',
+                  color: supportTab === 'info' ? '#15803D' : '#6B7280',
+                  boxShadow: supportTab === 'info' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Hotline &amp; Hỗ trợ
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSupportTab('create_report')}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: supportTab === 'create_report' ? '#FFFFFF' : 'transparent',
+                  color: supportTab === 'create_report' ? '#15803D' : '#6B7280',
+                  boxShadow: supportTab === 'create_report' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Gửi Khiếu Nại Mới
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSupportTab('my_reports')
+                  loadReportData()
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: supportTab === 'my_reports' ? '#FFFFFF' : 'transparent',
+                  color: supportTab === 'my_reports' ? '#15803D' : '#6B7280',
+                  boxShadow: supportTab === 'my_reports' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Khiếu nại của tôi ({myReports.length})
+              </button>
             </div>
+
+            {/* TAB 1: THÔNG TIN HỖ TRỢ & HOTLINE */}
+            {supportTab === 'info' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13.5px', color: '#374151' }}>
+                <div style={{ padding: '14px', background: '#F0FDF4', borderRadius: '14px', border: '1px solid #DCFCE7' }}>
+                  <div style={{ fontWeight: 800, color: '#15803D', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>call</span>
+                    Hotline khẩn cấp 24/7
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#111827', margin: '4px 0' }}>1900 8899</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>Hỗ trợ trực tiếp sự cố cọc sân, tranh chấp slot giờ chơi hoặc xác thực vé check-in khẩn cấp.</div>
+                </div>
+
+                <div style={{ padding: '14px', background: '#EFF6FF', borderRadius: '14px', border: '1px solid #DBEAFE' }}>
+                  <div style={{ fontWeight: 800, color: '#2563EB', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>smart_toy</span>
+                    Trợ lý AI SportNexus Concierge
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: '#4B5563' }}>
+                    Nhấn nút biểu tượng robot ở góc dưới cùng bên phải màn hình để nhận tư vấn ghép trận, chính sách hoàn hủy cọc và tìm sân tự động.
+                  </div>
+                </div>
+
+                <div style={{ padding: '14px', background: '#FAF5FF', borderRadius: '14px', border: '1px solid #F3E8FF' }}>
+                  <div style={{ fontWeight: 800, color: '#7E22CE', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>mail</span>
+                    Email tiếp nhận tranh chấp &amp; hợp tác
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#1F2937', fontWeight: 600 }}>support@sportnexus.vn</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>Phản hồi văn bản chính thức trong vòng 4 - 8 giờ làm việc.</div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: GỬI KHIẾU NẠI MỚI (POST /api/v1/reports) */}
+            {supportTab === 'create_report' && (
+              <form onSubmit={handleCreateReport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Lý do / Loại khiếu nại:
+                  </label>
+                  <select
+                    value={newReportForm.reasonId}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, reasonId: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      background: '#FFFFFF',
+                    }}
+                  >
+                    <option value="">-- Chọn lý do phản ánh --</option>
+                    {reportReasons.length > 0 ? (
+                      reportReasons.map((r) => (
+                        <option key={r.id || r.code} value={r.id || r.code}>
+                          {r.name || r.title || r.description || r.code}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="SERVICE_QUALITY">Chất lượng dịch vụ sân (Mặt sân xấu, ánh sáng yếu)</option>
+                        <option value="UNAUTHORIZED_CANCEL">Chủ sân hủy lịch đột ngột / Trùng giờ</option>
+                        <option value="UNSPORTSMANLIKE">Người chơi cùng sân có hành vi thiếu chuẩn mực</option>
+                        <option value="PAYMENT_ISSUE">Sự cố thanh toán cọc / Hoàn tiền ví Escrow</option>
+                        <option value="OTHER">Lý do khác</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Mã đặt sân liên quan (nếu có):
+                  </label>
+                  {myBookings.length > 0 ? (
+                    <select
+                      value={newReportForm.bookingId}
+                      onChange={(e) => setNewReportForm({ ...newReportForm, bookingId: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #D1D5DB',
+                        fontSize: '13px',
+                        outline: 'none',
+                        background: '#FFFFFF',
+                      }}
+                    >
+                      <option value="">-- Không liên quan mã đặt sân cụ thể --</option>
+                      {myBookings.map((b) => (
+                        <option key={b.id || b.bookingId} value={b.id || b.bookingId}>
+                          #{b.id || b.bookingId} - {b.facilityName || b.courtName || 'Đặt sân'} ({b.bookingDate || b.date || ''})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: BK-2024-9988"
+                      value={newReportForm.bookingId}
+                      onChange={(e) => setNewReportForm({ ...newReportForm, bookingId: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #D1D5DB',
+                        fontSize: '13px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Nội dung mô tả chi tiết sự việc (tối thiểu 10 ký tự):
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={newReportForm.description}
+                    onChange={(e) => setNewReportForm({ ...newReportForm, description: e.target.value })}
+                    placeholder="Mô tả cụ thể thời gian, địa điểm, sự việc đã xảy ra để BQT SportNexus xử lý và hỗ trợ kịp thời..."
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSupportTab('info')}
+                    style={{
+                      padding: '9px 16px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      background: '#FFFFFF',
+                      color: '#4B5563',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingReport}
+                    style={{
+                      padding: '9px 20px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: submittingReport ? '#9CA3AF' : '#15803D',
+                      color: '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      cursor: submittingReport ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {submittingReport ? (
+                      <>
+                        <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>
+                          sync
+                        </span>
+                        Đang gửi...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                          send
+                        </span>
+                        Gửi Khiếu Nại
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 3: KHIẾU NẠI CỦA TÔI (GET /reports/my-reports, POST /{id}/withdraw) */}
+            {supportTab === 'my_reports' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {loadingReports ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: '#6B7280' }}>
+                    <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '28px' }}>
+                      sync
+                    </span>
+                    <p style={{ marginTop: '8px', fontSize: '13px' }}>Đang tải danh sách khiếu nại...</p>
+                  </div>
+                ) : myReports.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 20px', background: '#F9FAFB', borderRadius: '16px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '42px', color: '#9CA3AF' }}>
+                      verified_user
+                    </span>
+                    <h4 style={{ margin: '8px 0 4px', fontSize: '15px', color: '#374151' }}>
+                      Bạn chưa có khiếu nại nào
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#6B7280' }}>
+                      Tất cả các lượt trải nghiệm đặt sân của bạn đều diễn ra thuận lợi.
+                    </p>
+                  </div>
+                ) : (
+                  myReports.map((rpt, idx) => {
+                    const rId = rpt.id || rpt.reportId || idx
+                    const isPending = rpt.status === 'PENDING' || rpt.status === 'WAITING' || !rpt.status
+                    const statusConfig = {
+                      PENDING: { label: 'Đang chờ xử lý', bg: '#FEF3C7', color: '#D97706' },
+                      WAITING: { label: 'Đang chờ xử lý', bg: '#FEF3C7', color: '#D97706' },
+                      IN_REVIEW: { label: 'Đang thụ lý', bg: '#E0F2FE', color: '#0284C7' },
+                      RESOLVED: { label: 'Đã giải quyết', bg: '#DCFCE7', color: '#15803D' },
+                      REJECTED: { label: 'Đã từ chối', bg: '#FEE2E2', color: '#DC2626' },
+                      WITHDRAWN: { label: 'Đã rút khiếu nại', bg: '#F3F4F6', color: '#6B7280' },
+                    }
+                    const st = statusConfig[rpt.status] || statusConfig.PENDING
+
+                    return (
+                      <div
+                        key={rId}
+                        style={{
+                          borderRadius: '16px',
+                          padding: '14px 16px',
+                          background: '#FFFFFF',
+                          border: '1px solid #E5E7EB',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                          <div>
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#1F2937' }}>
+                              Khiếu nại #{rId}
+                            </span>
+                            {rpt.createdAt && (
+                              <span style={{ fontSize: '11px', color: '#9CA3AF', marginLeft: '8px' }}>
+                                {new Date(rpt.createdAt).toLocaleDateString('vi-VN')}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: st.bg,
+                              color: st.color,
+                            }}
+                          >
+                            {st.label}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '12.5px', color: '#4B5563', marginBottom: '8px' }}>
+                          <strong>Lý do:</strong> {rpt.reasonName || rpt.reasonId || rpt.category || 'Khiếu nại dịch vụ'}
+                          {rpt.bookingId && <span> • <strong>Mã sân:</strong> #{rpt.bookingId}</span>}
+                        </div>
+
+                        <div style={{ fontSize: '13px', color: '#374151', padding: '8px 12px', background: '#F9FAFB', borderRadius: '10px', marginBottom: '8px' }}>
+                          “{rpt.description || rpt.content}”
+                        </div>
+
+                        {rpt.resolution && (
+                          <div style={{ fontSize: '12px', color: '#15803D', background: '#F0FDF4', padding: '8px 12px', borderRadius: '8px', marginBottom: '8px' }}>
+                            <strong>Kết quả xử lý từ BQT:</strong> {rpt.resolution}
+                          </div>
+                        )}
+
+                        {isPending && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleWithdrawReport(rId)}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid #D1D5DB',
+                                background: '#FFFFFF',
+                                color: '#6B7280',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                                undo
+                              </span>
+                              Rút khiếu nại
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
 
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
               <button
@@ -4331,14 +5584,498 @@ export default function Profile() {
                   cursor: 'pointer',
                 }}
               >
-                Đã hiểu
+                Đóng
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 8. MODAL XÁC NHẬN ĐĂNG XUẤT */}
+      {/* 7B. MODAL BẢO MẬT & QUẢN LÝ TÀI KHOẢN (POST /change-password, POST /me/phone, POST /me/email/send-otp, POST /me/email/verify, POST /set-password, DELETE /api/auth/me) */}
+      {showSecurityModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '560px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+              border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+                borderBottom: '1px solid #E5E7EB',
+                paddingBottom: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background: '#DCFCE7',
+                    color: '#15803D',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                    shield
+                  </span>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                    Bảo mật &amp; Quản lý tài khoản
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                    Quản lý mật khẩu, số điện thoại, xác thực OTP email và an toàn tài khoản
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowSecurityModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Sub-tabs điều hướng */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '6px',
+                marginBottom: '18px',
+                background: '#F3F4F6',
+                padding: '4px',
+                borderRadius: '12px',
+                overflowX: 'auto',
+              }}
+            >
+              {[
+                { id: 'password', label: 'Đổi mật khẩu', icon: 'lock' },
+                { id: 'phone', label: 'Số điện thoại', icon: 'call' },
+                { id: 'email', label: 'Email OTP', icon: 'mark_email_read' },
+                { id: 'set_pwd', label: 'Đặt MK mới', icon: 'key' },
+                { id: 'delete', label: 'Xóa tài khoản', icon: 'delete_forever', danger: true },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSecurityTab(tab.id)}
+                  style={{
+                    flex: '1 0 auto',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: securityTab === tab.id ? '#FFFFFF' : 'transparent',
+                    color: securityTab === tab.id ? (tab.danger ? '#DC2626' : '#15803D') : '#6B7280',
+                    boxShadow: securityTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                    {tab.icon}
+                  </span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* SUB-TAB 1: ĐỔI MẬT KHẨU (POST /api/auth/change-password) */}
+            {securityTab === 'password' && (
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Mật khẩu hiện tại:
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={passwordForm.oldPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                    placeholder="Nhập mật khẩu hiện tại"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Mật khẩu mới (tối thiểu 6 ký tự):
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    placeholder="Nhập mật khẩu mới"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Xác nhận mật khẩu mới:
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    placeholder="Nhập lại mật khẩu mới"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingPassword}
+                  style={{
+                    padding: '10px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: submittingPassword ? '#9CA3AF' : '#15803D',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: submittingPassword ? 'not-allowed' : 'pointer',
+                    marginTop: '6px',
+                  }}
+                >
+                  {submittingPassword ? 'Đang cập nhật...' : 'Cập nhật Mật khẩu mới'}
+                </button>
+              </form>
+            )}
+
+            {/* SUB-TAB 2: CẬP NHẬT SỐ ĐIỆN THOẠI (POST /api/auth/me/phone) */}
+            {securityTab === 'phone' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#4B5563' }}>
+                  Số điện thoại được sử dụng để nhận mã OTP nhận diện tại quầy check-in sân bóng và thông báo chia tiền ví Escrow.
+                </p>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Số điện thoại di động:
+                  </label>
+                  <input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="Ví dụ: 0908 123 456"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUpdatePhone}
+                  style={{
+                    padding: '10px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#15803D',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Lưu số điện thoại
+                </button>
+              </div>
+            )}
+
+            {/* SUB-TAB 3: XÁC THỰC EMAIL BẰNG OTP (POST /api/auth/me/email/send-otp & POST /verify) */}
+            {securityTab === 'email' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ padding: '12px', background: '#F0FDF4', borderRadius: '12px', border: '1px solid #DCFCE7', fontSize: '13px' }}>
+                  <strong>Email tài khoản:</strong> {profile.email || 'minh.nguyen@example.com'}
+                </div>
+
+                {!otpSent ? (
+                  <div>
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#4B5563' }}>
+                      Nhấn nút bên dưới để hệ thống SportNexus gửi mã xác thực gồm 6 chữ số vào hộp thư điện tử của bạn.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSendEmailOtp}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: '#2563EB',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        send
+                      </span>
+                      Gửi mã OTP qua Email
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                      Nhập mã OTP 6 số nhận được trong email:
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value)}
+                        placeholder="123456"
+                        style={{
+                          flex: 1,
+                          padding: '9px 12px',
+                          borderRadius: '10px',
+                          border: '1px solid #D1D5DB',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          letterSpacing: '2px',
+                          textAlign: 'center',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyEmail}
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: '#15803D',
+                          color: '#FFFFFF',
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Xác nhận
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendEmailOtp}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#2563EB',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        marginTop: '8px',
+                        padding: 0,
+                      }}
+                    >
+                      Chưa nhận được? Gửi lại mã OTP
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SUB-TAB 4: THIẾT LẬP MẬT KHẨU MỚI (POST /api/auth/set-password) */}
+            {securityTab === 'set_pwd' && (
+              <form onSubmit={handleSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#4B5563' }}>
+                  Sử dụng khi tài khoản được tạo qua liên kết Google/Facebook và muốn tạo mật khẩu trực tiếp cho SportNexus.
+                </p>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Mật khẩu mới:
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={setPasswordFormData.newPassword}
+                    onChange={(e) => setSetPasswordFormData({ ...setPasswordFormData, newPassword: e.target.value })}
+                    placeholder="Nhập mật khẩu mới"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                    Nhập lại mật khẩu mới:
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={setPasswordFormData.confirmPassword}
+                    onChange={(e) => setSetPasswordFormData({ ...setPasswordFormData, confirmPassword: e.target.value })}
+                    placeholder="Xác nhận mật khẩu"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      fontSize: '13px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '10px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#15803D',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Thiết lập mật khẩu
+                </button>
+              </form>
+            )}
+
+            {/* SUB-TAB 5: XÓA TÀI KHOẢN VĨNH VIỄN (DELETE /api/auth/me) */}
+            {securityTab === 'delete' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ padding: '14px', background: '#FEF2F2', borderRadius: '14px', border: '1px solid #FECACA', color: '#991B1B' }}>
+                  <div style={{ fontWeight: 800, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>warning</span>
+                    Vùng nguy hiểm: Xóa tài khoản vĩnh viễn
+                  </div>
+                  <p style={{ margin: 0, fontSize: '12.5px', lineHeight: 1.5 }}>
+                    Hành động này sẽ xóa toàn bộ lịch sử đấu, số dư ví SportNexus, thông tin môn thể thao và các đánh giá uy tín của bạn. Bạn sẽ không thể khôi phục tài khoản này sau khi xác nhận.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  style={{
+                    padding: '11px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#DC2626',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                    delete_forever
+                  </span>
+                  Xác nhận xóa tài khoản vĩnh viễn
+                </button>
+              </div>
+            )}
+
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
+              <button
+                onClick={() => setShowSecurityModal(false)}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  background: '#6B7280',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. MODAL XÁC NHẬN ĐĂNG XUẤT (POST /api/auth/logout) */}
       {showLogoutModal && (
         <div
           style={{
@@ -4407,7 +6144,12 @@ export default function Profile() {
                 Hủy
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await logoutApi()
+                  } catch (e) {
+                    console.warn('[Profile] Logout API notice:', e)
+                  }
                   try {
                     localStorage.removeItem('sportnexus_user_role')
                     localStorage.removeItem('sportnexus_current_user')

@@ -45,6 +45,22 @@ export async function sendChatMessage({ message, sessionId, lat, lng }) {
 }
 
 /**
+ * Tạo một phiên hội thoại mới với AI
+ * POST /api/v1/ai/sessions
+ * @returns {Promise<Object>} Session mới { id, title, createdAt, ... }
+ */
+export async function createAiSession() {
+  try {
+    const response = await apiClient.post(AI_SESSIONS_ENDPOINT, {})
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn('[aiApi] Không thể tạo phiên AI mới:', error)
+    throw normalizeApiError(error)
+  }
+}
+
+/**
  * Lấy danh sách các cuộc trò chuyện đã lưu
  * GET /api/v1/ai/sessions
  * @returns {Promise<Array>} Danh sách session: [{ id, title, lastMessage, createdAt, ... }]
@@ -83,6 +99,34 @@ export async function getAiSessionMessages(sessionId) {
 }
 
 /**
+ * Gửi tin nhắn trong một cuộc trò chuyện cụ thể
+ * POST /api/v1/ai/sessions/{id}/chat
+ * @param {string} sessionId - UUID của session
+ * @param {Object} params
+ * @param {string} params.message - Nội dung tin nhắn
+ * @param {number} [params.lat] - Vĩ độ
+ * @param {number} [params.lng] - Kinh độ
+ * @returns {Promise<Object>} Phản hồi từ trợ lý AI
+ */
+export async function sendSessionChatMessage(sessionId, { message, lat, lng } = {}) {
+  if (!sessionId) throw new Error('sessionId không được để trống')
+  if (!message || !message.trim()) throw new Error('Nội dung tin nhắn không được để trống')
+
+  const payload = { message: message.trim() }
+  if (typeof lat === 'number' && !isNaN(lat)) payload.lat = lat
+  if (typeof lng === 'number' && !isNaN(lng)) payload.lng = lng
+
+  try {
+    const response = await apiClient.post(`${AI_SESSIONS_ENDPOINT}/${sessionId}/chat`, payload)
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    console.warn(`[aiApi] Lỗi khi gửi tin nhắn vào session ${sessionId}:`, error)
+    throw normalizeApiError(error)
+  }
+}
+
+/**
  * Xóa một cuộc trò chuyện
  * DELETE /api/v1/ai/sessions/{id}
  * @param {string} sessionId - UUID của session
@@ -101,7 +145,9 @@ export async function deleteAiSession(sessionId) {
 
 export default {
   sendChatMessage,
+  createAiSession,
   getAiSessions,
   getAiSessionMessages,
+  sendSessionChatMessage,
   deleteAiSession,
 }

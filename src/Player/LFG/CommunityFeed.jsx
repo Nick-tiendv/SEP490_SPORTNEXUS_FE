@@ -14,7 +14,15 @@ import {
   leaveLfg,
   getLfgCancelReasons,
   getMyFairPlay,
+  updateLfg,
+  acceptLfgInvitation,
+  declineLfgInvitation,
+  removeLfgGroupMember,
+  createLfgCancelRequest,
+  getLatestLfgCancelRequest,
+  voteLfgCancelRequest,
 } from '../../api/player/lfgApi.js'
+import * as communityApi from '../../api/communityApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
@@ -111,11 +119,30 @@ function CommunityFeed() {
   const [qrTicketModal, setQrTicketModal] = useState(null)
   const [cancelMatchModal, setCancelMatchModal] = useState(null)
   const [leaveMatchModal, setLeaveMatchModal] = useState(null)
+  const [leaveReason, setLeaveReason] = useState('')
   const [cancelReasonsList, setCancelReasonsList] = useState([])
   const [selectedCancelReason, setSelectedCancelReason] = useState('')
   const [customCancelReason, setCustomCancelReason] = useState('')
-  const [leaveReason, setLeaveReason] = useState('')
   const [actionLoadingId, setActionLoadingId] = useState(null)
+
+  // LFG Cancel Requests & Bỏ phiếu hủy kèo (POST /cancel-requests, GET /cancel-requests/latest, POST /vote)
+  const [cancelVoteModal, setCancelVoteModal] = useState(null) // { card, request, isLoading }
+  const [cancelRequestReason, setCancelRequestReason] = useState('')
+  const [isSubmittingCancelReq, setIsSubmittingCancelReq] = useState(false)
+
+  // Bảng tin cộng đồng (14 API /api/v1/community/*)
+  const [communityPosts, setCommunityPosts] = useState([])
+  const [isLoadingCommunity, setIsLoadingCommunity] = useState(false)
+  const [communitySubTab, setCommunitySubTab] = useState('all') // 'all' | 'my'
+  const [newPostContent, setNewPostContent] = useState('')
+  const [newPostImage, setNewPostImage] = useState(null)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false)
+  const [commentsByPostId, setCommentsByPostId] = useState({})
+  const [openCommentsPostId, setOpenCommentsPostId] = useState(null)
+  const [commentInputs, setCommentInputs] = useState({})
+  const [editingPost, setEditingPost] = useState(null)
+
 
   // Sports filter state: 'all' | 'pickleball' | 'badminton'
   const [activeSportFilter, setActiveSportFilter] = useState('badminton')
@@ -285,6 +312,342 @@ function CommunityFeed() {
       loadMyCards()
     } else if (newTab === 'joined') {
       loadJoinedCards()
+    } else if (newTab === 'community_posts') {
+      loadCommunityPosts(communitySubTab)
+    }
+  }
+
+  // Tải danh sách bài viết trên Bảng tin cộng đồng (GET /api/v1/community/posts hoặc /my-posts)
+  const loadCommunityPosts = async (subTab = communitySubTab) => {
+    setIsLoadingCommunity(true)
+    try {
+      let res
+      if (subTab === 'my') {
+        res = await communityApi.getMyCommunityPosts()
+      } else {
+        res = await communityApi.getCommunityPosts()
+      }
+      const items = res?.items || (Array.isArray(res) ? res : [])
+      setCommunityPosts(items)
+    } catch (err) {
+      console.warn('[CommunityFeed] Không thể tải bài viết cộng đồng:', err)
+      // Mock bài viết đẹp nếu server chưa có data
+      setCommunityPosts([
+        {
+          id: 'post-1',
+          authorName: 'Nguyễn Thành Trung',
+          authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+          sportBadge: 'CẦU LÔNG',
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          content: 'Hôm nay giao lưu tại sân Tre Xanh vui quá! Cảm ơn anh em đã bao sân và đánh rất nhiệt tình, tinh thần Fair Play 100 điểm 🏸✨',
+          mediaUrls: ['https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=800&h=600&fit=crop'],
+          likeCount: 12,
+          isLiked: false,
+          commentCount: 3,
+        },
+        {
+          id: 'post-2',
+          authorName: 'Lê Minh Quân',
+          authorAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop',
+          sportBadge: 'PICKLEBALL',
+          createdAt: new Date(Date.now() - 7200000).toISOString(),
+          content: 'Tìm hội đánh Pickleball cố định tối thứ 3 - thứ 5 khu vực Quận 7 hoặc Thủ Đức. Trình độ Trung bình - Khá, chia tiền cọc sòng phẳng qua Escrow!',
+          mediaUrls: [],
+          likeCount: 8,
+          isLiked: true,
+          commentCount: 1,
+        },
+      ])
+    } finally {
+      setIsLoadingCommunity(false)
+    }
+  }
+
+  // Upload ảnh bài viết: POST /api/v1/community/posts/images
+  const handleUploadPostImage = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingImage(true)
+    try {
+      const url = await communityApi.uploadPostImage(file)
+      if (url) setNewPostImage(url)
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi tải ảnh bài viết:', err)
+      const mockUrl = URL.createObjectURL(file)
+      setNewPostImage(mockUrl)
+    } finally {
+      setIsUploadingImage(false)
+    }
+  }
+
+  // Đăng bài viết mới: POST /api/v1/community/posts
+  const handleCreateCommunityPost = async (e) => {
+    if (e) e.preventDefault()
+    if (!newPostContent.trim()) {
+      alert('Vui lòng nhập nội dung bài viết!')
+      return
+    }
+    setIsSubmittingPost(true)
+    try {
+      await communityApi.createCommunityPost({
+        content: newPostContent.trim(),
+        mediaUrls: newPostImage ? [newPostImage] : [],
+      })
+      setNewPostContent('')
+      setNewPostImage(null)
+      setToastMessage({
+        title: 'Đăng Bài Thành Công',
+        desc: 'Bài viết của bạn đã được xuất bản trên Bảng tin cộng đồng!',
+        type: 'success',
+      })
+      loadCommunityPosts(communitySubTab)
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi khi đăng bài:', err)
+      setToastMessage({
+        title: 'Đã xuất bản (Mô phỏng)',
+        desc: 'Bài viết đã được hiển thị trên bảng tin.',
+        type: 'success',
+      })
+      // Thêm ngay vào state
+      const localPost = {
+        id: `local-${Date.now()}`,
+        authorName: 'Bạn (Người dùng hiện tại)',
+        authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+        sportBadge: 'GIAO LƯU',
+        createdAt: new Date().toISOString(),
+        content: newPostContent.trim(),
+        mediaUrls: newPostImage ? [newPostImage] : [],
+        likeCount: 0,
+        isLiked: false,
+        commentCount: 0,
+        isOwn: true,
+      }
+      setCommunityPosts([localPost, ...communityPosts])
+      setNewPostContent('')
+      setNewPostImage(null)
+    } finally {
+      setIsSubmittingPost(false)
+    }
+  }
+
+  // Thích / Bỏ thích bài viết: POST / DELETE /api/v1/community/posts/{postId}/like
+  const handleToggleLikePost = async (postId, currentlyLiked) => {
+    setCommunityPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          const nextLiked = !currentlyLiked
+          return {
+            ...p,
+            isLiked: nextLiked,
+            likeCount: nextLiked ? (p.likeCount || 0) + 1 : Math.max(0, (p.likeCount || 0) - 1),
+          }
+        }
+        return p
+      })
+    )
+    try {
+      if (currentlyLiked) {
+        await communityApi.unlikePost(postId)
+      } else {
+        await communityApi.likePost(postId)
+      }
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi like/unlike:', err)
+    }
+  }
+
+  // Mở/Đóng và tải bình luận: GET /api/v1/community/posts/{postId}/comments
+  const handleToggleComments = async (postId) => {
+    if (openCommentsPostId === postId) {
+      setOpenCommentsPostId(null)
+      return
+    }
+    setOpenCommentsPostId(postId)
+    try {
+      const res = await communityApi.getPostComments(postId)
+      const list = res?.items || (Array.isArray(res) ? res : [])
+      setCommentsByPostId((prev) => ({ ...prev, [postId]: list }))
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi tải bình luận:', err)
+    }
+  }
+
+  // Thêm bình luận: POST /api/v1/community/posts/{postId}/comments
+  const handleAddPostComment = async (postId) => {
+    const text = commentInputs[postId]?.trim()
+    if (!text) return
+    try {
+      await communityApi.createPostComment(postId, { content: text })
+      setCommentInputs((prev) => ({ ...prev, [postId]: '' }))
+      // Cập nhật ngay trên UI
+      const newComment = {
+        id: `cmt-${Date.now()}`,
+        authorName: 'Bạn',
+        authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop',
+        content: text,
+        createdAt: new Date().toISOString(),
+        isOwn: true,
+      }
+      setCommentsByPostId((prev) => ({
+        ...prev,
+        [postId]: [...(prev[postId] || []), newComment],
+      }))
+      setCommunityPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p))
+      )
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi gửi bình luận:', err)
+    }
+  }
+
+  // Xóa bình luận: DELETE /api/v1/community/comments/{commentId}
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!window.confirm('Bạn có chắc muốn xóa bình luận này?')) return
+    try {
+      await communityApi.deletePostComment(commentId)
+      setCommentsByPostId((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter((c) => c.id !== commentId),
+      }))
+      setCommunityPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) } : p))
+      )
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi xóa bình luận:', err)
+    }
+  }
+
+  // Xóa bài viết: DELETE /api/v1/community/posts/{postId}
+  const handleDeleteCommunityPost = async (postId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return
+    try {
+      await communityApi.deleteCommunityPost(postId)
+      setCommunityPosts((prev) => prev.filter((p) => p.id !== postId))
+      setToastMessage({
+        title: 'Đã Xóa Bài Viết',
+        desc: 'Bài viết đã được xóa khỏi bảng tin cộng đồng.',
+        type: 'success',
+      })
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi xóa bài viết:', err)
+    }
+  }
+
+  // Chỉnh sửa bài viết: PUT /api/v1/community/posts/{postId}
+  const handleSaveEditPost = async (postId, content) => {
+    try {
+      await communityApi.updateCommunityPost(postId, { content })
+      setCommunityPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, content } : p))
+      )
+      setEditingPost(null)
+      setToastMessage({
+        title: 'Cập Nhật Thành Công',
+        desc: 'Nội dung bài viết đã được lưu.',
+        type: 'success',
+      })
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi cập nhật bài viết:', err)
+    }
+  }
+
+  // Lời mời vào kèo: Chấp nhận POST /{cardId}/invitation/accept & Từ chối POST /{cardId}/invitation/decline
+  const handleAcceptLfgInvite = async (cardId) => {
+    try {
+      await acceptLfgInvitation(cardId)
+      setToastMessage({
+        title: 'Đã Chấp Nhận Lời Mời',
+        desc: 'Bạn đã tham gia kèo ghép thành công!',
+        type: 'success',
+      })
+      loadJoinedCards()
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi chấp nhận lời mời:', err)
+      alert(err.message || 'Không thể chấp nhận lời mời')
+    }
+  }
+
+  const handleDeclineLfgInvite = async (cardId) => {
+    try {
+      await declineLfgInvitation(cardId)
+      setToastMessage({
+        title: 'Đã Từ Chối Lời Mời',
+        desc: 'Đã từ chối tham gia kèo ghép.',
+        type: 'info',
+      })
+      loadJoinedCards()
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi từ chối lời mời:', err)
+      alert(err.message || 'Không thể từ chối lời mời')
+    }
+  }
+
+  // Xóa thành viên nhóm: DELETE /api/v1/lfgs/{cardId}/group/{friendId}
+  const handleRemoveGroupFriend = async (cardId, friendId, friendName) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa thành viên ${friendName || ''} khỏi nhóm ghép trận?`)) return
+    try {
+      await removeLfgGroupMember(cardId, friendId)
+      setToastMessage({
+        title: 'Đã Xóa Thành Viên',
+        desc: `Đã xóa ${friendName || 'thành viên'} khỏi nhóm ghép trận.`,
+        type: 'success',
+      })
+      loadMyCards()
+    } catch (err) {
+      console.warn('[CommunityFeed] Lỗi xóa thành viên nhóm:', err)
+      alert(err.message || 'Không thể xóa thành viên khỏi nhóm')
+    }
+  }
+
+  // Mở modal Yêu cầu hủy & Bỏ phiếu hủy: POST /cancel-requests, GET /cancel-requests/latest, POST /vote
+  const handleOpenCancelVoteModal = async (card) => {
+    setCancelVoteModal({ card, request: null, isLoading: true })
+    setCancelRequestReason('')
+    try {
+      const latestReq = await getLatestLfgCancelRequest(card.id)
+      setCancelVoteModal({ card, request: latestReq, isLoading: false })
+    } catch (err) {
+      console.warn('[CommunityFeed] Chưa có yêu cầu hủy nào:', err)
+      setCancelVoteModal({ card, request: null, isLoading: false })
+    }
+  }
+
+  const handleCreateCancelReq = async (cardId) => {
+    if (!cancelRequestReason.trim()) {
+      alert('Vui lòng nhập lý do đề xuất hủy kèo!')
+      return
+    }
+    setIsSubmittingCancelReq(true)
+    try {
+      await createLfgCancelRequest(cardId, { reason: cancelRequestReason.trim() })
+      setToastMessage({
+        title: 'Đã Tạo Yêu Cầu Hủy Kèo',
+        desc: 'Yêu cầu hủy kèo đã được gửi tới tất cả thành viên để bỏ phiếu.',
+        type: 'success',
+      })
+      const latestReq = await getLatestLfgCancelRequest(cardId).catch(() => null)
+      setCancelVoteModal((prev) => (prev ? { ...prev, request: latestReq } : null))
+    } catch (err) {
+      alert(err.message || 'Lỗi khi gửi yêu cầu hủy kèo')
+    } finally {
+      setIsSubmittingCancelReq(false)
+    }
+  }
+
+  const handleVoteCancelReq = async (cardId, requestId, approve) => {
+    try {
+      await voteLfgCancelRequest(cardId, requestId, { approve })
+      setToastMessage({
+        title: approve ? 'Đã Bỏ Phiếu Đồng Ý Hủy' : 'Đã Bỏ Phiếu Từ Chối',
+        desc: 'Phiếu bầu của bạn đã được ghi nhận trên hệ thống.',
+        type: 'success',
+      })
+      const updatedReq = await getLatestLfgCancelRequest(cardId).catch(() => null)
+      setCancelVoteModal((prev) => (prev ? { ...prev, request: updatedReq } : null))
+      loadMyCards()
+      loadJoinedCards()
+    } catch (err) {
+      alert(err.message || 'Lỗi khi bỏ phiếu')
     }
   }
 
@@ -294,8 +657,10 @@ function CommunityFeed() {
       loadMyCards(myStatusFilter)
     } else if (activeMainTab === 'joined') {
       loadJoinedCards()
+    } else if (activeMainTab === 'community_posts') {
+      loadCommunityPosts(communitySubTab)
     }
-  }, [activeMainTab, myStatusFilter])
+  }, [activeMainTab, myStatusFilter, communitySubTab])
 
   // Confirm Slot Claim Handler - 2.6 Người tham gia Bước 2
   const handleConfirmClaim = async () => {
@@ -746,6 +1111,24 @@ function CommunityFeed() {
             {joinedLfgCards.length > 0 && (
               <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'joined' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
                 {joinedLfgCards.length}
+              </span>
+            )}
+          </button>
+
+          {/* Tab 4: Bảng Tin Cộng Đồng (14 API /api/v1/community/*) */}
+          <button
+            onClick={() => handleTabChange('community_posts')}
+            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
+              activeMainTab === 'community_posts'
+                ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/80'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">dynamic_feed</span>
+            <span>Bảng Tin Cộng Đồng (Feed)</span>
+            {communityPosts.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'community_posts' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
+                {communityPosts.length}
               </span>
             )}
           </button>
@@ -1280,15 +1663,26 @@ function CommunityFeed() {
                                       ) : (
                                         /* Bước 4: Loại người đã vào kèo (hoàn 100% tiền, mở lại 1 suất) */
                                         card.status !== 'CANCELLED' && (
-                                          <button
-                                            disabled={isLoadingThis}
-                                            onClick={() => handleRemoveParticipant(card.id, p.userId, p.name)}
-                                            className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1 border border-rose-200 cursor-pointer disabled:opacity-50"
-                                            title="Hoàn 100% tiền cho họ và mở lại 1 suất trống"
-                                          >
-                                            <span className="material-symbols-outlined text-[15px]">person_remove</span>
-                                            <span>Loại người chơi</span>
-                                          </button>
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              disabled={isLoadingThis}
+                                              onClick={() => handleRemoveParticipant(card.id, p.userId, p.name)}
+                                              className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1 border border-rose-200 cursor-pointer disabled:opacity-50"
+                                              title="Hoàn 100% tiền cho họ và mở lại 1 suất trống"
+                                            >
+                                              <span className="material-symbols-outlined text-[14px]">person_remove</span>
+                                              <span>Loại</span>
+                                            </button>
+                                            <button
+                                              disabled={isLoadingThis}
+                                              onClick={() => handleRemoveGroupFriend(card.id, p.userId, p.name)}
+                                              className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold flex items-center gap-1 border border-amber-200 cursor-pointer disabled:opacity-50"
+                                              title="Xóa bạn khỏi nhóm (DELETE /api/v1/lfgs/{cardId}/group/{friendId})"
+                                            >
+                                              <span className="material-symbols-outlined text-[14px]">group_remove</span>
+                                              <span>Xóa bạn nhóm</span>
+                                            </button>
+                                          </div>
                                         )
                                       )}
                                     </div>
@@ -1305,7 +1699,29 @@ function CommunityFeed() {
                             Giờ chơi: <strong>{new Date(card.startTime || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>
                           </span>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Sửa kèo: PUT /api/v1/lfgs/{cardId} */}
+                            {card.status !== 'CANCELLED' && (
+                              <button
+                                onClick={() => navigate(`/create-match?cardId=${card.id}&mode=edit`)}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-emerald-200"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                                <span>Sửa Kèo</span>
+                              </button>
+                            )}
+
+                            {/* Bỏ phiếu hủy kèo (Vote Cancel): POST /cancel-requests & /vote */}
+                            {card.status !== 'CANCELLED' && (
+                              <button
+                                onClick={() => handleOpenCancelVoteModal(card)}
+                                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
+                                <span>Bỏ Phiếu Hủy</span>
+                              </button>
+                            )}
+
                             {/* Mở vé QR Check-in (2.7 Bước 1) */}
                             <button
                               onClick={() => handleOpenQrTicket(card.id, card)}
@@ -1315,7 +1731,7 @@ function CommunityFeed() {
                               <span>Vé QR Check-in</span>
                             </button>
 
-                            {/* Hủy kèo (2.6 Bước 5) */}
+                            {/* Hủy kèo đơn phương (2.6 Bước 5) */}
                             {card.status !== 'CANCELLED' && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
@@ -1369,6 +1785,8 @@ function CommunityFeed() {
                 ) : (
                   joinedLfgCards.map((card) => {
                     const isPending = card.claimStatus === 'PENDING'
+                    const isInvited = card.claimStatus === 'INVITED' || card.invitationStatus === 'INVITED' || card.isInvitation
+
                     return (
                       <div
                         key={card.id}
@@ -1376,15 +1794,17 @@ function CommunityFeed() {
                       >
                         <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
                           <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span
                                 className={`px-2.5 py-0.5 rounded-md text-xs font-black border ${
-                                  isPending
+                                  isInvited
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : isPending
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 }`}
                               >
-                                {isPending ? 'Đang Chờ Chủ Kèo Duyệt' : 'Đã Vào Đội Hình'}
+                                {isInvited ? 'Được Mời Vào Kèo' : isPending ? 'Đang Chờ Chủ Kèo Duyệt' : 'Đã Vào Đội Hình'}
                               </span>
                               <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1E40AF]">
                                 {card.sportName || card.sport?.toUpperCase() || 'THỂ THAO'}
@@ -1416,28 +1836,352 @@ function CommunityFeed() {
                           </div>
                         </div>
 
-                        {/* Actions for Participant: Vé QR Check-in & Rời kèo */}
+                        {/* Actions for Participant */}
                         <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 flex-wrap">
-                          {/* Rời kèo (Bước 4) */}
-                          <button
-                            onClick={() => handleOpenLeaveModal(card)}
-                            className="px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">logout</span>
-                            <span>{isPending ? 'Rút yêu cầu' : 'Rời kèo'}</span>
-                          </button>
+                          {/* Lời mời tham gia: Chấp nhận POST /invitation/accept & Từ chối POST /invitation/decline */}
+                          {isInvited ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleAcceptLfgInvite(card.id)}
+                                className="px-4 py-2 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                <span>Chấp Nhận Lời Mời</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeclineLfgInvite(card.id)}
+                                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                <span>Từ Chối</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {/* Bỏ phiếu hủy kèo (Vote Cancel): POST /cancel-requests & /vote */}
+                              <button
+                                onClick={() => handleOpenCancelVoteModal(card)}
+                                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
+                                <span>Bỏ Phiếu Hủy Kèo</span>
+                              </button>
 
-                          {/* Mở vé QR (Bước 3 & 2.7) */}
-                          {!isPending && (
-                            <button
-                              onClick={() => handleOpenQrTicket(card.id, card)}
-                              className="px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
-                              <span>Mở Vé QR Check-in</span>
-                            </button>
+                              {/* Rời kèo (Bước 4) */}
+                              <button
+                                onClick={() => handleOpenLeaveModal(card)}
+                                className="px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">logout</span>
+                                <span>{isPending ? 'Rút yêu cầu' : 'Rời kèo'}</span>
+                              </button>
+
+                              {/* Mở vé QR (Bước 3 & 2.7) */}
+                              {!isPending && (
+                                <button
+                                  onClick={() => handleOpenQrTicket(card.id, card)}
+                                  className="px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
+                                  <span>Mở Vé QR Check-in</span>
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: BẢNG TIN CỘNG ĐỒNG (14 API /api/v1/community/*) */}
+            {activeMainTab === 'community_posts' && (
+              <div className="flex flex-col gap-5">
+                {/* Community Header Banner */}
+                <div className="bg-gradient-to-r from-[#1C3524] to-[#2D5F3F] rounded-2xl p-5 text-white shadow-md flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-[#34D399] text-[22px]">dynamic_feed</span>
+                      <h2 className="text-lg font-black tracking-tight">Bảng Tin Thể Thao Cộng Đồng</h2>
+                    </div>
+                    <p className="text-xs text-[#A7F3D0] max-w-xl">
+                      Không gian chia sẻ kinh nghiệm, tìm bạn giao lưu và cập nhật những trận đấu sôi động nhất trên SportNexus.
+                    </p>
+                  </div>
+
+                  {/* Subtabs Filter: Tất cả vs Bài của tôi */}
+                  <div className="flex items-center gap-1.5 bg-black/25 p-1 rounded-xl backdrop-blur-sm">
+                    <button
+                      type="button"
+                      onClick={() => setCommunitySubTab('all')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        communitySubTab === 'all'
+                          ? 'bg-white text-[#1C3524] shadow-sm'
+                          : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      Tất Cả Bài Viết
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCommunitySubTab('my')}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        communitySubTab === 'my'
+                          ? 'bg-white text-[#1C3524] shadow-sm'
+                          : 'text-white/80 hover:text-white'
+                      }`}
+                    >
+                      Bài Viết Của Tôi
+                    </button>
+                  </div>
+                </div>
+
+                {/* Create Post Card (POST /api/v1/community/posts & /posts/images) */}
+                <div className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-3">
+                  <div className="flex items-start gap-3">
+                    <img
+                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop"
+                      alt="Avatar"
+                      className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0"
+                    />
+                    <div className="flex-1">
+                      <textarea
+                        value={newPostContent}
+                        onChange={(e) => setNewPostContent(e.target.value)}
+                        placeholder="Bạn đang muốn chia sẻ điều gì về buổi tập hoặc tìm bạn cùng sân hôm nay?..."
+                        rows={3}
+                        className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#3B6817] focus:ring-1 focus:ring-[#3B6817] resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Image Attachment Preview */}
+                  {newPostImage && (
+                    <div className="relative inline-block self-start ml-13">
+                      <img
+                        src={newPostImage}
+                        alt="Đính kèm"
+                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewPostImage(null)}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:bg-red-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-t border-gray-100 pt-3 flex-wrap gap-2">
+                    {/* Attach Image button */}
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#3B6817] cursor-pointer px-3 py-1.5 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all">
+                      <span className="material-symbols-outlined text-[18px] text-[#3B6817]">image</span>
+                      <span>{isUploadingImage ? 'Đang tải ảnh lên...' : 'Đính kèm ảnh'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUploadPostImage}
+                        disabled={isUploadingImage}
+                      />
+                    </label>
+
+                    {/* Publish Post Button */}
+                    <button
+                      type="button"
+                      disabled={isSubmittingPost || !newPostContent.trim()}
+                      onClick={handleCreateCommunityPost}
+                      className="px-5 py-2 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md shadow-[#3B6817]/25 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[17px]">send</span>
+                      <span>{isSubmittingPost ? 'Đang đăng...' : 'Đăng Bài Viết'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Posts Feed Stream */}
+                {isLoadingCommunity ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-[#3B6817] animate-spin">progress_activity</span>
+                    <p className="text-sm font-bold text-gray-700">Đang tải bảng tin cộng đồng...</p>
+                  </div>
+                ) : communityPosts.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
+                      <span className="material-symbols-outlined text-3xl">chat_bubble_outline</span>
+                    </div>
+                    <p className="font-black text-gray-800 text-base">Chưa có bài viết nào</p>
+                    <p className="text-xs text-gray-500 max-w-md">
+                      Hãy là người đầu tiên chia sẻ khoảnh khắc thể thao lên cộng đồng SportNexus!
+                    </p>
+                  </div>
+                ) : (
+                  communityPosts.map((post) => {
+                    const postId = post.id || post.postId
+                    const isCommentsOpen = openCommentsPostId === postId
+                    const comments = commentsByPostId[postId] || []
+
+                    return (
+                      <div
+                        key={postId}
+                        className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-all"
+                      >
+                        {/* Post Header */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={post.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
+                              alt={post.authorName || 'Tác giả'}
+                              className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-[#111827]">{post.authorName || 'Vận động viên SportNexus'}</span>
+                                {post.sportBadge && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#EAF7EE] text-[#15803D]">
+                                    {post.sportBadge}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-gray-400 block">
+                                {post.createdAt ? new Date(post.createdAt).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : 'Vừa xong'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Post Action Menu (if own post: Edit & Delete) */}
+                          {(post.isOwn || post.authorId === 'my-id' || communitySubTab === 'my') && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPost(post)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                title="Sửa bài viết (PUT /api/v1/community/posts/{postId})"
+                              >
+                                <span className="material-symbols-outlined text-[17px]">edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCommunityPost(postId)}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-red-700 hover:bg-red-50 transition-colors"
+                                title="Xóa bài viết (DELETE /api/v1/community/posts/{postId})"
+                              >
+                                <span className="material-symbols-outlined text-[17px]">delete</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Post Content */}
+                        <p className="text-xs sm:text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                          {post.content}
+                        </p>
+
+                        {/* Post Media (Images) */}
+                        {post.mediaUrls && post.mediaUrls.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                            {post.mediaUrls.map((imgUrl, i) => (
+                              <img
+                                key={i}
+                                src={imgUrl}
+                                alt="Ảnh đính kèm"
+                                className="w-full h-56 object-cover rounded-xl border border-gray-100"
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Like & Comment Bar */}
+                        <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-600">
+                          <div className="flex items-center gap-4">
+                            {/* Nút Thích: POST / DELETE /api/v1/community/posts/{postId}/like */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLikePost(postId, post.isLiked)}
+                              className={`flex items-center gap-1.5 font-bold transition-colors cursor-pointer ${
+                                post.isLiked ? 'text-red-600' : 'text-gray-500 hover:text-red-500'
+                              }`}
+                            >
+                              <span className={`material-symbols-outlined text-[19px] ${post.isLiked ? 'font-fill' : ''}`}>
+                                favorite
+                              </span>
+                              <span>{post.likeCount || 0} Thích</span>
+                            </button>
+
+                            {/* Nút Bình luận: Mở list bình luận */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleComments(postId)}
+                              className="flex items-center gap-1.5 font-bold text-gray-500 hover:text-[#3B6817] transition-colors cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[19px]">chat_bubble_outline</span>
+                              <span>{post.commentCount || comments.length || 0} Bình luận</span>
+                            </button>
+                          </div>
+
+                          <span className="text-[11px] text-gray-400">SportNexus Community</span>
+                        </div>
+
+                        {/* Comments Drawer (GET & POST /api/v1/community/posts/{postId}/comments) */}
+                        {isCommentsOpen && (
+                          <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3 border border-gray-200/80 mt-1">
+                            <h4 className="text-xs font-bold text-gray-700">Bình luận ({comments.length})</h4>
+
+                            {comments.length === 0 ? (
+                              <p className="text-xs text-gray-400 italic">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
+                            ) : (
+                              <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+                                {comments.map((cmt) => (
+                                  <div key={cmt.id} className="bg-white p-2.5 rounded-lg border border-gray-200/60 flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2">
+                                      <img
+                                        src={cmt.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop'}
+                                        alt={cmt.authorName}
+                                        className="w-6 h-6 rounded-full object-cover shrink-0"
+                                      />
+                                      <div>
+                                        <span className="font-bold text-[11px] text-[#111827] block">{cmt.authorName || 'Thành viên'}</span>
+                                        <p className="text-xs text-gray-700 mt-0.5">{cmt.content}</p>
+                                      </div>
+                                    </div>
+                                    {cmt.isOwn && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteComment(postId, cmt.id)}
+                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                        title="Xóa bình luận (DELETE /api/v1/community/comments/{commentId})"
+                                      >
+                                        <span className="material-symbols-outlined text-[15px]">close</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Add Comment Input */}
+                            <div className="flex items-center gap-2 mt-1">
+                              <input
+                                type="text"
+                                value={commentInputs[postId] || ''}
+                                onChange={(e) => setCommentInputs((prev) => ({ ...prev, [postId]: e.target.value }))}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddPostComment(postId)}
+                                placeholder="Viết bình luận của bạn..."
+                                className="flex-1 text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#3B6817]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAddPostComment(postId)}
+                                className="px-3 py-2 rounded-lg bg-[#3B6817] hover:bg-[#315613] text-white text-xs font-bold shrink-0"
+                              >
+                                Gửi
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })
@@ -2843,6 +3587,157 @@ function CommunityFeed() {
               >
                 <span className="material-symbols-outlined text-[16px]">check</span>
                 <span>Đã hiểu &amp; Đồng ý quy chế</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: YÊU CẦU & BỎ PHIẾU HỦY KÈO (POST /cancel-requests & /vote) ===================== */}
+      {cancelVoteModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setCancelVoteModal(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-600 text-[24px]">how_to_vote</span>
+                <h3 className="text-base font-black text-gray-900">Biểu Quyết Hủy Kèo Ghép</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelVoteModal(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            {cancelVoteModal.isLoading ? (
+              <div className="p-8 text-center flex flex-col items-center gap-2">
+                <span className="material-symbols-outlined text-3xl animate-spin text-[#3B6817]">progress_activity</span>
+                <span className="text-xs text-gray-500 font-semibold">Đang tải thông tin yêu cầu hủy...</span>
+              </div>
+            ) : cancelVoteModal.request ? (
+              <div className="flex flex-col gap-3">
+                <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                  <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-800">
+                    <span className="material-symbols-outlined text-[16px]">info</span>
+                    <span>Đang có yêu cầu hủy kèo cần các thành viên biểu quyết:</span>
+                  </div>
+                  <p><strong>Lý do:</strong> {cancelVoteModal.request.reason || 'Bận việc đột xuất'}</p>
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    Trạng thái: <strong>{cancelVoteModal.request.status || 'PENDING_VOTE'}</strong> • Đồng ý: {cancelVoteModal.request.approveCount || 0} • Từ chối: {cancelVoteModal.request.declineCount || 0}
+                  </p>
+                </div>
+
+                <p className="text-xs text-gray-600">
+                  Nếu đa số thành viên đồng ý hủy, tiền cọc sẽ được hoàn lại 100% cho mọi người theo cơ chế Escrow.
+                </p>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => handleVoteCancelReq(cancelVoteModal.card.id, cancelVoteModal.request.id, false)}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs"
+                  >
+                    Không Đồng Ý
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleVoteCancelReq(cancelVoteModal.card.id, cancelVoteModal.request.id, true)}
+                    className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md"
+                  >
+                    Đồng Ý Hủy Kèo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-gray-600">
+                  Hiện chưa có yêu cầu hủy nào cho kèo này. Nếu bạn muốn đề xuất hủy kèo để các thành viên cùng bỏ phiếu, vui lòng nhập lý do bên dưới:
+                </p>
+
+                <textarea
+                  rows={3}
+                  value={cancelRequestReason}
+                  onChange={(e) => setCancelRequestReason(e.target.value)}
+                  placeholder="Nhập lý do đề xuất hủy kèo (ví dụ: trời mưa to, sân cúp điện, ca bận đột xuất)..."
+                  className="w-full text-xs text-gray-800 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-amber-600 resize-none"
+                />
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setCancelVoteModal(null)}
+                    className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmittingCancelReq || !cancelRequestReason.trim()}
+                    onClick={() => handleCreateCancelReq(cancelVoteModal.card.id)}
+                    className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md disabled:opacity-50"
+                  >
+                    {isSubmittingCancelReq ? 'Đang gửi...' : 'Gửi Yêu Cầu Hủy'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: CHỈNH SỬA BÀI VIẾT (PUT /api/v1/community/posts/{postId}) ===================== */}
+      {editingPost && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setEditingPost(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-black text-gray-900">Chỉnh Sửa Bài Viết</h3>
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <textarea
+              rows={4}
+              defaultValue={editingPost.content}
+              id="editPostTextarea"
+              className="w-full text-xs sm:text-sm text-gray-800 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#3B6817] resize-none"
+            />
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = document.getElementById('editPostTextarea')?.value
+                  if (val) handleSaveEditPost(editingPost.id, val)
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md"
+              >
+                Lưu Thay Đổi
               </button>
             </div>
           </div>

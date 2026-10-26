@@ -1,11 +1,32 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { getSportCategories, updateMySports } from '../../api/player/profileApi.js'
+import { getMySports, getSportCategories, updateMySports } from '../../api/player/profileApi.js'
 
 function OnBoarding() {
   const navigate = useNavigate()
   const [selectedSports, setSelectedSports] = useState(['badminton'])
+
+  // Tải danh sách môn thể thao đã lưu từ máy chủ: GET /api/auth/me/sports
+  useEffect(() => {
+    const normalize = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    const keyOf = (name) => {
+      const n = normalize(name)
+      if (n.includes('cau long')) return 'badminton'
+      if (n.includes('pickleball')) return 'pickleball'
+      if (n.includes('bong da')) return 'football'
+      if (n.includes('bong ro')) return 'basketball'
+      if (n.includes('tennis')) return 'tennis'
+      return null
+    }
+    getMySports()
+      .then((serverSports) => {
+        const keys = [...new Set(serverSports.map((s) => keyOf(s.name)).filter(Boolean))]
+        if (keys.length > 0) setSelectedSports(keys)
+      })
+      .catch((err) => console.warn('[OnBoarding] Không thể tải môn thể thao:', err))
+  }, [])
+
   const SKILL_TIERS = [
     { label: 'Mới tập chơi', sub: 'Căn bản, làm quen môn thể thao' },
     { label: 'Mới chơi - Đang tiến bộ', sub: 'Nắm chắc luật, giao lưu vui vẻ' },

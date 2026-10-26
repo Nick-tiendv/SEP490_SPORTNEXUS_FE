@@ -19,7 +19,13 @@ import {
   savePendingDeposit,
   validateDepositAmount,
 } from '../../api/player/walletApi.js'
-import { MIN_MAINTENANCE_FEE, POPULAR_BANKS, WITHDRAW_STATUS } from '../../api/player/withdrawApi.js'
+import {
+  MIN_MAINTENANCE_FEE,
+  POPULAR_BANKS,
+  WITHDRAW_STATUS,
+  cancelWithdrawalRequest,
+  getTransactionById,
+} from '../../api/player/withdrawApi.js'
 import { createWithdrawal, getBankAccount, getMyWithdrawals, updateBankAccount } from '../../api/owner/walletApi.js'
 
 // Yêu cầu rút tiền từ GET /api/v1/wallet/withdrawals -> dạng hiển thị trong lịch sử
@@ -175,6 +181,10 @@ export default function WalletEscrow() {
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
   const [withdrawReceipt, setWithdrawReceipt] = useState(null)
   const [historyTab, setHistoryTab] = useState('transactions') // 'transactions' | 'withdrawals'
+  const [saveBankDefault, setSaveBankDefault] = useState(true)
+  const [selectedTxDetail, setSelectedTxDetail] = useState(null)
+  const [loadingTxDetail, setLoadingTxDetail] = useState(false)
+
   // Lịch sử rút tiền: GET /api/v1/wallet/withdrawals; tài khoản ngân hàng: GET /api/v1/wallet/bank-account
   const [myWithdrawals, setMyWithdrawals] = useState([])
   const loadWithdrawals = useCallback(() => {
@@ -218,6 +228,7 @@ export default function WalletEscrow() {
     setShowWithdrawModal(true)
   }
 
+  // Thực hiện rút tiền: POST /api/v1/wallet/withdrawals & PUT /api/v1/wallet/bank-account
   const handleExecuteWithdraw = async (e) => {
     if (e) e.preventDefault()
     if (currentAvailableBalance < MIN_MAINTENANCE_FEE) {
@@ -267,6 +278,37 @@ export default function WalletEscrow() {
       toast.error(err?.message || 'Lỗi khi gửi yêu cầu rút tiền.')
     } finally {
       setWithdrawSubmitting(false)
+    }
+  }
+
+  // Hủy yêu cầu rút tiền: POST /api/v1/wallet/withdrawals/{id}/cancel
+  const handleCancelWithdrawal = async (requestId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn hủy yêu cầu rút tiền này không?')) return
+    try {
+      await cancelWithdrawalRequest(requestId)
+      toast.success('Đã hủy yêu cầu rút tiền thành công.')
+      loadWithdrawals()
+      loadWallet()
+      reloadTransactions()
+    } catch (err) {
+      toast.error(err?.message || 'Không thể hủy yêu cầu rút tiền.')
+    }
+  }
+
+  // Xem chi tiết giao dịch: GET /api/v1/wallet/transactions/{transactionId}
+  const handleViewTxDetail = async (tx) => {
+    const txId = tx.id || tx.transactionId
+    setLoadingTxDetail(true)
+    setSelectedTxDetail(tx)
+    try {
+      if (txId) {
+        const fullDetail = await getTransactionById(txId)
+        if (fullDetail) setSelectedTxDetail(fullDetail)
+      }
+    } catch (err) {
+      console.warn('[WalletEscrow] Không thể tải chi tiết giao dịch:', err)
+    } finally {
+      setLoadingTxDetail(false)
     }
   }
 
@@ -1021,12 +1063,17 @@ export default function WalletEscrow() {
                     const desc = tx.description || tx.note || tx.content
                     const ref = tx.orderCode || tx.referenceCode || tx.referenceId || tx.bookingId
                     return (
-                      <div key={tx.id || tx.transactionId || `${type}-${when}-${idx}`} className="px-6 py-4 flex items-center gap-4 hover:bg-[#FAFAFA] transition">
+                      <div
+                        key={tx.id || tx.transactionId || `${type}-${when}-${idx}`}
+                        onClick={() => handleViewTxDetail(tx)}
+                        className="px-6 py-4 flex items-center gap-4 hover:bg-[#F0FDF4] transition cursor-pointer group"
+                        title="Nhấn để xem chi tiết giao dịch (GET /api/v1/wallet/transactions/{id})"
+                      >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${meta.bg}`}>
                           <span className={`material-symbols-outlined text-[20px] ${meta.color}`}>{meta.icon}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-[#111827] truncate">
+                          <p className="text-sm font-bold text-[#111827] truncate group-hover:text-[#15803D] transition-colors">
                             {meta.label}
                             {desc ? <span className="font-medium text-[#6B7280]"> • {desc}</span> : null}
                           </p>
@@ -1188,6 +1235,17 @@ export default function WalletEscrow() {
                         <p className="text-[10.5px] text-[#94A3B8]">
                           Số dư sau rút: {formatVND(item.remainingBalance ?? 0)} đ
                         </p>
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelWithdrawal(item.id)}
+                            className="mt-2 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition inline-flex items-center gap-1 cursor-pointer"
+                            title="Hủy yêu cầu rút tiền này (POST /api/v1/wallet/withdrawals/{id}/cancel)"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">cancel</span>
+                            Hủy yêu cầu
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -1592,6 +1650,17 @@ export default function WalletEscrow() {
                 />
               </div>
 
+              {/* Checkbox lưu thông tin tài khoản ngân hàng */}
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  checked={saveBankDefault}
+                  onChange={(e) => setSaveBankDefault(e.target.checked)}
+                  className="rounded border-gray-300 text-[#15803D] focus:ring-[#15803D] h-4 w-4"
+                />
+                <span className="font-medium">Lưu thông tin ngân hàng này làm mặc định (PUT /api/v1/wallet/bank-account)</span>
+              </label>
+
               {/* Action Buttons */}
               <div className="pt-3 flex items-center gap-3">
                 <button
@@ -1699,6 +1768,111 @@ export default function WalletEscrow() {
                 Đóng
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== MODAL CHI TIẾT GIAO DỊCH ==================== */}
+      {selectedTxDetail && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setSelectedTxDetail(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[#15803D]">
+                <span className="material-symbols-outlined text-[24px]">receipt_long</span>
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">Chi Tiết Giao Dịch</h3>
+                <p className="text-xs text-gray-500 font-mono">
+                  GET /api/v1/wallet/transactions/{selectedTxDetail.id || selectedTxDetail.transactionId || ''}
+                </p>
+              </div>
+            </div>
+
+            {loadingTxDetail ? (
+              <div className="py-8 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px] animate-spin text-[#15803D]">progress_activity</span>
+                Đang tải dữ liệu chi tiết giao dịch từ máy chủ...
+              </div>
+            ) : (
+              <div className="space-y-2.5 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Mã giao dịch:</span>
+                    <span className="font-mono font-bold text-gray-900">
+                      #{selectedTxDetail.id || selectedTxDetail.transactionId || '---'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Loại giao dịch:</span>
+                    <span className="font-bold text-[#15803D]">
+                      {selectedTxDetail.type || selectedTxDetail.transactionType || 'Giao dịch ví'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Số tiền:</span>
+                    <span className="font-extrabold text-sm text-gray-900">
+                      {formatVND(Math.abs(selectedTxDetail.amount || 0))} đ
+                    </span>
+                  </div>
+                  {selectedTxDetail.balanceBefore != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Số dư trước GD:</span>
+                      <span className="font-medium text-gray-700">{formatVND(selectedTxDetail.balanceBefore)} đ</span>
+                    </div>
+                  )}
+                  {selectedTxDetail.balanceAfter != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Số dư sau GD:</span>
+                      <span className="font-extrabold text-[#15803D]">{formatVND(selectedTxDetail.balanceAfter)} đ</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Thời gian:</span>
+                    <span className="text-gray-700">
+                      {formatDateTime(selectedTxDetail.createdAt || selectedTxDetail.createdDate || selectedTxDetail.timestamp)}
+                    </span>
+                  </div>
+                  {selectedTxDetail.status && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Trạng thái:</span>
+                      <span className="font-bold uppercase text-emerald-700">{selectedTxDetail.status}</span>
+                    </div>
+                  )}
+                  {selectedTxDetail.orderCode && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Order Code:</span>
+                      <span className="font-mono text-gray-700">{selectedTxDetail.orderCode}</span>
+                    </div>
+                  )}
+                  {selectedTxDetail.description && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <span className="text-gray-500 block mb-0.5">Nội dung / Diễn giải:</span>
+                      <p className="text-gray-800 bg-white p-2 rounded-lg border border-slate-200">{selectedTxDetail.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxDetail(null)}
+                  className="w-full mt-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs transition cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

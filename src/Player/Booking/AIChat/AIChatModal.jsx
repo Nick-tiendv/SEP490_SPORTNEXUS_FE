@@ -10,6 +10,7 @@ import {
   formatVnd,
   processAIChatQuery,
 } from './aiBookingData.js'
+import { sendChatMessage } from '../../../api/player/aiApi.js'
 import './AIChatModal.css'
 
 function AIChatModal({
@@ -110,7 +111,7 @@ function AIChatModal({
   }
 
   // Xử lý gửi tin nhắn: Trợ lý AI trả lời đúng và đầy đủ theo câu hỏi, không dư thừa
-  const handleSendMessage = (textToSend) => {
+  const handleSendMessage = async (textToSend) => {
     const text = (textToSend || inputValue).trim()
     if (!text || isTyping) return
 
@@ -132,8 +133,25 @@ function AIChatModal({
     setInputValue('')
     setIsTyping(true)
 
-    // Phân tích câu hỏi và phản hồi chính xác sau 400ms - 600ms
-    setTimeout(() => {
+    try {
+      const aiResult = await sendChatMessage({
+        message: text,
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+      })
+      const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Dưới đây là gợi ý từ AI:'
+      const botMsg = {
+        id: `bot-${Date.now()}`,
+        sender: 'bot',
+        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        text: botReply,
+        facilities: aiResult?.reply?.facilities || aiResult?.facilities,
+        lfgCards: aiResult?.reply?.lfgCards || aiResult?.lfgCards,
+        slots: aiResult?.reply?.slots,
+      }
+      setMessages((prev) => [...prev, botMsg])
+    } catch (err) {
+      console.warn('[AIChatModal] Fallback to local AI engine:', err)
       const response = processAIChatQuery(text, activeCourtId, userLocation)
       if (response.recommendedCourt?.id) {
         setActiveCourtId(response.recommendedCourt.id)
@@ -145,9 +163,11 @@ function AIChatModal({
         ...response,
       }
       setMessages((prev) => [...prev, botMsg])
+    } finally {
       setIsTyping(false)
-    }, 500)
+    }
   }
+
 
   // Hành động 1: Chọn sân và slot trực tiếp trên giao diện Đặt sân nhanh
   const handleApplyCourt = (court, slot) => {

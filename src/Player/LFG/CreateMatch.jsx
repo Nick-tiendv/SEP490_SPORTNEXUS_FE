@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { createLfg } from '../../api/player/lfgApi.js'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
@@ -359,6 +359,9 @@ function CreateMatch() {
 
   // LFG Specific State - 2.6 Chủ kèo Bước 1
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const editCardId = searchParams.get('cardId') || searchParams.get('editId')
+  const isEditMode = Boolean(editCardId)
   // Kèo LFG phải gắn với một ca sân thật, truyền sang từ màn hình chọn ca.
   const initialSlotId = location.state?.courtSlotId || location.state?.slotId || null
   const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
@@ -368,6 +371,22 @@ function CreateMatch() {
   const [description, setDescription] = useState('')
   const [courtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
   const [createError, setCreateError] = useState(null)
+
+  // Tải dữ liệu kèo cũ khi ở chế độ chỉnh sửa: GET /api/v1/lfgs/{cardId}
+  useEffect(() => {
+    if (editCardId) {
+      getLfgById(editCardId)
+        .then((res) => {
+          if (res) {
+            if (res.slotsNeeded) setSlotsNeeded(res.slotsNeeded)
+            if (res.pricePerPerson) setPricePerPerson(String(res.pricePerPerson))
+            if (res.description) setDescription(res.description)
+            if (res.requireApproval !== undefined) setRequireApproval(Boolean(res.requireApproval))
+          }
+        })
+        .catch((e) => console.warn('[CreateMatch] Không thể tải thông tin kèo cũ để sửa:', e))
+    }
+  }, [editCardId])
 
   // Toast / Submission state
   const [submitting, setSubmitting] = useState(false)
@@ -435,7 +454,7 @@ function CreateMatch() {
     setSubmitting(true)
     setCreateError(null)
 
-    if (!courtSlotId) {
+    if (!isEditMode && !courtSlotId) {
       setCreateError('Chưa chọn ca sân. Vui lòng chọn sân và ca trống trước khi tạo kèo.')
       setSubmitting(false)
       return
@@ -456,7 +475,29 @@ function CreateMatch() {
         : 'INTERMEDIATE'
 
     const parsedPrice = pricePerPerson ? Number(pricePerPerson) : undefined
-    // Gọi API BE: POST /api/v1/lfgs
+    // Nếu đang sửa kèo: Gọi PUT /api/v1/lfgs/{cardId}
+    if (isEditMode) {
+      try {
+        await updateLfg(editCardId, {
+          slotsNeeded: Number(slotsNeeded) || 3,
+          pricePerPerson: parsedPrice,
+          skillLevelTag: skillTag,
+          description: description.trim() || undefined,
+          requireApproval: Boolean(requireApproval),
+        })
+        setTimeout(() => {
+          navigate('/community?tab=my_cards')
+        }, 500)
+        return
+      } catch (apiErr) {
+        console.warn('[CreateMatch] API updateLfg lỗi:', apiErr)
+        setCreateError(apiErr?.message || 'Không thể cập nhật kèo ghép.')
+        setSubmitting(false)
+        return
+      }
+    }
+
+    // Tạo mới: Gọi API BE: POST /api/v1/lfgs
     try {
       await createLfg({
         courtSlotId,
@@ -502,7 +543,7 @@ function CreateMatch() {
               <div className="flex flex-col">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h1 className="text-2xl sm:text-[28px] font-black text-[#111827] tracking-tight">
-                    Tạo Kèo Ghép Mới (LFG Matchmaking)
+                    {isEditMode ? 'Chỉnh Sửa Kèo Ghép (PUT /api/v1/lfgs)' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] border border-[#C6E7BE] text-[11px] font-extrabold uppercase tracking-wide">
                     Realtime Engine
@@ -1479,7 +1520,7 @@ function CreateMatch() {
                   className="px-6 py-3.5 rounded-2xl bg-[#2D5F3F] hover:bg-[#234A31] text-white font-black text-sm shadow-md shadow-[#2D5F3F]/35 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-60 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">bolt</span>
-                  <span>{submitting ? 'Đang Đăng Kèo...' : 'ĐĂNG KÈO NGAY'}</span>
+                  <span>{submitting ? 'Đang Xử Lý...' : isEditMode ? 'LƯU THAY ĐỔI KÈO' : 'ĐĂNG KÈO NGAY'}</span>
                 </button>
               </div>
             </div>

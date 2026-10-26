@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
-import { getFacilities } from '../../api/player/facilityApi.js'
+import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
 import { getLfgs } from '../../api/player/lfgApi.js'
 
@@ -858,6 +858,9 @@ function Dashboard() {
   // Trận sắp tới (GET /api/v1/bookings/upcoming) và kèo LFG đang mở (GET /api/v1/lfgs)
   const [upcomingMatchesData, setUpcomingMatchesData] = useState([])
   const [allLfgMatches, setAllLfgMatches] = useState([])
+  // Tìm kiếm cơ sở thể thao (GET /api/v1/facilities/search)
+  const [courtSearchKeyword, setCourtSearchKeyword] = useState('')
+  const [isSearchingCourts, setIsSearchingCourts] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -870,6 +873,7 @@ function Dashboard() {
     return () => { cancelled = true }
   }, [])
 
+  // 1. Tải danh sách cơ sở ban đầu
   useEffect(() => {
     let isMounted = true
     async function fetchApiFacilities() {
@@ -923,12 +927,70 @@ function Dashboard() {
     return () => { isMounted = false }
   }, [])
 
+  // 4. Tìm kiếm cơ sở thể thao (GET /api/v1/facilities/search)
+  const handleFacilitySearch = async (e) => {
+    if (e) e.preventDefault()
+    setIsSearchingCourts(true)
+    try {
+      const searchRes = await searchFacilities({
+        Keyword: courtSearchKeyword.trim(),
+        PageSize: 12,
+      })
+      const results = searchRes?.items || (Array.isArray(searchRes) ? searchRes : [])
+      if (Array.isArray(results) && results.length > 0) {
+        const transformed = results.map((fac) => {
+          const firstCourt = fac.courts?.[0]
+          const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
+            ? 'badminton'
+            : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
+            ? 'pickleball'
+            : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
+            ? 'football'
+            : firstCourt?.categoryName?.toLowerCase().includes('tennis')
+            ? 'tennis'
+            : 'badminton'
+          const emoji = sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : '⚽'
+          const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
+          const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
+          return {
+            id: fac.id,
+            sport: sportKey,
+            sports: [sportKey],
+            sportEmoji: emoji,
+            slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
+            dist: fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : 'TP. HCM',
+            name: fac.name,
+            surface: fac.description || 'Sân đạt chuẩn thi đấu',
+            price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
+            rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★`,
+            img: thumb,
+            isFromApi: true,
+            rawFacility: fac,
+          }
+        })
+        setApiSuggestedCourts(transformed)
+      } else {
+        // Nếu không có kết quả tìm kiếm, gọi lại danh sách mặc định
+        const all = await getFacilities()
+        if (Array.isArray(all)) setApiSuggestedCourts(all)
+      }
+    } catch (err) {
+      console.warn('Dashboard: Lỗi tìm kiếm cơ sở:', err)
+    } finally {
+      setIsSearchingCourts(false)
+    }
+  }
+
+  // Danh sách trận sắp tới và kèo LFG lấy từ API (không dùng dữ liệu giả)
+  const effectiveUpcomingMatches = upcomingMatchesData
+  const effectiveLfgMatches = allLfgMatches
+
   // Lọc dữ liệu theo môn đang chọn
-  const filteredUpcomingMatches = upcomingMatchesData.filter((m) =>
+  const filteredUpcomingMatches = effectiveUpcomingMatches.filter((m) =>
     isSportActive(m.sport)
   )
 
-  const filteredLfgMatches = allLfgMatches.filter((m) =>
+  const filteredLfgMatches = effectiveLfgMatches.filter((m) =>
     isSportActive(m.sport)
   )
 
@@ -942,6 +1004,7 @@ function Dashboard() {
     }
     return isSportActive(c.sport)
   })
+
 
   return (
     <div
@@ -1729,6 +1792,85 @@ function Dashboard() {
               Mở bản đồ sân ›
             </Link>
           </div>
+
+          {/* Thanh tìm kiếm nhanh cơ sở theo từ khóa GET /api/v1/facilities/search */}
+          <form
+            onSubmit={handleFacilitySearch}
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '14px',
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#FFFFFF',
+                borderRadius: '12px',
+                border: '1px solid #E5E7EB',
+                padding: '6px 12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="Tìm cụm sân theo tên, địa chỉ hoặc quận huyện (vd: Tre Xanh, Thủ Đức, Quận 7)..."
+                value={courtSearchKeyword}
+                onChange={(e) => setCourtSearchKeyword(e.target.value)}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  width: '100%',
+                  fontSize: '13px',
+                  color: '#1F2937',
+                  background: 'transparent',
+                }}
+              />
+              {courtSearchKeyword && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCourtSearchKeyword('')
+                    getFacilities().then((all) => Array.isArray(all) && setApiSuggestedCourts(all))
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: '#9CA3AF',
+                    padding: 0,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={isSearchingCourts}
+              style={{
+                background: '#15803D',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '0 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {isSearchingCourts ? 'Đang tìm...' : 'Tìm kiếm'}
+            </button>
+          </form>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filteredCourts.length === 0 ? (
