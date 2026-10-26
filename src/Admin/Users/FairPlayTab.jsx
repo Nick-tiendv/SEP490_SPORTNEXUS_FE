@@ -7,7 +7,11 @@ import { adjustFairPlay, claimBan, claimUnban, getFairPlayStatistics, getFairPla
 
 const PAGE_SIZE = 20
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN', { maximumFractionDigits: 2 }) : '—')
-const dateTime = value => (value ? new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—')
+const dateTime = value => (value ? new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }) : '—')
+// BE không áp dụng điểm Fair Play cho Quản trị viên (docs 37.4) → ẩn thao tác với tài khoản admin.
+const isAdminRole = role => /admin/i.test(role || '')
+// Mỗi lần điều chỉnh tối đa 100 điểm (docs 37.4).
+const MAX_ADJUST = 100
 const sourceLabels = { ADMIN: 'Quản trị viên', RATING: 'Đánh giá', SYSTEM: 'Hệ thống', NO_SHOW: 'Vắng mặt' }
 const noop = () => {}
 
@@ -58,7 +62,7 @@ export default function FairPlayTab({ tabs }) {
       {stats.error && <div className="users-notice" role="alert">Không tải được thống kê Fair Play: {stats.error}</div>}
       {list.error && <div className="users-notice" role="alert">Không tải được danh sách: {list.error}<button onClick={() => setReload(value => value + 1)} aria-label="Thử lại">↻</button></div>}
       {notice && <div className="users-notice" role="status">{notice}<button onClick={() => setNotice('')} aria-label="Đóng thông báo">×</button></div>}
-      <section className="users-toolbar" aria-label="Bộ lọc Fair Play"><div className="users-filter-top"><label className="users-search"><Search size={15} /><input aria-label="Tìm người dùng" placeholder="Họ tên, tên đăng nhập…" value={search} onChange={event => change(setSearch)(event.target.value)} /></label><select aria-label="Lọc theo điểm" value={maxScore} onChange={event => change(setMaxScore)(event.target.value)}><option value="">Mọi mức điểm</option><option value="49">Dưới 50 điểm</option><option value="69">Từ 69 điểm trở xuống</option><option value="89">Từ 89 điểm trở xuống</option></select><select aria-label="Lọc theo trạng thái nhận slot" value={claimBlocked} onChange={event => change(setClaimBlocked)(event.target.value)}><option value="">Mọi trạng thái nhận slot</option><option value="true">Đang bị chặn nhận slot</option><option value="false">Được nhận slot</option></select></div></section>
+      <section className="users-toolbar" aria-label="Bộ lọc Fair Play"><div className="users-filter-top"><label className="users-search"><Search size={15} /><input aria-label="Tìm người dùng" placeholder="Họ tên, tên đăng nhập…" value={search} onChange={event => change(setSearch)(event.target.value)} /></label><select aria-label="Lọc theo điểm" value={maxScore} onChange={event => change(setMaxScore)(event.target.value)}><option value="">Mọi mức điểm</option><option value="50">Từ 50 điểm trở xuống</option><option value="70">Từ 70 điểm trở xuống</option><option value="90">Từ 90 điểm trở xuống</option></select><select aria-label="Lọc theo trạng thái nhận slot" value={claimBlocked} onChange={event => change(setClaimBlocked)(event.target.value)}><option value="">Mọi trạng thái nhận slot</option><option value="true">Đang bị chặn nhận slot</option><option value="false">Được nhận slot</option></select></div></section>
       <section className="users-table-panel" aria-label="Danh sách điểm Fair Play" aria-busy={list.loading}><div className="users-table-scroll"><table><thead><tr><th>Người dùng</th><th>Điểm Fair Play</th><th>Lượt đánh giá</th><th>Nhận slot</th><th>Tài khoản</th></tr></thead>
         <tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(user => <tr key={user.userId} className={detailId === user.userId ? 'is-selected' : ''} onClick={() => setDetailId(user.userId)}><td><button className="users-table-profile" onClick={event => { event.stopPropagation(); setDetailId(user.userId) }}><UserAvatar user={user} /><span><strong>{user.name}</strong><small>{user.username ? `@${user.username}` : user.role}</small></span></button></td><td><strong style={Number.isFinite(s.minClaimScore) && user.score < s.minClaimScore ? { color: 'var(--sn-danger-text)' } : undefined}>{number(user.score)}</strong></td><td>{number(user.ratingCount)}{user.lowRatingCount > 0 && <small> ({user.lowRatingCount} thấp)</small>}</td><td><ClaimStatus user={user} /></td><td><AccountStatus status={user.isActive ? 'Active' : 'Suspended'} /></td></tr>)}</tbody></table></div>
         {list.loading && !list.items.length && <div className="users-empty"><Users size={25} /><h3>Đang tải…</h3></div>}
@@ -100,7 +104,7 @@ function FairPlayDetails({ userId, base, onClose, onDialog }) {
       <section><h3 className="users-section-title">Lịch sử điều chỉnh điểm</h3>{detail?.adjustments.length ? <ol className="users-timeline">{detail.adjustments.map(item => <li key={item.id}><strong style={{ color: item.delta < 0 ? 'var(--sn-danger-text)' : 'var(--sn-green-700)' }}>{item.delta > 0 ? '+' : ''}{number(item.delta)} điểm</strong> · {sourceLabels[item.source] || item.source}{item.by ? ` (${item.by})` : ''}<br /><small>{dateTime(item.createdAt)}{item.reason ? ` · ${item.reason}` : ''}</small></li>)}</ol> : <p className="users-unavailable">{detail ? 'Chưa có điều chỉnh nào.' : '…'}</p>}</section>
       {detail?.ratings.length > 0 && <section><h3 className="users-section-title">Đánh giá nhận được</h3><ol className="users-timeline">{detail.ratings.slice(0, 10).map(item => <li key={item.id}><strong>{item.stars ?? '—'} ★</strong> từ {item.rater}{item.hidden ? ' (đã ẩn)' : ''}<br /><small>{dateTime(item.createdAt)}{item.comment ? ` · ${item.comment}` : ''}</small></li>)}</ol></section>}
     </div>
-    <footer className="users-details-actions"><button className="users-button primary" onClick={() => onDialog({ type: 'adjust', user })}><SlidersHorizontal size={14} />Điều chỉnh điểm</button>{user.claimBanned ? <button className="users-button" onClick={() => onDialog({ type: 'unban', user })}><Check size={14} />Bỏ cấm nhận slot</button> : <button className="users-button users-danger" onClick={() => onDialog({ type: 'ban', user })}><Ban size={14} />Cấm nhận slot</button>}</footer>
+    {isAdminRole(user.role) ? <footer className="users-details-actions"><p className="users-unavailable">Điểm Fair Play không áp dụng cho Quản trị viên.</p></footer> : <footer className="users-details-actions"><button className="users-button primary" onClick={() => onDialog({ type: 'adjust', user })}><SlidersHorizontal size={14} />Điều chỉnh điểm</button>{user.claimBanned ? <button className="users-button" onClick={() => onDialog({ type: 'unban', user })}><Check size={14} />Bỏ cấm nhận slot</button> : <button className="users-button users-danger" onClick={() => onDialog({ type: 'ban', user })}><Ban size={14} />Cấm nhận slot</button>}</footer>}
   </aside>
 }
 
@@ -124,7 +128,9 @@ function AdjustDialog({ user, onClose, onDone }) {
   const delta = direction === 'add' ? value : -value
   const submit = event => {
     event.preventDefault()
-    if (!Number.isFinite(value) || value <= 0) return setError('Nhập số điểm lớn hơn 0.')
+    if (!amount.trim() || !Number.isFinite(value) || value <= 0) return setError('Nhập số điểm lớn hơn 0.')
+    if (value > MAX_ADJUST) return setError(`Mỗi lần chỉ điều chỉnh tối đa ${MAX_ADJUST} điểm.`)
+    if (!/^\d+([.,]\d{1,2})?$/.test(amount.trim())) return setError('Số điểm chỉ được có tối đa 2 chữ số thập phân.')
     if (!reason.trim()) return setError('Vui lòng nhập lý do điều chỉnh.')
     run(() => adjustFairPlay(user.userId, { delta, reason: reason.trim() }), `Đã ${direction === 'add' ? 'cộng' : 'trừ'} ${number(value)} điểm Fair Play của ${user.name}.`)
   }
@@ -132,7 +138,7 @@ function AdjustDialog({ user, onClose, onDone }) {
     <p><strong>{user.name}</strong> · điểm hiện tại {number(user.score)}</p>
     <form className="users-form" onSubmit={submit} noValidate>
       <label>Loại điều chỉnh<select value={direction} onChange={event => setDirection(event.target.value)}><option value="subtract">Trừ điểm (vi phạm)</option><option value="add">Cộng điểm (bồi hoàn / khen thưởng)</option></select></label>
-      <label>Số điểm<input type="number" min="0" step="1" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
+      <label>Số điểm<input type="number" min="0.01" max={MAX_ADJUST} step="0.01" inputMode="decimal" placeholder={`Tối đa ${MAX_ADJUST}`} value={amount} onChange={event => setAmount(event.target.value)} required /></label>
       <label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Ví dụ: Bỏ kèo không báo trước…" required /></label>
       {Number.isFinite(value) && value > 0 && Number.isFinite(user.score) && <p className="users-demo-note">Điểm sau điều chỉnh: {number(user.score + delta)}</p>}
       {error && <p className="users-form-error" role="alert">{error}</p>}
@@ -168,7 +174,8 @@ function UnbanDialog({ user, onClose, onDone }) {
   const { submitting, error, run } = useAction(onDone)
   return <DemoDialog title="Bỏ cấm nhận slot" onClose={submitting ? noop : onClose}>
     <p>Cho phép <strong>{user.name}</strong> nhận slot ghép trận trở lại?{user.banReason ? ` Lý do cấm trước đó: ${user.banReason}.` : ''}</p>
-    {user.claimBlocked && <p className="users-demo-note">Lưu ý: điểm Fair Play của người này vẫn dưới ngưỡng nên có thể tiếp tục bị chặn tự động.</p>}
+    {/* isClaimBlocked luôn true khi đang bị cấm, nên so trực tiếp điểm với ngưỡng nhận slot. */}
+    {Number.isFinite(user.score) && Number.isFinite(user.minClaimScore) && user.score < user.minClaimScore && <p className="users-demo-note">Lưu ý: điểm Fair Play của người này vẫn dưới ngưỡng nên có thể tiếp tục bị chặn tự động.</p>}
     {error && <p className="users-form-error" role="alert">{error}</p>}
     <footer><button className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" onClick={() => run(() => claimUnban(user.userId), `Đã bỏ cấm nhận slot cho ${user.name}.`)} disabled={submitting}>{submitting ? 'Đang lưu…' : 'Bỏ cấm'}</button></footer>
   </DemoDialog>

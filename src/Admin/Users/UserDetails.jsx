@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { X, UserRound, Wallet, TriangleAlert, Pencil, Ban, Check, Trash2 } from 'lucide-react'
 import { roleLabel } from './usersData.js'
 
@@ -13,9 +14,17 @@ const adminDisplayLabels = {
 }
 
 const money = value => value == null ? "Chưa có thông tin" : `${value.toLocaleString('vi-VN')} ₫`
+const dateTime = value => {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }) : 'Chưa có thông tin'
+}
 
+// Ảnh đại diện (avatarUrl) nếu có; lỗi tải ảnh hoặc không có ảnh → chữ viết tắt.
 export function UserAvatar({ user }) {
-  return <span className="users-avatar" aria-hidden="true">{String(user.name || '?').split(' ').filter(Boolean).slice(-2).map(word => word[0]).join('').toUpperCase()}</span>
+  const [failedUrl, setFailedUrl] = useState('')
+  const initials = String(user.name || '?').split(' ').filter(Boolean).slice(-2).map(word => word[0]).join('').toUpperCase()
+  if (user.avatarUrl && failedUrl !== user.avatarUrl) return <span className="users-avatar has-image" aria-hidden="true"><img src={user.avatarUrl} alt="" loading="lazy" onError={() => setFailedUrl(user.avatarUrl)} /></span>
+  return <span className="users-avatar" aria-hidden="true">{initials}</span>
 }
 
 export function AccountStatus({ status }) {
@@ -31,7 +40,7 @@ export default function UserDetails({ user, loading, error, isSelf, onClose, onE
         {error && <p className="users-form-error" role="alert">Không tải được chi tiết: {error}</p>}
         <section className="users-profile">
           <div className="users-profile-main"><UserAvatar user={user} /><div><h3>{user.name}</h3><p>{user.username && `@${user.username} • `}{roleLabel(user.role)}</p><small>{user.phone || "Chưa có số điện thoại"}</small><small>{user.email || 'Chưa có email'}</small></div><AccountStatus status={user.status} /></div>
-          <div className="users-profile-dates"><div><small>Ngày tham gia</small><strong>{user.joined ? user.joined.split('-').reverse().join('/') : 'Chưa có thông tin'}</strong></div><div><small>Xác minh</small><strong>{user.verified === true ? 'Đã xác minh' : user.verified === false ? 'Chưa xác minh' : 'Chưa có thông tin'}</strong></div></div>
+          <div className="users-profile-dates"><div><small>Ngày tham gia</small><strong>{user.joined ? user.joined.split('-').reverse().join('/') : 'Chưa có thông tin'}</strong></div><div><small>Cập nhật lần cuối</small><strong>{dateTime(user.modifiedAt)}</strong></div></div>
         </section>
         <section><h3 className="users-section-title"><UserRound size={15} />Hồ sơ thể thao</h3><div className="users-skill-grid">
           <div><small>Điểm tinh thần thể thao</small><strong className="users-rating">{user.fairplay == null ? '—' : user.fairplay.toLocaleString('vi-VN')}</strong><p>Fair-play score</p></div>

@@ -32,15 +32,28 @@ export function roleOptions(users) {
   return [...map.entries()].map(([name, id]) => ({ name, id }))
 }
 
+// Số điện thoại Việt Nam như BE yêu cầu (docs 03): 0912345678 hoặc +84912345678; bỏ qua khoảng trắng, dấu chấm, gạch.
+export const compactPhone = value => String(value ?? '').replace(/[\s.-]/g, '')
+export const isVietnamPhone = value => /^(0|\+84)\d{9}$/.test(compactPhone(value))
+// Dạng chuẩn để so trùng: +84xxxxxxxxx → 0xxxxxxxxx.
+export const phoneKey = value => compactPhone(value).replace(/^\+84/, '0')
+
+// Danh sách nút phân trang rút gọn: 1 … 4 5 6 … 20 ('…' là dấu ngắt).
+export function pageItems(current, count) {
+  const pages = [...new Set([1, current - 1, current, current + 1, count])].filter(page => page >= 1 && page <= count).sort((a, b) => a - b)
+  return pages.flatMap((page, index) => (index && page - pages[index - 1] > 1 ? [`gap-${page}`, page] : [page]))
+}
+
 export function userStats(users, now = new Date()) {
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  // Tháng hiện tại theo giờ Việt Nam (yyyy-MM), khớp với user.joined đã quy về ngày Việt Nam.
+  const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit' }).format(now)
   const active = users.filter(user => user.status === 'Active').length
   const percent = value => (users.length ? `${((value / users.length) * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : '0%')
   const suspended = users.length - active
   return [
     { label: 'TỔNG NGƯỜI DÙNG', value: users.length, trend: 'Toàn bộ tài khoản', tone: 'green' },
     { label: 'NGƯỜI DÙNG ĐANG HOẠT ĐỘNG', value: active, trend: `${percent(active)} đang hoạt động`, tone: 'green' },
-    { label: 'NGƯỜI DÙNG MỚI TRONG THÁNG', value: users.filter(user => user.joined?.startsWith(month)).length, trend: `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`, tone: 'green' },
+    { label: 'NGƯỜI DÙNG MỚI TRONG THÁNG', value: users.filter(user => user.joined?.startsWith(month)).length, trend: `Tháng ${Number(month.slice(5))}/${month.slice(0, 4)}`, tone: 'green' },
     { label: 'ĐÃ TẠM KHÓA', value: suspended, trend: `${percent(suspended)} toàn nền tảng`, tone: 'red' },
   ]
 }

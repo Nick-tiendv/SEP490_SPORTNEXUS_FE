@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { createAccount, deleteAccount, toggleAccountStatus, updateAccount } from '../../api/admin/accountApi.js'
-import { roleLabel } from './usersData.js'
+import { compactPhone, isVietnamPhone, phoneKey, roleLabel } from './usersData.js'
 
 export function DemoDialog({ title, onClose, children, closeLabel = "Đóng hộp thoại" }) {
   const dialog = useRef(null)
@@ -28,7 +28,8 @@ export function DemoDialog({ title, onClose, children, closeLabel = "Đóng hộ
 const noop = () => {}
 
 // Thêm: POST /api/accounts. Sửa: PUT /api/accounts/{id}.
-export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'người dùng' }) {
+// isSelf: đang sửa chính tài khoản đăng nhập → khóa ô vai trò để admin không tự hạ quyền.
+export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'người dùng', isSelf = false }) {
   const [values, setValues] = useState({ name: user?.name || '', username: user?.username || '', email: user?.email || '', phone: user?.phone || '', roleId: user?.roleId || roles.find(role => /player/i.test(role.name))?.id || roles[0]?.id || '', password: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -39,14 +40,17 @@ export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'ng
     if (clean.name.length < 2) return setError("Họ và tên phải có ít nhất 2 ký tự.")
     if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(clean.username)) return setError("Tên đăng nhập phải có 3–30 ký tự gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.")
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError("Vui lòng nhập địa chỉ Email hợp lệ.")
-    if (clean.phone && !/^[+\d\s()-]{7,20}$/.test(clean.phone)) return setError("Vui lòng nhập số điện thoại hợp lệ hoặc để trống.")
+    if (clean.phone && !isVietnamPhone(clean.phone)) return setError('Số điện thoại không đúng định dạng Việt Nam (ví dụ: 0912345678 hoặc +84912345678).')
+    // PUT coi phone = null là giữ nguyên, nên không thể xóa số đã có bằng cách để trống.
+    if (user?.phone && !clean.phone) return setError('Không thể xóa số điện thoại đã có. Hãy nhập số mới hoặc giữ số cũ.')
     if (!clean.roleId) return setError("Không xác định được vai trò. BE chưa trả về roleId trong danh sách tài khoản.")
     if (!user && clean.password.length < 6) return setError("Mật khẩu phải có ít nhất 6 ký tự.")
     if (user && clean.password && clean.password.length < 6) return setError("Mật khẩu mới phải có ít nhất 6 ký tự hoặc để trống.")
     if (users.some(item => item.id !== user?.id && (item.username.toLowerCase() === clean.username.toLowerCase() || (item.email && item.email.toLowerCase() === clean.email.toLowerCase())))) return setError("Tên đăng nhập hoặc Email đã tồn tại.")
+    if (clean.phone && users.some(item => item.id !== user?.id && item.phone && phoneKey(item.phone) === phoneKey(clean.phone))) return setError('Số điện thoại này đã được sử dụng bởi một tài khoản khác.')
     setSubmitting(true); setError('')
     try {
-      const payload = { username: clean.username, fullName: clean.name, email: clean.email, phone: clean.phone, roleId: clean.roleId, password: clean.password }
+      const payload = { username: clean.username, fullName: clean.name, email: clean.email, phone: compactPhone(clean.phone), roleId: clean.roleId, password: clean.password }
       if (user) await updateAccount(user.id, payload)
       else await createAccount(payload)
       onDone(user ? `Đã cập nhật tài khoản ${clean.name}.` : `Đã tạo tài khoản ${clean.name}.`)
@@ -55,9 +59,9 @@ export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'ng
     }
   }
   return <DemoDialog title={`${user ? "Chỉnh sửa" : "Thêm"} ${noun}`} onClose={submitting ? noop : onClose}><form onSubmit={submit} className="users-form">
-    {[['name', "Họ và tên"], ['username', "Tên đăng nhập"], ['email', 'Email'], ['phone', "Số điện thoại (không bắt buộc)"]].map(([name, label]) => <label key={name}>{label}<input name={name} type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'} value={values[name]} onChange={change} required={name !== 'phone'} maxLength={name === 'name' ? 80 : 120} /></label>)}
+    {[['name', "Họ và tên"], ['username', "Tên đăng nhập"], ['email', 'Email'], ['phone', "Số điện thoại (không bắt buộc)"]].map(([name, label]) => <label key={name}>{label}<input name={name} type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'} value={values[name]} onChange={change} required={name !== 'phone'} maxLength={name === 'name' ? 80 : name === 'phone' ? 16 : 120} placeholder={name === 'phone' ? '0912345678' : undefined} /></label>)}
     <label>{user ? 'Mật khẩu mới (để trống nếu không đổi)' : 'Mật khẩu'}<input name="password" type="password" autoComplete="new-password" value={values.password} onChange={change} required={!user} maxLength={100} /></label>
-    <label>Vai trò<select name="roleId" value={values.roleId} onChange={change} disabled={!roles.length}>{roles.map(role => <option key={role.id || role.name} value={role.id}>{roleLabel(role.name)}</option>)}</select></label>
+    <label>Vai trò<select name="roleId" value={values.roleId} onChange={change} disabled={!roles.length || isSelf}>{roles.map(role => <option key={role.id || role.name} value={role.id}>{roleLabel(role.name)}</option>)}</select>{isSelf && <small className="users-field-hint">Không thể tự đổi vai trò của tài khoản đang đăng nhập.</small>}</label>
     {error && <p className="users-form-error" role="alert">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" type="submit" disabled={submitting}>{submitting ? 'Đang lưu…' : user ? "Lưu thay đổi" : `Thêm ${noun}`}</button></footer>
   </form></DemoDialog>
 }

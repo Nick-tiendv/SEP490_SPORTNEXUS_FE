@@ -127,3 +127,8 @@
 
 /* With the details panel open the main column is narrow: show KPIs as 2x2 */
 @media(max-width:1700px){.users-page.with-details .users-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Avatar có ảnh, gợi ý dưới ô nhập, dấu ngắt phân trang */
+.users-avatar.has-image{overflow:hidden;padding:0;background:var(--sn-gray-100)}
+.users-avatar.has-image img{width:100%;height:100%;object-fit:cover;display:block}
+.users-field-hint{display:block;margin-top:4px;font-size:12px;font-weight:400;color:var(--sn-gray-500)}
+.users-page-gap{display:inline-grid;place-items:center;min-width:24px;color:var(--sn-gray-500)}
