@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useSport } from '../../Context/SportContext.jsx'
-import { getFacilities, searchFacilities, getFacilityLocations, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { useSport } from '../../Context/sportContext.js'
+import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -145,7 +145,6 @@ const SLOT_TEMPLATE = [
 ]
 
 const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
-const formatK = (n) => `${n / 1000}k`
 const roundTo10k = (n) => Math.round(n / 10000) * 10000
 
 const SPORT_SEARCH_TEXT = {
@@ -367,32 +366,14 @@ function MapBooking() {
 
   // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
   const [apiFacilities, setApiFacilities] = useState([])
-  const [isLoadingApi, setIsLoadingApi] = useState(true)
   const [apiStatus, setApiStatus] = useState('connecting')
-  const [apiLocations, setApiLocations] = useState([])
-
-  // Lấy danh sách địa điểm / khu vực từ GET /api/v1/facilities/locations
-  useEffect(() => {
-    let isMounted = true
-    async function loadLocations() {
-      try {
-        const locs = await getFacilityLocations()
-        if (isMounted && Array.isArray(locs) && locs.length > 0) {
-          setApiLocations(locs)
-        }
-      } catch (e) {
-        console.warn('MapBooking: Không thể tải locations:', e)
-      }
-    }
-    loadLocations()
-    return () => { isMounted = false }
-  }, [])
+  // Cụm sân đang chọn: ID thật từ API (rỗng tới khi tải xong danh sách cơ sở)
+  const [selectedCourtId, setSelectedCourtId] = useState('')
 
   useEffect(() => {
     let isMounted = true
     async function loadBackendFacilities() {
       try {
-        setIsLoadingApi(true)
         const rawFacilities = await getFacilities()
         if (isMounted && Array.isArray(rawFacilities) && rawFacilities.length > 0) {
           const transformed = rawFacilities.map(transformFacilityToCourt).filter(Boolean)
@@ -410,8 +391,6 @@ function MapBooking() {
       } catch (err) {
         console.warn('API /api/v1/facilities không phản hồi:', err)
         if (isMounted) setApiStatus('fallback')
-      } finally {
-        if (isMounted) setIsLoadingApi(false)
       }
     }
     loadBackendFacilities()
@@ -466,60 +445,30 @@ function MapBooking() {
   const [priceRange, setPriceRange] = useState([PRICE_MIN, PRICE_MAX])
   const [priceEdit, setPriceEdit] = useState(null) // { idx, text } khi đang gõ giá
 
-  // Mặc định chọn cụm sân gần nhất với vị trí xuất phát hoặc tọa độ vệ tinh
-  const [selectedCourtId, setSelectedCourtId] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      const loc = saved ? JSON.parse(saved).location : 'Thủ Đức'
-      const key = detectDistrictKey(loc)
-      if (key === 'thuduc') return 'ddink-td'
-      if (key === 'binhthanh') return 'yonex-bt'
-      if (key === 'q7') return 'trexanh-q7'
-      if (key === 'q1') return 'taodan-q1'
-      if (key === 'q10') return 'lananh-q10'
-      if (key === 'phunhuan') return 'rachmieu-pn'
-      if (key === 'tanbinh') return 'viettel-tb'
-      if (key === 'quan8') return 'chanhhung-q8'
-      if (key === 'tanphu') return 'celadon-tp'
-      if (key === 'govap') return 'quangtrung-gv'
-      if (key === 'q3') return 'hoxuanhuong-q3'
-      if (key === 'q11') return 'phutho-q11'
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'lananh-q10'
-  })
 
   // Tự động chuyển sân ưu tiên khi vị trí thay đổi (nếu người dùng chưa tìm kiếm cụ thể)
   useEffect(() => {
     if (query.trim()) return
     const key = detectDistrictKey(effectiveOrigin)
-    const courtList = apiFacilities
-    if (key === 'thuduc') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'thuduc') ? prev : courtList.find((c) => c.district === 'thuduc')?.id || prev))
-    else if (key === 'binhthanh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'binhthanh') ? prev : courtList.find((c) => c.district === 'binhthanh')?.id || prev))
-    else if (key === 'q7') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q7') ? prev : courtList.find((c) => c.district === 'q7')?.id || prev))
-    else if (key === 'q1') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q1') ? prev : courtList.find((c) => c.district === 'q1')?.id || prev))
-    else if (key === 'q10') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q10') ? prev : courtList.find((c) => c.district === 'q10')?.id || prev))
-    else if (key === 'phunhuan') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'phunhuan') ? prev : courtList.find((c) => c.district === 'phunhuan')?.id || prev))
-    else if (key === 'tanbinh') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanbinh') ? prev : courtList.find((c) => c.district === 'tanbinh')?.id || prev))
-    else if (key === 'quan8') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'quan8') ? prev : courtList.find((c) => c.district === 'quan8')?.id || prev))
-    else if (key === 'tanphu') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'tanphu') ? prev : courtList.find((c) => c.district === 'tanphu')?.id || prev))
-    else if (key === 'govap') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'govap') ? prev : courtList.find((c) => c.district === 'govap')?.id || prev))
-    else if (key === 'q3') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q3') ? prev : courtList.find((c) => c.district === 'q3')?.id || prev))
-    else if (key === 'q11') setSelectedCourtId((prev) => (courtList.some((c) => c.id === prev && c.district === 'q11') ? prev : courtList.find((c) => c.district === 'q11')?.id || prev))
+    if (!key) return
+    // Giữ sân đang chọn nếu cùng quận, không thì chọn sân đầu tiên ở quận đó (nếu có)
+    setSelectedCourtId((prev) =>
+      apiFacilities.some((c) => c.id === prev && c.district === key) ? prev : apiFacilities.find((c) => c.district === key)?.id || prev,
+    )
   }, [effectiveOrigin, query, apiFacilities])
 
-  const courtMatchesSport = (c) => {
+  const courtMatchesSport = useCallback((c) => {
     if (Array.isArray(c.sports) && c.sports.length > 0) {
       return c.sports.some((s) => isSportActive(s))
     }
     return isSportActive(c.sport)
-  }
+  }, [isSportActive])
 
   // Lọc cụm sân:
   // - Khi không gõ tìm kiếm: lọc theo môn và khoảng giá (sắp xếp theo khoảng cách từ người chơi)
   // - Khi người chơi gõ tìm kiếm (tên sân, tuyến đường, quận):
   //   1. Ưu tiên tìm trong danh sách các cụm sân có sẵn. Không ép lọc theo môn/giá để tránh làm biến mất kết quả sân người chơi đang tìm kiếm!
-  //   2. Nếu tên sân người chơi tìm không có trong danh mục mẫu, tự động tạo kết quả Sân Tìm Kiếm Động
-  //      để Google Maps & giao diện lập tức hiển thị, ghim và dẫn đường trực tiếp đến sân đó!
+  //   2. Không có sân nào khớp thì trả danh sách rỗng
   const baseFilteredCourts = useMemo(() => {
     const trimmed = query.trim()
     if (!trimmed) {
@@ -545,43 +494,9 @@ function MapBooking() {
       })
     }
 
-    // Nếu người chơi gõ một tên sân thực tế khác (vd: "Sân Cầu Lông Trường Chinh", "Sân Cầu Lông Sky", v.v.)
-    // Tự sinh cụm sân tìm kiếm động để bản đồ Google Maps và danh sách hiển thị đúng kết quả người chơi muốn
-    const norm = normalizeText(trimmed)
-    const guessedSport = norm.includes('pickleball') ? 'pickleball' : 'badminton'
-    const detectedDist = detectDistrictKey(trimmed)
-    const distCenter = DISTRICT_COORDS[detectedDist] || { lat: 10.7769, lng: 106.7009 }
-    const dynamicLat = distCenter.lat + 0.005
-    const dynamicLng = distCenter.lng + 0.005
-    const dynamicDist = (gpsCoords?.lat && gpsCoords?.lng)
-      ? (haversineDistanceKm(gpsCoords.lat, gpsCoords.lng, dynamicLat, dynamicLng) || 2.5)
-      : (DISTRICT_DISTANCES[detectDistrictKey(effectiveOrigin)]?.[detectedDist] ?? 2.5)
-
-    const dynamicCourt = {
-      id: `custom-search-${trimmed.replace(/[^a-z0-9]/gi, '_')}`,
-      sport: guessedSport,
-      name: trimmed,
-      street: trimmed,
-      address: `${trimmed}, TP. Hồ Chí Minh`,
-      mapQuery: `${trimmed}, TP. Hồ Chí Minh`,
-      district: detectedDist,
-      lat: dynamicLat,
-      lng: dynamicLng,
-      rating: 5.0,
-      price: 180000,
-      courtCount: 6,
-      image:
-        guessedSport === 'pickleball'
-          ? 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=300&h=300&fit=crop'
-          : 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=300&h=300&fit=crop',
-      subCourt: `${trimmed} - Sân 01`,
-      subCourtDesc: 'Định vị trực tiếp từ Google Maps TP.HCM theo yêu cầu tìm kiếm',
-      isCustomSearch: true,
-      distance: dynamicDist,
-      overrides: {},
-    }
-    return [dynamicCourt]
-  }, [localizedCourts, isSportActive, query, priceRange, gpsCoords])
+    // Không có sân thật khớp từ khóa: không tự tạo "sân" từ chữ người dùng gõ
+    return []
+  }, [localizedCourts, courtMatchesSport, query, priceRange])
 
   // Lọc theo tiện ích (danh mục lấy từ GET /api/v1/master-data/amenities): sân phải có đủ các tiện ích đã chọn
   const [amenityOptions, setAmenityOptions] = useState([])
@@ -946,7 +861,6 @@ function MapBooking() {
     })
   }
 
-  const scrollToSummary = () => summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 
 
   const sportOf = (key) => SPORTS_LIST.find((s) => s.key === key)

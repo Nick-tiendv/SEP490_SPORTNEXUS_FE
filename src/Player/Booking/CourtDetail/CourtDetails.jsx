@@ -843,9 +843,9 @@ function CourtDetails() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {reviewsList.map((rev) => (
+                {reviewsList.map((rev, index) => (
                   <div
-                    key={rev.id || Math.random()}
+                    key={rev.id || `review-${index}`}
                     className="p-3.5 rounded-xl bg-surface-container/70 border border-outline-variant/10 flex flex-col gap-1.5"
                   >
                     <div className="flex items-center justify-between">

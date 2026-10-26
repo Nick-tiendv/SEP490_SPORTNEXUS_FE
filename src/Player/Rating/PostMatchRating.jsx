@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { uid } from '../../utils/ids.js'
 import { useNavigate, Link } from 'react-router-dom'
-import { rateFairPlay, getMyFairPlay } from '../../api/player/lfgApi.js'
+import { rateFairPlay } from '../../api/player/lfgApi.js'
 import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
@@ -90,17 +91,7 @@ function PostMatchRating() {
 
   // Toast thông báo
   const [toastMessage, setToastMessage] = useState(null)
-  const [myFairPlayData, setMyFairPlayData] = useState(null)
   const [isSubmittingRating, setIsSubmittingRating] = useState(false)
-
-  // Tải điểm Fair Play cá nhân
-  useEffect(() => {
-    getMyFairPlay()
-      .then((data) => {
-        if (data) setMyFairPlayData(data)
-      })
-      .catch((err) => console.warn('[PostMatchRating] Không thể lấy điểm Fair Play:', err))
-  }, [])
 
   /* ------------------- Pending Fair Play Ratings (GET /api/v1/fair-play/pending-ratings) ------------------- */
   const [pendingRatings, setPendingRatings] = useState([])
@@ -200,7 +191,7 @@ function PostMatchRating() {
       sport: item.sport || 'Cầu lông',
       checkInDone: true,
       checkInTime: item.matchTime || '10:00',
-      contextId: item.contextId || item.bookingId || item.lfgId || `match_${item.id || Date.now()}`,
+      contextId: item.contextId || item.bookingId || item.lfgId || null,
       coPlayers: item.coPlayers && item.coPlayers.length > 0 ? item.coPlayers : defaultCoPlayers,
     }
     setCheckoutSession(matchSession)
@@ -266,7 +257,7 @@ function PostMatchRating() {
     }
 
     const newPartner = {
-      id: `partner_${Date.now()}`,
+      id: uid('partner'),
       name: name,
       email: `${name.toLowerCase().replace(/\s+/g, '')}@guest.local`,
       role: doublesForm.role,
@@ -399,7 +390,7 @@ function PostMatchRating() {
       : selectedPlayer.role || 'Bạn chơi cùng sân'
 
     const newReview = {
-      id: Date.now(),
+      id: uid('review'),
       author: 'Bạn (Người chơi cùng sân)',
       targetPlayer: selectedPlayer.name,
       coPlayerRole: effectiveRole,
@@ -600,6 +591,9 @@ function PostMatchRating() {
       </div>
 
       {/* ===================== BANNER: TRẬN ĐẤU ĐANG CHỜ CHẤM FAIR PLAY (GET /api/v1/fair-play/pending-ratings) ===================== */}
+      {loadingPending && pendingRatings.length === 0 && (
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6B7280' }}>Đang tải các trận chờ chấm Fair Play…</p>
+      )}
       {pendingRatings.length > 0 && (
         <div
           style={{
@@ -1556,7 +1550,7 @@ function PostMatchRating() {
 
                   <button
                     type="submit"
-                    disabled={writtenReview.trim().length < 10}
+                    disabled={writtenReview.trim().length < 10 || isSubmittingRating}
                     style={{
                       padding: '11px 24px',
                       borderRadius: '12px',

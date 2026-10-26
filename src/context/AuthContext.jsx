@@ -4,16 +4,19 @@ import { refreshAccessToken } from '../api/auth/authApi.js'
 import { AuthContext } from './authContext.js'
 import { createSession, readSession, saveSession, tokenExpiry, validSession } from './authSession.js'
 import { mockAuthEnabled } from './mockAuth.js'
+import { clearUserData } from './userStorage.js'
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(readSession)
   const sessionRef = useRef(session)
   const logout = useCallback(() => {
+    clearUserData()
     sessionRef.current = null
     saveSession(null)
     setSession(null)
   }, [])
   const login = useCallback(({ token, role, refreshToken }) => {
+    clearUserData() // bỏ dữ liệu của phiên trước (có thể là tài khoản khác)
     const next = createSession({ token, role, refreshToken })
     sessionRef.current = next
     saveSession(next)

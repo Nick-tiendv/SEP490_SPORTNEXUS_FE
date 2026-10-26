@@ -43,7 +43,7 @@ const toWithdrawalItem = (raw) => {
     bank: { bankName: raw.bankName || '', accountNumber: raw.bankAccountNumber || '', accountHolder: raw.bankAccountHolder || '' },
   }
 }
-import { isSafeInternalPath } from './DepositResultCard.jsx'
+import { isSafeInternalPath } from './depositUtils.js'
 
 /**
  * Màn Ví Escrow — luồng nạp tiền PayOS
@@ -319,6 +319,8 @@ export default function WalletEscrow() {
   const [payMode, setPayMode] = useState('qr') // Mặc định hiển thị VietQR tại chỗ để thuận tiện trên mọi thiết bị
   const [submitting, setSubmitting] = useState(false)
   const amountError = validateDepositAmount(amount)
+  // Chỉ tô đỏ / báo lỗi sau khi người dùng đã nhập hoặc bấm nạp
+  const showAmountError = touched && Boolean(amountError)
 
   const handleAmountInput = (e) => {
     const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -332,7 +334,7 @@ export default function WalletEscrow() {
   const [qrPhase, setQrPhase] = useState(DEPOSIT_STATUS.PENDING)
   const [cancelling, setCancelling] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
 
   const handleSubmit = async () => {
     setTouched(true)
@@ -688,7 +690,7 @@ export default function WalletEscrow() {
                 className={`border rounded-2xl px-5 py-4 flex items-center gap-4 transition-all focus-within:ring-2 ${
                   amount > DEPOSIT_MAX
                     ? 'bg-rose-50/60 border-2 border-rose-500 focus-within:ring-rose-200'
-                    : amountError
+                    : showAmountError
                     ? 'bg-rose-50/30 border border-rose-400 focus-within:ring-rose-200'
                     : 'bg-[#F8FAFC] border-[#E2E8F0] focus-within:border-[#10B981] focus-within:ring-[#10B981]/20'
                 }`}
@@ -705,7 +707,7 @@ export default function WalletEscrow() {
                   placeholder="0"
                   onChange={handleAmountInput}
                   onBlur={() => setTouched(true)}
-                  aria-invalid={Boolean(amountError)}
+                  aria-invalid={showAmountError}
                   aria-describedby="deposit-amount-hint"
                   className={`w-full bg-transparent text-2xl md:text-[28px] font-extrabold outline-none tracking-tight ${
                     amount > DEPOSIT_MAX ? 'text-rose-700' : 'text-[#111827]'
@@ -748,8 +750,8 @@ export default function WalletEscrow() {
                 </div>
               )}
 
-              <p id="deposit-amount-hint" className={`mt-2 text-xs font-semibold ${amountError ? 'text-rose-600' : 'text-[#6B7280]'}`}>
-                {amountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)}đ, tối đa ${formatVND(DEPOSIT_MAX)}đ.`}
+              <p id="deposit-amount-hint" className={`mt-2 text-xs font-semibold ${showAmountError ? 'text-rose-600' : 'text-[#6B7280]'}`}>
+                {showAmountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)}đ, tối đa ${formatVND(DEPOSIT_MAX)}đ.`}
               </p>
 
               <div className="mt-5">

@@ -1,4 +1,4 @@
-import { useSport } from '../Context/SportContext.jsx'
+import { useSport } from '../Context/sportContext.js'
 import { AppSidebar, SidebarNav } from '../../components/layout/AppShell.jsx'
 
 // Khám phá: tìm sân, tìm người chơi, cộng đồng, giải đấu (Đội nằm trong Giải đấu)
