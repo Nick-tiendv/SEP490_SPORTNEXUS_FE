@@ -67,3 +67,15 @@ export async function forgotPassword(identifier) {
 export async function resetPassword({ phone, otpCode, newPassword, confirmPassword }) {
   return validateResponse((await apiClient.post('/api/auth/reset-password', { phone, otpCode, newPassword, confirmPassword }, { skipAuth: true })).data)
 }
+
+// ---------- Đăng nhập mạng xã hội: POST /api/auth/google | /api/auth/facebook ----------
+// SocialLoginRequest: token (Google idToken | Facebook accessToken), role (Player | Owner, chỉ dùng khi tạo tài khoản mới)
+// LoginResponse như đăng nhập thường + isNewUser, needsPhone (chưa có SĐT), hasPassword.
+export async function socialLogin(provider, token, role) {
+  const response = await apiClient.post(`/api/auth/${provider}`, { token, ...(role ? { role } : {}) }, { skipAuth: true })
+  const body = validateResponse(response.data)
+  if (typeof body.data?.token !== 'string' || !body.data.token.trim() || typeof body.data?.role !== 'string') {
+    throw Object.assign(new Error('Phản hồi đăng nhập thiếu token hoặc vai trò.'), { isNormalized: true })
+  }
+  return body.data
+}
