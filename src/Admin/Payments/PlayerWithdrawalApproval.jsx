@@ -24,7 +24,7 @@ import {
   MIN_MAINTENANCE_FEE,
   WITHDRAW_STATUS,
   POPULAR_BANKS,
-} from '../../api/withdrawApi.js'
+} from '../../api/player/withdrawApi.js'
 
 export default function PlayerWithdrawalApproval() {
   const [requests, setRequests] = useState(() => getWithdrawalRequests())

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fe-dev-mock",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5174", "--strictPort"],
+      "env": { "VITE_ALLOW_MOCK_AUTH": "true", "VITE_AUTH_ROLE_ROUTES": "{\"Admin\":\"/admin/dashboard\",\"Player\":\"/dashboard\"}" },
+      "port": 5174
+    }
+  ]
+}

@@ -1,44 +1,113 @@
 import { useState } from 'react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { UserAvatar } from '../Users/UserDetails.jsx'
-import { sportLabels, formatLabels, parseDate, date, facilities } from './tournamentData.js'
+import { addParticipant, cancelTournament, checkInParticipant, generateBracket, lockTournament, randomPairing, removeParticipant, unlockTournament, updateMatchScore } from '../../api/admin/tournamentApi.js'
+import { date } from './tournamentData.js'
 
-export function TournamentForm({ tournament, tournaments, onClose, onSave }) {
-  const [values, setValues] = useState({ name: tournament?.name || '', sport: tournament?.sport || 'Badminton', facility: tournament?.facility || facilities[0], organizer: tournament?.organizer || 'Ban tổ chức SportNexus (minh họa)', starts: tournament ? date(tournament.starts) : '', ends: tournament ? date(tournament.ends) : '', deadline: tournament ? date(tournament.deadline) : '', capacity: String(tournament?.capacity || 32), entryFee: String(tournament?.entryFee ?? 150000), prize: String(tournament?.prize ?? 15000000), format: tournament?.format || 'Knockout' })
+const noop = () => {}
+// Chạy một thao tác API trong hộp thoại: quản lý trạng thái đang gửi và lỗi.
+function useSubmit(onDone) {
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const change = event => setValues({ ...values, [event.target.name]: event.target.value })
+  const run = async (task, message) => {
+    setSubmitting(true); setError('')
+    try { await task(); onDone(message) } catch (err) { setError(err.message); setSubmitting(false) }
+  }
+  return { submitting, error, setError, run }
+}
+
+// Admin không tạo giải: POST /api/v1/tournaments chỉ dành cho Owner (docs 18), giải do chủ sân tạo.
+
+const actions = {
+  generate: { title: 'Tạo nhánh đấu', button: 'Xác nhận', task: context => generateBracket(context.targetId), message: () => 'Đã tạo nhánh đấu.' },
+  pair: { title: 'Bốc thăm ngẫu nhiên', button: 'Xác nhận', task: context => randomPairing(context.targetId), message: () => 'Đã bốc thăm ngẫu nhiên.' },
+  cancel: { title: 'Xác nhận hủy giải', button: 'Xác nhận hủy giải', danger: true, reason: true, task: (context, reason) => cancelTournament(context.tournament.id, reason), message: context => `Đã hủy giải ${context.tournament.name}.` },
+  lock: { title: 'Khóa giải đấu', button: 'Khóa giải', danger: true, reason: true, task: (context, reason) => lockTournament(context.tournament.id, reason), message: context => `Đã khóa giải ${context.tournament.name}.` },
+  unlock: { title: 'Mở khóa giải đấu', button: 'Mở khóa', task: context => unlockTournament(context.tournament.id), message: context => `Đã mở khóa giải ${context.tournament.name}.` },
+}
+const explanation = (type, context) => ({
+  generate: context.hasBracket ? 'Đã có nhánh đấu. Tạo lại có thể thay thế nhánh đấu và kết quả hiện tại.' : `Tạo nhánh đấu từ ${context.participants.length} người tham gia hiện có.`,
+  pair: `Xáo trộn ngẫu nhiên thứ tự ${context.participants.length} người tham gia để xếp cặp.`,
+  cancel: 'Hủy toàn bộ giải đấu. Việc hoàn phí cho người đã đăng ký do backend xử lý theo chính sách hiện hành.',
+  lock: 'Khóa giải để tạm dừng hoạt động (ví dụ nội dung chưa rõ ràng, có báo cáo vi phạm). Ban tổ chức sẽ thấy lý do khóa.',
+  unlock: context.tournament.lockReason ? `Lý do khóa trước đó: ${context.tournament.lockReason}` : 'Cho phép giải hoạt động trở lại.',
+}[type])
+
+// generate-bracket / execute-random-pairing (API giải đấu) · cancel / lock / unlock (PATCH /api/v1/admin/tournaments/{id}/…).
+export function TournamentActionDialog({ type, context, onClose, onDone }) {
+  const action = actions[type]
+  const [reason, setReason] = useState('')
+  const { submitting, error, setError, run } = useSubmit(onDone)
+  const name = ['cancel', 'lock', 'unlock'].includes(type) ? context.tournament.name : context.targetName
+  const confirm = () => {
+    if (action.reason && !reason.trim()) return setError('Vui lòng nhập lý do.')
+    run(() => action.task(context, reason.trim()), action.message(context))
+  }
+  return <DemoDialog title={action.title} onClose={submitting ? noop : onClose}>
+    <p><strong>{name}</strong></p>
+    <p className="tournaments-dialog-explanation">{explanation(type, context)}</p>
+    {action.reason && <div className="users-form"><label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder={type === 'lock' ? 'Ví dụ: Nội dung giới thiệu giải chưa rõ ràng…' : 'Ví dụ: Không đủ người đăng ký…'} /></label></div>}
+    {error && <p className="users-form-error" role="alert">{error}</p>}
+    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Giữ nguyên</button><button className={`users-button ${action.danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting}>{submitting ? 'Đang xử lý…' : action.button}</button></footer>
+  </DemoDialog>
+}
+
+// POST /api/v1/tournaments/{id}/participants — theo số điện thoại hoặc mã tài khoản / đội.
+export function AddParticipantDialog({ context, onClose, onDone }) {
+  const [mode, setMode] = useState('phone')
+  const [value, setValue] = useState('')
+  const { submitting, error, setError, run } = useSubmit(onDone)
   const submit = event => {
     event.preventDefault()
-    const clean = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]))
-    if (clean.name.length < 3 || clean.organizer.length < 3) return setError('Tên giải và ban tổ chức phải có ít nhất 3 ký tự.')
-    if (tournaments.some(item => item.id !== tournament?.id && item.name.toLocaleLowerCase('vi') === clean.name.toLocaleLowerCase('vi'))) return setError('Tên giải đã có trong dữ liệu minh họa.')
-    const starts = parseDate(clean.starts), ends = parseDate(clean.ends), deadline = parseDate(clean.deadline)
-    if (!starts || !ends || !deadline) return setError('Nhập ngày hợp lệ theo định dạng ngày/tháng/năm.')
-    if (ends < starts || deadline > starts) return setError('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu; hạn đăng ký không được sau ngày bắt đầu.')
-    const capacity = Number(clean.capacity), entryFee = Number(clean.entryFee), prize = Number(clean.prize)
-    const max = clean.format === 'RoundRobin' ? 16 : 64
-    if (!Number.isInteger(capacity) || capacity < 2 || capacity > max || capacity < (tournament?.participants.length || 0)) return setError(`Sức chứa phải từ 2 đến ${max} và không ít hơn số người đã đăng ký.`)
-    if (!clean.entryFee || !clean.prize || !Number.isSafeInteger(entryFee) || !Number.isSafeInteger(prize) || entryFee < 0 || prize < 0 || entryFee > 1000000000 || prize > 1000000000) return setError('Phí tham gia và giải thưởng phải là số nguyên từ 0 đến 1.000.000.000 đ.')
-    onSave({ ...clean, starts, ends, deadline, capacity, entryFee, prize })
+    const input = value.trim()
+    if (mode === 'phone' && !/^[+\d\s()-]{7,20}$/.test(input)) return setError('Số điện thoại không hợp lệ.')
+    if (mode !== 'phone' && !/^[0-9a-f-]{36}$/i.test(input)) return setError('Mã phải là UUID (36 ký tự).')
+    run(() => addParticipant(context.targetId, { [mode === 'phone' ? 'phone' : mode === 'user' ? 'userId' : 'teamId']: input }), 'Đã thêm người tham gia.')
   }
-  return <DemoDialog title={tournament ? 'Chỉnh sửa giải đấu — Bản mẫu' : 'Tạo giải đấu — Bản mẫu'} closeLabel="Đóng hộp thoại" onClose={onClose}><p className="users-demo-note">Chỉ lưu trong phiên hiện tại. Giải mới chưa có người đăng ký. Bản mẫu hỗ trợ thi đấu đơn; đổi thể thức sẽ xóa nhánh đấu và bốc thăm cũ.</p><form className="users-form" noValidate onSubmit={submit}>
-    {[['name', 'Tên giải đấu'], ['organizer', 'Ban tổ chức']].map(([name, label]) => <label key={name}>{label}<input name={name} value={values[name]} onChange={change} maxLength={120} required /></label>)}
-    <label>Môn thể thao<select name="sport" value={values.sport} onChange={change}>{Object.entries(sportLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-    <label>Cơ sở<select name="facility" value={values.facility} onChange={change}>{facilities.map(facility => <option key={facility}>{facility}</option>)}</select></label>
-    {[['starts', 'Ngày bắt đầu'], ['ends', 'Ngày kết thúc'], ['deadline', 'Hạn đăng ký']].map(([name, label]) => <label key={name}>{label}<input name={name} inputMode="numeric" maxLength={10} value={values[name]} onChange={change} required /></label>)}
-    <label>Thể thức<select name="format" value={values.format} onChange={change}>{Object.entries(formatLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-    {[['capacity', 'Sức chứa'], ['entryFee', 'Phí tham gia (đ)'], ['prize', 'Giải thưởng (đ)']].map(([name, label]) => <label key={name}>{label}<input name={name} type="number" value={values[name]} onChange={change} min={name === 'capacity' ? 2 : 0} step="1" required /></label>)}
-    {error && <p className="users-form-error" role="alert">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose}>Hủy</button><button className="users-button primary">{tournament ? 'Lưu thay đổi minh họa' : 'Tạo giải minh họa'}</button></footer>
+  return <DemoDialog title="Thêm người tham gia" onClose={submitting ? noop : onClose}><form className="users-form" onSubmit={submit}>
+    <p>{context.targetName}</p>
+    <label>Thêm theo<select value={mode} onChange={event => { setMode(event.target.value); setValue('') }}><option value="phone">Số điện thoại</option><option value="user">Mã tài khoản (userId)</option><option value="team">Mã đội (teamId)</option></select></label>
+    <label>{mode === 'phone' ? 'Số điện thoại' : mode === 'user' ? 'userId' : 'teamId'}<input value={value} onChange={event => setValue(event.target.value)} type={mode === 'phone' ? 'tel' : 'text'} required /></label>
+    {error && <p className="users-form-error" role="alert">{error}</p>}
+    <footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" disabled={submitting}>{submitting ? 'Đang thêm…' : 'Thêm'}</button></footer>
   </form></DemoDialog>
 }
 
-export function TournamentActionDialog({ type, tournament, onClose, onConfirm }) {
-  const [reason, setReason] = useState('')
-  const [error, setError] = useState('')
-  const cancel = type === 'cancel', pair = type === 'pair'
-  return <DemoDialog title={cancel ? 'Xác nhận hủy giải — Bản mẫu' : pair ? 'Bốc thăm ngẫu nhiên — Bản mẫu' : 'Tạo nhánh đấu — Bản mẫu'} closeLabel="Đóng hộp thoại" onClose={onClose}><p className="users-demo-note">Chỉ cập nhật dữ liệu trong phiên hiện tại. Không tác động đến giải thật, đăng ký, thanh toán hoặc hoàn tiền.</p><p>#{tournament.id} · {tournament.name}</p>{!cancel && <p className="tournaments-dialog-explanation">{pair ? 'Bốc thăm xáo trộn thứ tự người chơi; không thay đổi hạt giống. Nếu đã có nhánh đấu, xác nhận sẽ thay nhánh đấu để khớp với bốc thăm mới và xóa kết quả mẫu cũ.' : tournament.bracket ? 'Đã có nhánh đấu. Xác nhận tạo lại sẽ thay nhánh đấu và xóa các kết quả mẫu cũ; giữ nguyên thứ tự bốc thăm hiện tại.' : 'Tạo nhánh đấu theo thứ tự bốc thăm đã xác nhận, hoặc hạt giống nếu chưa bốc thăm. Kết quả tạo là xác định cho cùng thứ tự người chơi.'}</p>}{cancel && <label className="tournaments-reason">Lý do hủy minh họa<input value={reason} onChange={event => setReason(event.target.value)} maxLength={200} /></label>}{error && <p className="users-form-error" role="alert">{error}</p>}<footer><button className="users-button" onClick={onClose}>Giữ nguyên</button><button className={`users-button ${cancel ? 'users-danger' : 'primary'}`} onClick={() => { if (cancel && reason.trim().length < 5) return setError('Nhập lý do minh họa có ít nhất 5 ký tự.'); onConfirm(reason.trim()) }}>{cancel ? 'Xác nhận hủy minh họa' : pair ? 'Xác nhận bốc thăm minh họa' : tournament.bracket ? 'Xác nhận tạo lại nhánh đấu' : 'Xác nhận tạo nhánh đấu'}</button></footer></DemoDialog>
+// Xem người tham gia, check-in (POST /check-in) hoặc xóa (DELETE /participants/{id}).
+export function ParticipantDialog({ context, onClose, onDone }) {
+  const { participant } = context
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const { submitting, error, run } = useSubmit(onDone)
+  return <DemoDialog title="Thông tin người tham gia" onClose={submitting ? noop : onClose}>
+    <div className="tournaments-player"><UserAvatar user={participant} /><div><strong>{participant.name}</strong><small>{[participant.seed != null && `Hạt giống ${participant.seed}`, participant.phone].filter(Boolean).join(' · ')}</small></div></div>
+    {participant.registered && <p>Ngày đăng ký: {date(participant.registered)}.</p>}
+    <p>Thanh toán: {participant.paid ? 'Đã thanh toán' : 'Chưa thanh toán'} · Check-in: {participant.checkedIn ? 'Đã check-in' : 'Chưa check-in'}.</p>
+    {confirmRemove && <p className="users-form-error">Xóa {participant.name} khỏi {context.targetName}? Bấm “Xác nhận xóa” để tiếp tục.</p>}
+    {error && <p className="users-form-error" role="alert">{error}</p>}
+    <footer><button className="users-button" onClick={onClose} disabled={submitting}>Đóng</button>
+      {!participant.checkedIn && <button className="users-button primary" disabled={submitting} onClick={() => run(() => checkInParticipant(context.targetId, participant.id), `Đã check-in cho ${participant.name}.`)}>Check-in</button>}
+      <button className="users-button users-danger" disabled={submitting} onClick={() => (confirmRemove ? run(() => removeParticipant(context.targetId, participant.id), `Đã xóa ${participant.name} khỏi giải.`) : setConfirmRemove(true))}>{confirmRemove ? 'Xác nhận xóa' : 'Xóa khỏi giải'}</button>
+    </footer>
+  </DemoDialog>
 }
 
-export function ParticipantDialog({ participant, onClose }) {
-  return <DemoDialog title="Thông tin người tham gia — Bản mẫu" closeLabel="Đóng hộp thoại" onClose={onClose}><div className="tournaments-player"><UserAvatar user={participant} /><div><strong>{participant.name}</strong><small>{participant.rating} · Hạt giống {participant.seed}</small></div></div><p>Ngày đăng ký: {date(participant.registered)}.</p><p>Thanh toán: {participant.paid ? 'Đã thanh toán minh họa' : 'Chưa thanh toán minh họa'}.</p><p className="users-demo-note">Hồ sơ và hạt giống là dữ liệu giả lập. Không đăng ký người chơi hoặc thu tiền tại đây.</p><footer><button className="users-button" onClick={onClose}>Đóng</button></footer></DemoDialog>
+// PUT /api/v1/matches/{matchId}/score
+export function ScoreDialog({ context, onClose, onDone }) {
+  const { match } = context
+  const [values, setValues] = useState({ a: match.scoreA ?? '', b: match.scoreB ?? '', winner: match.winnerId || '' })
+  const { submitting, error, setError, run } = useSubmit(onDone)
+  const submit = event => {
+    event.preventDefault()
+    const a = Number(values.a), b = Number(values.b)
+    if (values.a === '' || values.b === '' || !Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return setError('Tỷ số phải là số nguyên không âm.')
+    const winnerId = values.winner || (a > b ? match.a.id : b > a ? match.b.id : '')
+    run(() => updateMatchScore(match.id, { scoreP1: a, scoreP2: b, winnerId }), 'Đã cập nhật tỷ số.')
+  }
+  return <DemoDialog title="Cập nhật tỷ số" onClose={submitting ? noop : onClose}><form className="users-form" onSubmit={submit}>
+    <p>{match.roundLabel || ''} · {match.a.name} — {match.b.name}</p>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}><label>{match.a.name || 'Bên 1'}<input type="number" min={0} step={1} value={values.a} onChange={event => setValues({ ...values, a: event.target.value })} required /></label><label>{match.b.name || 'Bên 2'}<input type="number" min={0} step={1} value={values.b} onChange={event => setValues({ ...values, b: event.target.value })} required /></label></div>
+    <label>Người thắng<select value={values.winner} onChange={event => setValues({ ...values, winner: event.target.value })}><option value="">Tự xác định theo tỷ số</option>{[match.a, match.b].filter(side => side.id).map(side => <option key={side.id} value={side.id}>{side.name}</option>)}</select></label>
+    {error && <p className="users-form-error" role="alert">{error}</p>}
+    <footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" disabled={submitting || !match.id}>{submitting ? 'Đang lưu…' : 'Lưu tỷ số'}</button></footer>
+  </form></DemoDialog>
 }

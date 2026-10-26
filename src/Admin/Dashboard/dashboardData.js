@@ -1,43 +1,78 @@
-import { Users, UserRoundCheck, Building2, CalendarDays, Wallet, Network, Flag, ShieldCheck, TriangleAlert, MessageSquareWarning, ClipboardCheck, CircleDollarSign } from 'lucide-react'
+// Cấu hình và hàm tiện ích cho Admin Dashboard (dữ liệu thật lấy qua src/api/admin/dashboardApi.js).
 
-// Presentation-only mock data. No backend requests or payment operations.
-export const stats = [
-  { label: "Tổng người dùng", value: '148.250', icon: Users, trend: '+12,4%', supporting: 'so với tháng trước' },
-  { label: "Chủ sân đang hoạt động", value: '1.420', icon: UserRoundCheck, trend: '+8,2%', supporting: 'so với tháng trước' },
-  { label: "Cơ sở thể thao", value: '3.890', icon: Building2, trend: '+6,5%', supporting: 'đang hoạt động' },
-  { label: "Tổng lượt đặt sân", value: '94.620', icon: CalendarDays, trend: '+18,6%', supporting: 'so với tháng trước' },
-  { label: "Doanh thu nền tảng", value: '4.580.000.000 ₫', icon: Wallet, trend: '+24,8%', supporting: 'doanh thu tháng này' },
-  { label: "Nhóm chơi đang hoạt động", value: '1.845', icon: Network, trend: '+15,2%', supporting: 'so với tháng trước' },
-]
-export const trends = {
-  '7 ngày': [17, 30, 34, 33, 37, 43, 48],
-  '30 ngày': [13, 22, 34, 40, 39, 42, 53, 51],
-  '90 ngày': [15, 19, 27, 24, 35, 41, 45, 57],
+export const PERIODS = ['Hôm nay', 'Tháng này', 'Quý này']
+export const TREND_RANGES = { '7 ngày': 7, '30 ngày': 30, '90 ngày': 90 }
+// Số bản ghi tối đa lấy về để tổng hợp biểu đồ / môn thể thao phía FE.
+// Số trang booking tối đa (100 đơn/trang) dùng để tính tỉ lệ theo môn.
+export const AGGREGATE_MAX_PAGES = 10
+
+const startOfDay = date => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+export const toApiDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+// Trả về khoảng hiện tại và khoảng liền trước có cùng độ dài để tính % tăng trưởng.
+export function periodRange(period, now = new Date()) {
+  const today = startOfDay(now)
+  let from
+  if (period === 'Hôm nay') from = today
+  else if (period === 'Quý này') from = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)
+  else from = new Date(today.getFullYear(), today.getMonth(), 1)
+  const length = Math.round((today - from) / 86400000) + 1
+  return {
+    current: { DateFrom: toApiDate(from), DateTo: toApiDate(today) },
+    previous: { DateFrom: toApiDate(addDays(from, -length)), DateTo: toApiDate(addDays(from, -1)) },
+  }
 }
-export const sports = [
-  { name: 'Cầu lông', count: '42,5%', bookings: '40.215 lượt đặt', width: 85 },
-  { name: 'Pickleball', count: '28,0%', bookings: '26.894 lượt đặt', width: 65 },
-  { name: 'Bóng đá mini', count: '16,0%', bookings: '15.140 lượt đặt', width: 43 },
-  { name: 'Quần vợt', count: '10,0%', bookings: '9.462 lượt đặt', width: 29 },
-  { name: 'Bóng rổ', count: '3,5%', bookings: '2.909 lượt đặt', width: 13 },
-]
-export const attention = [
-  { title: '12 Chủ sân chờ KYC', text: 'Giấy tờ xác minh chưa đầy đủ hoặc đang chờ quản trị viên phê duyệt.', icon: ClipboardCheck, tone: 'green', detail: "Ưu tiên cao", action: 'Duyệt ngay' },
-  { title: '5 Báo cáo vi phạm', text: 'Có đơn đặt sân / đánh giá bị báo cáo cần được kiểm tra và xử lý.', icon: Flag, tone: 'red', detail: 'Cần kiểm tra', action: 'Kiểm tra' },
-  { title: '3 Khiếu nại Escrow', text: 'Yêu cầu hoàn tiền / tranh chấp thanh toán đang chờ xác minh.', icon: CircleDollarSign, tone: 'green', detail: '23.000.000 ₫', action: 'Xem xét' },
-  { title: '8 Cơ sở mới đăng ký', text: 'Cần rà soát thông tin cơ sở và xác nhận trước khi hiển thị.', icon: Building2, tone: 'green', detail: 'Trong 24 giờ qua', action: 'Thẩm định' },
-]
-export const bookings = [
-  { id: '#BK-88219', user: 'Lê Hoàng Nam', initials: 'HN', facility: 'Pro Arena', court: 'Pickleball Court 02', location: 'TP. HCM', date: '12/03/2025', time: '20:00 – 21:00', amount: '320.000 ₫', sport: 'Pickleball', status: 'Confirmed', payment: 'Đã thanh toán' },
-  { id: '#BK-88218', user: 'Nguyễn Mai Anh', initials: 'MA', facility: 'CLB Cầu Lông Thủ Đức', court: 'Sân 3', location: 'TP. HCM', date: '12/03/2025', time: '18:30 – 19:30', amount: '200.000 ₫', sport: 'Cầu lông', status: 'Pending', payment: 'Chờ thanh toán' },
-  { id: '#BK-88217', user: 'Trần Đức Khang', initials: 'DK', facility: 'Sân Bóng SportNexus', court: 'Sân 5 người', location: 'Bình Thạnh', date: '12/03/2025', time: '17:00 – 18:30', amount: '650.000 ₫', sport: 'Bóng đá', status: 'Confirmed', payment: 'Đã thanh toán' },
-  { id: '#BK-88216', user: 'Đặng Quốc Huy', initials: 'QH', facility: 'Tennis Club Lê Văn', court: 'Sân 02', location: 'TP. HCM', date: '12/03/2025', time: '08:00 – 09:00', amount: '450.000 ₫', sport: 'Tennis', status: 'Completed', payment: 'Đã thanh toán' },
-  { id: '#BK-88215', user: 'Phạm Thùy Linh', initials: 'TL', facility: 'D-Sports Basketball', court: 'Sân Indoor', location: 'TP. HCM', date: '12/03/2025', time: '21:00 – 22:00', amount: '180.000 ₫', sport: 'Bóng rổ', status: 'Cancelled', payment: 'Đã hoàn tiền' },
-]
-export const activities = [
-  { icon: UserRoundCheck, text: 'Nguyễn Minh đã đăng ký trở thành chủ sân mới.', meta: '2 phút trước • KYC đang chờ duyệt', tone: 'green' },
-  { icon: CalendarDays, text: 'Cơ sở Sunshine đã xác nhận 23 lượt đặt sân trong khung giờ 20:00.', meta: '5 phút trước • Tổng giá trị 4,2 triệu', tone: 'green' },
-  { icon: MessageSquareWarning, text: 'Nhận báo cáo mới từ Nguyễn Hoàng về cơ sở Smash Club.', meta: '8 phút trước • Yêu cầu kiểm tra', tone: 'red' },
-  { icon: ShieldCheck, text: 'Giao dịch Escrow Pickleball QUEEN 2.5 đã được hoàn tất.', meta: '12 phút trước • Đã thanh toán thành công', tone: 'green' },
-  { icon: TriangleAlert, text: 'D-Sports Thảo Điền đã báo lịch bảo trì 2 sân vào cuối tuần.', meta: '15 phút trước • Đã cập nhật', tone: 'gray' },
-]
+export function lastDaysRange(days, now = new Date()) {
+  const today = startOfDay(now)
+  return { from: addDays(today, -(days - 1)), to: today }
+}
+
+export const formatNumber = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
+export const formatCurrency = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
+export function growth(current, previous) {
+  if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return undefined
+  const percent = ((current - previous) / previous) * 100
+  return `${percent >= 0 ? '+' : ''}${percent.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
+}
+export function formatDate(value) {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('vi-VN') : '—'
+}
+export function formatTime(value) {
+  if (!value) return ''
+  if (/^\d{1,2}:\d{2}/.test(value)) return value.slice(0, 5)
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+}
+
+// Gom dữ liệu byDay của API dashboard theo ngày (hoặc theo tuần khi khoảng dài) cho biểu đồ xu hướng.
+export function buildTrendSeries(byDay, days, now = new Date()) {
+  const { from } = lastDaysRange(days, now)
+  const bucketDays = days > 30 ? 7 : 1
+  const buckets = Array.from({ length: Math.ceil(days / bucketDays) }, (_, index) => ({ start: addDays(from, index * bucketDays), revenue: 0, bookings: 0, newUsers: 0 }))
+  for (const day of byDay) {
+    const date = day.date ? new Date(day.date) : null
+    if (!date || Number.isNaN(date.getTime())) continue
+    const index = Math.floor(Math.round((startOfDay(date) - from) / 86400000) / bucketDays)
+    if (index < 0 || index >= buckets.length) continue
+    buckets[index].bookings += day.bookings
+    buckets[index].revenue += day.bookingGrossValue
+    buckets[index].newUsers += day.newUsers
+  }
+  return buckets.map(bucket => ({ ...bucket, label: bucket.start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) }))
+}
+
+// Tỷ lệ booking theo môn thể thao.
+export function buildSportShares(bookings) {
+  const counts = new Map()
+  for (const { sport } of bookings) if (sport) counts.set(sport, (counts.get(sport) || 0) + 1)
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
+  const max = Math.max(0, ...counts.values())
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({
+    name,
+    count: `${((count / total) * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`,
+    bookings: `${count.toLocaleString('vi-VN')} lượt đặt`,
+    width: Math.round((count / max) * 100),
+  }))
+}

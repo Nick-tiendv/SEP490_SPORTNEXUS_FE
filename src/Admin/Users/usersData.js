@@ -1,60 +1,48 @@
-// Fictional prototype records only; no backend data or persisted account changes.
-const profiles = [
-  ['Minh Minh Minh', 'minhminh', 'minh.minh@gmail.com', 'Player', 'Active'],
-  ['Lê Hoàng Nam', 'nam_le', 'hoangnam.le@vn.vn', 'Player', 'Active'],
-  ['Nguyễn Văn Sơn', 'owner_phuongnang', 'nguyen.vanson@sport.vn', 'Court Owner', 'Active'],
-  ['Trần Đình Khang', 'hoang_badminton', 'khang.dinh@outlook.com', 'Player', 'Inactive'],
-  ['Hoàng Phạm Cường', 'cuong_ph', 'cuong.pham@gmail.com', 'Player', 'Suspended'],
-  ['Vũ Thị Mai Anh', 'mai_anh', 'maianh.vt@gmail.com', 'Player', 'Active'],
-  ['Alex Tran', 'alextran_admin', 'alex.tran@sportnexus.vn', 'Administrator', 'Active'],
-  ['Phạm Thùy Linh', 'thuy_linh', 'linh.pham@example.com', 'Player', 'Active'],
-  ['Đặng Quốc Huy', 'quoc_huy', 'huy.dang@example.com', 'Player', 'Inactive'],
-  ['Nguyễn Mai Anh', 'mai_nguyen', 'mai.nguyen@example.com', 'Court Owner', 'Active'],
-  ['Trần Đức Khang', 'duc_khang', 'khang.tran@example.com', 'Player', 'Active'],
-  ['Lê Thanh Bình', 'thanh_binh', 'binh.le@example.com', 'Player', 'Suspended'],
-  ['Võ Ngọc Lan', 'ngoc_lan', 'lan.vo@example.com', 'Player', 'Active'],
-  ['Bùi Gia Bảo', 'gia_bao', 'bao.bui@example.com', 'Court Owner', 'Inactive'],
-  ['Trần Hoài An', 'hoai_an', 'an.tran@example.com', 'Player', 'Active'],
-]
+// Nhãn hiển thị và hàm tiện ích cho trang Quản lý người dùng (dữ liệu thật lấy qua src/api/admin/accountApi.js).
 
-export const initialUsers = profiles.map(([name, username, email, role, status], index) => ({
-  id: `USER-${94811 + index}`, name, username, email, role, status,
-  joined: index === 0 ? '2024-01-14' : `2024-10-${String(index + 1).padStart(2, '0')}`,
-  phone: index === 0 ? '0912 778 899' : null,
-  lastActive: status === 'Active' ? "10 phút trước (ứng dụng iOS)" : null,
-  sport: role === 'Player' ? (index % 2 ? 'Tennis' : 'Pickleball & Cầu Lông') : null,
-  skillLevel: role === 'Player' ? (index % 2 === 0 ? 'Trung bình - Khá' : 'Khá - Nâng cao') : null,
-  fairplay: status === 'Suspended' ? 72 : role === 'Player' ? 99.4 : null,
-  bookings: role === 'Player' ? 32 + index : 0,
-  lfg: role === 'Player' ? 18 + index : 0,
-  tournaments: role === 'Player' ? 2 : 0,
-  reviews: role === 'Player' ? 14 + index : 0,
-  wallet: role === 'Player' ? 2450000 + index * 100000 : null,
-  totalSpent: role === 'Player' ? 14200000 + index * 200000 : null,
-  activities: index === 0 ? [
-    { title: "Đã tham gia trận tìm nhóm chơi #BK-8820", text: 'Kèo Pickleball Đôi Nam 4.0 • Sunrise Court 2', time: "18 phút trước" },
-    { title: "Đã đặt sân Sunrise Riverside", text: '18:30–20:00 (Court 2B) • Đã thanh toán cọc', time: "Hôm qua lúc 15:42" },
-    { title: "Đã hoàn tất điểm danh tại cổng", text: 'Smart Turnstile Gate 3 • PB Center Q7', time: "24/10/2024" },
-    { title: "Đã cập nhật mật khẩu", text: "Đã xác minh bảo mật 2FA bằng SMS OTP", time: "12/10/2024" },
-  ] : [],
-  disputes: status === 'Suspended' ? 1 : 0,
-}))
+export const roleLabels = {
+  Admin: 'Quản trị viên',
+  Administrator: 'Quản trị viên',
+  Player: 'Người chơi',
+  Owner: 'Chủ sân',
+  'Court Owner': 'Chủ sân',
+  CourtOwner: 'Chủ sân',
+}
+export const statusLabels = { Active: 'Đang hoạt động', Suspended: 'Đã tạm khóa' }
+export const roleLabel = role => roleLabels[role] || role || '—'
+export const roleTone = role => (/owner/i.test(role) ? 'owner' : /admin/i.test(role) ? 'administrator' : '')
 
-export const userStats = [
-  { label: "TỔNG NGƯỜI DÙNG", value: '148.250', trend: "+12,4% so với tháng trước", tone: 'green' },
-  { label: "NGƯỜI DÙNG ĐANG HOẠT ĐỘNG", value: '139.410', trend: "94,0% đang hoạt động", tone: 'green' },
-  { label: "NGƯỜI DÙNG MỚI TRONG THÁNG", value: '4.820', trend: "+10,2% so với tháng trước", tone: 'green' },
-  { label: "ĐÃ TẠM KHÓA / NGỪNG HOẠT ĐỘNG", value: '8.840', trend: "5,9% toàn nền tảng", tone: 'red' },
-]
 export const emptyFilters = { search: '', role: 'All', status: 'All', from: '', to: '' }
 
+const normalize = value => String(value ?? '').toLocaleLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
+
 export function filterUsers(users, filters) {
-  const query = filters.search.trim().toLocaleLowerCase()
+  const query = normalize(filters.search.trim())
   return users.filter(user =>
-    (!query || [user.name, user.username, user.email].some(value => value.toLocaleLowerCase().includes(query))) &&
+    (!query || [user.name, user.username, user.email, user.phone].some(value => normalize(value).includes(query))) &&
     (filters.role === 'All' || user.role === filters.role) &&
     (filters.status === 'All' || user.status === filters.status) &&
-    (!filters.from || user.joined >= filters.from) && (!filters.to || user.joined <= filters.to))
+    (!filters.from || (user.joined && user.joined >= filters.from)) && (!filters.to || (user.joined && user.joined <= filters.to)))
+}
+
+// Vai trò lấy từ chính danh sách tài khoản, vì BE chưa có API danh sách vai trò.
+export function roleOptions(users) {
+  const map = new Map()
+  for (const user of users) if (user.role && !map.has(user.role)) map.set(user.role, user.roleId)
+  return [...map.entries()].map(([name, id]) => ({ name, id }))
+}
+
+export function userStats(users, now = new Date()) {
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const active = users.filter(user => user.status === 'Active').length
+  const percent = value => (users.length ? `${((value / users.length) * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : '0%')
+  const suspended = users.length - active
+  return [
+    { label: 'TỔNG NGƯỜI DÙNG', value: users.length, trend: 'Toàn bộ tài khoản', tone: 'green' },
+    { label: 'NGƯỜI DÙNG ĐANG HOẠT ĐỘNG', value: active, trend: `${percent(active)} đang hoạt động`, tone: 'green' },
+    { label: 'NGƯỜI DÙNG MỚI TRONG THÁNG', value: users.filter(user => user.joined?.startsWith(month)).length, trend: `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`, tone: 'green' },
+    { label: 'ĐÃ TẠM KHÓA', value: suspended, trend: `${percent(suspended)} toàn nền tảng`, tone: 'red' },
+  ]
 }
 
 export function usersCsv(users) {
@@ -64,7 +52,7 @@ export function usersCsv(users) {
     if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`
     return `"${text.replaceAll('"', '""')}"`
   }
-  return '\uFEFF' + [['ID', "Họ và tên", "Tên đăng nhập", 'Email', 'Vai trò', "Trạng thái", "Ngày tham gia"],
-    ...users.map(user => [user.id, user.name, user.username, user.email, user.role, user.status, user.joined])]
+  return '﻿' + [['ID', 'Họ và tên', 'Tên đăng nhập', 'Email', 'Số điện thoại', 'Vai trò', 'Trạng thái', 'Ngày tham gia'],
+    ...users.map(user => [user.id, user.name, user.username, user.email, user.phone, roleLabel(user.role), statusLabels[user.status] || user.status, user.joined])]
     .map(row => row.map(escape).join(',')).join('\r\n')
 }

@@ -1,15 +1,38 @@
 import { useState } from 'react'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
-import { UserAvatar } from '../Users/UserDetails.jsx'
-import { LFGFinances } from './LFGDetails.jsx'
-import { slotLabels, money } from './lfgData.js'
+import { cancelLfg } from '../../api/admin/lfgApi.js'
+import { titleOf, shortId } from './lfgData.js'
 
-export default function LFGDialogs({ dialog, onClose, onReview, onModerate }) {
+const noop = () => {}
+
+// POST /api/v1/admin/lfgs/{cardId}/cancel { reason, cancelBooking, bookingRefundPercentage }.
+export default function CancelLfgDialog({ lfg, onClose, onDone }) {
   const [reason, setReason] = useState('')
+  const [cancelBooking, setCancelBooking] = useState(false)
+  const [refund, setRefund] = useState('100')
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const { activity, slot } = dialog
-  if (dialog.type === 'slot') return <DemoDialog title={`Vị trí ${slot.id} — Thông tin minh họa`} closeLabel="Đóng hộp thoại" onClose={onClose}>{slot.player ? <><div className="lfg-dialog-player"><UserAvatar user={slot.player} /><div><strong>{slot.player.name}</strong><small>@{slot.player.username} · {slot.player.rating}</small></div></div><p>Trạng thái đăng ký: {slotLabels[slot.status]}.</p><p>Phần đóng góp minh họa: {money(activity.courtFee / activity.slots.length)} · {slot.paid ? 'Đã thanh toán' : 'Chưa thanh toán'}.</p></> : <p>{['Cancelled', 'Completed'].includes(activity.status) ? 'Vị trí chưa có người trong dữ liệu lịch sử; kèo đã đóng.' : 'Vị trí này còn trống trong dữ liệu mẫu.'} Phần đóng góp: {money(activity.courtFee / activity.slots.length)}.</p>}<p className="users-demo-note">Chỉ xem thông tin. Quản trị viên không nhận vị trí hoặc tham gia kèo tại đây.</p><footer><button className="users-button" onClick={onClose}>Đóng</button></footer></DemoDialog>
-  if (dialog.type === 'reports') return <DemoDialog title={`Báo cáo kèo #${activity.id} — Bản mẫu`} closeLabel="Đóng hộp thoại" onClose={onClose}><p className="users-demo-note">Báo cáo giả lập để kiểm tra giao diện. Đánh dấu đã xem chỉ cập nhật phiên hiện tại; không kết luận vi phạm, cấm tài khoản hoặc áp dụng hình phạt.</p><div className="lfg-report-list">{activity.reports.map(report => <article key={report.id}><h3>{report.reason}</h3><p>{report.description}</p><small>{report.time} · {report.reviewed ? 'Đã xem trong bản mẫu' : 'Chưa xem trong bản mẫu'}</small></article>)}</div>{!activity.reports.length && <p>Không có báo cáo minh họa cho kèo này.</p>}<footer><button className="users-button" onClick={onClose}>Đóng</button><button className="users-button primary" disabled={!activity.reports.some(report => !report.reviewed)} onClick={onReview}>Đánh dấu đã xem — Bản mẫu</button></footer></DemoDialog>
-  if (dialog.type === 'finance') return <DemoDialog title="Thông tin ký quỹ — Bản mẫu" closeLabel="Đóng hộp thoại" onClose={onClose}><p className="users-demo-note">Các khoản tiền và trạng thái chỉ là dữ liệu minh họa. Không hoàn tiền, chuyển tiền, rút tiền hoặc thu tiền.</p><LFGFinances activity={activity} /><p className="lfg-demo-note">Mỗi vị trí đóng góp {money(activity.courtFee / activity.slots.length)}. {activity.slots.filter(item => item.paid).length}/{activity.slots.length} vị trí đã thanh toán minh họa.</p><footer><button className="users-button" onClick={onClose}>Đóng</button></footer></DemoDialog>
-  return <DemoDialog title="Xác nhận hủy kèo — Bản mẫu" closeLabel="Đóng hộp thoại" onClose={onClose}><p className="users-demo-note">Chỉ cập nhật trạng thái và nhật ký minh họa trong phiên hiện tại. Không hủy kèo thật, thay đổi người chơi, xử lý tiền hoặc áp dụng hình phạt. Tải lại trang sẽ khôi phục dữ liệu.</p><p>Hủy kèo #{activity.id}: {activity.title}?</p><form className="users-form" noValidate onSubmit={event => { event.preventDefault(); if (reason.trim().length < 5) { setError('Nhập lý do minh họa có ít nhất 5 ký tự.'); return } onModerate(reason.trim()) }}><label>Lý do hủy minh họa<input value={reason} onChange={event => setReason(event.target.value)} maxLength={200} required /></label>{error && <p role="alert" className="users-form-error">{error}</p>}<footer><button type="button" className="users-button" onClick={onClose}>Giữ nguyên kèo</button><button className="users-button users-danger">Xác nhận hủy minh họa</button></footer></form></DemoDialog>
+  const submit = async event => {
+    event.preventDefault()
+    const refundValue = Number(refund)
+    if (!reason.trim()) return setError('Vui lòng nhập lý do hủy kèo.')
+    if (cancelBooking && (!Number.isFinite(refundValue) || refundValue < 0 || refundValue > 100)) return setError('Tỉ lệ hoàn tiền phải từ 0 đến 100%.')
+    setSubmitting(true); setError('')
+    try {
+      await cancelLfg(lfg.id, { reason: reason.trim(), cancelBooking, bookingRefundPercentage: refundValue })
+      onDone(`Đã hủy kèo ${shortId(lfg.id)}${cancelBooking ? ` và đơn đặt sân (hoàn ${refundValue}%)` : ''}.`)
+    } catch (err) {
+      setError(err.message); setSubmitting(false)
+    }
+  }
+  return <DemoDialog title="Hủy kèo ghép trận" onClose={submitting ? noop : onClose}>
+    <p>Hủy kèo {shortId(lfg.id)}: <strong>{titleOf(lfg)}</strong>? Người tham gia sẽ không thể chơi theo kèo này nữa.</p>
+    <form className="users-form" noValidate onSubmit={submit}>
+      <label>Lý do hủy<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Ví dụ: Kèo vi phạm quy định cộng đồng…" required /></label>
+      <label className="payments-review-check" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={cancelBooking} onChange={event => setCancelBooking(event.target.checked)} />Hủy luôn đơn đặt sân của kèo</label>
+      {cancelBooking && <label>Tỉ lệ hoàn tiền đơn đặt sân (%)<input type="number" min="0" max="100" value={refund} onChange={event => setRefund(event.target.value)} /></label>}
+      {error && <p role="alert" className="users-form-error">{error}</p>}
+      <footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Giữ nguyên kèo</button><button className="users-button users-danger" disabled={submitting}>{submitting ? 'Đang hủy…' : 'Xác nhận hủy kèo'}</button></footer>
+    </form>
+  </DemoDialog>
 }

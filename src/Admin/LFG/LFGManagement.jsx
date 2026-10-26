@@ -1,66 +1,77 @@
-import { useState } from 'react'
-import { Users, UserRoundSearch, BadgeCheck, Trophy, CircleX, Download, ListFilter, Search, Filter } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Users, UserRoundSearch, BadgeCheck, Hourglass, CircleX, Download, Search, RefreshCw } from 'lucide-react'
 import LFGTable from './LFGTable.jsx'
 import LFGDetails from './LFGDetails.jsx'
-import LFGDialogs from './LFGDialogs.jsx'
-import { initialActivities, lfgStats, statusLabels, sportLabels, number, normalize, parseDate, exportActivities } from './lfgData.js'
+import CancelLfgDialog from './LFGDialogs.jsx'
+import { useDebounced, usePagedList } from '../components/listHooks.js'
+import { getLfgStatistics, listLfgs } from '../../api/admin/lfgApi.js'
+import { getSportOptions, listAdminFacilities } from '../../api/admin/facilityApi.js'
+import { fetchAllPages } from '../../api/admin/dashboardApi.js'
+import { statusLabels, sportLabels, number, money, percent, exportLfgs } from './lfgData.js'
 import '../Users/users.css'
 import './lfg.css'
 
-const emptyFilters = { search: '', status: '', sport: '', facility: '', from: '', to: '', reported: false }
-const icons = { total: Users, open: UserRoundSearch, full: BadgeCheck, completed: Trophy, cancelled: CircleX }
+const emptyFilters = { search: '', status: '', sport: '', facility: '', from: '', to: '' }
+const icons = { total: Users, open: UserRoundSearch, full: BadgeCheck, completed: Hourglass, cancelled: CircleX }
 
 export default function LFGManagement() {
-  const [activities, setActivities] = useState(initialActivities)
-  const [draft, setDraft] = useState(emptyFilters)
   const [filters, setFilters] = useState(emptyFilters)
-  const [detailId, setDetailId] = useState(initialActivities[0].id)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(5)
-  const [dialog, setDialog] = useState(null)
+  const [pageSize, setPageSize] = useState(20)
+  const [reload, setReload] = useState(0)
+  const [detailId, setDetailId] = useState(null)
+  const [cancelling, setCancelling] = useState(null)
   const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
-  const fromDate = parseDate(filters.from), toDate = parseDate(filters.to)
-  const filtered = activities.filter(activity => normalize(`${activity.id} ${activity.title} ${sportLabels[activity.venue.sport]} ${activity.host.name} ${activity.venue.name}`).includes(normalize(filters.search.trim()))
-    && (!filters.status || activity.status === filters.status) && (!filters.sport || activity.venue.sport === filters.sport)
-    && (!filters.facility || activity.venue.id === filters.facility) && (!fromDate || activity.date >= fromDate) && (!toDate || activity.date <= toDate)
-    && (!filters.reported || activity.reports.length > 0))
-  const detail = activities.find(activity => activity.id === detailId)
-  const venues = [...new Map(activities.map(activity => [activity.venue.id, activity.venue])).values()]
-  const change = (key, value) => { setDraft(previous => ({ ...previous, [key]: value })); setError('') }
-  const apply = event => {
-    event.preventDefault()
-    const from = parseDate(draft.from), to = parseDate(draft.to)
-    if ((draft.from && !from) || (draft.to && !to)) return setError('Nhập ngày hợp lệ theo định dạng ngày/tháng/năm (ví dụ: 15/10/2026).')
-    if (from && to && from > to) return setError('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.')
-    setFilters(draft); setPage(1); setError('')
-  }
-  const reset = () => { setDraft(emptyFilters); setFilters(emptyFilters); setPage(1); setError('') }
-  const toggleReports = () => {
-    const reported = !filters.reported
-    setDraft(previous => ({ ...previous, reported })); setFilters(previous => ({ ...previous, reported })); setPage(1)
-  }
-  const reviewReports = () => {
-    const id = dialog.activity.id
-    setActivities(previous => previous.map(activity => activity.id === id ? { ...activity, reports: activity.reports.map(report => ({ ...report, reviewed: true })), history: [...activity.history, { id: `review-${activity.history.length}`, time: 'Phiên hiện tại', text: 'Đã xem báo cáo trong bản mẫu; chưa kết luận hoặc xử phạt.' }] } : activity))
-    setNotice('Đã đánh dấu báo cáo là đã xem trong bản mẫu. Không lưu lên máy chủ.'); setDialog(null)
-  }
-  const moderate = reason => {
-    const id = dialog.activity.id
-    setActivities(previous => previous.map(activity => activity.id === id && !['Completed', 'Cancelled'].includes(activity.status) ? { ...activity, status: 'Cancelled', moderationReason: reason, history: [...activity.history, { id: `moderation-${activity.history.length}`, time: 'Phiên hiện tại', text: `Hủy kèo trong bản mẫu. Lý do: ${reason}` }] } : activity))
-    setNotice(`Đã đổi trạng thái kèo #${id} thành “Đã hủy” trong bản mẫu. Không thay đổi khoản tiền hoặc dữ liệu máy chủ.`); setDialog(null)
-  }
-  const download = () => { exportActivities(filtered); setNotice(`Đã xuất ${number(filtered.length)} kèo đang được lọc ra CSV minh họa.`) }
-  const draftChanged = Object.keys(emptyFilters).some(key => draft[key] !== filters[key])
-  return <div className="lfg-page"><header className="lfg-page-heading"><div><h1>Quản lý ghép trận <span>1.845 kèo mẫu</span></h1><p>Theo dõi hoạt động tìm người chơi và các kèo ghép trận trên SportNexus.</p></div><div><button className="users-button" onClick={download}><Download size={13} />Xuất CSV</button><button className="users-button" aria-pressed={filters.reported} onClick={toggleReports}><ListFilter size={13} />{filters.reported ? 'Hiện tất cả kèo' : 'Lọc kèo có báo cáo'}</button></div></header>
-    <div className="lfg-kpis">{lfgStats.map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{number(stat.value)}</strong><p>{stat.note}</p></article> })}</div>
-    <p className="lfg-demo-label">Chỉ số toàn nền tảng là số liệu minh họa độc lập; không tính từ {activities.length} kèo mẫu và không cộng các nhóm thành tổng. Thay đổi sẽ mất khi tải lại trang.</p>
+  const [stats, setStats] = useState({ key: -1, value: {}, error: '' })
+  const [options, setOptions] = useState({ sports: [], facilities: [] })
+  const keyword = useDebounced(filters.search.trim())
+  const invalidRange = filters.from && filters.to && filters.from > filters.to
+
+  // GET /api/v1/admin/lfgs — lọc, tìm kiếm, phân trang phía server.
+  const params = useMemo(() => ({ Keyword: keyword, Status: filters.status, CategoryId: filters.sport, FacilityId: filters.facility, FromDate: invalidRange ? '' : filters.from, ToDate: invalidRange ? '' : filters.to, Page: page, PageSize: pageSize }), [keyword, filters.status, filters.sport, filters.facility, filters.from, filters.to, invalidRange, page, pageSize])
+  const list = usePagedList(listLfgs, params, reload)
+  useEffect(() => {
+    let cancelled = false
+    getLfgStatistics()
+      .then(value => !cancelled && setStats({ key: reload, value, error: '' }))
+      .catch(error => !cancelled && setStats(previous => ({ ...previous, key: reload, error: error.message })))
+    return () => { cancelled = true }
+  }, [reload])
+  useEffect(() => {
+    let cancelled = false
+    Promise.allSettled([getSportOptions(), fetchAllPages((Page, PageSize) => listAdminFacilities({ ApprovalStatus: 'APPROVED', Page, PageSize }))]).then(([sports, facilities]) => {
+      if (!cancelled) setOptions({ sports: sports.value || [], facilities: facilities.value || [] })
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const s = stats.value
+  const statsLoading = stats.key === -1
+  const kpis = [
+    { icon: 'total', label: 'Tổng kèo ghép trận', value: s.totalCards, note: `${number(s.newCardsThisMonth)} kèo mới trong tháng` },
+    { icon: 'open', label: 'Kèo đang mở', value: s.openCards, note: `${number(s.activeParticipants)} người đang tham gia` },
+    { icon: 'full', label: 'Đã đủ người', value: s.filledCards, note: `Tỉ lệ đủ người ${percent(s.fillRate)} · lấp vị trí ${percent(s.slotFillRate)}` },
+    { icon: 'completed', label: 'Đã hết hạn', value: s.expiredCards, note: 'Kèo quá giờ chơi chưa đủ người' },
+    { icon: 'cancelled', label: 'Đã hủy', value: s.cancelledCards, note: 'Bởi chủ kèo hoặc quản trị viên' },
+  ]
+  const detail = list.items.find(item => item.id === detailId)
+  const activeFilters = Object.values(filters).filter(Boolean).length
+  const change = (key, value) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1) }
+  const reset = () => { setFilters(emptyFilters); setPage(1) }
+  const download = () => { exportLfgs(list.items); setNotice(`Đã xuất ${number(list.items.length)} kèo của trang hiện tại ra CSV.`) }
+  const cancelled = message => { setCancelling(null); setNotice(message); setReload(value => value + 1) }
+
+  return <div className="lfg-page"><header className="lfg-page-heading admin-page-header"><div><h1>Quản lý ghép trận <span>{statsLoading ? '…' : `${number(s.totalCards)} kèo`}</span></h1><p>Theo dõi hoạt động tìm người chơi và các kèo ghép trận trên SportNexus.</p></div><div><button className="users-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={13} />Làm mới</button><button className="users-button" onClick={download} disabled={!list.items.length}><Download size={13} />Xuất CSV</button></div></header>
+    <div className="lfg-kpis">{kpis.map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{statsLoading ? '…' : number(stat.value)}</strong><p>{stat.note}</p></article> })}</div>
+    <p className="lfg-demo-label">Tiền qua kèo: đã thu {money(s.totalCollected)} · đang giữ {money(s.totalHeld)} · đã giải ngân {money(s.totalReleased)}{s.topSports?.length ? ` · Môn nhiều kèo nhất: ${s.topSports.slice(0, 3).map(item => `${sportLabels[item.name] || item.name} (${number(item.count)})`).join(', ')}` : ''}</p>
+    {stats.error && <div className="users-notice" role="alert"><span>Không tải được thống kê ghép trận: {stats.error}</span></div>}
+    {list.error && <div className="users-notice" role="alert"><span>Không tải được danh sách kèo: {list.error}</span><button aria-label="Thử lại" onClick={() => setReload(value => value + 1)}>↻</button></div>}
     {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
-    <form className="lfg-toolbar" aria-label="Tìm kiếm và bộ lọc kèo" onSubmit={apply} noValidate><div className="lfg-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm kèo ghép trận" value={draft.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={draft.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Môn thể thao<select value={draft.sport} onChange={event => change('sport', event.target.value)}><option value="">Tất cả môn</option>{Object.entries(sportLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-      <div className="lfg-filter-row"><label>Cơ sở<select value={draft.facility} onChange={event => change('facility', event.target.value)}><option value="">Tất cả cơ sở</option>{venues.map(venue => <option key={venue.id} value={venue.id}>{venue.name}</option>)}</select></label><label>Từ ngày<input inputMode="numeric" maxLength={10} value={draft.from} onChange={event => change('from', event.target.value)} aria-describedby={error ? 'lfg-filter-error' : undefined} /></label><label>Đến ngày<input inputMode="numeric" maxLength={10} value={draft.to} onChange={event => change('to', event.target.value)} aria-describedby={error ? 'lfg-filter-error' : undefined} /></label><button className="users-button primary"><Filter size={12} />Áp dụng bộ lọc</button><button type="button" className="lfg-text-button" onClick={reset}>Đặt lại</button></div>
-      {error && <p className="users-form-error" id="lfg-filter-error" role="alert">{error}</p>}{draftChanged && <p className="lfg-filter-hint">Bộ lọc đã thay đổi. Nhấn “Áp dụng bộ lọc” để cập nhật kết quả và CSV.</p>}
-    </form>
-    <div className={`lfg-content-grid ${detail ? 'with-details' : ''}`}><LFGTable activities={filtered} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <LFGDetails activity={detail} onClose={() => setDetailId(null)} onSlot={slot => setDialog({ type: 'slot', activity: detail, slot })} onReports={() => setDialog({ type: 'reports', activity: detail })} onFinance={() => setDialog({ type: 'finance', activity: detail })} onModerate={() => setDialog({ type: 'moderation', activity: detail })} />}</div>
-    {dialog && <LFGDialogs dialog={dialog} onClose={() => setDialog(null)} onReview={reviewReports} onModerate={moderate} />}
+    <section className="lfg-toolbar" aria-label="Tìm kiếm và bộ lọc kèo"><div className="lfg-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm kèo ghép trận" placeholder="Người tổ chức, cơ sở, mô tả…" value={filters.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Môn thể thao<select value={filters.sport} onChange={event => change('sport', event.target.value)}><option value="">Tất cả môn</option>{options.sports.map(sport => <option key={sport.id} value={sport.id}>{sportLabels[sport.name] || sport.name}</option>)}</select></label></div>
+      <div className="lfg-filter-row"><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)}><option value="">Tất cả cơ sở</option>{options.facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>)}</select></label><label>Từ ngày<input type="date" value={filters.from} onChange={event => change('from', event.target.value)} /></label><label>Đến ngày<input type="date" value={filters.to} onChange={event => change('to', event.target.value)} /></label><button type="button" className="lfg-text-button" onClick={reset} disabled={!activeFilters}>Đặt lại</button></div>
+      {invalidRange && <p className="users-form-error" role="alert">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}
+    </section>
+    <div className={`lfg-content-grid ${detail ? 'with-details' : ''}`}><LFGTable lfgs={list.items} total={list.total} totalPages={list.totalPages} loading={list.loading} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <LFGDetails key={`${detail.id}#${reload}`} base={detail} onClose={() => setDetailId(null)} onCancel={setCancelling} />}</div>
+    {cancelling && <CancelLfgDialog lfg={cancelling} onClose={() => setCancelling(null)} onDone={cancelled} />}
   </div>
 }

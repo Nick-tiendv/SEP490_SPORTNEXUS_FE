@@ -1,119 +1,175 @@
-import { useState } from 'react'
-import { Download, ShieldCheck, MessageSquare, Star, Handshake, TriangleAlert, CheckCircle2, Search, ArrowRight, Building2, UserRound, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import '../Users/users.css'
 import './reviews.css'
-import { initialReviews, initialReports, emptyFilters, filterRecords, getSummary, isActiveReport, updateReview, updateReport, toCsv } from './reviewsData.js'
+import ReviewsTab from './ReviewsTab.jsx'
+import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport } from '../../api/admin/reportApi.js'
+import { decisionOptions, emptyFilters, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv } from './reviewsData.js'
 
-const adminDisplayLabels = {
-  "Player": "Người chơi",
-  "Active": "Đang hoạt động",
-  "Facility": "Cơ sở thể thao",
-  "Fair-play": "Tinh thần thể thao",
-  "Review": "Đánh giá",
-  "Report": "Báo cáo",
-  "Other": "Khác",
-  "Booking": "Đặt sân",
-  "Payment": "Thanh toán",
-  "Tournament": "Giải đấu",
-  "Published": "Đã đăng",
-  "Flagged": "Bị gắn cờ",
-  "Hidden": "Đã ẩn",
-  "Open": "Đang mở",
-  "In Review": "Đang xem xét",
-  "Resolved": "Đã giải quyết",
-  "Dismissed": "Đã bỏ qua",
-  "Verified": "Đã xác minh",
-  "High": "Cao",
-  "Medium": "Trung bình",
-  "Low": "Thấp",
-  "All": "Tất cả",
-  "Reviews": "Đánh giá",
-  "Ratings": "Điểm đánh giá",
-  "Statuses": "Trạng thái",
-  "Priorities": "Mức ưu tiên",
-  "Categories": "Danh mục"
+const PAGE_SIZE = 10
+const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
+const date = value => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('vi-VN') : '—')
+const settled = result => (result.status === 'fulfilled' ? result.value : undefined)
+function Badge({ value }) { return <span className={`rr-badge rr-${String(value || 'none').toLowerCase().replaceAll(' ', '-')}`}>{label(value)}</span> }
+
+function GuidelinesDialog({ onClose }) {
+  return <DemoDialog title="Hướng dẫn kiểm duyệt" onClose={onClose}><div className="rr-guidelines"><ol><li>Đối chiếu nội dung báo cáo với bằng chứng và phản hồi của chủ sân (nếu có).</li><li>Ưu tiên báo cáo có hành vi quấy rối, đe dọa hoặc tiết lộ thông tin cá nhân.</li><li>Chỉ hoàn tiền, trừ điểm fair-play hoặc xóa bài viết khi đã xác minh vi phạm.</li><li>Luôn ghi chú lý do quyết định để các bên có thể tra cứu.</li></ol><button className="rr-button" onClick={onClose}>Đóng hướng dẫn</button></div></DemoDialog>
 }
 
-
-const number = value => value.toLocaleString('vi-VN')
-const date = value => new Date(`${value}T00:00:00`).toLocaleDateString('vi-VN')
-function Badge({ value }) { return <span className={`rr-badge rr-${value.toLowerCase().replaceAll(' ', '-')}`}>{adminDisplayLabels[value] || value}</span> }
-function Person({ name, username }) { return <div className="rr-person"><span className="rr-avatar">{name.split(' ').slice(-2).map(n => n[0]).join('')}</span><span><strong>{name}</strong>{username && <small>@{username}</small>}</span></div> }
-function ActionDialog({ action, onClose, onConfirm }) {
-  const [note, setNote] = useState('')
-  const titles = { hide: 'Ẩn đánh giá', resolve: 'Xử lý báo cáo', dismiss: 'Bỏ qua báo cáo', inReview: 'Bắt đầu rà soát' }
-  if (action === 'rules') return <DemoDialog title="Hướng dẫn kiểm duyệt — Bản mẫu" onClose={onClose}><div className="rr-guidelines"><p>Hướng dẫn minh họa, chưa phải chính sách chính thức của SportNexus.</p><ol><li>Đối chiếu nội dung đánh giá với bằng chứng và thông tin của các bên.</li><li>Ưu tiên báo cáo có hành vi quấy rối, đe dọa hoặc tiết lộ thông tin cá nhân.</li><li>Giữ đánh giá mang tính góp ý. Chỉ ẩn nội dung vi phạm sau khi ghi rõ lý do.</li><li>Ghi chú quyết định; xử lý hoặc bỏ qua từng báo cáo dựa trên kết quả xác minh.</li></ol><button className="rr-button" onClick={onClose}>Đóng hướng dẫn</button></div></DemoDialog>
-  return <DemoDialog title={titles[action]} onClose={onClose}><form className="rr-action-form" onSubmit={event => { event.preventDefault(); onConfirm(note.trim()) }}><p>{action === 'hide' ? 'Đánh giá sẽ được chuyển sang trạng thái Đã ẩn. Vui lòng ghi rõ lý do.' : action === 'dismiss' ? 'Đóng báo cáo mà không thay đổi trạng thái đánh giá liên quan?' : 'Xác nhận cập nhật trạng thái báo cáo trong phiên dữ liệu mẫu.'}</p><label>{action === 'hide' ? 'Lý do ẩn (bắt buộc)' : 'Ghi chú quản trị'}<input autoFocus value={note} onChange={e => setNote(e.target.value)} required={action === 'hide'} pattern={action === 'hide' ? '.*[^ ].*' : undefined} maxLength={1000} placeholder="Nhập nội dung xác minh hoặc quyết định..." /></label><footer><button type="button" className="rr-button" onClick={onClose}>Hủy</button><button className={`rr-button ${action === 'hide' ? 'danger' : 'primary'}`}>Xác nhận</button></footer></form></DemoDialog>
+// POST /api/v1/reports/admin/{reportId}/resolve
+function ResolveDialog({ report, onClose, onDone }) {
+  const [values, setValues] = useState({ decision: decisionOptions[0].value, adminNote: '', refund: report.requestedRefund != null ? String(report.requestedRefund) : '', lockSlot: false, deduct: '', deletePost: false })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }))
+  const approving = values.decision === decisionOptions[0].value
+  const submit = async event => {
+    event.preventDefault()
+    const refund = values.refund === '' ? null : Number(values.refund)
+    const deduct = values.deduct === '' ? null : Number(values.deduct)
+    if (!values.adminNote.trim()) return setError('Vui lòng ghi chú lý do quyết định.')
+    if (refund != null && (!Number.isInteger(refund) || refund < 0 || refund > 100)) return setError('Tỷ lệ hoàn tiền phải là số nguyên từ 0 đến 100.')
+    if (deduct != null && (!Number.isFinite(deduct) || deduct < 0)) return setError('Số điểm fair-play bị trừ phải lớn hơn hoặc bằng 0.')
+    setSubmitting(true); setError('')
+    try {
+      await resolveAdminReport(report.uuid, {
+        decision: values.decision,
+        adminNote: values.adminNote.trim(),
+        refundPercentage: approving ? refund : null,
+        lockSlotForMaintenance: approving && values.lockSlot,
+        deductTargetUserFairPlayPoints: approving ? deduct : null,
+        deleteCommunityPost: approving && values.deletePost,
+      })
+      onDone(`Đã xử lý báo cáo ${report.id}.`)
+    } catch (err) {
+      setError(err.message); setSubmitting(false)
+    }
+  }
+  const check = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }
+  return <DemoDialog title={`Xử lý báo cáo ${report.id}`} onClose={submitting ? () => {} : onClose}><form className="rr-action-form" onSubmit={submit}>
+    <p>{report.reporter} báo cáo <strong>{report.entity}</strong> · {report.reason}</p>
+    <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{decisionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+    <label>Ghi chú quản trị (bắt buộc)<textarea rows={3} maxLength={1000} value={values.adminNote} onChange={event => set('adminNote', event.target.value)} placeholder="Nhập nội dung xác minh hoặc lý do quyết định..." required /></label>
+    {approving && <>
+      <label>Tỷ lệ hoàn tiền cho người báo cáo (%){report.requestedRefund != null && ` — người báo cáo yêu cầu ${report.requestedRefund}%`}<input type="number" min={0} max={100} step={1} value={values.refund} onChange={event => set('refund', event.target.value)} placeholder="Để trống nếu không hoàn tiền" /></label>
+      <label>Trừ điểm fair-play của người bị báo cáo<input type="number" min={0} step={1} value={values.deduct} onChange={event => set('deduct', event.target.value)} placeholder="Để trống nếu không trừ" /></label>
+      <label style={check}><input type="checkbox" checked={values.lockSlot} onChange={event => set('lockSlot', event.target.checked)} />Khóa khung giờ để bảo trì sân</label>
+      <label style={check}><input type="checkbox" checked={values.deletePost} onChange={event => set('deletePost', event.target.checked)} />Xóa bài viết cộng đồng bị báo cáo</label>
+    </>}
+    {error && <p className="rr-error" role="alert">{error}</p>}
+    <footer><button type="button" className="rr-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`rr-button ${approving ? 'primary' : 'danger'}`} disabled={submitting}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
+  </form></DemoDialog>
 }
 
-function ReportInformation({ report }) {
-  return <section className="rr-report-card"><div className="rr-card-title"><strong><TriangleAlert size={14} /> Báo cáo {report.id}</strong><Badge value={report.priority} /></div><dl><dt>Người báo cáo</dt><dd>{report.reporter}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Danh mục</dt><dd>{adminDisplayLabels[report.category] || report.category}</dd><dt>Lý do</dt><dd>{report.reason}</dd><dt>Trạng thái</dt><dd><Badge value={report.status} /></dd><dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl><p>{report.description}</p><div className="rr-note"><small>Ghi chú bởi quản trị viên</small><p>{report.notes || 'Chưa có ghi chú. Thêm ghi chú khi xử lý báo cáo.'}</p></div></section>
-}
-
-function Inspector({ tab, review, report, related, onAction, onKeep }) {
-  const item = tab === 'reviews' ? review : report
-  if (!item) return <aside className="rr-inspector rr-empty"><MessageSquare size={30} /><h2>Chưa chọn nội dung</h2><p>Chọn một dòng để xem thông tin chi tiết.</p></aside>
-  const actionable = (tab === 'reviews' ? related : [report]).filter(isActiveReport)
-  return <aside className="rr-inspector"><header><div><h2><MessageSquare size={17} /> {tab === 'reviews' ? "Đánh giá" : "Báo cáo"} chi tiết</h2><small>{item.id}</small></div><Badge value={item.status} /></header>
-    {tab === 'reviews' ? <>
-      {review.status === 'Flagged' && <div className="rr-warning"><TriangleAlert size={16} /><span>Đánh giá bị gắn cờ · {related.length} báo cáo<br />{related[0]?.reason || 'Nội dung cần được kiểm tra'}{related[0] && <><br />Ưu tiên: {adminDisplayLabels[related[0].priority] || related[0].priority}</>}</span></div>}
-      <section className="rr-reviewer"><div className="rr-card-title"><small>NGƯỜI ĐÁNH GIÁ</small>{review.verified && <Badge value="Verified" />}</div><Person name={review.name} username={review.username} /><small>Người chơi • Thành viên cộng đồng SportNexus</small></section>
-      <section className="rr-target"><small>{review.type === 'Facility' ? 'CƠ SỞ ĐƯỢC ĐÁNH GIÁ' : 'NGƯỜI CHƠI ĐƯỢC ĐÁNH GIÁ'}</small><div>{review.type === 'Facility' ? <Building2 size={24} /> : <UserRound size={24} />}<span><strong>{review.target}</strong><small>{review.targetInfo}</small></span></div></section>
-      <div className="rr-rating"><span aria-label={`${review.rating} trên 5 sao`}>★★★★★</span><strong>{review.rating.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} <small>/ 5,0</small></strong><small>{date(review.date)}</small></div><blockquote>“{review.content}”</blockquote>
-      {review.notes && <div className="rr-note"><small>Lý do / ghi chú kiểm duyệt</small><p>{review.notes}</p></div>}
-      {related.map(r => <ReportInformation key={r.id} report={r} />)}
-    </> : <><ReportInformation report={report} />{review && <section className="rr-linked"><small>ĐÁNH GIÁ LIÊN QUAN · {review.id}</small><Person name={review.name} username={review.username} /><p>{review.content}</p><Badge value={review.status} /></section>}<section className="rr-history"><h3>Lịch sử xử lý</h3>{report.history.map((entry, i) => <p key={`${entry.time}-${i}`}><span>{entry.time}</span>{entry.text}</p>)}</section></>}
-    <div className="rr-demo-note"><ShieldCheck size={15} /> Dữ liệu mẫu, thay đổi chỉ lưu trong phiên hiện tại và đặt lại khi tải trang.</div>
-    <div className="rr-actions">{tab === 'reviews' && <><button className="rr-button mint" disabled={review.status === 'Published'} onClick={onKeep}><CheckCircle2 size={14} />Giữ đánh giá</button><button className="rr-button danger" disabled={review.status === 'Hidden'} onClick={() => onAction('hide')}><ShieldCheck size={14} />Ẩn đánh giá</button></>}{tab === 'reports' && <button className="rr-button mint" disabled={report.status !== 'Open'} onClick={() => onAction('inReview', report.id)}>Đánh dấu đang xem xét</button>}{actionable.length > 0 && <><button className="rr-button primary" onClick={() => onAction('resolve', actionable[0].id)}>Giải quyết báo cáo</button><button className="rr-button" onClick={() => onAction('dismiss', actionable[0].id)}>Bỏ qua báo cáo</button></>}</div>
+function Inspector({ report, loading, error, onResolve }) {
+  if (!report) return <aside className="rr-inspector rr-empty"><MessageSquare size={30} /><h2>Chưa chọn báo cáo</h2><p>Chọn một dòng để xem thông tin chi tiết.</p></aside>
+  return <aside className="rr-inspector" aria-busy={loading}><header><div><h2><TriangleAlert size={17} /> Báo cáo chi tiết</h2><small title={report.uuid}>{report.id}</small></div><Badge value={report.status} /></header>
+    {loading && <p className="rr-demo-note">Đang tải chi tiết…</p>}
+    {error && <p className="rr-error" role="alert">Không tải được chi tiết: {error}</p>}
+    <section className="rr-report-card"><dl><dt>Người báo cáo</dt><dd>{report.reporter}{report.reporterUsername && ` (@${report.reporterUsername})`}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Loại</dt><dd>{label(report.targetType)}</dd>{report.facility && <><dt>Cơ sở</dt><dd>{report.facility}</dd></>}{(report.bookingCode || report.bookingId) && <><dt>Đơn đặt sân</dt><dd>#{report.bookingCode || String(report.bookingId).slice(0, 8).toUpperCase()}</dd></>}<dt>Lý do</dt><dd>{report.reason}</dd>{report.requestedRefund != null && <><dt>Yêu cầu hoàn</dt><dd>{report.requestedRefund}%</dd></>}<dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl>{report.description && <p>{report.description}</p>}
+      {report.evidence.length > 0 && <div className="rr-note"><small>Bằng chứng ({report.evidence.length})</small><p>{report.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>Ảnh {index + 1}</a>)}</p></div>}
+    </section>
+    <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>
+    {(report.notes || report.decision) && <div className="rr-note"><small>Quyết định của quản trị viên{report.resolvedAt && ` · ${report.resolvedAt}`}</small><p>{report.decision && <strong>{decisionOptions.find(option => option.value === report.decision)?.label || report.decision}. </strong>}{report.notes}</p></div>}
+    {report.history.length > 0 && <section className="rr-history"><h3>Lịch sử xử lý</h3>{report.history.map((entry, i) => <p key={`${entry.time}-${i}`}><span>{entry.time}</span>{entry.text}</p>)}</section>}
+    <div className="rr-actions"><button className="rr-button primary" disabled={!isActiveReport(report) || loading} onClick={onResolve}><CheckCircle2 size={14} />Xử lý báo cáo</button></div>
   </aside>
 }
 
 export default function ReviewsReportsPage() {
-  const [reviews, setReviews] = useState(() => initialReviews)
-  const [reports, setReports] = useState(() => initialReports)
-  const [tab, setTab] = useState('reviews')
-  const [filters, setFilters] = useState({ ...emptyFilters })
+  const [tab, setTab] = useState('reports')
+  // ?status=Pending (từ Dashboard) → mở sẵn bộ lọc trạng thái.
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, status: reportStatusLabels[searchParams.get('status')] ? searchParams.get('status') : '' }))
+  const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [selected, setSelected] = useState(initialReviews[0].id)
+  const [reload, setReload] = useState(0)
+  const [list, setList] = useState({ key: '', items: [], total: 0, totalPages: 1, error: '' })
+  const [stats, setStats] = useState({ key: -1 })
+  const [selected, setSelected] = useState(null)
+  const [detailState, setDetailState] = useState({ key: '', data: null, error: '' })
   const [dialog, setDialog] = useState(null)
-  const [exporting, setExporting] = useState(false)
-  const summary = getSummary(reviews, reports)
+
   const invalidRange = filters.from && filters.to && filters.from > filters.to
-  const filtered = invalidRange ? [] : filterRecords(tab === 'reviews' ? reviews : reports, filters, tab)
-  const pages = Math.max(1, Math.ceil(filtered.length / 10)), currentPage = Math.min(page, pages)
-  const rows = filtered.slice((currentPage - 1) * 10, currentPage * 10)
-  const selectedItem = filtered.find(r => r.id === selected) || rows[0]
-  const report = tab === 'reports' ? selectedItem : null
-  const review = tab === 'reviews' ? selectedItem : reviews.find(r => r.id === report?.reviewId)
-  const related = reports.filter(r => r.reviewId === review?.id)
-  const change = (key, value) => { setFilters(f => ({ ...f, [key]: value })); setPage(1) }
-  const switchTab = next => { setTab(next); setFilters({ ...emptyFilters }); setPage(1); setSelected(null) }
-  const priority = () => { setTab('reports'); setFilters({ ...emptyFilters, priority: 'High', status: 'Active' }); setPage(1); setSelected(reports.find(r => r.priority === 'High' && isActiveReport(r))?.id) }
-  const openAction = (action, reportId) => setDialog({ action, reportId, reviewId: review?.id })
-  const confirm = note => {
-    if (dialog.action === 'hide') setReviews(data => updateReview(data, dialog.reviewId, 'Hidden', note))
-    else setReports(data => updateReport(data, dialog.reportId, { resolve: 'Resolved', dismiss: 'Dismissed', inReview: 'In Review' }[dialog.action], note))
-    setDialog(null); toast.success('Đã cập nhật dữ liệu mẫu.')
+  const params = invalidRange ? null : { SearchKeyword: search, Status: filters.status, TargetType: filters.targetType, HasOwnerResponded: filters.responded, FromDate: filters.from, ToDate: filters.to, PageIndex: page, PageSize: PAGE_SIZE }
+  const listKey = params ? `${JSON.stringify(params)}#${reload}` : ''
+  const loading = Boolean(params) && list.key !== listKey
+
+  useEffect(() => {
+    const timer = setTimeout(() => { setSearch(filters.search.trim()); setPage(1) }, 400)
+    return () => clearTimeout(timer)
+  }, [filters.search])
+  useEffect(() => {
+    if (!listKey) return
+    let cancelled = false
+    listAdminReports(JSON.parse(listKey.split('#')[0]))
+      .then(result => !cancelled && setList({ key: listKey, ...result, error: '' }))
+      .catch(error => !cancelled && setList({ key: listKey, items: [], total: 0, totalPages: 1, error: error.message }))
+    return () => { cancelled = true }
+  }, [listKey])
+  // Thống kê: ưu tiên /reports/admin/statistics, thiếu field nào thì đếm bằng danh sách theo trạng thái.
+  useEffect(() => {
+    let cancelled = false
+    Promise.allSettled([getReportStatistics({}), countAdminReports({}), countAdminReports({ Status: 'Pending' }), countAdminReports({ Status: 'Resolved' }), countAdminReports({ Status: 'Rejected' })])
+      .then(results => {
+        if (cancelled) return
+        const [statistics, total, pending, resolved, rejected] = results.map(settled)
+        setStats({ key: reload, total: statistics?.total ?? total, pending: statistics?.pending ?? pending, resolved: statistics?.resolved ?? resolved, rejected: statistics?.rejected ?? rejected })
+      })
+    return () => { cancelled = true }
+  }, [reload])
+  const detailKey = selected ? `${selected}#${reload}` : ''
+  useEffect(() => {
+    if (!detailKey) return
+    let cancelled = false
+    getAdminReport(detailKey.split('#')[0])
+      .then(data => !cancelled && setDetailState({ key: detailKey, data, error: '' }))
+      .catch(error => !cancelled && setDetailState({ key: detailKey, data: null, error: error.message }))
+    return () => { cancelled = true }
+  }, [detailKey])
+
+  const listItem = list.items.find(item => item.uuid === selected)
+  const fetched = detailState.key === detailKey ? detailState.data : null
+  const report = listItem || fetched ? { ...listItem, ...Object.fromEntries(Object.entries(fetched || {}).filter(([, value]) => value !== '' && value != null && value !== '—' && !(Array.isArray(value) && !value.length))) } : null
+  const pages = Math.max(1, list.totalPages || Math.ceil(list.total / PAGE_SIZE))
+  const statsLoading = stats.key !== reload
+  const closedRate = Number.isFinite(stats.total) && stats.total ? (((stats.resolved || 0) + (stats.rejected || 0)) / stats.total) * 100 : null
+
+  const change = (key, value) => { setFilters(f => ({ ...f, [key]: value })); if (key !== 'search') setPage(1) }
+  const resetFilters = () => { setFilters({ ...emptyFilters }); setSearch(''); setPage(1) }
+  const showPending = () => { setTab('reports'); setFilters({ ...emptyFilters, status: 'Pending' }); setSearch(''); setPage(1) }
+  const done = message => { setDialog(null); toast.success(message); setReload(value => value + 1) }
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([toCsv(list.items)], { type: 'text/csv;charset=utf-8;' }))
+    const a = document.createElement('a'); a.href = url; a.download = 'sportnexus-reports.csv'; a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success(`Đã xuất ${list.items.length} báo cáo của trang hiện tại.`)
   }
-  const exportCsv = async () => {
-    setExporting(true)
-    try { const blob = new Blob([toCsv(filtered, tab)], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `sportnexus-${tab}-demo.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); toast.success(`Đã xuất ${filtered.length} dòng dữ liệu mẫu.`) } catch { toast.error('Không thể xuất CSV. Vui lòng thử lại.') } finally { setExporting(false) }
-  }
-  const selectFilter = (key, label, options) => <label>{label}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả {label.toLowerCase()}</option>{options.map(value => <option key={value} value={value}>{key === 'rating' ? `${value} sao` : adminDisplayLabels[value] || value}</option>)}</select></label>
-  return <div className="rr-page"><div className="rr-page-heading"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{number(summary.total)} Đánh giá &amp; {summary.reports} Báo cáo</span></div><p>Theo dõi đánh giá, phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={exportCsv} disabled={exporting || invalidRange || !filtered.length}><Download size={14} />{exporting ? "Đang xuất…" : "Xuất CSV"}</button><button className="rr-button primary" onClick={() => openAction('rules')}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
-    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reviews', "Đánh giá & Phản hồi", number(summary.total)], ['reports', "Báo cáo vi phạm", `${summary.open} chưa xử lý`]].map(([key, label, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => switchTab(key)}>{label}<span>{count}</span></button>)}<small>Dữ liệu mẫu · Tháng 10/2026</small></div>
-    <div className="rr-stats">{[
-      ["Tổng đánh giá", number(summary.total), MessageSquare, '+16,8% so với tháng trước'], ["Điểm cơ sở trung bình", `${summary.average.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / 5,0`, Building2, 'Dựa trên toàn bộ đánh giá sân'], ["Điểm tinh thần thể thao", `${summary.positive.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`, Handshake, 'Tỷ lệ đánh giá tích cực (≥ 4 sao)'], ["Báo cáo chưa xử lý", summary.open, TriangleAlert, `${summary.today} báo cáo mới trong ngày mẫu`], ["Báo cáo đã giải quyết / đóng", summary.resolved, CheckCircle2, `Tỷ lệ đóng: ${(summary.resolved / (summary.reports || 1) * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`],
-    ].map(([label, value, icon, trend]) => <StatCard key={label} label={label} value={value} icon={icon} trend={trend} />)}</div>
-    <div className="rr-priority"><TriangleAlert size={20} /><p><strong>{summary.open} Báo cáo đang mở</strong> · <b>{summary.high} Báo cáo ưu tiên cao </b> · {summary.flagged} Đánh giá bị gắn cờ </p><button className="rr-button" onClick={priority} disabled={!summary.high}>Xử lý ưu tiên ngay <ArrowRight size={14} /></button></div>
-    <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby={`rr-tab-${tab}`}><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder={tab === 'reviews' ? "Tìm người chơi, cơ sở, đánh giá..." : "Tìm ID báo cáo, người báo cáo, người bị báo cáo..."} value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{tab === 'reviews' ? <>{selectFilter('type', "Đánh giá", ['Facility', 'Fair-play'])}{selectFilter('rating', "Điểm đánh giá", ['5', '4', '3', '2', '1'])}{selectFilter('status', "Trạng thái", ['Published', 'Flagged', 'Hidden'])}</> : <>{selectFilter('priority', "Mức ưu tiên", ['High', 'Medium', 'Low'])}{selectFilter('status', "Trạng thái", ['Active', 'Open', 'In Review', 'Resolved', 'Dismissed'])}{selectFilter('category', "Danh mục", ['Review', 'Player', 'Facility', 'Other'])}</>}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, label]) => <label key={key}>{label}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={() => { setFilters({ ...emptyFilters }); setPage(1) }}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
-      <div className="rr-table-scroll"><table><thead><tr>{(tab === 'reviews' ? ['Người đánh giá', 'Loại', 'Đối tượng', 'Đánh giá', 'Nhận xét gần nhất', 'Trạng thái'] : ["ID báo cáo", "Người báo cáo", "Đối tượng bị báo cáo", "Danh mục", "Lý do", "Mức ưu tiên", "Trạng thái", "Ngày tạo"]).map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{rows.map(item => <tr key={item.id} className={selectedItem?.id === item.id ? 'selected' : ''} onClick={() => setSelected(item.id)}>{tab === 'reviews' ? <><td><button className="rr-row-button" aria-label={`Xem ${item.id}`} onClick={() => setSelected(item.id)}><Person name={item.name} username={item.username} /></button></td><td><Badge value={item.type} /></td><td>{item.target}</td><td><span className={`rr-table-rating ${item.rating < 3 ? 'low' : ''}`}><Star size={12} fill="currentColor" />{item.rating.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span><small>{date(item.date)}</small></td><td className="rr-excerpt" title={item.content}>{item.content}</td><td><Badge value={item.status} /></td></> : <><td><button className="rr-row-button" onClick={() => setSelected(item.id)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.category} /></td><td className="rr-excerpt" title={item.reason}>{item.reason}</td><td><Badge value={item.priority} /></td><td><Badge value={item.status} /></td><td>{date(item.date)}</td></>}</tr>)}</tbody></table></div>
-      {!rows.length && <div className="rr-empty"><Search size={28} /><h3>Không tìm thấy dữ liệu</h3><p>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</p></div>}
-      <footer className="rr-pagination"><span>Hiển thị {filtered.length ? (currentPage - 1) * 10 + 1 : 0}–{Math.min(currentPage * 10, filtered.length)} trên {number(filtered.length)} kết quả</span><div><button className="rr-button" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} /></button><span>{currentPage} / {pages}</span><button className="rr-button" aria-label="Trang sau" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}><ChevronRight size={15} /></button></div></footer>
-    </section><Inspector tab={tab} review={review} report={report} related={related} onAction={openAction} onKeep={() => { setReviews(data => updateReview(data, review.id, 'Published')); toast.success('Đã giữ đánh giá ở trạng thái Đã đăng trong dữ liệu mẫu.') }} /></div>
-    {dialog && <ActionDialog action={dialog.action} onClose={() => setDialog(null)} onConfirm={confirm} />}
+  const selectFilter = (key, title, options) => <label>{title}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả</option>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
+
+  return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
+    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
+    {tab === 'reports' && <div className="rr-stats">{[
+      ['Tổng báo cáo', number(stats.total), TriangleAlert, 'Toàn nền tảng'],
+      ['Đang chờ xử lý', number(stats.pending), MessageSquare, 'Cần quản trị viên xem xét'],
+      ['Đã giải quyết', number(stats.resolved), CheckCircle2, 'Báo cáo được chấp nhận'],
+      ['Đã bác bỏ', number(stats.rejected), CircleX, closedRate == null ? '' : `Tỷ lệ đóng: ${closedRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`],
+    ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={statsLoading ? '…' : value} icon={icon} supporting={supporting} />)}</div>}
+    {tab === 'reports' && !statsLoading && stats.pending > 0 && <div className="rr-priority"><TriangleAlert size={20} /><p><strong>{number(stats.pending)} báo cáo</strong> đang chờ xử lý</p><button className="rr-button" onClick={showPending}>Xử lý ngay <ArrowRight size={14} /></button></div>}
+
+    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
+      : <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
+        <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do', 'Chủ sân', 'Trạng thái', 'Ngày tạo'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.uuid} className={selected === item.uuid ? 'selected' : ''} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.targetType} /></td><td className="rr-excerpt" title={item.reason}>{item.reason}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td></tr>)}</tbody></table></div>
+        {loading && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Đang tải báo cáo…</h3></div>}
+        {!loading && list.error && <div className="rr-empty" role="alert"><TriangleAlert size={28} /><h3>Không tải được báo cáo</h3><p>{list.error}</p></div>}
+        {!loading && !list.error && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Không có báo cáo</h3><p>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</p></div>}
+        <footer className="rr-pagination"><span>Hiển thị {list.items.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + list.items.length} trên {number(list.total)} kết quả</span><div><button className="rr-button" aria-label="Trang trước" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page} / {pages}</span><button className="rr-button" aria-label="Trang sau" disabled={loading || page >= pages} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></footer>
+      </section><Inspector report={report} loading={Boolean(selected) && detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onResolve={() => setDialog({ type: 'resolve', report })} /></div>}
+    {dialog?.type === 'rules' && <GuidelinesDialog onClose={() => setDialog(null)} />}
+    {dialog?.type === 'resolve' && <ResolveDialog report={dialog.report} onClose={() => setDialog(null)} onDone={done} />}
   </div>
 }

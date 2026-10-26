@@ -60,7 +60,7 @@ function Register() {
       try {
         localStorage.setItem('sportnexus_user_role', role)
         localStorage.setItem('sportnexus_registered_role', role)
-      } catch {}
+      } catch { /* bỏ qua khi localStorage bị chặn */ }
       toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.')
       navigate('/login', { replace: true })
     } catch (error) {
