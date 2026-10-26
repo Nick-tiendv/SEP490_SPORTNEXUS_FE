@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
 import { getFacilityBookings, getOwnerBooking, getOwnerBookingsPage } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 import { addDays, formatDateTime, formatTime, formatVND, statusBadge, toDateKey } from '../shared.js'
 
 const PAGE_SIZE = 15
@@ -212,7 +213,7 @@ export default function OwnerBookings() {
         <button type="button" role="tab" aria-selected={view === 'day'} className="snx-tab" onClick={() => setView('day')}>Theo ngày</button>
       </div>
       {!facilityId ? (
-        <div className="snx-empty"><span className="material-symbols-outlined">domain_add</span>Bạn chưa có cơ sở. <Link to="/owner/facilities">Tạo cơ sở</Link></div>
+        <NoFacilityState what="nhận đơn đặt sân" />
       ) : view === 'list' ? (
         <ListView facilityId={facilityId} onOpen={setOpenId} />
       ) : (

@@ -16,6 +16,7 @@ import {
   updateMatchScore,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 import TournamentManagePanel from './TournamentManagePanel.jsx'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
@@ -61,7 +62,7 @@ function useLoad(load, key, enabled = true) {
 }
 
 export default function CreateAutomatedTournament() {
-  const { facilityId, facility, wallet, refreshWallet } = useOwnerContext()
+  const { facilityId, facility, wallet, refreshWallet, loading: layoutLoading } = useOwnerContext()
   const [listToken, setListToken] = useState(0)
   const [childToken, setChildToken] = useState(0)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
@@ -292,6 +293,9 @@ export default function CreateAutomatedTournament() {
           Tạo giải đấu mới
         </button>
       </div>
+
+      {!layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="tổ chức giải đấu" /></div>}
+      {facility && facility.approvalStatus !== 'APPROVED' && <div className="snx-alert snx-alert--info" style={{ marginBottom: 16 }}>Cơ sở {facility.name} chưa được Admin duyệt nên chưa tạo được giải.</div>}
 
       {/* DANH SÁCH GIẢI CỦA CƠ SỞ */}
       <div style={{ ...panelStyle, marginBottom: '24px' }}>
