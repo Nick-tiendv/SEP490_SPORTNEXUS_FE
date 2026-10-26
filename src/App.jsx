@@ -56,6 +56,12 @@ import CheckQR from './CourtOwner/CheckIn/CheckQR.jsx'
 import ViewCourtBookingSchedule from './CourtOwner/Schedule/BookingSchedule.jsx'
 import CreateAutomatedTournament from './CourtOwner/Tournament/CreateTournament.jsx'
 import Settlement from './CourtOwner/Settlement/Settlement.jsx'
+import OwnerFacilities from './CourtOwner/Facilities/OwnerFacilities.jsx'
+import OwnerSlots from './CourtOwner/Slots/OwnerSlots.jsx'
+import OwnerBookings from './CourtOwner/Bookings/OwnerBookings.jsx'
+import OwnerReviews from './CourtOwner/Reviews/OwnerReviews.jsx'
+import OwnerReports from './CourtOwner/Reports/OwnerReports.jsx'
+import OwnerPromotions from './CourtOwner/Promotions/OwnerPromotions.jsx'
 
 // Redirect users to the appropriate homepage based on their role
 function HomeRedirect() {
@@ -134,6 +140,12 @@ function App() {
             />
             <Route path="dashboard" element={<CourtOwnerDashboard />} />
             <Route path="profile" element={<CourtOwnerProfile />} />
+            <Route path="facilities" element={<OwnerFacilities />} />
+            <Route path="slots" element={<OwnerSlots />} />
+            <Route path="bookings" element={<OwnerBookings />} />
+            <Route path="reviews" element={<OwnerReviews />} />
+            <Route path="reports" element={<OwnerReports />} />
+            <Route path="promotions" element={<OwnerPromotions />} />
             <Route path="courts" element={<CourtManage />} />
             <Route path="court-manage" element={<CourtManage />} />
             <Route path="check-qr" element={<CheckQR />} />

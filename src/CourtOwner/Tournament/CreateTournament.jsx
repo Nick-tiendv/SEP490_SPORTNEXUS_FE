@@ -15,6 +15,7 @@ import {
   updateMatchScore,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import TournamentManagePanel from './TournamentManagePanel.jsx'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
 const CATEGORY_TYPES = [
@@ -190,7 +191,7 @@ export default function CreateAutomatedTournament() {
   const openCreateModal = () => {
     // Lần tải môn trước đó lỗi (vd server khởi động chậm) thì tải lại.
     if (!sports.length) setSportsToken((value) => value + 1)
-    setForm({ name: '', categoryId: defaultSportId(), children: [emptyChild()] })
+    setForm({ name: '', categoryId: defaultSportId(), startDate: '', endDate: '', registrationDeadline: '', rules: '', children: [emptyChild()] })
     setShowCreateModal(true)
   }
   // Danh sách môn về sau khi form đã mở: chọn sẵn môn mặc định.
@@ -211,10 +212,22 @@ export default function CreateAutomatedTournament() {
       showToast('Vui lòng chọn bộ môn.', 'error')
       return
     }
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      showToast('Ngày kết thúc phải sau ngày bắt đầu.', 'error')
+      return
+    }
+    if (form.startDate && form.registrationDeadline && form.registrationDeadline > form.startDate) {
+      showToast('Hạn đăng ký phải trước ngày bắt đầu.', 'error')
+      return
+    }
     const payload = {
       facilityId,
       categoryId: selectedSportId,
       name: form.name.trim(),
+      startDate: form.startDate || null,
+      endDate: form.endDate || null,
+      registrationDeadline: form.registrationDeadline || null,
+      rules: form.rules?.trim() || null,
       children: form.children.map((item) => ({
         name: item.name.trim(),
         categoryType: Number(item.categoryType),
@@ -571,6 +584,13 @@ export default function CreateAutomatedTournament() {
               </div>
             </div>
           )}
+          <TournamentManagePanel
+            tournament={tournament}
+            child={child}
+            rounds={rounds}
+            facilityId={facilityId}
+            onChanged={() => { setListToken((value) => value + 1); setChildToken((value) => value + 1) }}
+          />
         </>
       )}
 
@@ -694,6 +714,20 @@ export default function CreateAutomatedTournament() {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Lịch giải (không bắt buộc): bỏ trống hạn đăng ký thì BE lấy 24h trước ngày bắt đầu */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+              {[['startDate', 'Ngày bắt đầu'], ['endDate', 'Ngày kết thúc'], ['registrationDeadline', 'Hạn đăng ký']].map(([key, label]) => (
+                <div key={key}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>{label}</label>
+                  <input type="date" value={form[key] || ''} onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))} style={inputStyle} />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Điều lệ giải (không bắt buộc)</label>
+              <textarea rows={2} maxLength={4000} value={form.rules || ''} onChange={(event) => setForm((prev) => ({ ...prev, rules: event.target.value }))} style={{ ...inputStyle, resize: 'vertical' }} />
             </div>
 
             <div style={{ fontSize: '14px', fontWeight: 900, color: '#0F172A', marginBottom: '10px' }}>Bảng đấu ({form.children.length})</div>

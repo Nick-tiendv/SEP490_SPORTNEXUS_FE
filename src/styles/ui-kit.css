@@ -168,3 +168,22 @@
 /* Ô tìm kiếm trong cột dọc: không giãn theo chiều cao */
 .snx-stack > .snx-search { flex: 0 0 auto; }
 .snx-search { min-width: 0; }
+
+/* ---------- Ô số liệu, lưới ảnh, bảng (trang Chủ sân) ---------- */
+.snx-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 12px; }
+.snx-stat { padding: 14px 16px; border: 1px solid rgba(226, 232, 230, .9); border-radius: var(--snx-radius-lg); background: rgba(255, 255, 255, .94); font-family: var(--snx-font-sans); }
+.snx-stat-label { font-size: 12px; font-weight: 600; color: var(--snx-text-muted); }
+.snx-stat-value { margin-top: 4px; font: 700 22px var(--snx-font-display); color: var(--snx-green-950); }
+.snx-thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.snx-thumb { position: relative; overflow: hidden; aspect-ratio: 4 / 3; border: 1px solid #e2e8e6; border-radius: var(--snx-radius-md); background: #f4f7f6; }
+.snx-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.snx-thumb-actions { position: absolute; inset: auto 6px 6px 6px; display: flex; gap: 4px; justify-content: flex-end; }
+.snx-thumb-flag { position: absolute; top: 6px; left: 6px; }
+.snx-table-wrap { overflow-x: auto; }
+.snx-table { width: 100%; border-collapse: collapse; font: 400 13px var(--snx-font-sans); color: var(--snx-text); }
+.snx-table th { padding: 8px 10px; border-bottom: 1px solid #e2e8e6; text-align: left; font-size: 12px; font-weight: 600; color: var(--snx-text-muted); white-space: nowrap; }
+.snx-table td { padding: 10px; border-bottom: 1px solid #eef2f1; vertical-align: top; }
+.snx-table tr:last-child td { border-bottom: 0; }
+.snx-chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid #d5dfdb; border-radius: 999px; background: #fff; font: 500 12px var(--snx-font-sans); color: var(--snx-text); cursor: pointer; }
+.snx-chip[aria-pressed="true"] { border-color: var(--snx-green-700, #2d6a4f); background: #e8f5e3; color: var(--snx-green-950); }
+.snx-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }

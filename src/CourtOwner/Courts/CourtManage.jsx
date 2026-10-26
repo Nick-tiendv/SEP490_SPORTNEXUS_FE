@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
+import { createCourt, deleteCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 
 // Màu & icon theo môn (scoringRule của master-data/sports).
@@ -221,6 +221,22 @@ export default function CourtManage() {
       setCourts(prev => prev.map(item => (item.id === court.id ? { ...item, status: nextStatus } : item)))
       syncLayout()
       showToast(`Đã ${nextStatus === 'ACTIVE' ? 'mở lại' : 'tạm ngưng'} ${court.name}!`)
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Xóa sân: DELETE /facilities/{facilityId}/courts/{courtId} (BE xóa luôn các ca tương lai chưa đặt)
+  const handleDeleteCourt = async (court) => {
+    if (!window.confirm(`Xóa ${court.name}? Các ca tương lai chưa có người đặt của sân này cũng bị xóa.`)) return
+    setBusyId(court.id)
+    try {
+      const result = await deleteCourt(facilityId, court.id)
+      await reloadCourts()
+      syncLayout()
+      showToast(`Đã xóa ${court.name}${result?.removedFutureSlots ? ` và ${result.removedFutureSlots} ca tương lai` : ''}.`)
     } catch (error) {
       showToast(error.message, 'error')
     } finally {
@@ -1038,23 +1054,25 @@ export default function CourtManage() {
                         </button>
 
                         <button
-                          onClick={() => showToast(`Cấu hình camera & thiết bị IoT sân ${court.name} đã kết nối.`)}
-                          title="Cài đặt thiết bị IoT & camera"
+                          onClick={() => handleDeleteCourt(court)}
+                          disabled={busyId === court.id}
+                          title={`Xóa ${court.name}`}
+                          aria-label={`Xóa ${court.name}`}
                           style={{
                             background: 'none',
-                            border: '1px solid #CBD5E1',
+                            border: '1px solid #FECACA',
                             borderRadius: '8px',
                             width: '32px',
                             height: '32px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: '#1E293B',
-                            cursor: 'pointer',
+                            color: '#B91C1C',
+                            cursor: busyId === court.id ? 'wait' : 'pointer',
                           }}
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                            videocam
+                            delete
                           </span>
                         </button>
                       </div>
