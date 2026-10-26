@@ -277,57 +277,22 @@ export default function Dashboard() {
   const statValue = (value, format = (v) => v) => (data ? format(value) : statsLoadError ? '—' : '...')
 
   return (
-    <div className="responsive-page-container" style={{ minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="snx-page">
       {/* Top Welcome / Overview Header Banner Hub */}
-      <div
-        style={{
-          background: 'rgba(255, 255, 255, 0.94)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderRadius: '20px',
-          padding: '24px 28px',
-          border: '1px solid rgba(255, 255, 255, 0.90)',
-          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
-          marginBottom: '24px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-        }}
-      >
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                color: '#fff',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 800,
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase',
-              }}
-            >
+            <span className="snx-page-eyebrow">
               Trung Tâm Quản Trị Chủ Sân
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
               {profile?.fullName ? `Xin chào, ${profile.fullName}` : 'SportNexus Operating System'}
             </span>
           </div>
-          <h1
-            style={{
-              fontSize: '26px',
-              fontWeight: 900,
-              color: '#0F172A',
-              margin: 0,
-              letterSpacing: '-0.5px',
-            }}
-          >
+          <h1 className="snx-page-title">
             Tổng Quan Hoạt Động & Tài Chính Cơ Sở
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+          <p className="snx-page-subtitle">
             {facility?.name ? `${facility.name} • ` : ''}Số liệu {periodDays} ngày gần nhất
             {data ? ` • ${formatPercent(data.cancellationRate)} đơn bị hủy • ${data.reviewCount || 0} đánh giá (${Number(data.averageRating || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}★)` : ''}
           </p>

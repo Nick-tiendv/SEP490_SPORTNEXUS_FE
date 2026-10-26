@@ -213,7 +213,7 @@ export default function CheckQR() {
     : []
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -244,41 +244,18 @@ export default function CheckQR() {
       )}
 
       {/* Header section */}
-      <div
-        style={{
-          ...panelStyle,
-          borderRadius: '20px',
-          padding: '24px 28px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '20px',
-          marginBottom: '28px',
-        }}
-      >
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-                color: '#fff',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase',
-              }}
-            >
+            <span className="snx-page-eyebrow">
               Smart Escrow Check-in Terminal
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>{facility?.name || ''}</span>
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
+          <h1 className="snx-page-title">
             Quét Mã QR Check-in Người Chơi
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+          <p className="snx-page-subtitle">
             Quét vé QR đặt sân hoặc kèo LFG khi người chơi tới sân. Tiền giữ của đơn được chuyển cho chủ sân sau giờ chơi.
           </p>
         </div>

@@ -851,13 +851,7 @@ export default function Profile() {
   }
 
   return (
-    <div
-      style={{
-        padding: '24px 28px 60px 28px',
-        maxWidth: '1440px',
-        margin: '0 auto',
-      }}
-    >
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div

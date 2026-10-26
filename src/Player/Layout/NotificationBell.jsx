@@ -72,7 +72,8 @@ const NOTIFICATION_TYPES_CATALOG = [
   { code: 'SYSTEM', label: 'Thông báo hệ thống & Bảo trì', desc: 'Cập nhật tính năng mới, bảo trì cụm sân và cảnh báo bảo mật' },
 ]
 
-export default function NotificationBell() {
+// linkable = false: chỉ đánh dấu đã đọc, không chuyển trang (dùng cho Chủ sân vì link trong thông báo là trang Player)
+export default function NotificationBell({ linkable = true }) {
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('all')
@@ -269,7 +270,7 @@ export default function NotificationBell() {
       setUnreadCount((c) => Math.max(0, c - 1))
       markNotificationRead(item.id).catch(() => {})
     }
-    if (item.link) {
+    if (linkable && item.link) {
       setIsOpen(false)
       navigate(item.link)
     }

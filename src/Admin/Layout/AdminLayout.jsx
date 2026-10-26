@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import AdminSidebar from './AdminSidebar.jsx'
 import AdminHeader from './AdminHeader.jsx'
+import { AppFooter } from '../../components/layout/AppShell.jsx'
 import { getMyAccount } from '../../api/admin/accountApi.js'
 import { getAdminDashboard } from '../../api/admin/dashboardApi.js'
 import { lastDaysRange, toApiDate } from '../Dashboard/dashboardData.js'
@@ -41,6 +42,7 @@ export default function AdminLayout() {
       <div className="admin-workspace">
         <AdminHeader onMenuToggle={() => setMenuOpen(open => !open)} profile={profile} badges={badges} />
         <main className="admin-main"><Outlet context={{ profile }} /></main>
+        <AppFooter />
       </div>
     </div>
   )

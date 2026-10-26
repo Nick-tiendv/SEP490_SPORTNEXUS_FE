@@ -1007,14 +1007,7 @@ function Dashboard() {
 
 
   return (
-    <div
-      className="responsive-page-container"
-      style={{
-        maxWidth: '1160px',
-        margin: '0 auto',
-        fontFamily: "'Inter', sans-serif",
-      }}
-    >
+    <div className="snx-page">
       {/* ===================== SECTION 1: WELCOME & QUICK SPORT BAR ===================== */}
       <section
         style={{
@@ -1043,15 +1036,7 @@ function Dashboard() {
           {/* Welcome Text */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <h1
-                style={{
-                  fontSize: '28px',
-                  fontWeight: 800,
-                  color: '#1C3524',
-                  margin: 0,
-                  letterSpacing: '-0.5px',
-                }}
-              >
+              <h1 className="snx-page-title">
                 Xin chào, {currentUser.name || 'bạn'} 👋
               </h1>
               <span

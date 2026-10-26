@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
+import { PageHeader } from '../../components/layout/AppShell.jsx'
 import {
   searchTournaments,
   getMyRegistrations,
@@ -121,11 +122,13 @@ function TournamentList() {
 
   return (
     <div className="w-full min-h-screen text-[#1e293b] flex flex-col font-sans">
-      <div className="w-full max-w-[1400px] mx-auto px-6 py-6 md:px-10 md:py-8 flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-black text-slate-900">Giải đấu</h1>
-          <p className="text-sm text-slate-500">Tìm giải đang mở đăng ký và quản lý các giải bạn đã tham gia.</p>
-        </header>
+      <div className="snx-page flex flex-col gap-6">
+        <PageHeader
+          eyebrow="Giải đấu"
+          eyebrowIcon="emoji_events"
+          title="Giải đấu"
+          subtitle="Tìm giải đang mở đăng ký và quản lý các giải bạn đã tham gia."
+        />
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-2 bg-white border border-slate-200 rounded-xl p-1">

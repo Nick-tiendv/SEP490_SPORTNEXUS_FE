@@ -256,7 +256,7 @@ export default function CreateAutomatedTournament() {
   const modalBackdrop = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -284,16 +284,16 @@ export default function CreateAutomatedTournament() {
       )}
 
       {/* HEADER */}
-      <div style={{ ...panelStyle, padding: '26px 32px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-            <span style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#fff', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+            <span className="snx-page-eyebrow">
               Tournament Manager
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>{facility?.name || ''}</span>
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>Giải Đấu & Sơ Đồ Nhánh Đấu</h1>
-          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+          <h1 className="snx-page-title">Giải Đấu & Sơ Đồ Nhánh Đấu</h1>
+          <p className="snx-page-subtitle">
             Tạo giải với nhiều bảng đấu, quản lý người tham gia, bốc thăm ghép đôi, chốt nhánh loại trực tiếp và nhập tỉ số từng trận.
           </p>
         </div>

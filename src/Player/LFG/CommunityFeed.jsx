@@ -1017,7 +1017,7 @@ function CommunityFeed() {
       )}
 
       {/* Main Container */}
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="snx-page">
         {/* Realtime WebSocket SignalR Bar */}
         <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF7EE] text-[#15803D] font-bold text-[11px] tracking-wider uppercase border border-[#DCFCE7]">
@@ -1039,9 +1039,9 @@ function CommunityFeed() {
         </div>
 
         {/* Title & Actions */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="snx-page-header">
           <div>
-            <h1 className="text-3xl sm:text-[36px] font-black text-[#111827] tracking-tight leading-tight whitespace-nowrap">
+            <h1 className="snx-page-title">
               Sàn Ghép Trận &amp; Tranh Slot
             </h1>
           </div>

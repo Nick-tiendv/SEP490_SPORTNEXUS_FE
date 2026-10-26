@@ -386,7 +386,7 @@ export default function CourtManage() {
   }
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div

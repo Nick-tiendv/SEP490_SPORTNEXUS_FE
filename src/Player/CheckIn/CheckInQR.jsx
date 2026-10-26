@@ -846,16 +846,7 @@ function CheckInQR() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: 'calc(100vh - 60px)',
-        background: 'transparent',
-        padding: '28px 36px 60px 36px',
-        color: '#111827',
-        maxWidth: '1440px',
-        margin: '0 auto',
-      }}
-    >
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -885,28 +876,10 @@ function CheckInQR() {
       )}
 
       {/* ===================== TOP HEADER SECTION ===================== */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '20px',
-          marginBottom: '26px',
-        }}
-      >
+      <div className="snx-page-header">
         {/* Left: Title & Subtitle */}
         <div>
-          <h1
-            style={{
-              fontSize: '32px',
-              fontWeight: 800,
-              color: '#111827',
-              letterSpacing: '-0.5px',
-              margin: 0,
-              lineHeight: 1.2,
-            }}
-          >
+          <h1 className="snx-page-title">
             Check-in QR &amp; Chấm Fair Play
           </h1>
         </div>

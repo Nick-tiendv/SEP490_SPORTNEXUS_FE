@@ -1109,7 +1109,7 @@ function SplitPayment() {
                 ? 'ĐẶT SÂN / THANH TOÁN VIETQR NAPAS 24/7'
                 : 'ĐẶT SÂN'}
             </p>
-            <h1 className="sp-main-title">
+            <h1 className="snx-page-title sp-main-title">
               {step === 'ticket_pass'
                 ? 'Vé Điện Tử & Mã QR Check-in Sân'
                 : step === 'bank_qr'

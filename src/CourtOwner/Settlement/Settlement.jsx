@@ -225,7 +225,7 @@ export default function Settlement() {
   const facilityMax = Math.max(1, ...facilityItems.map((item) => item.total))
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
+    <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -255,21 +255,10 @@ export default function Settlement() {
       )}
 
       {/* Header section */}
-      <div style={{ ...panelStyle, padding: '24px 28px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px', marginBottom: '28px' }}>
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #15803D 0%, #047857 100%)',
-                color: '#FFFFFF',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '11.5px',
-                fontWeight: 800,
-                letterSpacing: '0.6px',
-                textTransform: 'uppercase',
-              }}
-            >
+            <span className="snx-page-eyebrow">
               FINANCIAL SETTLEMENT HUB
             </span>
             <select
@@ -283,10 +272,10 @@ export default function Settlement() {
               ))}
             </select>
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#0F172A', margin: '0 0 6px 0', letterSpacing: '-0.5px', lineHeight: 1.25 }}>
+          <h1 className="snx-page-title">
             Báo Cáo Doanh Thu &amp; Rút Tiền
           </h1>
-          <p style={{ margin: 0, color: '#475569', fontSize: '14px', lineHeight: 1.5, maxWidth: '680px' }}>
+          <p className="snx-page-subtitle">
             Theo dõi thu nhập vào ví, tiền đặt sân đang giữ và gửi yêu cầu rút tiền về tài khoản ngân hàng (Quản trị viên duyệt thủ công).
           </p>
           {earnings.error && <p style={{ margin: '6px 0 0 0', color: '#B91C1C', fontSize: '13px', fontWeight: 700 }}>Không tải được báo cáo: {earnings.error}</p>}
