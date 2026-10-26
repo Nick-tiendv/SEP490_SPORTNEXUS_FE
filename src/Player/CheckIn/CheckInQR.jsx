@@ -4760,6 +4760,10 @@ function CheckInQR() {
                         <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>
                           Hãy đặt sân mới hoặc tham gia kèo LFG trên SportNexus ngay!
                         </p>
+                        <div className="snx-row" style={{ justifyContent: 'center', marginTop: 12 }}>
+                          <Link to="/court-finder" className="snx-btn snx-btn--primary snx-btn--sm">Đặt sân</Link>
+                          <Link to="/community" className="snx-btn snx-btn--secondary snx-btn--sm">Tìm kèo LFG</Link>
+                        </div>
                       </div>
                     )
                   }
