@@ -288,7 +288,7 @@ function MapBooking() {
         const parsed = JSON.parse(saved)
         if (parsed.location) return parsed.location
       }
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 'Thủ Đức'
   })
 
@@ -346,7 +346,7 @@ function MapBooking() {
             const parsed = JSON.parse(saved)
             if (parsed.location) setUserProfileLocation(parsed.location)
           }
-        } catch {}
+        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
     }
     const handleStorage = (e) => {
@@ -354,7 +354,7 @@ function MapBooking() {
         try {
           const parsed = JSON.parse(e.newValue)
           if (parsed.location) setUserProfileLocation(parsed.location)
-        } catch {}
+        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
     }
     window.addEventListener('player-profile-updated', handleProfileUpdate)
@@ -484,7 +484,7 @@ function MapBooking() {
       if (key === 'govap') return 'quangtrung-gv'
       if (key === 'q3') return 'hoxuanhuong-q3'
       if (key === 'q11') return 'phutho-q11'
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 'lananh-q10'
   })
 
@@ -679,53 +679,12 @@ function MapBooking() {
       })
     }
 
-    const count = selectedCourt.courtCount || 6
-    const basePrefix = selectedCourt.subCourt
-      ? selectedCourt.subCourt.replace(/\s*\d+$/, '').trim()
-      : selectedCourt.sport === 'pickleball'
-      ? 'Sân Pickleball'
-      : selectedCourt.sport === 'football'
-      ? 'Sân Bóng Đá'
-      : selectedCourt.sport === 'basketball'
-      ? 'Sân Bóng Rổ'
-      : selectedCourt.sport === 'tennis'
-      ? 'Sân Tennis'
-      : 'Sân Cầu Lông'
-
-    return Array.from({ length: count }, (_, idx) => {
-      const num = String(idx + 1).padStart(2, '0')
-      const id = `court-sub-${idx + 1}`
-      // Giả lập trạng thái đã kín lịch cho 1 số sân theo slot để giao diện phong phú, chân thực
-      const isBooked =
-        (selectedSlotId === 's5' && idx === 2) ||
-        (selectedSlotId === 's4' && idx === 3) ||
-        (selectedSlotId === 's6' && idx === 1) ||
-        (selectedSlotId === 's7' && idx === 4)
-
-      return {
-        id,
-        number: num,
-        name: `${basePrefix} ${num}`,
-        type:
-          idx === count - 1
-            ? 'Sân VIP Trung Tâm'
-            : selectedCourt.sport === 'pickleball'
-            ? 'Mặt sân Acrylic Pro chống lóa'
-            : selectedCourt.sport === 'football'
-            ? 'Cỏ nhân tạo 50mm chuẩn FIFA'
-            : selectedCourt.sport === 'basketball'
-            ? 'Sàn gỗ phong Maple Pro FIBA'
-            : selectedCourt.sport === 'tennis'
-            ? 'Mặt sân cứng DecoTurf US Open'
-            : 'Thảm PVC chuẩn thi đấu BWF',
-        isBooked,
-        note: isBooked ? 'Đã kín lịch' : 'Đang trống',
-      }
-    })
-  }, [selectedCourt, selectedSlotId])
+    // Không có danh sách sân con thật từ API: không tự tạo sân giả.
+    return []
+  }, [selectedCourt])
 
   // Trạng thái các sân được chọn trong khung giờ (cho phép chọn nhiều sân cùng một khung giờ)
-  const [selectedSubCourtIds, setSelectedSubCourtIds] = useState(['court-sub-1'])
+  const [selectedSubCourtIds, setSelectedSubCourtIds] = useState([])
 
   // Tự động giữ ít nhất 1 sân khả dụng khi đổi cụm sân hoặc khung giờ
   useEffect(() => {
@@ -1507,6 +1466,9 @@ function MapBooking() {
                 </div>
 
                 <div className="mb-subcourts-grid">
+                  {venueSubCourts.length === 0 && (
+                    <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: 13, color: '#6b7280' }}>Cơ sở chưa công bố danh sách sân con. Bấm "Xem chi tiết" để xem ca trống theo từng sân.</p>
+                  )}
                   {venueSubCourts.map((court) => {
                     const isSelected = selectedSubCourtIds.includes(court.id)
                     const isBooked = court.isBooked

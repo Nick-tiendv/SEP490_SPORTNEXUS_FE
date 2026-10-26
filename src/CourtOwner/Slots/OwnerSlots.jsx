@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -124,7 +125,7 @@ function BulkCard({ facilityId, courts, onDone }) {
     event.preventDefault()
     if (form.dateTo < form.dateFrom) { toast.error('Ngày kết thúc phải sau ngày bắt đầu.'); return }
     if (form.action === 'SET_PRICE' && !(Number(form.price) > 0)) { toast.error('Vui lòng nhập giá mới.'); return }
-    if (form.action === 'DELETE' && !window.confirm('Xóa mọi ca trống khớp bộ lọc? Không hoàn tác được.')) return
+    if (form.action === 'DELETE' && !(await confirmDialog('Xóa mọi ca trống khớp bộ lọc? Không hoàn tác được.'))) return
     const filter = {
       courtIds: form.courtIds.length ? form.courtIds : null,
       dateFrom: form.dateFrom,
@@ -181,7 +182,7 @@ function BulkCard({ facilityId, courts, onDone }) {
 function DaySlotsModal({ day, court, onClose, onDeleted }) {
   const [busyId, setBusyId] = useState(null)
   const remove = async (slot) => {
-    if (!window.confirm(`Xóa ca ${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}?`)) return
+    if (!(await confirmDialog(`Xóa ca ${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}?`))) return
     setBusyId(slot.id)
     try {
       await deleteSlot(slot.id)

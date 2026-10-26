@@ -187,3 +187,4 @@
 .snx-chip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid #d5dfdb; border-radius: 999px; background: #fff; font: 500 12px var(--snx-font-sans); color: var(--snx-text); cursor: pointer; }
 .snx-chip[aria-pressed="true"] { border-color: var(--snx-green-700, #2d6a4f); background: #e8f5e3; color: var(--snx-green-950); }
 .snx-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }

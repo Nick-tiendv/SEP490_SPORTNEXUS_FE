@@ -84,14 +84,14 @@ export default function DepositCancel() {
               try {
                 const w = await getWallet()
                 if (active) setWallet(w)
-              } catch {}
+              } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
               return setPhase('ALREADY_PAID')
             }
             if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {
               setAutoBackIn(AUTO_BACK_SECONDS)
               return setPhase('ALREADY_CANCELLED')
             }
-          } catch {}
+          } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
         }
         if (err?.status === 401) return
         setErrorMessage(err?.message || 'Không thể hủy lệnh nạp. Vui lòng thử lại.')

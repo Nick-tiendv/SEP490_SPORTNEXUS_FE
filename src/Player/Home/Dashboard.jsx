@@ -2,12 +2,14 @@
 // Thiết kế pastel sáng, năng động, chuyên nghiệp & hỗ trợ lọc linh hoạt theo 5 môn thể thao (Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis)
 
 import { useState, useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/SportContext.jsx'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
+import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs } from '../../api/player/lfgApi.js'
 
 const actionCards = [
@@ -814,14 +816,14 @@ function Dashboard() {
       if (savedRole === 'court_owner' || savedRole === 'admin') {
         navigate('/owner/dashboard', { replace: true })
       }
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
   }, [navigate])
 
   const [playerProfile, setPlayerProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('player_profile_data')
       if (saved) return JSON.parse(saved)
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return {}
   })
 
@@ -830,7 +832,7 @@ function Dashboard() {
       try {
         const saved = localStorage.getItem('player_profile_data')
         if (saved) setPlayerProfile(JSON.parse(saved))
-      } catch (e) {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     }
     window.addEventListener('player-profile-updated', handleProfileUpdate)
     window.addEventListener('storage', handleProfileUpdate)
@@ -975,7 +977,7 @@ function Dashboard() {
         if (Array.isArray(all)) setApiSuggestedCourts(all)
       }
     } catch (err) {
-      console.warn('Dashboard: Lỗi tìm kiếm cơ sở:', err)
+      toast.error(err?.message || 'Không tìm được cơ sở, vui lòng thử lại.')
     } finally {
       setIsSearchingCourts(false)
     }
@@ -1008,6 +1010,9 @@ function Dashboard() {
 
   return (
     <div className="snx-page">
+      {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
+      <SplitInvites />
+
       {/* ===================== SECTION 1: WELCOME & QUICK SPORT BAR ===================== */}
       <section
         style={{

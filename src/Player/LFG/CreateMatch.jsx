@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { confirmDialog } from '../../components/common/confirm.js'
+import { toast } from 'sonner'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
@@ -298,7 +300,7 @@ function CreateMatch() {
         const parsed = JSON.parse(saved)
         if (parsed.location) return parsed.location
       }
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 'Thủ Đức'
   })
 
@@ -462,7 +464,7 @@ function CreateMatch() {
 
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
-      alert(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
+      toast.error(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
       setSubmitting(false)
       return
     }
@@ -523,8 +525,8 @@ function CreateMatch() {
   }
 
   // Handle Cancel Match Creation
-  const handleCancel = () => {
-    if (window.confirm('Bạn có chắc chắn muốn huỷ bỏ đăng kèo ghép trận này không?')) {
+  const handleCancel = async () => {
+    if ((await confirmDialog('Bạn có chắc chắn muốn huỷ bỏ đăng kèo ghép trận này không?'))) {
       navigate('/community')
     }
   }

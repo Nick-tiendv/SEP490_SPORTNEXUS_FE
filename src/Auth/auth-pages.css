@@ -1,4 +1,4 @@
-@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}
+html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}::-webkit-scrollbar{display:none;}
 
     /* Custom subtle glassmorphism and scanlines */
     .glass-panel {
@@ -40,7 +40,7 @@
       animation: pulse-slow 3s ease-in-out infinite;
     }
   
-@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}
+html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}::-webkit-scrollbar{display:none;}
 img[alt^="SportNexus logo mark"]{display:none!important}
 
 /* Standalone Login/Register layout; other pages keep their existing styles. */
@@ -193,4 +193,4 @@ img[alt^="SportNexus logo mark"]{display:none!important}
   .auth-register .auth-register-intro { padding-inline: 56px; }
   .auth-register .auth-register-panel { padding: 48px 56px; }
 }
-@layer base { html, body { margin: 0; padding: 0; } body { overscroll-behavior: none; } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }
+ html, body { margin: 0; padding: 0; } body { overscroll-behavior: none; } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; }  ::-webkit-scrollbar { display: none; }

@@ -8,11 +8,15 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:auth": "node --test tests/auth-integration.test.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.mjs\"",
+    "format": "prettier --write \"src/**/*.{js,jsx,css}\" \"tests/**/*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx,css}\" \"tests/**/*.mjs\""
   },
   "dependencies": {
     "axios": "^1.20.0",
     "jsqr": "^1.4.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.47.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.8",
@@ -31,7 +35,8 @@
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
     "postcss": "^8.5.28",
-    "tailwindcss": "^4.3.3",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^3.4.19",
     "vite": "^8.3.0"
   }
 }

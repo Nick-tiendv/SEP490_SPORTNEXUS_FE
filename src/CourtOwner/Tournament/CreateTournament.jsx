@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import {
   addParticipant,
@@ -126,9 +127,9 @@ export default function CreateAutomatedTournament() {
       { reloadList: true, after: () => setNewParticipant('') },
     )
   }
-  const handleRemoveParticipant = (participant) => {
+  const handleRemoveParticipant = async (participant) => {
     const name = participant.teamName || participant.fullName
-    if (!window.confirm(`Xóa "${name}" khỏi bảng đấu?`)) return
+    if (!(await confirmDialog(`Xóa "${name}" khỏi bảng đấu?`))) return
     runAction(() => removeParticipant(childId, participant.participantId), `Đã xóa "${name}" khỏi bảng đấu.`, { reloadList: true })
   }
   const handleCheckIn = (participant) =>
@@ -136,8 +137,8 @@ export default function CreateAutomatedTournament() {
 
   // ---------- Bốc thăm & chốt nhánh ----------
   const handleRandomPairing = () => runAction(() => executeRandomPairing(childId), 'Bốc thăm ghép đôi hoàn tất, các cặp đấu đã được tạo.', { reloadList: true })
-  const handleGenerateBracket = () => {
-    if (!window.confirm('Chốt danh sách và sinh sơ đồ nhánh đấu? Sau bước này không thể thêm / xóa người tham gia.')) return
+  const handleGenerateBracket = async () => {
+    if (!(await confirmDialog('Chốt danh sách và sinh sơ đồ nhánh đấu? Sau bước này không thể thêm / xóa người tham gia.'))) return
     runAction(() => generateBracket(childId), 'Đã chốt danh sách và sinh sơ đồ nhánh đấu. Bảng đấu chuyển sang Đang thi đấu.', { reloadList: true })
   }
 
@@ -174,8 +175,8 @@ export default function CreateAutomatedTournament() {
       after: () => { setShowCancelModal(false); setCancelReason(''); refreshWallet().catch(() => {}) },
     })
   }
-  const handleDeleteTournament = () => {
-    if (!window.confirm(`Xóa vĩnh viễn giải "${tournament.name}"?`)) return
+  const handleDeleteTournament = async () => {
+    if (!(await confirmDialog(`Xóa vĩnh viễn giải "${tournament.name}"?`))) return
     runAction(() => deleteTournament(tournament.id), 'Đã xóa giải đấu.', {
       reloadList: true,
       reloadChild: false,

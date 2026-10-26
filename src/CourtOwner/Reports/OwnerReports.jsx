@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
@@ -59,7 +60,7 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
   const submit = async (event) => {
     event.preventDefault()
     if (!response.trim()) { toast.error('Vui lòng nhập nội dung giải trình.'); return }
-    if (mode === 'refund' && !window.confirm(`Đồng ý hoàn ${refundPct}% tiền cho khách ngay? Thao tác này không hoàn tác được.`)) return
+    if (mode === 'refund' && !(await confirmDialog(`Đồng ý hoàn ${refundPct}% tiền cho khách ngay? Thao tác này không hoàn tác được.`))) return
     setBusy(true)
     try {
       if (mode === 'refund') {

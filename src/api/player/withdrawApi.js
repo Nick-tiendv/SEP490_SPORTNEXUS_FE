@@ -80,13 +80,13 @@ export async function updateBankAccount(payload) {
     const body = response.data
     try {
       localStorage.setItem('sportnexus_player_bank_account', JSON.stringify(bodyPayload))
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return body?.data || body?.result || body
   } catch (error) {
     console.warn('[withdrawApi] Lỗi cập nhật tài khoản ngân hàng:', error)
     try {
       localStorage.setItem('sportnexus_player_bank_account', JSON.stringify(payload))
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     throw normalizeApiError(error)
   }
 }
@@ -123,7 +123,7 @@ export function getWithdrawalRequests(params = {}) {
       if (items.length > 0) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-        } catch {}
+        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
       return items
     } catch (error) {
@@ -215,7 +215,7 @@ export async function createWithdrawalRequest({ amount, bank, note }) {
         note: note || '',
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newReq, ...existing]))
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     return resData
   } catch (error) {

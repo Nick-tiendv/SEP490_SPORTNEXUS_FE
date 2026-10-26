@@ -1,5 +1,7 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
 import { useEffect, useState } from 'react'
+import { confirmDialog } from '../../../components/common/confirm.js'
+import { toast } from 'sonner'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { initialsOf, useCurrentUser } from '../../../hooks/useCurrentUser.js'
@@ -8,7 +10,6 @@ import {
   getBookingQrTicket,
   getCourtSlots,
   lookupAccountByPhone,
-  joinBooking,
   payRemainingBooking,
   addBookingParticipants,
   getCancellationReasons,
@@ -123,7 +124,7 @@ function SplitPayment() {
   })
 
   // Mã QR Check-in Pass sau khi đặt sân thành công
-  const [qrToken, setQrToken] = useState('SNX-BWF-9982-A81F')
+  const [qrToken, setQrToken] = useState('') // lấy từ GET /bookings/{id}/qr-ticket sau khi đặt thành công
   const [qrVersion] = useState(1)
 
   // Notification modal state
@@ -222,7 +223,7 @@ function SplitPayment() {
           return (matchDate.getTime() - now.getTime()) / (1000 * 60 * 60)
         }
       }
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 26 // Mặc định > 24h nếu chưa rõ thời điểm cụ thể
   }
 
@@ -278,7 +279,7 @@ function SplitPayment() {
         },
       })
     )
-    alert(`⏰ Đã hết hạn góp tiền (PaymentDeadline)!\n\nĐơn đặt sân đã tự động hủy. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
+    toast.error(`Đã hết hạn góp tiền (PaymentDeadline)!\n\nĐơn đặt sân đã tự động hủy. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
 
   // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
@@ -316,11 +317,11 @@ function SplitPayment() {
   const handleAddInvitedFriend = async (friend) => {
     if (!friend || !friend.id) return
     if (invitedFriends.some((f) => f.id === friend.id)) {
-      alert('Bạn này đã có trong danh sách chia tiền rồi!')
+      toast.warning('Bạn này đã có trong danh sách chia tiền rồi!')
       return
     }
     if (invitedFriends.length >= 7) {
-      alert('Tối đa 8 người chia tiền cho 1 đơn đặt sân.')
+      toast.warning('Tối đa 8 người chia tiền cho 1 đơn đặt sân.')
       return
     }
 
@@ -329,7 +330,8 @@ function SplitPayment() {
       try {
         await addBookingParticipants(targetBookingId, [friend.id])
       } catch (err) {
-        console.warn('SplitPayment: Lỗi khi thêm người chia tiền qua API:', err)
+        toast.error(err?.message || 'Không thêm được người chia tiền.')
+        return
       }
     }
 
@@ -352,64 +354,51 @@ function SplitPayment() {
     setInvitedFriends((prev) => prev.filter((f) => f.id !== id))
   }
 
-  // BƯỚC 3: Người được mời nhận thông báo -> POST /api/v1/bookings/{bookingId}/join
-  const handleSimulateFriendJoin = async (friendId) => {
+  // Bạn được mời tự góp tiền từ tài khoản của họ (POST /bookings/{id}/join).
+  // Ở đây người tạo chỉ đồng bộ lại trạng thái góp tiền thật: GET /bookings/{id} -> participants[].paymentStatus
+  const [syncingParticipants, setSyncingParticipants] = useState(false)
+  const handleRefreshParticipants = async () => {
     const bookingId =
       (typeof bookingResult === 'string' && isValidGuid(bookingResult) ? bookingResult : null) ||
       bookingResult?.id ||
       bookingResult?.bookingId ||
-      bookingResult?.data?.id
-    try {
-      if (isValidGuid(bookingId)) {
-        await joinBooking(bookingId)
-      }
-    } catch (err) {
-      console.warn('[SplitPayment] joinBooking API notice:', err?.message)
+      bookingResult?.data?.id ||
+      location.state?.bookingId
+    if (!isValidGuid(bookingId)) {
+      toast.error('Chưa có mã đơn đặt sân để cập nhật.')
+      return
     }
-
-    setInvitedFriends((prev) => {
-      const next = prev.map((f) => (f.id === friendId ? { ...f, status: 'PAID' } : f))
-      const allPaid = next.every((f) => f.status === 'PAID')
-      if (allPaid) {
-        setBookingStatus('PAID')
-        window.dispatchEvent(
-          new CustomEvent('player_new_notification', {
-            detail: {
-              id: `all_paid_${Date.now()}`,
-              type: 'booking',
-              icon: 'verified',
-              color: '#15803D',
-              bg: '#DCFCE7',
-              title: 'Tất cả bạn bè đã góp tiền đủ (PAID)!',
-              message: `Đơn đặt sân ${courtName} đã thanh toán đủ và chuyển sang PAID. Vé QR check-in đã sẵn sàng!`,
-              time: 'Vừa xong',
-              unread: true,
-              link: '/checkin',
-              linkText: 'Xem vé QR',
-            },
-          })
-        )
-      }
-      return next
-    })
+    setSyncingParticipants(true)
+    try {
+      const detail = await getBookingById(bookingId)
+      const paidIds = new Set((detail?.participants || []).filter((p) => /PAID|HELD|CHECKED_IN/i.test(p.paymentStatus || '')).map((p) => String(p.userId)))
+      setInvitedFriends((prev) => prev.map((f) => (paidIds.has(String(f.id)) ? { ...f, status: 'PAID' } : f)))
+      const status = String(detail?.bookingStatus || '').toUpperCase()
+      if (status) setBookingStatus(status)
+      toast.success(status === 'PAID' ? 'Mọi người đã góp đủ, đơn đã xác nhận.' : 'Đã cập nhật trạng thái góp tiền.')
+    } catch (err) {
+      toast.error(err?.message || 'Không tải được trạng thái đơn.')
+    } finally {
+      setSyncingParticipants(false)
+    }
   }
 
   // BƯỚC 4: (Tùy chọn) Người tạo trả nốt phần của người chưa góp -> POST /api/v1/bookings/{bookingId}/pay-remaining
   const handlePayRemaining = async () => {
     const unpaid = invitedFriends.filter((f) => f.status !== 'PAID')
     if (unpaid.length === 0) {
-      alert('Tất cả mọi người đã góp đủ tiền rồi!')
+      toast.warning('Tất cả mọi người đã góp đủ tiền rồi!')
       return
     }
     const remainingDue = unpaid.length * splitAmount
     if (walletBalance < remainingDue) {
-      alert(`Số dư ví (${formatVnd(walletBalance)}) không đủ để trả nốt (${formatVnd(remainingDue)})! Vui lòng nạp thêm tiền.`)
+      toast.error(`Số dư ví (${formatVnd(walletBalance)}) không đủ để trả nốt (${formatVnd(remainingDue)})! Vui lòng nạp thêm tiền.`)
       return
     }
 
-    const confirmPay = window.confirm(
+    const confirmPay = (await confirmDialog(
       `👉 Người tạo trả nốt phần của ${unpaid.length} người chưa góp (${formatVnd(remainingDue)}) để xác nhận đơn ngay?\n\nLưu ý: Những người chưa góp sẽ bị loại khỏi đơn theo quy định Bước 4.`
-    )
+    ))
     if (!confirmPay) return
 
     setIsPayingRemaining(true)
@@ -419,12 +408,15 @@ function SplitPayment() {
         bookingResult?.id ||
         bookingResult?.bookingId ||
         bookingResult?.data?.id
-      if (isValidGuid(bookingId)) {
-        try {
-          await payRemainingBooking(bookingId)
-        } catch (apiErr) {
-          console.warn('[SplitPayment] payRemainingBooking API notice:', apiErr)
-        }
+      if (!isValidGuid(bookingId)) {
+        toast.error('Chưa có mã đơn đặt sân để thanh toán.')
+        return
+      }
+      try {
+        await payRemainingBooking(bookingId)
+      } catch (apiErr) {
+        toast.error(apiErr?.message || 'Không thanh toán được phần còn lại.')
+        return
       }
 
       // Số dư thật do backend cập nhật: tải lại ví (getWallet tự đồng bộ TopBar và các trang khác).
@@ -451,7 +443,7 @@ function SplitPayment() {
           },
         })
       )
-      alert(`✅ Đã thanh toán nốt ${formatVnd(remainingDue)} thành công!\n\nĐơn hàng đã chuyển sang trạng thái PAID. Vé QR check-in đã sẵn sàng.`)
+      toast.success(`Đã thanh toán nốt ${formatVnd(remainingDue)} thành công!\n\nĐơn hàng đã chuyển sang trạng thái PAID. Vé QR check-in đã sẵn sàng.`)
     } finally {
       setIsPayingRemaining(false)
     }
@@ -460,7 +452,7 @@ function SplitPayment() {
   // HỦY ĐƠN VÀ HOÀN TIỀN (Image 2)
   const handleOpenCancelModal = async () => {
     if (bookingStatus === 'CHECKED_IN') {
-      alert('❌ Đơn đã check-in tại sân không thể hủy theo quy định!')
+      toast.error('Đơn đã check-in tại sân không thể hủy theo quy định!')
       return
     }
     setShowCancelModal(true)
@@ -532,8 +524,8 @@ function SplitPayment() {
         })
       )
 
-      alert(
-        `✅ Đã hủy đơn đặt sân thành công!\n\n${
+      toast.success(
+        `Đã hủy đơn đặt sân thành công!\n\n${
           isEligibleRefund
             ? `💰 Bạn đã được hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
             : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
@@ -649,17 +641,17 @@ function SplitPayment() {
     if (paymentChannel === 'escrow') {
       // Kiểm tra số dư ví
       if (walletBalance < payableAmount) {
-        alert('Số dư ví không đủ! Vui lòng nạp thêm tiền hoặc chọn thanh toán qua ngân hàng.')
+        toast.error('Số dư ví không đủ! Vui lòng nạp thêm tiền hoặc chọn thanh toán qua ngân hàng.')
         return
       }
 
       if (slotError) {
-        alert(`❌ ${slotError}`)
+        toast.error(`${slotError}`)
         return
       }
       const bookingPayload = buildBookingPayload()
       if (!bookingPayload) {
-        alert('❌ Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+        toast.error('Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
         return
       }
 
@@ -673,9 +665,9 @@ function SplitPayment() {
           console.error('[SplitPayment] createBooking API thất bại:', apiErr)
           const errorMsg = apiErr?.message || 'Lỗi xử lý đơn đặt sân từ máy chủ.'
           if (errorMsg.includes('Số dư không đủ') || errorMsg.includes('số dư hiện tại') || errorMsg.includes('số dư khả dụng')) {
-            const confirmDeposit = window.confirm(
+            const confirmDeposit = (await confirmDialog(
               `❌ ${errorMsg}\n\n👉 Bạn có muốn chuyển sang màn hình nạp tiền ví qua cổng PayOS để nạp số dư còn thiếu không?`
-            )
+            ))
             if (confirmDeposit) {
               navigate('/wallet', {
                 state: {
@@ -690,7 +682,7 @@ function SplitPayment() {
             }
             return
           }
-          alert(`❌ Đặt sân không thành công:\n${errorMsg}`)
+          toast.error(`Đặt sân không thành công:\n${errorMsg}`)
           return
         }
 
@@ -713,7 +705,7 @@ function SplitPayment() {
           try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
         }
 
-        let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
+        let ticketTokenValue = '' // chỉ dùng mã thật từ qr-ticket; lỗi thì để trống
 
         // BƯỚC 5: GET /api/v1/bookings/{bookingId}/qr-ticket
         if (isValidGuid(bookingId)) {
@@ -809,12 +801,12 @@ function SplitPayment() {
   const handleInitiatePayOS = async () => {
     const bookingPayload = buildBookingPayload()
     if (!bookingPayload) {
-      alert('❌ Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+      toast.error('Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
       return
     }
 
     if (payableAmount > 2000000) {
-      alert(`❌ Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)}đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (2.000.000đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
+      toast.error(`Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)}đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (2.000.000đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
       navigate('/wallet', {
         state: {
           returnTo: { path: '/split-payment', state: location.state, label: 'Quay lại đặt sân' },
@@ -856,7 +848,7 @@ function SplitPayment() {
       setStep('bank_qr')
     } catch (err) {
       console.error('[SplitPayment] Khởi tạo thanh toán PayOS thất bại:', err)
-      alert(`❌ Không thể tạo thanh toán PayOS:\n${err?.message || 'Lỗi kết nối máy chủ'}`)
+      toast.error(`Không thể tạo thanh toán PayOS:\n${err?.message || 'Lỗi kết nối máy chủ'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -868,12 +860,12 @@ function SplitPayment() {
       setStep('confirm')
       return
     }
-    const confirmCancel = window.confirm('Bạn có chắc muốn hủy đơn thanh toán PayOS này không?')
+    const confirmCancel = (await confirmDialog('Bạn có chắc muốn hủy đơn thanh toán PayOS này không?'))
     if (!confirmCancel) return
 
     try {
       await cancelDeposit(payosSession.orderCode)
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     clearPendingDeposit()
     setPayosSession(null)
     setStep('confirm')
@@ -883,7 +875,7 @@ function SplitPayment() {
   const handleCompleteBookingAfterPayment = async (orderCode) => {
     const bookingPayload = buildBookingPayload()
     if (!bookingPayload) {
-      alert('Đã nhận thanh toán qua PayOS nhưng thiếu thông tin ca sân. Vui lòng liên hệ hỗ trợ hoặc xem lại số dư ví.')
+      toast.error('Đã nhận thanh toán qua PayOS nhưng thiếu thông tin ca sân. Vui lòng liên hệ hỗ trợ hoặc xem lại số dư ví.')
       navigate('/wallet')
       return
     }
@@ -895,7 +887,7 @@ function SplitPayment() {
         createdBooking = await createBooking(bookingPayload)
       } catch (apiErr) {
         console.error('[SplitPayment] createBooking thất bại sau khi PayOS thanh toán:', apiErr)
-        alert(`Đã nhận thanh toán qua PayOS nhưng lỗi tạo đơn đặt sân:\n${apiErr?.message || 'Lỗi hệ thống'}\nTiền đã được lưu vào ví Escrow của bạn.`)
+        toast.error(`Đã nhận thanh toán qua PayOS nhưng lỗi tạo đơn đặt sân:\n${apiErr?.message || 'Lỗi hệ thống'}\nTiền đã được lưu vào ví Escrow của bạn.`)
         navigate('/wallet')
         return
       }
@@ -914,7 +906,7 @@ function SplitPayment() {
           try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
         }
 
-      let ticketTokenValue = bookingId ? `SNX-${String(bookingId).slice(0, 8).toUpperCase()}` : `SNX-${Date.now()}`
+      let ticketTokenValue = '' // chỉ dùng mã thật từ qr-ticket; lỗi thì để trống
 
       if (isValidGuid(bookingId)) {
         try {
@@ -945,7 +937,7 @@ function SplitPayment() {
       try {
         const w = await getWallet()
         if (w && typeof w.balance === 'number') setWalletBalance(w.balance)
-      } catch {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
       if (paymentMode === 'split') {
         setBookingStatus('PENDING')
@@ -1036,12 +1028,12 @@ function SplitPayment() {
         }
         if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {
           clearPendingDeposit()
-          alert(status === DEPOSIT_STATUS.CANCELLED ? 'Đơn thanh toán PayOS đã bị hủy.' : 'Thanh toán PayOS không thành công.')
+          toast.error(status === DEPOSIT_STATUS.CANCELLED ? 'Đơn thanh toán PayOS đã bị hủy.' : 'Thanh toán PayOS không thành công.')
           setStep('confirm')
           setPayosSession(null)
           return
         }
-      } catch (err) {
+      } catch {
         // Tiếp tục thử lại trong chu kỳ polling
       }
       if (active) {
@@ -1056,26 +1048,37 @@ function SplitPayment() {
     }
   }, [step, payosSession, payosCheckAttempt])
 
-  // Action: Gửi mã check-in cho bạn chơi
-  const handleSendCodeToFriends = () => {
-    window.dispatchEvent(new CustomEvent('player_new_notification', {
-      detail: {
-        id: `friend_${Date.now()}`,
-        type: 'checkin',
-        icon: 'share',
-        color: '#7C3AED',
-        bg: '#F3E8FF',
-        title: 'Gửi mã cho bạn chơi thành công!',
-        message: `Đã gửi mã vé check-in và link định vị sân ${courtName} cho bạn chơi.`,
-        details: `Mã vé Token: #${qrToken} • Người nhận: Trần Bảo An, Lê Hoàng Nam, Phạm Quốc Thịnh`,
-        time: 'Vừa xong',
-        unread: true,
-        link: '/checkin',
-        linkText: 'Xem vé QR nhóm',
-        meta: { token: qrToken, recipients: ['Trần Bảo An', 'Lê Hoàng Nam', 'Phạm Quốc Thịnh'] }
+  // Gửi mã check-in cho bạn chơi: dùng chia sẻ của thiết bị, không có thì sao chép vào clipboard.
+  const handleSendCodeToFriends = async () => {
+    const text = `Vé check-in SportNexus tại ${courtName}
+Mã vé: #${qrToken}
+Xem vé QR: ${window.location.origin}/qr-pass`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Vé check-in SportNexus', text })
+        return
       }
-    }))
-    alert(`Đã gửi mã vé QR #${qrToken} thành công cho 3 bạn chơi! Thông báo đã được gửi vào chuông thông báo.`)
+      await navigator.clipboard.writeText(text)
+      toast.success('Đã sao chép thông tin vé. Hãy dán gửi cho bạn chơi qua tin nhắn.')
+    } catch (error) {
+      if (error?.name !== 'AbortError') toast.error('Không chia sẻ được vé, vui lòng thử lại.')
+    }
+  }
+
+  // Tải ảnh vé QR: lưu mã QR đang hiển thị thành file SVG.
+  const handleDownloadTicketQr = () => {
+    const svg = document.querySelector('.sp-ticket-qr-box svg')
+    if (!svg) {
+      toast.error('Chưa có mã QR để tải.')
+      return
+    }
+    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `ve-checkin-${qrToken}.svg`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -1873,11 +1876,12 @@ function SplitPayment() {
                                 <button
                                   type="button"
                                   className="sp-btn-sim-join"
-                                  title="Bước 3: Người được mời nhận thông báo -> POST /api/v1/bookings/{id}/join"
-                                  onClick={() => handleSimulateFriendJoin(f.id)}
+                                  title="Bạn chơi tự góp tiền từ tài khoản của họ. Bấm để cập nhật trạng thái mới nhất."
+                                  disabled={syncingParticipants}
+                                  onClick={handleRefreshParticipants}
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>send</span>
-                                  <span>Góp tiền</span>
+                                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>refresh</span>
+                                  <span>{syncingParticipants ? 'Đang cập nhật…' : 'Cập nhật'}</span>
                                 </button>
                               </>
                             )}
@@ -2014,33 +2018,12 @@ function SplitPayment() {
                 )}
 
                 <div className="sp-qr-svg-wrap" key={qrVersion}>
-                  <svg
-                    className="w-full h-full text-green-900 drop-shadow-[0_0_12px_rgba(34,197,94,0.35)]"
-                    fill="currentColor"
-                    viewBox="0 0 100 100"
-                  >
-                    {/* Outer corner finders */}
-                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="5" />
-                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="11" />
-                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="69" y="5" />
-                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="75" y="11" />
-                    <rect fill="none" height="26" rx="4" stroke="#1b5e20" strokeWidth="4" width="26" x="5" y="69" />
-                    <rect fill="#2e7d32" height="14" rx="2" width="14" x="11" y="75" />
-
-                    {/* Inner dynamic matrix dots based on qrVersion */}
-                    <rect height="6" rx="1.5" width="6" x="38" y="8" fill="#1b5e20" />
-                    <rect height="6" rx="1.5" width="10" x="52" y={16 + (qrVersion % 4)} fill="#2e7d32" />
-                    <rect height="12" rx="1.5" width="6" x="42" y={48 + (qrVersion % 3)} fill="#1b5e20" />
-                    <rect height="6" rx="1.5" width="12" x="78" y="38" fill="#2e7d32" />
-                    <rect height="12" rx="1.5" width="6" x="86" y="68" fill="#1b5e20" />
-                    <rect height="6" rx="1.5" width="6" x="54" y="54" fill="#1b5e20" />
-                    <rect height="6" rx="1.5" width="8" x="68" y="54" fill="#2e7d32" />
-                    <rect height="8" rx="1.5" width="6" x="38" y="76" fill="#1b5e20" />
-                    <rect height="6" rx="1.5" width="10" x="50" y="76" fill="#2e7d32" />
-                    <circle cx="50" cy="38" r="4" fill="#15803d" />
-                    <circle cx="62" cy="70" r="3.5" fill="#15803d" />
-                    <circle cx="70" cy="85" r="3.5" fill="#2e7d32" />
-                  </svg>
+                  {/* Mã QR thật từ qrToken của vé (GET /bookings/{id}/qr-ticket); chủ sân quét mã này để check-in */}
+                  {qrToken ? (
+                    <QRCodeSVG value={qrToken} size={200} level="M" fgColor="#14532d" style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <div style={{ display: 'grid', placeItems: 'center', height: '100%', textAlign: 'center', color: '#6b7280', fontSize: 12 }}>Chưa lấy được mã vé. Mở trang Vé check-in QR để xem lại.</div>
+                  )}
                 </div>
               </div>
 
@@ -2098,7 +2081,7 @@ function SplitPayment() {
                   className="sp-btn-action-primary"
                   style={{ flex: 1 }}
                   disabled={bookingStatus === 'CANCELLED'}
-                  onClick={() => alert('Đã lưu mã vé QR vào thư viện ảnh của thiết bị!')}
+                  onClick={handleDownloadTicketQr}
                 >
                   <span className="material-symbols-outlined">download</span>
                   <span>Tải ảnh vé QR</span>

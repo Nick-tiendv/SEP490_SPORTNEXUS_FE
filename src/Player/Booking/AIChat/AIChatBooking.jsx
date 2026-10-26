@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  COURTS,
   DISTRICT_CENTERS,
   buildSlotsForCourt,
   buildWelcomeMessage,
@@ -339,7 +338,7 @@ function AIChatBooking() {
 
       recognitionRef.current = recognition
       recognition.start()
-    } catch (err) {
+    } catch {
       setIsListening(false)
       showToast('⚠️ Không thể khởi động Micro. Vui lòng thử lại!')
     }

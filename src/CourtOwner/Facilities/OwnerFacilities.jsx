@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -182,7 +183,7 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
     run('upload', () => uploadFacilityImages(facilityId, list), `Đã tải lên ${list.length} ảnh.`)
   }
   const remove = async () => {
-    if (!window.confirm(`Đóng cơ sở "${f.name}"? Sân con và các ca chưa đặt trong tương lai sẽ bị xóa. Lịch sử đặt sân và đánh giá vẫn được giữ.`)) return
+    if (!(await confirmDialog(`Đóng cơ sở "${f.name}"? Sân con và các ca chưa đặt trong tương lai sẽ bị xóa. Lịch sử đặt sân và đánh giá vẫn được giữ.`))) return
     setBusy('delete')
     try {
       await deleteFacility(facilityId)
@@ -251,7 +252,7 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
                 {img.isThumbnail && <span className="snx-thumb-flag snx-badge snx-badge--green">Ảnh đại diện</span>}
                 <div className="snx-thumb-actions">
                   {!img.isThumbnail && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={!!busy} onClick={() => run(`thumb-${img.id}`, () => setFacilityThumbnail(facilityId, img.id), 'Đã đặt ảnh đại diện.')}>Đặt đại diện</button>}
-                  <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={!!busy} onClick={() => window.confirm('Xóa ảnh này?') && run(`del-${img.id}`, () => deleteFacilityImage(facilityId, img.id), 'Đã xóa ảnh.')} aria-label="Xóa ảnh"><span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span></button>
+                  <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={!!busy} onClick={async () => (await confirmDialog('Xóa ảnh này?')) && run(`del-${img.id}`, () => deleteFacilityImage(facilityId, img.id), 'Đã xóa ảnh.')} aria-label="Xóa ảnh"><span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span></button>
                 </div>
               </div>
             ))}

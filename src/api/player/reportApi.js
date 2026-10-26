@@ -1,4 +1,4 @@
-import apiClient, { normalizeApiError } from './apiClient.js'
+import apiClient, { normalizeApiError } from '../apiClient.js'
 
 export const REPORTS_ENDPOINT = '/api/v1/reports'
 

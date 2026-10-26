@@ -1,4 +1,4 @@
-import { get, getList, pick, post, put, upload } from '../owner/request.js'
+import { del, get, getList, pick, post, put, upload } from '../owner/request.js'
 
 // ---------- Tài khoản: /api/auth/me ----------
 export const getMyProfile = () => get('/api/auth/me')
@@ -49,3 +49,13 @@ export function toSkillEnum(label) {
 export const updateMySports = sports => put('/api/auth/me/sports', {
   sports: sports.map(sport => ({ sportCategoryId: sport.sportCategoryId, skillLevel: toSkillEnum(sport.skillLevel) })),
 })
+
+// ---------- Bảo mật tài khoản (trang Hồ sơ) ----------
+export const uploadAvatar = file => upload('/api/auth/me/avatar', 'file', file)
+// AddPhoneRequest: phone, otpCode | firebaseIdToken
+export const updatePhone = payload => post('/api/auth/me/phone', payload)
+export const sendEmailOtp = () => post('/api/auth/me/email/send-otp', {})
+export const verifyEmail = ({ otpCode }) => post('/api/auth/me/email/verify', { otpCode: String(otpCode || '').trim() })
+// Đặt mật khẩu cho tài khoản đăng nhập Google / Facebook chưa có mật khẩu: newPassword, confirmPassword
+export const setPassword = payload => post('/api/auth/set-password', payload)
+export const deleteMyAccount = () => del('/api/auth/me')

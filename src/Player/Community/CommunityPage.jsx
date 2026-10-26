@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -19,7 +20,7 @@ import {
   updateCommunityPost,
   updatePostComment,
   uploadPostImage,
-} from '../../api/communityApi.js'
+} from '../../api/player/communityApi.js'
 
 const PAGE_SIZE = 10
 const MAX_IMAGES = 10
@@ -125,7 +126,7 @@ function Comment({ comment, postId, onChanged, depth = 0 }) {
     try { await updatePostComment(comment.id, editing); setEditing(null); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bình luận.') }
   }
   const remove = async () => {
-    if (!window.confirm('Xóa bình luận này?')) return
+    if (!(await confirmDialog('Xóa bình luận này?'))) return
     try { await deletePostComment(comment.id); onChanged(true) } catch (e) { toast.error(e?.message || 'Không xóa được bình luận.') }
   }
   const reply = async () => {
@@ -218,7 +219,7 @@ function PostCard({ post, onAuthor, onChanged, onRemoved }) {
     try { await updateCommunityPost(post.id, { content: editing }); setEditing(null); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bài viết.') }
   }
   const remove = async () => {
-    if (!window.confirm('Xóa bài viết này?')) return
+    if (!(await confirmDialog('Xóa bài viết này?'))) return
     try { await deleteCommunityPost(post.id); toast.success('Đã xóa bài viết.'); onRemoved(post.id) } catch (e) { toast.error(e?.message || 'Không xóa được bài viết.') }
   }
 

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
+import { confirmDialog } from '../../components/common/confirm.js'
+import { toast } from 'sonner'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getLfgs,
   getLfgById,
@@ -14,7 +17,6 @@ import {
   leaveLfg,
   getLfgCancelReasons,
   getMyFairPlay,
-  updateLfg,
   acceptLfgInvitation,
   declineLfgInvitation,
   removeLfgGroupMember,
@@ -22,7 +24,7 @@ import {
   getLatestLfgCancelRequest,
   voteLfgCancelRequest,
 } from '../../api/player/lfgApi.js'
-import * as communityApi from '../../api/communityApi.js'
+import * as communityApi from '../../api/player/communityApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
@@ -198,7 +200,7 @@ function CommunityFeed() {
         const parsed = JSON.parse(saved)
         if (parsed.location) return parsed.location
       }
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 'Thủ Đức'
   })
 
@@ -214,7 +216,7 @@ function CommunityFeed() {
             const parsed = JSON.parse(saved)
             if (parsed.location) setUserProfileLocation(parsed.location)
           }
-        } catch {}
+        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
     }
     const handleStorage = (e) => {
@@ -222,7 +224,7 @@ function CommunityFeed() {
         try {
           const parsed = JSON.parse(e.newValue)
           if (parsed.location) setUserProfileLocation(parsed.location)
-        } catch {}
+        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
     }
     window.addEventListener('player-profile-updated', handleProfileUpdate)
@@ -331,33 +333,8 @@ function CommunityFeed() {
       setCommunityPosts(items)
     } catch (err) {
       console.warn('[CommunityFeed] Không thể tải bài viết cộng đồng:', err)
-      // Mock bài viết đẹp nếu server chưa có data
-      setCommunityPosts([
-        {
-          id: 'post-1',
-          authorName: 'Nguyễn Thành Trung',
-          authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-          sportBadge: 'CẦU LÔNG',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          content: 'Hôm nay giao lưu tại sân Tre Xanh vui quá! Cảm ơn anh em đã bao sân và đánh rất nhiệt tình, tinh thần Fair Play 100 điểm 🏸✨',
-          mediaUrls: ['https://images.unsplash.com/photo-1613918431703-aa50889e3be6?w=800&h=600&fit=crop'],
-          likeCount: 12,
-          isLiked: false,
-          commentCount: 3,
-        },
-        {
-          id: 'post-2',
-          authorName: 'Lê Minh Quân',
-          authorAvatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop',
-          sportBadge: 'PICKLEBALL',
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-          content: 'Tìm hội đánh Pickleball cố định tối thứ 3 - thứ 5 khu vực Quận 7 hoặc Thủ Đức. Trình độ Trung bình - Khá, chia tiền cọc sòng phẳng qua Escrow!',
-          mediaUrls: [],
-          likeCount: 8,
-          isLiked: true,
-          commentCount: 1,
-        },
-      ])
+      setCommunityPosts([])
+      toast.error(err?.message || 'Không tải được bài viết cộng đồng.')
     } finally {
       setIsLoadingCommunity(false)
     }
@@ -372,9 +349,8 @@ function CommunityFeed() {
       const url = await communityApi.uploadPostImage(file)
       if (url) setNewPostImage(url)
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi tải ảnh bài viết:', err)
-      const mockUrl = URL.createObjectURL(file)
-      setNewPostImage(mockUrl)
+      // Không dùng ảnh tạm trên máy: bài viết sẽ lưu link mà người khác không xem được.
+      toast.error(err?.message || 'Không tải được ảnh, vui lòng thử lại.')
     } finally {
       setIsUploadingImage(false)
     }
@@ -384,7 +360,7 @@ function CommunityFeed() {
   const handleCreateCommunityPost = async (e) => {
     if (e) e.preventDefault()
     if (!newPostContent.trim()) {
-      alert('Vui lòng nhập nội dung bài viết!')
+      toast.warning('Vui lòng nhập nội dung bài viết!')
       return
     }
     setIsSubmittingPost(true)
@@ -452,7 +428,7 @@ function CommunityFeed() {
         await communityApi.likePost(postId)
       }
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi like/unlike:', err)
+      toast.error(err?.message || 'Không thích / bỏ thích được bài viết.')
     }
   }
 
@@ -468,7 +444,7 @@ function CommunityFeed() {
       const list = res?.items || (Array.isArray(res) ? res : [])
       setCommentsByPostId((prev) => ({ ...prev, [postId]: list }))
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi tải bình luận:', err)
+      toast.error(err?.message || 'Không tải được bình luận.')
     }
   }
 
@@ -502,7 +478,7 @@ function CommunityFeed() {
 
   // Xóa bình luận: DELETE /api/v1/community/comments/{commentId}
   const handleDeleteComment = async (postId, commentId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa bình luận này?')) return
+    if (!(await confirmDialog('Bạn có chắc muốn xóa bình luận này?'))) return
     try {
       await communityApi.deletePostComment(commentId)
       setCommentsByPostId((prev) => ({
@@ -513,13 +489,13 @@ function CommunityFeed() {
         prev.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) } : p))
       )
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi xóa bình luận:', err)
+      toast.error(err?.message || 'Không xóa được bình luận.')
     }
   }
 
   // Xóa bài viết: DELETE /api/v1/community/posts/{postId}
   const handleDeleteCommunityPost = async (postId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return
+    if (!(await confirmDialog('Bạn có chắc chắn muốn xóa bài viết này không?'))) return
     try {
       await communityApi.deleteCommunityPost(postId)
       setCommunityPosts((prev) => prev.filter((p) => p.id !== postId))
@@ -529,7 +505,7 @@ function CommunityFeed() {
         type: 'success',
       })
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi xóa bài viết:', err)
+      toast.error(err?.message || 'Không xóa được bài viết.')
     }
   }
 
@@ -547,7 +523,7 @@ function CommunityFeed() {
         type: 'success',
       })
     } catch (err) {
-      console.warn('[CommunityFeed] Lỗi cập nhật bài viết:', err)
+      toast.error(err?.message || 'Không cập nhật được bài viết.')
     }
   }
 
@@ -563,7 +539,7 @@ function CommunityFeed() {
       loadJoinedCards()
     } catch (err) {
       console.warn('[CommunityFeed] Lỗi chấp nhận lời mời:', err)
-      alert(err.message || 'Không thể chấp nhận lời mời')
+      toast.error(err.message || 'Không thể chấp nhận lời mời')
     }
   }
 
@@ -578,13 +554,13 @@ function CommunityFeed() {
       loadJoinedCards()
     } catch (err) {
       console.warn('[CommunityFeed] Lỗi từ chối lời mời:', err)
-      alert(err.message || 'Không thể từ chối lời mời')
+      toast.error(err.message || 'Không thể từ chối lời mời')
     }
   }
 
   // Xóa thành viên nhóm: DELETE /api/v1/lfgs/{cardId}/group/{friendId}
   const handleRemoveGroupFriend = async (cardId, friendId, friendName) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa thành viên ${friendName || ''} khỏi nhóm ghép trận?`)) return
+    if (!(await confirmDialog(`Bạn có chắc muốn xóa thành viên ${friendName || ''} khỏi nhóm ghép trận?`))) return
     try {
       await removeLfgGroupMember(cardId, friendId)
       setToastMessage({
@@ -595,7 +571,7 @@ function CommunityFeed() {
       loadMyCards()
     } catch (err) {
       console.warn('[CommunityFeed] Lỗi xóa thành viên nhóm:', err)
-      alert(err.message || 'Không thể xóa thành viên khỏi nhóm')
+      toast.error(err.message || 'Không thể xóa thành viên khỏi nhóm')
     }
   }
 
@@ -614,7 +590,7 @@ function CommunityFeed() {
 
   const handleCreateCancelReq = async (cardId) => {
     if (!cancelRequestReason.trim()) {
-      alert('Vui lòng nhập lý do đề xuất hủy kèo!')
+      toast.warning('Vui lòng nhập lý do đề xuất hủy kèo!')
       return
     }
     setIsSubmittingCancelReq(true)
@@ -628,7 +604,7 @@ function CommunityFeed() {
       const latestReq = await getLatestLfgCancelRequest(cardId).catch(() => null)
       setCancelVoteModal((prev) => (prev ? { ...prev, request: latestReq } : null))
     } catch (err) {
-      alert(err.message || 'Lỗi khi gửi yêu cầu hủy kèo')
+      toast.error(err.message || 'Lỗi khi gửi yêu cầu hủy kèo')
     } finally {
       setIsSubmittingCancelReq(false)
     }
@@ -647,7 +623,7 @@ function CommunityFeed() {
       loadMyCards()
       loadJoinedCards()
     } catch (err) {
-      alert(err.message || 'Lỗi khi bỏ phiếu')
+      toast.error(err.message || 'Lỗi khi bỏ phiếu')
     }
   }
 
@@ -670,7 +646,7 @@ function CommunityFeed() {
     setClaimError(null)
 
     if (walletBalance < (bookingModal.price || 0)) {
-      alert('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
+      toast.error('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
       setIsClaiming(false)
       return
     }
@@ -761,7 +737,7 @@ function CommunityFeed() {
 
   // Chủ kèo: Loại người đã vào kèo - 2.6 Bước 4
   const handleRemoveParticipant = async (cardId, userId, participantName) => {
-    if (!window.confirm(`Xác nhận loại ${participantName} khỏi kèo?\n\nChính sách quy định: Hoàn 100% tiền cho họ và mở lại 1 suất trống cho kèo.`)) {
+    if (!(await confirmDialog(`Xác nhận loại ${participantName} khỏi kèo?\n\nChính sách quy định: Hoàn 100% tiền cho họ và mở lại 1 suất trống cho kèo.`))) {
       return
     }
     setActionLoadingId(`${cardId}-${userId}`)
@@ -846,7 +822,7 @@ function CommunityFeed() {
       const now = Date.now()
       const diffHours = (matchTime - now) / (1000 * 60 * 60)
       if (diffHours < 2 && diffHours > 0) {
-        alert('Quy định hệ thống: Không thể rời kèo trong vòng 2 giờ trước giờ chơi!')
+        toast.error('Quy định hệ thống: Không thể rời kèo trong vòng 2 giờ trước giờ chơi!')
         return
       }
     }
@@ -882,7 +858,7 @@ function CommunityFeed() {
       courtName: matchInfo.courtName || 'Sân SportNexus',
       facilityAddress: matchInfo.facilityAddress || 'TP. Hồ Chí Minh',
       time: matchInfo.time || '19:30 - 21:00',
-      ticketCode: matchInfo.ticketCode || `SNX-LFG-${String(cardId).slice(0, 8)}`,
+      ticketCode: matchInfo.ticketCode || '',
       qrCode: null,
     })
 
@@ -892,15 +868,16 @@ function CommunityFeed() {
         ...prev,
         isLoading: false,
         ticketData: res,
-        qrCode: res?.qrCode || res?.code || `SNX-LFG-${cardId}`,
+        qrCode: res?.qrCode || res?.code || (typeof res === 'string' ? res : null),
         ticketCode: res?.ticketCode || res?.code || prev.ticketCode,
       }))
     } catch (err) {
-      console.warn('[CommunityFeed] Lấy vé QR thất bại hoặc demo fallback:', err)
+      // Không tạo mã giả: mã không có trên hệ thống thì chủ sân quét sẽ báo lỗi.
+      toast.error(err?.message || 'Không lấy được vé QR của kèo.')
       setQrTicketModal((prev) => ({
         ...prev,
         isLoading: false,
-        qrCode: `SNX-LFG-${cardId}`,
+        qrCode: null,
       }))
     }
   }
@@ -909,7 +886,7 @@ function CommunityFeed() {
   const handleCreateMatchSubmit = (e) => {
     e.preventDefault()
     if (!newMatch.title || !newMatch.location) {
-      alert('Vui lòng nhập đầy đủ tiêu đề và địa điểm sân!')
+      toast.warning('Vui lòng nhập đầy đủ tiêu đề và địa điểm sân!')
       return
     }
 
@@ -2673,24 +2650,16 @@ function CommunityFeed() {
               ) : (
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-52 h-52 bg-white rounded-xl p-3 border-2 border-[#15803D] shadow-sm flex items-center justify-center relative overflow-hidden">
-                    {/* Simulated SVG QR Code */}
-                    <svg className="w-full h-full text-[#111827]" fill="currentColor" viewBox="0 0 100 100">
-                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="5" y="5"></rect>
-                      <rect fill="currentColor" height="14" rx="2" width="14" x="11" y="11"></rect>
-                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="69" y="5"></rect>
-                      <rect fill="currentColor" height="14" rx="2" width="14" x="75" y="11"></rect>
-                      <rect fill="none" height="26" rx="4" stroke="currentColor" strokeWidth="4" width="26" x="5" y="69"></rect>
-                      <rect fill="currentColor" height="14" rx="2" width="14" x="11" y="75"></rect>
-                      <rect height="6" rx="1" width="6" x="38" y="8"></rect>
-                      <rect height="6" rx="1" width="10" x="52" y="18"></rect>
-                      <rect height="12" rx="1" width="6" x="42" y="52"></rect>
-                      <rect height="6" rx="1" width="12" x="80" y="38"></rect>
-                      <rect height="12" rx="1" width="6" x="86" y="68"></rect>
-                    </svg>
+                    {/* Mã QR thật từ GET /lfgs/{id}/qr-ticket; chủ sân quét mã này để check-in */}
+                    {qrTicketModal.qrCode ? (
+                      <QRCodeSVG value={qrTicketModal.qrCode} size={180} level="M" style={{ width: '100%', height: '100%' }} />
+                    ) : (
+                      <span className="text-xs text-gray-500 font-bold text-center">Chưa lấy được mã vé. Vui lòng thử lại.</span>
+                    )}
                     <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#16A34A] animate-pulse"></div>
                   </div>
                   <span className="font-mono text-xs font-black px-3 py-1 rounded-md bg-gray-200 text-gray-800 tracking-wider">
-                    {qrTicketModal.ticketCode || 'SNX-LFG-PASS'}
+                    {qrTicketModal.ticketCode || qrTicketModal.qrCode || '—'}
                   </span>
                 </div>
               )}

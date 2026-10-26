@@ -1,4 +1,4 @@
-import apiClient, { normalizeApiError } from './apiClient.js'
+import apiClient, { normalizeApiError } from '../apiClient.js'
 
 /**
  * Service quản lý đánh giá cơ sở và fair-play
@@ -80,7 +80,7 @@ export async function createFacilityReview(payload) {
         comment: payload.comment ? String(payload.comment).trim() : '',
       })
       return fbResponse.data?.data || fbResponse.data
-    } catch (fbErr) {
+    } catch {
       throw normalizeApiError(error)
     }
   }
