@@ -10,10 +10,11 @@ function validateResponse(body) {
   return body
 }
 // RegisterRequest: username, password, fullName, phone, email (+ role, otpCode khi có: Player | Owner, mã OTP xác thực SĐT)
-const registrationPayload = ({ username, password, fullName, phone, email, role, otpCode }) => ({
+const registrationPayload = ({ username, password, fullName, phone, email, role, otpCode, sports }) => ({
   username, password, fullName, phone, email,
   ...(role ? { role } : {}),
   ...(otpCode ? { otpCode } : {}),
+  ...(Array.isArray(sports) && sports.length ? { sports } : {}),
 })
 export async function registerUser(payload) {
   return validateResponse((await apiClient.post('/api/auth/register', registrationPayload(payload), { skipAuth: true })).data)
@@ -39,6 +40,13 @@ export async function refreshAccessToken(refreshToken) {
   const body = validateResponse((await apiClient.post('/api/auth/refresh-token', { refreshToken }, { skipAuth: true })).data)
   if (typeof body.data?.token !== 'string' || !body.data.token) throw Object.assign(new Error('Không làm mới được phiên đăng nhập.'), { isNormalized: true })
   return body.data
+}
+
+// GET /api/v1/master-data/sports (công khai): danh mục môn cho form đăng ký
+export async function getPublicSports() {
+  const body = (await apiClient.get('/api/v1/master-data/sports', { skipAuth: true })).data
+  const list = body?.data?.items ?? body?.data ?? body
+  return (Array.isArray(list) ? list : []).map((sport) => ({ id: String(sport.id), name: sport.name || '' }))
 }
 
 // ---------- OTP số điện thoại: POST /api/auth/send-otp, /api/auth/verify-otp (type: REGISTER | FORGOT_PASSWORD) ----------
