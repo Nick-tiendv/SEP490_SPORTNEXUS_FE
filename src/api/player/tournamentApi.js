@@ -89,6 +89,25 @@ export const getMyMatches = async ({ from, to } = {}) => (await getList(`${TOURN
 // GET /api/v1/tournaments/{id}/court-schedule: các khung giờ sân đã giữ và các trận đã xếp sân
 export const getCourtSchedule = id => get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/court-schedule`)
 
+// GET /api/v1/tournaments/{id}/participants (công khai, id là bảng đấu): VĐV / đội đã đăng ký
+// TournamentParticipantResponse: participantId, fullName, avatarUrl, teamName, isCheckedIn, teamMembers[]
+export const getTournamentParticipants = async id => (await getList(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/participants`)).items
+
+// GET /api/v1/tournaments/{id}/bracket (công khai): danh sách trận { id, matchIndex, roundName, status, startTime, courtName, p1, p2, winner, scores[] }
+// Gom theo vòng đấu, giữ thứ tự BE trả về.
+export async function getTournamentBracket(id) {
+  const data = await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/bracket`)
+  const matches = Array.isArray(data) ? data : data?.items || data?.matches || []
+  const rounds = []
+  for (const m of [...matches].sort((a, b) => (a.matchIndex ?? 0) - (b.matchIndex ?? 0))) {
+    const name = m.roundName || 'Vòng đấu'
+    let round = rounds.find(r => r.name === name)
+    if (!round) rounds.push(round = { name, matches: [] })
+    round.matches.push(m)
+  }
+  return rounds
+}
+
 // GET /api/v1/matches/{matchId}: BE trả MẢNG MatchDetailResponse (lấy phần tử đầu)
 export async function getMatch(matchId) {
   const data = await get(`/api/v1/matches/${encodeURIComponent(matchId)}`)

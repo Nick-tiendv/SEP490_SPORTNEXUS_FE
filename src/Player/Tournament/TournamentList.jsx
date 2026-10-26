@@ -12,6 +12,8 @@ import {
   getMyMatches,
   getCourtSchedule,
   getMatch,
+  getTournamentBracket,
+  getTournamentParticipants,
 } from '../../api/player/tournamentApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
@@ -73,10 +75,77 @@ function TournamentCard({ tournament, actions, onOpen }) {
 }
 
 // Chi tiết giải: các bảng đấu, giải thưởng, lịch các trận (court-schedule) và chi tiết trận
+// Người tham gia + sơ đồ nhánh đấu của 1 bảng đấu (API công khai)
+function CategoryInsight({ category, onClose }) {
+  const [view, setView] = useState('participants')
+  const participants = useApi(() => getTournamentParticipants(category.id), [category.id], { initialData: [] })
+  const bracket = useApi(() => getTournamentBracket(category.id), [category.id], { initialData: [], enabled: view === 'bracket' })
+  return (
+    <section className="snx-card" style={{ padding: 16 }}>
+      <div className="snx-row" style={{ marginBottom: 10 }}>
+        <strong>{category.name}</strong>
+        <span className="snx-spacer" />
+        <div className="snx-tabs" role="tablist" aria-label="Thông tin bảng đấu">
+          <button type="button" role="tab" aria-selected={view === 'participants'} className="snx-tab" onClick={() => setView('participants')}>Người tham gia</button>
+          <button type="button" role="tab" aria-selected={view === 'bracket'} className="snx-tab" onClick={() => setView('bracket')}>Nhánh đấu</button>
+        </div>
+        <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
+      </div>
+      {view === 'participants' && (
+        participants.error ? <div className="snx-alert snx-alert--error">{participants.error}</div>
+          : participants.loading && !participants.data.length ? <p className="snx-muted">Đang tải…</p>
+          : participants.data.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Chưa có ai đăng ký nội dung này.</p>
+          : (
+            <div className="snx-list">
+              {participants.data.map((p) => (
+                <div key={p.participantId} className="snx-list-item">
+                  <span className="snx-avatar-sm">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : (p.teamName || p.fullName || '?').slice(0, 1)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontSize: 14 }}>{p.teamName || p.fullName}</strong>
+                    {p.teamName && <div className="snx-muted">{(p.teamMembers || []).map((m) => m.fullName).join(', ') || p.fullName}</div>}
+                  </div>
+                  {p.isCheckedIn && <span className="snx-badge snx-badge--green">Đã check-in</span>}
+                </div>
+              ))}
+            </div>
+          )
+      )}
+      {view === 'bracket' && (
+        bracket.error ? <div className="snx-alert snx-alert--error">{bracket.error}</div>
+          : bracket.loading && !bracket.data.length ? <p className="snx-muted">Đang tải nhánh đấu…</p>
+          : bracket.data.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Ban tổ chức chưa chốt nhánh đấu.</p>
+          : (
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+              {bracket.data.map((round) => (
+                <div key={round.name} style={{ minWidth: 220, flex: '0 0 auto' }}>
+                  <div className="snx-muted" style={{ fontWeight: 600, marginBottom: 6 }}>{round.name}</div>
+                  <div className="snx-stack" style={{ gap: 8 }}>
+                    {round.matches.map((m) => (
+                      <div key={m.id} style={{ border: '1px solid #e2e8e6', borderRadius: 10, padding: '8px 10px', background: '#fff' }}>
+                        {[['p1', 'scoreP1'], ['p2', 'scoreP2']].map(([side, scoreKey]) => (
+                          <div key={side} className="snx-row" style={{ flexWrap: 'nowrap', fontWeight: m.winner && m.winner === m[side] ? 700 : 400 }}>
+                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m[side] === 'TBD' ? 'Chờ xác định' : m[side]}</span>
+                            <span>{(m.scores || []).map((s) => s[scoreKey]).join(' ')}</span>
+                          </div>
+                        ))}
+                        <div className="snx-muted" style={{ fontSize: 12, marginTop: 4 }}>{m.courtName ? `${m.courtName} · ${dateTime(m.startTime)}` : 'Chưa xếp sân'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+      )}
+    </section>
+  )
+}
+
 function TournamentDetailModal({ id, onClose, onRegister }) {
   const detail = useApi(() => getTournament(id), [id])
   const schedule = useApi(() => getCourtSchedule(id), [id], { initialData: null })
   const [matchId, setMatchId] = useState(null)
+  const [insightId, setInsightId] = useState(null)
   const match = useApi(() => getMatch(matchId), [matchId], { enabled: Boolean(matchId) })
   const t = detail.data
 
@@ -105,10 +174,16 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
                       <div className="snx-muted">{money(child.entryFee)} · {child.registered ?? 0}{child.capacity ? `/${child.capacity}` : ''} đã đăng ký</div>
                     </div>
                     <StatusBadge value={child.status} />
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setInsightId(insightId === child.id ? null : child.id)}>{insightId === child.id ? 'Ẩn' : 'Người tham gia & nhánh đấu'}</button>
                   </div>
                 ))}
               </div>
             </section>
+
+            {insightId && (() => {
+              const category = (t.children.length ? t.children : [t]).find((c) => c.id === insightId)
+              return category ? <CategoryInsight key={category.id} category={category} onClose={() => setInsightId(null)} /> : null
+            })()}
 
             {t.prize > 0 && <p style={{ margin: 0, fontSize: 14 }}>Tổng giải thưởng: <strong>{money(t.prize)}</strong></p>}
 
@@ -202,11 +277,11 @@ function RegisterModal({ target, teams, onClose, onDone }) {
   )
 }
 
-function MyMatches() {
+function MyMatches({ onBrowse }) {
   const matches = useApi(() => getMyMatches(), [], { initialData: [] })
   if (matches.loading) return <p className="snx-muted">Đang tải…</p>
   if (matches.error) return <div className="snx-alert snx-alert--error">{matches.error}</div>
-  if (!matches.data.length) return <div className="snx-empty"><span className="material-symbols-outlined">sports_score</span>Bạn chưa có trận đấu nào được xếp lịch.</div>
+  if (!matches.data.length) return <div className="snx-empty"><span className="material-symbols-outlined">sports_score</span>Bạn chưa có trận đấu nào được xếp lịch.<div className="snx-row" style={{ justifyContent: 'center', marginTop: 12 }}><button type="button" className="snx-btn snx-btn--primary" onClick={onBrowse}>Tìm giải đang mở</button></div></div>
   return (
     <div className="snx-card">
       <div className="snx-list">
@@ -301,14 +376,14 @@ function TournamentList() {
       </div>
 
       {tab === 'teams' && <TeamsPanel />}
-      {tab === 'matches' && <MyMatches />}
+      {tab === 'matches' && <MyMatches onBrowse={() => setTab('open')} />}
 
       {(tab === 'open' || tab === 'mine') && (
         <>
           {current.loading && <p className="snx-muted">Đang tải…</p>}
           {current.error && <div className="snx-alert snx-alert--error">{current.error}</div>}
           {!current.loading && !current.error && list.length === 0 && (
-            <div className="snx-empty"><span className="material-symbols-outlined">emoji_events</span>{tab === 'open' ? 'Hiện chưa có giải nào mở đăng ký.' : 'Bạn chưa đăng ký giải nào.'}</div>
+            <div className="snx-empty"><span className="material-symbols-outlined">emoji_events</span>{tab === 'open' ? 'Hiện chưa có giải nào mở đăng ký.' : 'Bạn chưa đăng ký giải nào.'}{tab !== 'open' && <div className="snx-row" style={{ justifyContent: 'center', marginTop: 12 }}><button type="button" className="snx-btn snx-btn--primary" onClick={() => setTab('open')}>Xem giải đang mở</button></div>}</div>
           )}
           <div className="snx-grid snx-grid--2">
             {list.map((tournament) => (
