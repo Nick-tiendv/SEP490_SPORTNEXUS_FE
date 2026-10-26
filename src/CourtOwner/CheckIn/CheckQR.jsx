@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import jsQR from 'jsqr'
 import { checkInBooking, getOwnerBookings, scanQrCode } from '../../api/owner'
 import { pick } from '../../api/owner/request.js'
@@ -43,7 +44,6 @@ export default function CheckQR() {
   const [result, setResult] = useState(null) // { ok, code, message, data, time }
   const [busy, setBusy] = useState(false)
   const [sessionLogs, setSessionLogs] = useState([])
-  const [toastMessage, setToastMessage] = useState(null)
 
   // Đơn trong ngày: chờ check-in (PAID) và đã check-in (CHECKED_IN)
   const [listTab, setListTab] = useState('waiting')
@@ -52,10 +52,7 @@ export default function CheckQR() {
   const [todayError, setTodayError] = useState(null) // { key, message }
   const todayKey = `${facilityId}|${reloadKey}`
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type })
-    setTimeout(() => setToastMessage(null), 3500)
-  }
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
   useEffect(() => {
     if (!facilityId) return
@@ -214,46 +211,18 @@ export default function CheckQR() {
 
   return (
     <div className="snx-page">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
-            color: '#FFFFFF',
-            padding: '14px 22px',
-            borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-            fontWeight: 600,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            maxWidth: '420px',
-            animation: 'fadeInSlide 0.3s ease',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            {toastMessage.type === 'error' ? 'error' : 'check_circle'}
-          </span>
-          {toastMessage.msg}
-        </div>
-      )}
 
       {/* Header section */}
       <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
             <span className="snx-page-eyebrow">
-              Smart Escrow Check-in Terminal
+              Vận hành
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>{facility?.name || ''}</span>
           </div>
           <h1 className="snx-page-title">
-            Quét Mã QR Check-in Người Chơi
+            Quét QR check-in
           </h1>
           <p className="snx-page-subtitle">
             Quét vé QR đặt sân hoặc kèo LFG khi người chơi tới sân. Tiền giữ của đơn được chuyển cho chủ sân sau giờ chơi.
@@ -278,8 +247,8 @@ export default function CheckQR() {
             <span className="material-symbols-outlined" style={{ fontSize: '26px', color: '#34D399' }}>account_balance_wallet</span>
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: '#A7F3D0', fontWeight: 600 }}>Số Dư Khả Dụng</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF' }}>{formatVND(wallet?.availableBalance ?? wallet?.balance)}</div>
+            <div style={{ fontSize: '12px', color: '#A7F3D0', fontWeight: 600 }}>Số dư khả dụng</div>
+            <div style={{ fontSize: '22px', fontWeight: 600, color: '#FFFFFF' }}>{formatVND(wallet?.availableBalance ?? wallet?.balance)}</div>
           </div>
         </div>
       </div>
@@ -322,7 +291,7 @@ export default function CheckQR() {
               }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{cameraOn ? 'videocam_off' : 'videocam'}</span>
-              {cameraOn ? 'Tắt Camera' : 'Bật Camera'}
+              {cameraOn ? 'Tắt camera' : 'Bật camera'}
             </button>
           </div>
 
@@ -382,7 +351,7 @@ export default function CheckQR() {
                 <div style={{ textAlign: 'center', padding: '16px' }}>
                   <span className="material-symbols-outlined" style={{ fontSize: '48px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px' }}>qr_code_scanner</span>
                   <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 600 }}>
-                    Bấm "Bật Camera" rồi đưa mã QR vé người chơi vào giữa khung hình
+                    Bấm "Bật camera" rồi đưa mã QR vé người chơi vào giữa khung hình
                   </div>
                 </div>
               )}
@@ -431,7 +400,7 @@ export default function CheckQR() {
                 disabled={!facilityId}
                 style={{ background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '0 16px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
               >
-                Kiểm Tra
+                Kiểm tra
               </button>
             </div>
           </form>
@@ -443,7 +412,7 @@ export default function CheckQR() {
             <div style={{ textAlign: 'center', color: '#475569', fontWeight: 600 }}>Chưa có cơ sở để check-in.</div>
           ) : pendingCode ? (
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 800, color: '#1D4ED8', textTransform: 'uppercase', marginBottom: '8px' }}>Đã đọc được mã vé</div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1D4ED8', textTransform: 'uppercase', marginBottom: '8px' }}>Đã đọc được mã vé</div>
               <div style={{ background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px', padding: '14px 16px', fontFamily: 'monospace', fontSize: '14px', fontWeight: 700, color: '#0F172A', wordBreak: 'break-all', marginBottom: '14px' }}>
                 {pendingCode}
               </div>
@@ -463,7 +432,7 @@ export default function CheckQR() {
                   style={{ flex: 2, background: '#10B981', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>how_to_reg</span>
-                  {busy ? 'Đang check-in...' : 'Xác Nhận Check-in'}
+                  {busy ? 'Đang check-in...' : 'Xác nhận check-in'}
                 </button>
               </div>
             </div>
@@ -472,8 +441,8 @@ export default function CheckQR() {
               <span className="material-symbols-outlined" style={{ fontSize: '56px', color: result.ok ? '#10B981' : '#EF4444' }}>
                 {result.ok ? 'verified' : 'cancel'}
               </span>
-              <h3 style={{ fontSize: '20px', fontWeight: 800, color: result.ok ? '#047857' : '#B91C1C', margin: '8px 0 6px' }}>
-                {result.ok ? 'Check-in Thành Công' : 'Check-in Thất Bại'}
+              <h3 style={{ fontSize: '20px', fontWeight: 600, color: result.ok ? '#047857' : '#B91C1C', margin: '8px 0 6px' }}>
+                {result.ok ? 'Check-in thành công' : 'Check-in thất bại'}
               </h3>
               <p style={{ fontSize: '14px', color: '#1E293B', fontWeight: 600, margin: '0 0 16px 0' }}>{result.message}</p>
               {resultDetails.length > 0 && (
@@ -491,13 +460,13 @@ export default function CheckQR() {
                 onClick={handleResetScanner}
                 style={{ background: '#0F172A', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px 22px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}
               >
-                Quét Vé Tiếp Theo
+                Quét vé tiếp theo
               </button>
             </div>
           ) : (
             <div style={{ textAlign: 'center', color: '#475569' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '56px', color: '#CBD5E1' }}>confirmation_number</span>
-              <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: '8px 0 6px' }}>Chờ quét vé</h3>
+              <h3 style={{ fontSize: '17px', fontWeight: 600, color: '#0F172A', margin: '8px 0 6px' }}>Chờ quét vé</h3>
               <p style={{ fontSize: '13.5px', fontWeight: 600, margin: 0 }}>
                 Bật camera, nhập mã, hoặc bấm vào ô nhập rồi dùng máy quét cầm tay. Có thể check-in thủ công ở danh sách bên dưới.
               </p>
@@ -510,7 +479,7 @@ export default function CheckQR() {
       <div style={{ ...panelStyle, marginBottom: '24px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '18px' }}>
           <div>
-            <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Đơn Đặt Sân Hôm Nay</h3>
+            <h3 style={{ fontSize: '17px', fontWeight: 600, color: '#0F172A', margin: 0 }}>Đơn đặt sân hôm nay</h3>
             <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '13.5px', fontWeight: 600 }}>
               Khách quên vé QR? Check-in thủ công ngay tại danh sách chờ.
             </p>
@@ -530,7 +499,7 @@ export default function CheckQR() {
                   background: listTab === key ? '#ECFDF5' : '#F1F5F9',
                   color: listTab === key ? '#047857' : '#334155',
                   fontSize: '13px',
-                  fontWeight: 800,
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
@@ -557,7 +526,7 @@ export default function CheckQR() {
               <thead>
                 <tr style={{ borderBottom: '2px solid #CBD5E1', background: '#F8FAFC' }}>
                   {['Khách hàng', 'Sân', 'Giờ chơi', 'Người chơi', 'Tổng tiền', ''].map((head) => (
-                    <th key={head} style={{ padding: '12px 14px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>{head}</th>
+                    <th key={head} style={{ padding: '12px 14px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>{head}</th>
                   ))}
                 </tr>
               </thead>
@@ -565,7 +534,7 @@ export default function CheckQR() {
                 {listItems.map((booking) => (
                   <tr key={booking.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                     <td style={{ padding: '12px 14px' }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>
                         {booking.customerName}{booking.isWalkIn ? ' (Vãng lai)' : ''}
                       </div>
                       <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>{booking.customerPhone || '—'}</div>
@@ -580,7 +549,7 @@ export default function CheckQR() {
                     <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
                       {booking.checkedInCount}/{booking.participantCount || 1} đã vào sân
                     </td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 800, color: '#047857' }}>{formatVND(booking.totalAmount)}</td>
+                    <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600, color: '#047857' }}>{formatVND(booking.totalAmount)}</td>
                     <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                       {listTab === 'waiting' ? (
                         <button
@@ -591,7 +560,7 @@ export default function CheckQR() {
                           Check-in thủ công
                         </button>
                       ) : (
-                        <span style={{ background: '#DCFCE7', color: '#15803D', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800 }}>Đã vào sân</span>
+                        <span style={{ background: '#DCFCE7', color: '#15803D', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>Đã vào sân</span>
                       )}
                     </td>
                   </tr>
@@ -605,7 +574,7 @@ export default function CheckQR() {
       {/* Nhật ký quét trong phiên làm việc */}
       {sessionLogs.length > 0 && (
         <div style={panelStyle}>
-          <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: '0 0 14px 0' }}>Nhật Ký Quét Trong Phiên</h3>
+          <h3 style={{ fontSize: '17px', fontWeight: 600, color: '#0F172A', margin: '0 0 14px 0' }}>Nhật ký quét trong phiên</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {sessionLogs.map((log, idx) => (
               <div

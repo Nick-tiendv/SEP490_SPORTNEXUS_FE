@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   changePassword,
@@ -50,7 +51,6 @@ export default function Profile() {
   const { profile, refreshProfile } = useOwnerContext()
   const avatarInputRef = useRef(null)
 
-  const [toastMessage, setToastMessage] = useState(null)
   const [busy, setBusy] = useState('')
 
   const [isEditing, setIsEditing] = useState(false)
@@ -65,10 +65,7 @@ export default function Profile() {
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [showLogoutModal, setShowLogoutModal] = useState(false)
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type })
-    setTimeout(() => setToastMessage(null), 3500)
-  }
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
   useEffect(() => {
     let cancelled = false
@@ -224,7 +221,7 @@ export default function Profile() {
     boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
     marginBottom: '24px',
   }
-  const labelStyle = { display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#334155', marginBottom: '6px' }
+  const labelStyle = { display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }
   const inputStyle = { width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '14px', boxSizing: 'border-box', background: '#FFFFFF' }
   const readonlyStyle = { ...inputStyle, background: '#F8FAFC', color: '#475569' }
   const primaryButton = (disabled) => ({ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#15803D', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: disabled ? 'wait' : 'pointer', opacity: disabled ? 0.6 : 1 })
@@ -233,31 +230,6 @@ export default function Profile() {
 
   return (
     <div className="snx-page snx-page--narrow">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
-            color: '#FFFFFF',
-            padding: '14px 22px',
-            borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-            fontWeight: 600,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            maxWidth: '420px',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>{toastMessage.type === 'error' ? 'error' : 'check_circle'}</span>
-          {toastMessage.msg}
-        </div>
-      )}
 
       {/* THẺ HỒ SƠ */}
       <div style={{ ...panelStyle, padding: 0, overflow: 'hidden' }}>
@@ -267,7 +239,7 @@ export default function Profile() {
             {profile?.avatarUrl ? (
               <img src={profile.avatarUrl} alt={displayName} style={{ width: '104px', height: '104px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #FFFFFF', boxShadow: '0 6px 18px rgba(0,0,0,0.15)' }} />
             ) : (
-              <div style={{ width: '104px', height: '104px', borderRadius: '50%', border: '4px solid #FFFFFF', background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', fontWeight: 800, boxShadow: '0 6px 18px rgba(0,0,0,0.15)' }}>
+              <div style={{ width: '104px', height: '104px', borderRadius: '50%', border: '4px solid #FFFFFF', background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', fontWeight: 600, boxShadow: '0 6px 18px rgba(0,0,0,0.15)' }}>
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}
@@ -283,15 +255,15 @@ export default function Profile() {
           </div>
 
           <div style={{ flex: 1, minWidth: '220px', paddingBottom: '4px' }}>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 900, color: '#0F172A' }}>{profile ? displayName : 'Đang tải...'}</h1>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#0F172A' }}>{profile ? displayName : 'Đang tải...'}</h1>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-              <span style={{ fontSize: '13px', color: '#475569', fontWeight: 700 }}>@{profile?.username || '—'} • Chủ Cơ Sở</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: kycInfo.bg, color: kycInfo.color, fontSize: '12px', fontWeight: 800, padding: '3px 10px', borderRadius: '999px' }}>
+              <span style={{ fontSize: '13px', color: '#475569', fontWeight: 700 }}>@{profile?.username || '—'} • Chủ cơ sở</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: kycInfo.bg, color: kycInfo.color, fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{kycInfo.icon}</span>
                 {kycInfo.label}
               </span>
               {profile && !profile.isActive && (
-                <span style={{ background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 800, padding: '3px 10px', borderRadius: '999px' }}>Tài khoản bị khóa</span>
+                <span style={{ background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px' }}>Tài khoản bị khóa</span>
               )}
             </div>
           </div>
@@ -302,7 +274,7 @@ export default function Profile() {
       {/* THÔNG TIN CÁ NHÂN */}
       <div style={panelStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', gap: '12px' }}>
-          <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>Thông Tin Tài Khoản</h3>
+          <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Thông tin tài khoản</h3>
           {!isEditing && profile && (
             <button onClick={startEditing} style={{ ...secondaryButton, padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>edit</span>
@@ -346,7 +318,7 @@ export default function Profile() {
       <div style={panelStyle}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>Xác Minh Danh Tính (eKYC)</h3>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Xác minh danh tính (eKYC)</h3>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
               Chủ sân phải được Quản trị viên duyệt hồ sơ mới tạo được cơ sở thể thao.
             </p>
@@ -402,7 +374,7 @@ export default function Profile() {
                       <span style={{ fontSize: '12px', fontWeight: 700 }}>{busy === `kyc-${image.key}` ? 'Đang tải lên...' : 'Bấm để chọn ảnh'}</span>
                     </div>
                   )}
-                  <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginTop: '8px' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#0F172A', marginTop: '8px' }}>
                     {image.label}{image.required ? ' *' : ''}
                   </div>
                 </label>
@@ -443,13 +415,13 @@ export default function Profile() {
         {/* TÀI KHOẢN NGÂN HÀNG */}
         <div style={{ ...panelStyle, marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>Tài Khoản Nhận Tiền</h3>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Tài khoản nhận tiền</h3>
             <Link to="/owner/settlement" style={{ fontSize: '13px', fontWeight: 700, color: '#15803D', textDecoration: 'none' }}>Quản lý →</Link>
           </div>
           {bankAccount ? (
             <div style={{ borderRadius: '14px', padding: '16px 18px', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', color: '#FFFFFF' }}>
               <div style={{ fontSize: '13px', color: '#94A3B8', fontWeight: 700 }}>{bankAccount.bankName}</div>
-              <div style={{ fontSize: '19px', fontWeight: 800, letterSpacing: '1.5px', margin: '6px 0', fontFamily: 'monospace' }}>{bankAccount.bankAccountNumber}</div>
+              <div style={{ fontSize: '19px', fontWeight: 600, letterSpacing: '1.5px', margin: '6px 0', fontFamily: 'monospace' }}>{bankAccount.bankAccountNumber}</div>
               <div style={{ fontSize: '13px', fontWeight: 700 }}>{bankAccount.bankAccountHolder}</div>
             </div>
           ) : (
@@ -461,7 +433,7 @@ export default function Profile() {
 
         {/* ĐỔI MẬT KHẨU */}
         <div style={{ ...panelStyle, marginBottom: 0 }}>
-          <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>Đổi Mật Khẩu</h3>
+          <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Đổi mật khẩu</h3>
           {profile && !profile.hasPassword ? (
             <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
               Tài khoản đăng nhập bằng Google/Facebook chưa có mật khẩu.
@@ -495,7 +467,7 @@ export default function Profile() {
       {/* ĐĂNG XUẤT */}
       <div style={{ ...panelStyle, marginTop: '24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', border: '1px solid #FECACA' }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#B91C1C' }}>Đăng Xuất</h3>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#B91C1C' }}>Đăng xuất</h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#475569', fontWeight: 600 }}>Kết thúc phiên làm việc trên thiết bị này.</p>
         </div>
         <button onClick={() => setShowLogoutModal(true)} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#DC2626', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -508,7 +480,7 @@ export default function Profile() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '400px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', textAlign: 'center' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '44px', color: '#DC2626' }}>logout</span>
-            <h3 style={{ margin: '8px 0 6px', fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Đăng xuất khỏi SportNexus?</h3>
+            <h3 style={{ margin: '8px 0 6px', fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Đăng xuất khỏi SportNexus?</h3>
             <p style={{ margin: '0 0 20px 0', fontSize: '13.5px', color: '#475569', fontWeight: 600 }}>Bạn sẽ cần đăng nhập lại để quản lý cơ sở.</p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setShowLogoutModal(false)} style={{ ...secondaryButton, flex: 1 }}>Ở lại</button>
