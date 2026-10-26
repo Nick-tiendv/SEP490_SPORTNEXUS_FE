@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 import { toast } from 'sonner'
-import { registerUser } from '../api/auth/authApi.js'
+import { registerUser, sendOtp, verifyOtp } from '../api/auth/authApi.js'
 
 function Register() {
   const [role, setRole] = useState('player') // 'player' | 'court_owner'
@@ -11,6 +11,11 @@ function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  // Xác thực số điện thoại bằng OTP (không bắt buộc nếu BE không yêu cầu)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [otpBusy, setOtpBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const submitting = useRef(false)
@@ -31,7 +36,9 @@ function Register() {
       phone: phone.trim(),
       email: email.trim().toLowerCase(),
       password,
-      role,
+      // Vai trò theo BE: Player | Owner
+      role: role === 'court_owner' ? 'Owner' : 'Player',
+      otpCode: otpCode.trim() || undefined,
       sports: selectedSports,
     }
 
@@ -68,6 +75,35 @@ function Register() {
     } finally {
       submitting.current = false
       setLoading(false)
+    }
+  }
+
+  const handleSendOtp = async () => {
+    if (!phone.trim()) { toast.error('Vui lòng nhập số điện thoại trước.'); return }
+    setOtpBusy(true)
+    try {
+      const res = await sendOtp(phone.trim(), 'REGISTER')
+      setOtpSent(true)
+      setOtpVerified(false)
+      toast.success(res?.devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${res.devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
+    } catch (error) {
+      toast.error(error?.message || 'Không gửi được mã OTP.')
+    } finally {
+      setOtpBusy(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode.trim()) return
+    setOtpBusy(true)
+    try {
+      await verifyOtp({ phone: phone.trim(), otpCode: otpCode.trim(), type: 'REGISTER' })
+      setOtpVerified(true)
+      toast.success('Đã xác thực số điện thoại.')
+    } catch (error) {
+      toast.error(error?.message || 'Mã OTP không đúng hoặc đã hết hạn.')
+    } finally {
+      setOtpBusy(false)
     }
   }
 
@@ -277,6 +313,18 @@ function Register() {
                       type="tel" 
                     />
                     {errors.phone && <p id="phone-error" role="alert" className="mt-1 text-sm text-red-600">{errors.phone}</p>}
+                  </div>
+                  <div className="snx-row" style={{ marginTop: 8 }}>
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={otpBusy || !phone.trim()} onClick={handleSendOtp}>
+                      {otpSent ? 'Gửi lại mã OTP' : 'Gửi mã OTP'}
+                    </button>
+                    {otpSent && (
+                      <>
+                        <input className="snx-input" style={{ flex: '1 1 110px', minHeight: 32, height: 32 }} inputMode="numeric" maxLength={6} placeholder="Mã OTP" aria-label="Mã OTP" value={otpCode} onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpVerified(false) }} />
+                        <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={otpBusy || otpCode.length < 4} onClick={handleVerifyOtp}>Xác thực</button>
+                      </>
+                    )}
+                    {otpVerified && <span className="snx-badge snx-badge--green">Đã xác thực</span>}
                   </div>
                 </div>
 

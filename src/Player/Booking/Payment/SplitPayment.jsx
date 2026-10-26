@@ -133,11 +133,6 @@ function SplitPayment() {
   // =========================================================================
   // ĐẶT SÂN CHIA TIỀN VỚI BẠN BÈ (Image 1: Bước 1, 2, 3, 4, 5)
   // =========================================================================
-  const DEFAULT_SAMPLE_FRIENDS = [
-    { id: '11111111-1111-1111-1111-111111111111', fullName: 'Lê Hoàng Nam', phone: '0912345678', email: 'hoang.nam@sportnexus.vn' },
-    { id: '22222222-2222-2222-2222-222222222222', fullName: 'Trần Bảo An', phone: '0988777666', email: 'bao.an@sportnexus.vn' },
-    { id: '33333333-3333-3333-3333-333333333333', fullName: 'Phạm Quốc Thịnh', phone: '0903112233', email: 'quoc.thinh@sportnexus.vn' },
-  ]
 
   const [lookupPhone, setLookupPhone] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
@@ -1326,26 +1321,6 @@ function SplitPayment() {
                       </button>
                     </div>
                   )}
-
-                  {/* Gợi ý thêm nhanh bạn bè mẫu */}
-                  <div className="sp-sample-friends-row">
-                    <span className="sp-sample-label">Gợi ý bạn chơi:</span>
-                    {DEFAULT_SAMPLE_FRIENDS.map((sample) => {
-                      const isAdded = invitedFriends.some((f) => f.id === sample.id)
-                      return (
-                        <button
-                          key={sample.id}
-                          type="button"
-                          className="sp-sample-pill"
-                          style={{ opacity: isAdded ? 0.5 : 1, textDecoration: isAdded ? 'line-through' : 'none' }}
-                          disabled={isAdded}
-                          onClick={() => handleAddInvitedFriend(sample)}
-                        >
-                          + {sample.fullName} ({maskPhone(sample.phone)})
-                        </button>
-                      )
-                    })}
-                  </div>
 
                   {/* Danh sách người tham gia */}
                   <div className="sp-friends-list">

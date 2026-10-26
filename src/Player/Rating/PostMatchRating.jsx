@@ -389,9 +389,14 @@ function PostMatchRating() {
       return
     }
 
+    // contextId = mã trận / kèo lấy từ GET /api/v1/fair-play/pending-ratings; không dùng mã cố định
+    const contextId = checkoutSession.contextId || checkoutSession.lfgId
+    const revieweeId = selectedPlayer?.userId || selectedPlayer?.id
+    if (!contextId || !revieweeId) {
+      triggerToast('⚠️ Chưa xác định được trận đấu hoặc người chơi cần đánh giá.')
+      return
+    }
     setIsSubmittingRating(true)
-    const contextId = checkoutSession.contextId || checkoutSession.lfgId || 'ba2a7900-1a73-430c-9cbd-3b5be6874b04'
-    const revieweeId = selectedPlayer.userId || selectedPlayer.id || 'c0a80123-4567-89ab-cdef-0123456789ab'
 
     try {
       await rateFairPlay({

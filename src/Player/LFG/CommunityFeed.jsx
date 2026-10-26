@@ -105,7 +105,7 @@ function CommunityFeed() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   // 3-Tab Main Navigation: 'all' (Sàn ghép trận) | 'my_cards' (Kèo đã tạo - Chủ kèo) | 'joined' (Kèo đã tham gia)
-  const [activeMainTab, setActiveMainTab] = useState(() => searchParams.get('tab') || 'all')
+  const [activeMainTab, setActiveMainTab] = useState(() => (searchParams.get('tab') === 'community_posts' ? 'all' : searchParams.get('tab') || 'all'))
   const [myStatusFilter, setMyStatusFilter] = useState('all') // 'all' | 'OPEN' | 'FILLED' | 'CANCELLED'
   const [myLfgCards, setMyLfgCards] = useState([])
   const [joinedLfgCards, setJoinedLfgCards] = useState([])
@@ -1115,9 +1115,9 @@ function CommunityFeed() {
             )}
           </button>
 
-          {/* Tab 4: Bảng Tin Cộng Đồng (14 API /api/v1/community/*) */}
+          {/* Bảng tin cộng đồng đã tách thành trang riêng /feed (mục "Cộng đồng" trên sidebar) */}
           <button
-            onClick={() => handleTabChange('community_posts')}
+            onClick={() => navigate('/feed')}
             className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
               activeMainTab === 'community_posts'
                 ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
@@ -1125,7 +1125,8 @@ function CommunityFeed() {
             }`}
           >
             <span className="material-symbols-outlined text-[20px]">dynamic_feed</span>
-            <span>Bảng Tin Cộng Đồng (Feed)</span>
+            <span>Bảng tin Cộng đồng</span>
+            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
             {communityPosts.length > 0 && (
               <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'community_posts' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
                 {communityPosts.length}

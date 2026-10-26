@@ -1,8 +1,10 @@
 import { isBackendMockToken, mockAuthEnabled } from './mockAuth.js'
 
 const key = 'sportnexus.auth'
-export function createSession({ token, role }) {
+export function createSession({ token, role, refreshToken }) {
   const session = { token, role }
+  // refreshToken dùng để xin token mới trước khi token hết hạn (POST /api/auth/refresh-token)
+  if (typeof refreshToken === 'string' && refreshToken) session.refreshToken = refreshToken
 
   if (mockAuthEnabled && isBackendMockToken(token)) session.isMockSession = true
   if (!validSession(session)) throw new Error('Token đăng nhập không hợp lệ hoặc đã hết hạn.')

@@ -180,6 +180,13 @@ export function transformFacilityToCourt(fac) {
  * @param {number} [params.PageSize=20] - Kích thước trang
  * @returns {Promise<{ items: Array, totalItems: number, page: number, pageSize: number }>}
  */
+// GET /api/v1/master-data/amenities: danh mục tiện ích (dùng cho bộ lọc tìm sân)
+export async function getAmenityOptions() {
+  const body = (await apiClient.get('/api/v1/master-data/amenities', { skipAuth: true })).data
+  const list = body?.data ?? body
+  return (Array.isArray(list) ? list : []).map((a) => ({ id: String(a.id), name: a.name || '', iconCode: a.iconCode || '' }))
+}
+
 export async function searchFacilities(params = {}) {
   try {
     const cleanParams = {}

@@ -9,7 +9,12 @@ function validateResponse(body) {
   }
   return body
 }
-const registrationPayload = ({ username, password, fullName, phone, email }) => ({ username, password, fullName, phone, email })
+// RegisterRequest: username, password, fullName, phone, email (+ role, otpCode khi có: Player | Owner, mã OTP xác thực SĐT)
+const registrationPayload = ({ username, password, fullName, phone, email, role, otpCode }) => ({
+  username, password, fullName, phone, email,
+  ...(role ? { role } : {}),
+  ...(otpCode ? { otpCode } : {}),
+})
 export async function registerUser(payload) {
   return validateResponse((await apiClient.post('/api/auth/register', registrationPayload(payload), { skipAuth: true })).data)
 }
@@ -27,6 +32,22 @@ export async function loginUser({ username, password }) {
 // Management-only API: never expose this operation in public registration UI.
 export async function registerAdmin(payload) {
   return validateResponse((await apiClient.post('/api/auth/register-admin', registrationPayload(payload))).data)
+}
+
+// POST /api/auth/refresh-token: đổi refreshToken lấy token mới (LoginResponse: token, refreshToken, role...)
+export async function refreshAccessToken(refreshToken) {
+  const body = validateResponse((await apiClient.post('/api/auth/refresh-token', { refreshToken }, { skipAuth: true })).data)
+  if (typeof body.data?.token !== 'string' || !body.data.token) throw Object.assign(new Error('Không làm mới được phiên đăng nhập.'), { isNormalized: true })
+  return body.data
+}
+
+// ---------- OTP số điện thoại: POST /api/auth/send-otp, /api/auth/verify-otp (type: REGISTER | FORGOT_PASSWORD) ----------
+// send-otp trả { phone, type, expiresInSeconds, devOtp } (devOtp chỉ có ở môi trường dev của BE)
+export async function sendOtp(phone, type = 'REGISTER') {
+  return validateResponse((await apiClient.post('/api/auth/send-otp', { phone, type }, { skipAuth: true })).data).data
+}
+export async function verifyOtp({ phone, otpCode, type = 'REGISTER' }) {
+  return validateResponse((await apiClient.post('/api/auth/verify-otp', { phone, otpCode, type }, { skipAuth: true })).data)
 }
 
 // ---------- Quên mật khẩu: forgot-password → nhập OTP → reset-password ----------

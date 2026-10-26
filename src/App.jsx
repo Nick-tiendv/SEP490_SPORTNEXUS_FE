@@ -14,6 +14,7 @@ import VerifyAccount from './Auth/VerifyAccount.jsx'
 // Player pages
 import AIChatBooking from './Player/Booking/AIChat/AIChatBooking.jsx'
 import CommunityFeed from './Player/LFG/CommunityFeed.jsx'
+import CommunityPage from './Player/Community/CommunityPage.jsx'
 import CourtDetails from './Player/Booking/CourtDetail/CourtDetails.jsx'
 import CreateMatch from './Player/LFG/CreateMatch.jsx'
 import Dashboard from './Player/Home/Dashboard.jsx'
@@ -87,6 +88,7 @@ function App() {
             <Route path="/wallet/deposit-success" element={<DepositSuccess />} />
             <Route path="/wallet/deposit-cancel" element={<DepositCancel />} />
             <Route path="/community" element={<CommunityFeed />} />
+            <Route path="/feed" element={<CommunityPage />} />
             <Route path="/tournament" element={<TournamentList />} />
             <Route path="/court-finder" element={<MapBooking />} />
             <Route path="/court" element={<CourtDetails />} />
