@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   cancelWithdrawal,
   createWithdrawal,
@@ -75,12 +76,8 @@ export default function Settlement() {
   const [showBankModal, setShowBankModal] = useState(false)
   const [bankForm, setBankForm] = useState({ bankName: '', bankAccountNumber: '', bankAccountHolder: '' })
   const [busy, setBusy] = useState(false)
-  const [toastMessage, setToastMessage] = useState(null)
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type })
-    setTimeout(() => setToastMessage(null), 3500)
-  }
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
   const reloadAll = () => {
     setReloadToken((value) => value + 1)
@@ -206,7 +203,7 @@ export default function Settlement() {
     boxShadow: '0 8px 30px rgba(15, 23, 42, 0.05)',
   }
   const cardStyle = { ...panelStyle, padding: '22px 24px' }
-  const labelStyle = { fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px' }
+  const labelStyle = { fontSize: '11.5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }
   const inputStyle = { width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1px solid #CBD5E1', fontSize: '14px', boxSizing: 'border-box' }
   const pagerButton = (disabled) => ({ padding: '6px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', fontSize: '12.5px', fontWeight: 700, color: '#334155', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 })
   const value = (v) => (e ? formatVND(v) : earnings.error ? '—' : '...')
@@ -226,46 +223,19 @@ export default function Settlement() {
 
   return (
     <div className="snx-page">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
-            color: '#FFFFFF',
-            padding: '14px 22px',
-            borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-            fontWeight: 600,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            maxWidth: '420px',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            {toastMessage.type === 'error' ? 'error' : 'check_circle'}
-          </span>
-          {toastMessage.msg}
-        </div>
-      )}
 
       {/* Header section */}
       <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <span className="snx-page-eyebrow">
-              FINANCIAL SETTLEMENT HUB
+              Kinh doanh
             </span>
             <select
               value={periodDays}
               onChange={(event) => setPeriodDays(Number(event.target.value))}
               title="Kỳ báo cáo"
-              style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #86EFAC', background: '#DCFCE7', color: '#15803D', fontSize: '12px', fontWeight: 800, cursor: 'pointer' }}
+              style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #86EFAC', background: '#DCFCE7', color: '#15803D', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
             >
               {PERIOD_OPTIONS.map((days) => (
                 <option key={days} value={days}>{days} ngày gần nhất</option>
@@ -273,7 +243,7 @@ export default function Settlement() {
             </select>
           </div>
           <h1 className="snx-page-title">
-            Báo Cáo Doanh Thu &amp; Rút Tiền
+            Doanh thu &amp; rút tiền
           </h1>
           <p className="snx-page-subtitle">
             Theo dõi thu nhập vào ví, tiền đặt sân đang giữ và gửi yêu cầu rút tiền về tài khoản ngân hàng (Quản trị viên duyệt thủ công).
@@ -285,23 +255,10 @@ export default function Settlement() {
           onClick={openWithdrawModal}
           disabled={!!pendingWithdrawal}
           title={pendingWithdrawal ? 'Bạn đang có 1 yêu cầu rút tiền chờ xử lý' : undefined}
-          style={{
-            background: pendingWithdrawal ? '#94A3B8' : 'linear-gradient(135deg, #15803D 0%, #047857 100%)',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '16px',
-            padding: '15px 26px',
-            fontSize: '14.5px',
-            fontWeight: 800,
-            cursor: pendingWithdrawal ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            boxShadow: pendingWithdrawal ? 'none' : '0 6px 20px rgba(21, 128, 61, 0.32)',
-          }}
+          className="snx-btn snx-btn--primary"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>payments</span>
-          <span>{pendingWithdrawal ? 'ĐANG CHỜ DUYỆT RÚT TIỀN' : 'TẠO YÊU CẦU RÚT TIỀN'}</span>
+          <span>{pendingWithdrawal ? 'Đang chờ duyệt rút tiền' : 'Tạo yêu cầu rút tiền'}</span>
         </button>
       </div>
 
@@ -309,13 +266,13 @@ export default function Settlement() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '28px' }}>
         <div style={{ background: 'linear-gradient(135deg, #064E3B 0%, #15803D 55%, #047857 100%)', borderRadius: '20px', padding: '22px 24px', color: '#FFFFFF', boxShadow: '0 12px 30px -4px rgba(21, 128, 61, 0.35)' }}>
           <div style={{ ...labelStyle, color: '#A7F3D0' }}>Số dư khả dụng</div>
-          <div style={{ fontSize: '28px', fontWeight: 900, margin: '8px 0' }}>{formatVND(availableBalance)}</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, margin: '8px 0' }}>{formatVND(availableBalance)}</div>
           <div style={{ fontSize: '12.5px', color: '#D1FAE5', fontWeight: 600 }}>Đang tạm giữ: {formatVND(wallet?.frozenBalance)}</div>
         </div>
 
         <div style={cardStyle}>
           <div style={{ ...labelStyle, color: '#B45309' }}>Tiền đặt sân chờ chuyển</div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#B45309' }}>{value(e?.pendingBookingAmount)}</div>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#B45309' }}>{value(e?.pendingBookingAmount)}</div>
           <div style={{ fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
             {e ? `${e.pendingBookings} đơn • chuyển vào ví sau giờ chơi + ${e.settlementHoldHours} giờ` : 'Tiền nền tảng đang giữ cho bạn'}
           </div>
@@ -323,7 +280,7 @@ export default function Settlement() {
 
         <div style={cardStyle}>
           <div style={{ ...labelStyle, color: '#1D4ED8' }}>Thực nhận ({periodDays} ngày)</div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#0F172A' }}>{value(e?.netIncome)}</div>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#0F172A' }}>{value(e?.netIncome)}</div>
           <div style={{ fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
             {e ? `Tiền mặt tại quầy (ngoài ví): ${formatVND(e.walkInCashRevenue)}` : 'Tiền vào ví trong kỳ'}
           </div>
@@ -331,7 +288,7 @@ export default function Settlement() {
 
         <div style={cardStyle}>
           <div style={{ ...labelStyle, color: '#6D28D9' }}>Phí nền tảng ({periodDays} ngày)</div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#6D28D9' }}>{value(e?.platformFees)}</div>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#6D28D9' }}>{value(e?.platformFees)}</div>
           <div style={{ fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>{e ? `Đã rút về ngân hàng: ${formatVND(e.withdrawn)}` : 'Phí SportNexus thu trên đơn'}</div>
         </div>
       </div>
@@ -339,7 +296,7 @@ export default function Settlement() {
       {/* Chi tiết thu nhập & theo cơ sở */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px', marginBottom: '28px' }}>
         <div style={panelStyle}>
-          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Chi Tiết Thu Nhập Trong Kỳ</h3>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Chi tiết thu nhập trong kỳ</h3>
           <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '13px', fontWeight: 600 }}>Các khoản cộng / trừ tạo nên số thực nhận</p>
           {!e ? (
             <div style={{ padding: '16px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{earnings.error ? '—' : 'Đang tải...'}</div>
@@ -356,7 +313,7 @@ export default function Settlement() {
                   </strong>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 4px', fontSize: '15px', fontWeight: 900, color: '#047857' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 4px', fontSize: '15px', fontWeight: 700, color: '#047857' }}>
                 <span>Thực nhận vào ví</span>
                 <span>{formatVND(e.netIncome)}</span>
               </div>
@@ -370,7 +327,7 @@ export default function Settlement() {
         </div>
 
         <div style={panelStyle}>
-          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Thu Nhập Theo Cơ Sở</h3>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Thu nhập theo cơ sở</h3>
           <p style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '13px', fontWeight: 600 }}>Tiền đặt sân + phí hủy đã nhận trong kỳ</p>
           {!e ? (
             <div style={{ padding: '16px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{earnings.error ? '—' : 'Đang tải...'}</div>
@@ -380,7 +337,7 @@ export default function Settlement() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {facilityItems.map((item) => (
                 <div key={item.facilityId}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>
                     <span>{item.facilityName}</span>
                     <span>{formatVND(item.total)}</span>
                   </div>
@@ -401,7 +358,7 @@ export default function Settlement() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px', marginBottom: '28px', alignItems: 'start' }}>
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Tài Khoản Nhận Tiền</h3>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Tài khoản nhận tiền</h3>
             <button onClick={openBankModal} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', fontSize: '12.5px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
               {bankAccount ? 'Sửa' : 'Thêm tài khoản'}
             </button>
@@ -411,7 +368,7 @@ export default function Settlement() {
           ) : bankAccount ? (
             <div style={{ borderRadius: '14px', padding: '16px 18px', background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', color: '#FFFFFF' }}>
               <div style={{ fontSize: '13px', color: '#94A3B8', fontWeight: 700 }}>{bankAccount.bankName}</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '1.5px', margin: '6px 0', fontFamily: 'monospace' }}>{bankAccount.bankAccountNumber}</div>
+              <div style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '1.5px', margin: '6px 0', fontFamily: 'monospace' }}>{bankAccount.bankAccountNumber}</div>
               <div style={{ fontSize: '13px', fontWeight: 700 }}>{bankAccount.bankAccountHolder}</div>
             </div>
           ) : (
@@ -427,7 +384,7 @@ export default function Settlement() {
         </div>
 
         <div style={panelStyle}>
-          <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Lịch Sử Rút Tiền</h3>
+          <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Lịch sử rút tiền</h3>
           {withdrawals.error ? (
             <div style={{ color: '#B91C1C', fontWeight: 700 }}>{withdrawals.error}</div>
           ) : !withdrawals.data ? (
@@ -442,7 +399,7 @@ export default function Settlement() {
                   <div key={item.id} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
                       <strong style={{ fontSize: '15px', color: '#0F172A' }}>{formatVND(item.amount)}</strong>
-                      <span style={{ background: status.bg, color: status.color, fontSize: '11.5px', fontWeight: 800, padding: '3px 10px', borderRadius: '999px' }}>{status.label}</span>
+                      <span style={{ background: status.bg, color: status.color, fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px' }}>{status.label}</span>
                     </div>
                     <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
                       {item.bankName} • {item.bankAccountNumber} • Gửi lúc {formatDateTimeVN(item.createdAt)}
@@ -481,7 +438,7 @@ export default function Settlement() {
       <div style={panelStyle}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0F172A' }}>Biến Động Số Dư Ví</h3>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Biến động số dư ví</h3>
             <p style={{ margin: '4px 0 0 0', color: '#475569', fontSize: '13px', fontWeight: 600 }}>Mỗi giao dịch kèm biến động số dư khả dụng (+ vào / − ra)</p>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
@@ -496,7 +453,7 @@ export default function Settlement() {
                   background: txnType === tab.key ? '#ECFDF5' : '#F1F5F9',
                   color: txnType === tab.key ? '#047857' : '#334155',
                   fontSize: '12.5px',
-                  fontWeight: 800,
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
@@ -527,7 +484,7 @@ export default function Settlement() {
                 <thead>
                   <tr style={{ borderBottom: '2px solid #CBD5E1', background: '#F8FAFC' }}>
                     {['Thời gian', 'Loại', 'Mô tả', 'Số tiền', 'Biến động số dư', 'Trạng thái'].map((head) => (
-                      <th key={head} style={{ padding: '12px 14px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>{head}</th>
+                      <th key={head} style={{ padding: '12px 14px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>{head}</th>
                     ))}
                   </tr>
                 </thead>
@@ -538,7 +495,7 @@ export default function Settlement() {
                       <tr key={txn.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                         <td style={{ padding: '12px 14px', fontSize: '12.5px', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatDateTimeVN(txn.createdAt)}</td>
                         <td style={{ padding: '12px 14px' }}>
-                          <span style={{ background: '#F1F5F9', color: '#334155', fontSize: '11.5px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#F1F5F9', color: '#334155', fontSize: '11.5px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px', whiteSpace: 'nowrap' }}>
                             {TXN_TYPE_LABEL[txn.type] || txn.type}
                           </span>
                         </td>
@@ -547,7 +504,7 @@ export default function Settlement() {
                           {txn.note && <div style={{ fontSize: '11.5px', color: '#64748B' }}>{txn.note}</div>}
                         </td>
                         <td style={{ padding: '12px 14px', fontSize: '13px', color: '#0F172A', fontWeight: 700, whiteSpace: 'nowrap' }}>{formatVND(txn.amount)}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 800, whiteSpace: 'nowrap', color: change > 0 ? '#047857' : change < 0 ? '#B91C1C' : '#64748B' }}>
+                        <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', color: change > 0 ? '#047857' : change < 0 ? '#B91C1C' : '#64748B' }}>
                           {change > 0 ? '+' : ''}{formatVND(change)}
                         </td>
                         <td style={{ padding: '12px 14px', fontSize: '12px', color: '#475569', fontWeight: 700 }}>{txn.status || '—'}</td>
@@ -571,24 +528,24 @@ export default function Settlement() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <form onSubmit={handleSaveBank} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Tài Khoản Ngân Hàng Nhận Tiền</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Tài khoản ngân hàng nhận tiền</h3>
               <button type="button" onClick={() => setShowBankModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Ngân hàng</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Ngân hàng</label>
             <input list="sportnexus-banks" required maxLength={100} placeholder="VD: Vietcombank" value={bankForm.bankName} onChange={(event) => setBankForm((f) => ({ ...f, bankName: event.target.value }))} style={{ ...inputStyle, marginBottom: '14px' }} />
             <datalist id="sportnexus-banks">
               {COMMON_BANKS.map((name) => <option key={name} value={name} />)}
             </datalist>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Số tài khoản (6–20 chữ số)</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Số tài khoản (6–20 chữ số)</label>
             <input required inputMode="numeric" placeholder="VD: 0071000987654" value={bankForm.bankAccountNumber} onChange={(event) => setBankForm((f) => ({ ...f, bankAccountNumber: event.target.value.replace(/[^\d]/g, '') }))} style={{ ...inputStyle, marginBottom: '14px', fontFamily: 'monospace' }} />
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Tên chủ tài khoản</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Tên chủ tài khoản</label>
             <input required maxLength={100} placeholder="VD: NGUYEN VAN A" value={bankForm.bankAccountHolder} onChange={(event) => setBankForm((f) => ({ ...f, bankAccountHolder: event.target.value.toUpperCase() }))} style={{ ...inputStyle, marginBottom: '20px' }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setShowBankModal(false)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
               <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#15803D', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {busy ? 'Đang lưu...' : 'Lưu Tài Khoản'}
+                {busy ? 'Đang lưu...' : 'Lưu tài khoản'}
               </button>
             </div>
           </form>
@@ -600,7 +557,7 @@ export default function Settlement() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <form onSubmit={handleWithdraw} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '480px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Tạo Yêu Cầu Rút Tiền</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Tạo yêu cầu rút tiền</h3>
               <button type="button" onClick={() => setShowWithdrawModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -615,7 +572,7 @@ export default function Settlement() {
               Chuyển về: <strong>{bankAccount.bankName}</strong> • {bankAccount.bankAccountNumber} • {bankAccount.bankAccountHolder}
             </div>
 
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Số tiền muốn rút</label>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Số tiền muốn rút</label>
             <input
               required
               inputMode="numeric"
@@ -625,7 +582,7 @@ export default function Settlement() {
                 const amount = parseAmount(event.target.value)
                 setWithdrawAmount(amount ? new Intl.NumberFormat('vi-VN').format(amount) : '')
               }}
-              style={{ ...inputStyle, fontSize: '18px', fontWeight: 800, marginBottom: '8px' }}
+              style={{ ...inputStyle, fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}
             />
             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
               {[['50%', 0.5], ['Toàn bộ', 1]].map(([label, ratio]) => (
@@ -643,7 +600,7 @@ export default function Settlement() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setShowWithdrawModal(false)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
               <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#15803D', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {busy ? 'Đang gửi...' : 'Gửi Yêu Cầu Rút Tiền'}
+                {busy ? 'Đang gửi...' : 'Gửi yêu cầu rút tiền'}
               </button>
             </div>
           </form>

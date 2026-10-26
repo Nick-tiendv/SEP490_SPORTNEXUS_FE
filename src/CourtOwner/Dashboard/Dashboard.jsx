@@ -60,7 +60,7 @@ function RevenueChart({ days, loading, periodDays, formatVND }) {
     >
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '18px' }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Doanh thu theo ngày</h3>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Doanh thu theo ngày</h3>
           <p style={{ margin: '2px 0 0 0', color: '#1E293B', fontSize: '13px', fontWeight: 600 }}>
             {loading
               ? 'Đang tải...'
@@ -83,7 +83,7 @@ function RevenueChart({ days, loading, periodDays, formatVND }) {
       {!loading && total === 0 ? (
         <div style={{ height: `${CHART_HEIGHT}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '12px', border: '1px dashed #CBD5E1', color: '#475569' }}>
           <span className="material-symbols-outlined" style={{ fontSize: '36px', color: '#CBD5E1' }}>bar_chart</span>
-          <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>Chưa có doanh thu trong {periodDays} ngày gần nhất</div>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>Chưa có doanh thu trong {periodDays} ngày gần nhất</div>
           <div style={{ fontSize: '12.5px', fontWeight: 600 }}>Biểu đồ sẽ hiện khi cơ sở có đơn đặt sân đã thanh toán.</div>
         </div>
       ) : showTable ? (
@@ -172,7 +172,7 @@ function RevenueChart({ days, loading, periodDays, formatVND }) {
                     zIndex: 5,
                   }}
                 >
-                  <div style={{ fontWeight: 800, marginBottom: '2px' }}>Ngày {active.label}</div>
+                  <div style={{ fontWeight: 600, marginBottom: '2px' }}>Ngày {active.label}</div>
                   <div>Doanh thu: {formatVND(active.revenue)}</div>
                   <div>Số đơn: {active.bookings}</div>
                 </div>
@@ -283,14 +283,14 @@ export default function Dashboard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
             <span className="snx-page-eyebrow">
-              Trung Tâm Quản Trị Chủ Sân
+              Vận hành
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>
-              {profile?.fullName ? `Xin chào, ${profile.fullName}` : 'SportNexus Operating System'}
+              {profile?.fullName ? `Xin chào, ${profile.fullName}` : ''}
             </span>
           </div>
           <h1 className="snx-page-title">
-            Tổng Quan Hoạt Động & Tài Chính Cơ Sở
+            Tổng quan
           </h1>
           <p className="snx-page-subtitle">
             {facility?.name ? `${facility.name} • ` : ''}Số liệu {periodDays} ngày gần nhất
@@ -308,7 +308,7 @@ export default function Dashboard() {
             value={periodDays}
             onChange={(e) => setPeriodDays(Number(e.target.value))}
             title="Kỳ thống kê"
-            style={{ padding: '10px 12px', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 800, color: '#0F172A', background: '#FFFFFF', cursor: 'pointer' }}
+            style={{ padding: '10px 12px', borderRadius: '12px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 600, color: '#0F172A', background: '#FFFFFF', cursor: 'pointer' }}
           >
             {PERIOD_OPTIONS.map((days) => (
               <option key={days} value={days}>{days} ngày gần nhất</option>
@@ -329,11 +329,11 @@ export default function Dashboard() {
               verified
             </span>
             <div>
-              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase' }}>
-                Trạng Thái Hệ Thống
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 600, textTransform: 'uppercase' }}>
+                Trạng thái hệ thống
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                {facility ? `${facility.activeCourtCount}/${facility.courtCount}` : '0/0'} Sân Sẵn Sàng
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
+                {facility ? `${facility.activeCourtCount}/${facility.courtCount}` : '0/0'} sân sẵn sàng
                 {data?.openReports ? ` • ${data.openReports} khiếu nại mở` : ''}
               </div>
             </div>
@@ -364,14 +364,14 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#A7F3D0', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#A7F3D0', textTransform: 'uppercase' }}>
               SỐ DƯ KHẢ DỤNG
             </span>
             <span className="material-symbols-outlined" style={{ color: '#34D399', fontSize: '22px' }}>
               account_balance_wallet
             </span>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#FFFFFF' }}>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#FFFFFF' }}>
             {formatVND(wallet?.availableBalance ?? wallet?.balance)}
           </div>
           <div style={{ fontSize: '12px', color: '#D1FAE5', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -395,14 +395,14 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#B45309', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#B45309', textTransform: 'uppercase' }}>
               ĐƠN ĐẶT SÂN ({periodDays} NGÀY)
             </span>
             <span className="material-symbols-outlined" style={{ color: '#D97706', fontSize: '22px' }}>
               receipt_long
             </span>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#B45309' }}>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#B45309' }}>
             {statValue(data?.totalBookings)} <span style={{ fontSize: '14px', fontWeight: 700, color: '#1E293B' }}>đơn</span>
           </div>
           <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600 }}>
@@ -423,14 +423,14 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#1D4ED8', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#1D4ED8', textTransform: 'uppercase' }}>
               TỶ LỆ LẤP ĐẦY ({periodDays} NGÀY)
             </span>
             <span className="material-symbols-outlined" style={{ color: '#1D4ED8', fontSize: '22px' }}>
               pie_chart
             </span>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#0F172A' }}>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#0F172A' }}>
             {statValue(data?.occupancyRate, formatPercent)}{' '}
             {data && <span style={{ fontSize: '14px', fontWeight: 700, color: '#047857' }}>({data.bookedSlots}/{data.sellableSlots} ca)</span>}
           </div>
@@ -455,14 +455,14 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#047857', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#047857', textTransform: 'uppercase' }}>
               DOANH THU ({periodDays} NGÀY)
             </span>
             <span className="material-symbols-outlined" style={{ color: '#047857', fontSize: '22px' }}>
               trending_up
             </span>
           </div>
-          <div style={{ fontSize: '26px', fontWeight: 900, margin: '8px 0', color: '#0F172A' }}>
+          <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#0F172A' }}>
             {statValue(data?.totalRevenue, formatVND)}
           </div>
           <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600 }}>
@@ -472,7 +472,7 @@ export default function Dashboard() {
       </div>
 
       {/* SECTION 1: BIỂU ĐỒ DOANH THU THEO NGÀY & VIỆC CẦN XỬ LÝ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', marginBottom: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 380px)', gap: '24px', marginBottom: '32px' }}>
         <div style={{ minWidth: 0 }}>
           <RevenueChart days={data?.revenueByDay || []} loading={!data && !statsLoadError} periodDays={periodDays} formatVND={formatVND} />
         </div>
@@ -489,12 +489,12 @@ export default function Dashboard() {
             boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
           }}
         >
-          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Việc Cần Xử Lý</h3>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Việc cần xử lý</h3>
           <p style={{ margin: '0 0 16px 0', color: '#1E293B', fontSize: '13px', fontWeight: 600 }}>Những mục đang chờ bạn hành động</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {todoItems.length === 0 ? (
-              <div style={{ padding: '18px', borderRadius: '12px', background: '#F0FDF4', border: '1px solid #BBF7D0', textAlign: 'center', color: '#15803D', fontSize: '13.5px', fontWeight: 800 }}>
+              <div style={{ padding: '18px', borderRadius: '12px', background: '#F0FDF4', border: '1px solid #BBF7D0', textAlign: 'center', color: '#15803D', fontSize: '13.5px', fontWeight: 600 }}>
                 Mọi thứ đều ổn ✓
               </div>
             ) : (
@@ -517,7 +517,7 @@ export default function Dashboard() {
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '22px', color: item.color }}>{item.icon}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>{item.title}</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>{item.title}</div>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginTop: '2px' }}>{item.desc}</div>
                   </div>
                   {item.link && <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#64748B' }}>chevron_right</span>}
@@ -545,8 +545,8 @@ export default function Dashboard() {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                Khách Đặt Sân Hôm Nay
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>
+                Khách đặt sân hôm nay
               </h3>
               <p style={{ margin: '2px 0 0 0', color: '#1E293B', fontSize: '13px', fontWeight: 600 }}>
                 {todayList ? `${upcomingToday.length} đơn chờ check-in • ${todayList.length - upcomingToday.length} đã check-in` : 'Đang tải...'}
@@ -604,7 +604,7 @@ export default function Dashboard() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontWeight: 800,
+                      fontWeight: 600,
                       fontSize: '16px',
                       flexShrink: 0,
                     }}
@@ -613,7 +613,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>
                         {customer}{item.isWalkIn ? ' (Vãng lai)' : ''}
                       </span>
                       {item.customerPhone && <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>({item.customerPhone})</span>}
@@ -628,13 +628,13 @@ export default function Dashboard() {
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: checkedIn ? '#16A34A' : '#D97706' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: checkedIn ? '#16A34A' : '#D97706' }}>
                     {formatVND(item.totalAmount)}
                   </div>
                   <div style={{ marginTop: '6px' }}>
                     {checkedIn ? (
                       <span style={{ background: '#DCFCE7', color: '#15803D', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px' }}>
-                        ✓ Đã Check-in
+                        ✓ Đã check-in
                       </span>
                     ) : (
                       <Link
@@ -678,14 +678,14 @@ export default function Dashboard() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-              Hiệu Quả Từng Sân ({periodDays} ngày)
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>
+              Hiệu quả từng sân ({periodDays} ngày)
             </h3>
             <Link
               to="/owner/courts"
-              style={{ fontSize: '12px', color: '#047857', fontWeight: 800, textDecoration: 'none' }}
+              style={{ fontSize: '12px', color: '#047857', fontWeight: 600, textDecoration: 'none' }}
             >
-              Quản Lý Sân
+              Quản lý sân
             </Link>
           </div>
 
@@ -713,15 +713,15 @@ export default function Dashboard() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{court.courtName}</span>
-                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#047857' }}>Lấp đầy: {occupancy}%</span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{court.courtName}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857' }}>Lấp đầy: {occupancy}%</span>
                   </div>
                   <div style={{ height: '6px', borderRadius: '999px', background: '#E2E8F0', marginTop: '8px', overflow: 'hidden' }}>
                     <div style={{ width: `${Math.min(occupancy, 100)}%`, height: '100%', background: '#10B981' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11.5px', color: '#1E293B', fontWeight: 700 }}>
                     <span>{court.bookings} đơn • {court.bookedSlots}/{court.sellableSlots} ca</span>
-                    <span style={{ fontWeight: 800, color: '#9A3412' }}>{formatVND(court.revenue)}</span>
+                    <span style={{ fontWeight: 600, color: '#9A3412' }}>{formatVND(court.revenue)}</span>
                   </div>
                 </div>
               )
@@ -751,7 +751,7 @@ export default function Dashboard() {
             <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
               calendar_month
             </span>
-            Xem Chi Tiết Lưới Lịch {facility?.courtCount ?? 0} Sân
+            Xem chi tiết lưới lịch {facility?.courtCount ?? 0} Sân
           </Link>
         </div>
       </div>

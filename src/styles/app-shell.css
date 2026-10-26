@@ -425,3 +425,13 @@
   .snx-main .sp-page,
   .snx-main .responsive-page-container { padding: 16px 12px 32px; }
 }
+
+/* Nền dịu cho khu quản trị (Chủ sân): bỏ ảnh nền thể thao để bảng, số liệu dễ đọc */
+.snx-calm-bg {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, rgba(36, 115, 72, .08), transparent 60%),
+    radial-gradient(900px 400px at -10% 110%, rgba(36, 115, 72, .06), transparent 60%),
+    #f4f7f5;
+  color: #0f172a;
+}

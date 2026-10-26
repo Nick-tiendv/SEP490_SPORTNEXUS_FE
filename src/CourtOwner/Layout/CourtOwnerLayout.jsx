@@ -122,7 +122,7 @@ export default function CourtOwnerLayout() {
   }
 
   return (
-    <div className="sport-animated-bg" style={{ minHeight: '100vh' }}>
+    <div className="snx-calm-bg">
       <AppSidebar homeTo="/owner/dashboard" roleLabel="Chủ sân" open={mobileOpen} onClose={closeMenu}>
         {/* Cơ sở đang quản lý */}
         <div className="snx-owner-facility">
