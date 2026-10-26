@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getCancellationReasons, cancelBooking, getBookingQrTicket, getBookingById, getMyBookings, getUpcomingBookings } from '../../api/player/bookingApi.js'
-import { cancelLfg, rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/player/lfgApi.js'
+import { rateFairPlay, getLfgQrTicket, scanCheckIn } from '../../api/player/lfgApi.js'
 import { getTournamentQrTicket, checkInTournament } from '../../api/player/tournamentApi.js'
 
 const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
@@ -187,7 +188,8 @@ function CheckInQR() {
     setIsScanningCheckIn(true)
     setScanError(null)
     const facilityId = ticketData?.facilityId
-    const qrCode = ticketData?.qrCode || ticketData?.ticketCode
+    // Chỉ dùng mã QR thật do BE cấp (ticketCode chỉ là nhãn hiển thị)
+    const qrCode = ticketData?.qrCode
     if (!ticketData?.id || !qrCode) {
       setScanError('Chưa có vé hợp lệ để check-in.')
       setIsScanningCheckIn(false)
@@ -393,7 +395,7 @@ function CheckInQR() {
             setCheckOutDone(Boolean(parsed?.checkOutDone))
           }
         }
-      } catch (e) {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     } else {
       setCheckOutDone(false)
     }
@@ -475,7 +477,7 @@ function CheckInQR() {
     try {
       const saved = localStorage.getItem('player_match_reviewed_ids')
       if (saved) return JSON.parse(saved)
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return []
   })
 
@@ -612,7 +614,7 @@ function CheckInQR() {
       parsed.checkOutDone = true
       localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
       window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     setToastMessage(`🎉 Đã thêm bạn đánh đôi "${trimmed}" (Đi cùng ${newParticipant.representedBy}) vào danh sách đánh giá!`)
     setTimeout(() => setToastMessage(null), 3500)
@@ -739,7 +741,7 @@ function CheckInQR() {
       const currentList = saved ? JSON.parse(saved) : []
       const updatedList = [newReview, ...currentList]
       localStorage.setItem('player_match_reviews', JSON.stringify(updatedList))
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     // Đánh dấu người chơi đã được đánh giá (mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận)
     if (selectedCoPlayer) {
@@ -779,48 +781,23 @@ function CheckInQR() {
   }
 
 
-  // Mock check-in history data exactly as shown in screenshot
-  const historyList = [
-    {
-      id: 1,
-      time: 'Hôm nay, 18:00',
-      location: 'D-Sports Thảo Điền, TP. Thủ Đức',
-      sport: 'Cầu Lông',
-      sportColor: 'cyan', // light blue badge
-      sportIcon: 'badminton',
-      amount: '240.000 đ',
-      status: 'Đã giải ngân',
-      authMethod: 'Check-in Cổng A',
-      authIcon: 'qr',
-      stars: 5,
-    },
-    {
-      id: 2,
-      time: '18/02/2026, 19:30',
-      location: 'SportNexus Arena Q.7',
-      sport: 'Pickleball Pro',
-      sportColor: 'green', // light green badge
-      sportIcon: 'pickleball',
-      amount: '330.000 đ',
-      status: 'Đã giải ngân',
-      authMethod: 'Check-in Cổng B2',
-      authIcon: 'qr',
-      stars: 5,
-    },
-    {
-      id: 3,
-      time: '12/02/2026, 07:00',
-      location: 'Sân Cầu Lông Kỳ Hòa Q.10',
-      sport: 'Cầu Lông',
+  // Lịch sử check-in thật: các đơn của tôi đã CHECKED_IN (GET /bookings/my-bookings)
+  const historyList = myBookingsList
+    .filter((b) => String(b.bookingStatus || b.status || '').toUpperCase() === 'CHECKED_IN')
+    .sort((x, y) => new Date(y.startTime) - new Date(x.startTime))
+    .map((b) => ({
+      id: b.bookingId || b.id,
+      time: `${dateVN(b.startTime)}, ${clockVN(b.startTime)}`,
+      location: [b.facilityName, b.courtName].filter(Boolean).join(' · ') || '—',
+      sport: b.sportName || '—',
       sportColor: 'cyan',
-      sportIcon: 'badminton',
-      amount: '200.000 đ',
-      status: 'Đã giải ngân',
-      authMethod: 'Check-in OTP Kiosk',
-      authIcon: 'kiosk',
-      stars: 5,
-    },
-  ]
+      sportIcon: 'sports',
+      amount: `${new Intl.NumberFormat('vi-VN').format(Number(b.myAmount ?? b.totalAmount) || 0)} đ`,
+      status: 'Đã check-in',
+      authMethod: 'Quét QR tại cổng',
+      authIcon: 'qr',
+      stars: null, // BE chưa trả điểm Fair Play theo từng đơn
+    }))
 
   if (!isLoadingTicket && !ticketData) {
     return (
@@ -1450,59 +1427,14 @@ function CheckInQR() {
                 }}
               />
 
-              {/* Exact High-fidelity SVG QR Code representation */}
-              <svg width="190" height="190" viewBox="0 0 220 220" fill="none">
-                {/* Background */}
-                <rect width="220" height="220" rx="14" fill="#ffffff" />
-
-                {/* Top-Left Finder Pattern (Outer dark blue, inner green) */}
-                <rect x="20" y="20" width="56" height="56" rx="10" stroke="#111827" strokeWidth="8" fill="none" />
-                <rect x="34" y="34" width="28" height="28" rx="6" fill="#15803D" />
-
-                {/* Top-Right Finder Pattern */}
-                <rect x="144" y="20" width="56" height="56" rx="10" stroke="#111827" strokeWidth="8" fill="none" />
-                <rect x="158" y="34" width="28" height="28" rx="6" fill="#15803D" />
-
-                {/* Bottom-Left Finder Pattern */}
-                <rect x="20" y="144" width="56" height="56" rx="10" stroke="#111827" strokeWidth="8" fill="none" />
-                <rect x="34" y="158" width="28" height="28" rx="6" fill="#15803D" />
-
-                {/* Timing & Data Blocks */}
-                <rect x="88" y="24" width="14" height="14" rx="3" fill="#111827" />
-                <rect x="110" y="24" width="12" height="12" rx="3" fill="#15803D" />
-                <rect x="96" y="44" width="14" height="14" rx="3" fill="#15803D" />
-                <rect x="120" y="48" width="12" height="12" rx="3" fill="#111827" />
-
-                {/* Left/Middle data modules */}
-                <rect x="24" y="88" width="12" height="12" rx="3" fill="#15803D" />
-                <rect x="44" y="90" width="14" height="14" rx="3" fill="#111827" />
-                <rect x="68" y="88" width="12" height="12" rx="3" fill="#111827" />
-
-                {/* Center Verified Checkmark Badge */}
-                <rect x="85" y="85" width="50" height="50" rx="10" fill="#16A34A" />
-                <path
-                  d="M98 110L106 118L122 102"
-                  stroke="#ffffff"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-
-                {/* Right side data modules */}
-                <rect x="146" y="88" width="14" height="14" rx="3" fill="#111827" />
-                <rect x="170" y="90" width="12" height="12" rx="3" fill="#15803D" />
-                <rect x="188" y="88" width="12" height="12" rx="3" fill="#111827" />
-
-                {/* Bottom area data modules */}
-                <rect x="88" y="146" width="14" height="14" rx="3" fill="#15803D" />
-                <rect x="110" y="146" width="14" height="14" rx="3" fill="#111827" />
-                <rect x="96" y="168" width="14" height="14" rx="3" fill="#111827" />
-                <rect x="120" y="168" width="12" height="12" rx="3" fill="#15803D" />
-
-                {/* Bottom-right Corner Block */}
-                <rect x="146" y="146" width="52" height="52" rx="10" stroke="#15803D" strokeWidth="8" fill="none" />
-                <rect x="160" y="160" width="24" height="24" rx="5" fill="#111827" />
-              </svg>
+              {/* Mã QR thật của vé (qrCode do BE cấp); chủ sân quét mã này tại cổng để check-in */}
+              {ticketData?.qrCode ? (
+                <div style={{ background: '#ffffff', borderRadius: 14, padding: 12 }}>
+                  <QRCodeSVG value={ticketData.qrCode} size={166} level="M" />
+                </div>
+              ) : (
+                <div style={{ width: 190, height: 190, display: 'grid', placeItems: 'center', background: '#ffffff', borderRadius: 14, color: '#6b7280', fontSize: 12, textAlign: 'center', padding: 12 }}>Chưa có mã vé</div>
+              )}
             </div>
 
             {/* Fixed QR code info */}
@@ -2846,6 +2778,9 @@ function CheckInQR() {
                   </thead>
 
                   <tbody>
+                    {historyList.length === 0 && (
+                      <tr><td colSpan={6} style={{ padding: '18px 4px', textAlign: 'center', color: '#6B7280', fontSize: 13 }}>{isLoadingBookings ? 'Đang tải lịch sử…' : 'Bạn chưa có lượt check-in nào.'}</td></tr>
+                    )}
                     {historyList.map((item, index) => {
                       const isCyan = item.sportColor === 'cyan'
                       return (
@@ -2981,7 +2916,7 @@ function CheckInQR() {
                                   letterSpacing: '1px',
                                 }}
                               >
-                                {'★'.repeat(item.stars)}
+                                {item.stars ? '★'.repeat(item.stars) : '—'}
                               </span>
                               <span
                                 style={{
@@ -2993,7 +2928,7 @@ function CheckInQR() {
                                   borderRadius: '6px',
                                 }}
                               >
-                                {item.stars * 20}đ
+                                {item.stars ? `${item.stars * 20}đ` : 'Chưa có'}
                               </span>
                             </div>
                           </td>

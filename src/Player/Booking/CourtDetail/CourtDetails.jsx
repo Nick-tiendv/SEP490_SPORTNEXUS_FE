@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
-import { getCourtSlots, getFacilityAvailability } from '../../../api/player/bookingApi.js'
+import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
@@ -339,14 +340,14 @@ function CourtDetails() {
   // Chuyển sang Bước 3 & Bước 4 tại SplitPayment
   const handleCheckout = () => {
     if (selectedSlots.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
+      toast.warning('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
       return
     }
 
     const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const validSlots = selectedSlots.filter((s) => GUID_REGEX.test(s.id))
     if (validSlots.length === 0) {
-      alert('❌ Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
+      toast.error('Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
       return
     }
 

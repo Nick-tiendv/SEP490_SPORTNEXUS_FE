@@ -7,32 +7,49 @@ SportNexus is a sports court discovery, booking, payment, wallet, LFG, and AI-as
 ## Project
 
 - **Project:** SportNexus
-- **Frontend:** React.js + Vite
-- **Backend:** Java + Spring Boot
-- **Database:** MySQL
-- **API documentation:** Swagger
+- **Frontend:** React 19 + Vite 8, React Router 7
+- **Backend:** C# ASP.NET Core (.NET 10), repo `SEP490_SPORTNEXUS_BE`
+- **Database:** PostgreSQL (Entity Framework Core + Npgsql)
+- **API documentation:** Swagger và `docs/API_RESPONSES.md` của backend
 - **UI Design:** Figma
 
 ## Frontend Repository
 
-`https://github.com/Nick-tienvd/SEP490_SPORTNEXUS_FE.git`
+`https://github.com/Nick-tiendv/SEP490_SPORTNEXUS_FE.git`
 
 ## Tech Stack
 
-- React.js
-- Vite
-- Axios
-- JWT Decode
-- Tailwind CSS
-- Ant Design
-- Swiper
+- React 19, React Router 7, Vite 8
+- Axios (`src/api/apiClient.js`: gắn token, làm mới token, chuẩn hóa lỗi)
+- Tailwind CSS 3 (build qua PostCSS, cấu hình ở `tailwind.config.js`)
+- CSS dùng chung: `src/styles/app-shell.css`, `src/styles/ui-kit.css`; Admin: `src/Admin/styles/`
+- sonner (thông báo), lucide-react + Material Symbols (icon)
+- Leaflet (bản đồ tìm sân), qrcode.react + jsqr (vé QR)
+
+## Environment
+
+Tạo file `.env` từ `.env.example`:
+
+```text
+VITE_API_BASE_URL=https://sep490-sportnexus-be.onrender.com
+VITE_ALLOW_MOCK_AUTH=false
+```
+
+## Scripts
+
+| Lệnh | Việc |
+|---|---|
+| `npm run dev` | Chạy dev server |
+| `npm run build` | Build production vào `dist/` |
+| `npm run lint` | ESLint |
+| `npm test` | Chạy toàn bộ test trong `tests/` |
 
 ## Getting Started
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Nick-tienvd/SEP490_SPORTNEXUS_FE.git
+git clone https://github.com/Nick-tiendv/SEP490_SPORTNEXUS_FE.git
 ```
 
 ### 2. Enter the project
@@ -61,20 +78,20 @@ http://localhost:5173/
 
 ## Frontend Structure
 
-The project should preferably keep frontend code organized into reusable parts:
+Code được chia theo role (xem thêm `docs/FOLDER_STRUCTURE.md`):
 
 ```text
 src/
-├── assets/
-├── components/
-├── hooks/
-├── layouts/
-├── pages/
-├── services/
-└── utils/
+├── Admin/        # trang quản trị (/admin/*)
+├── CourtOwner/   # trang chủ sân (/owner/*)
+├── Player/       # trang người chơi
+├── Auth/         # đăng nhập, đăng ký, quên mật khẩu
+├── api/          # mọi lời gọi API: admin/, owner/, player/, auth/
+├── components/   # layout dùng chung (AppShell), ErrorBoundary, ProtectedRoute…
+├── context/      # AuthContext (phiên đăng nhập)
+├── hooks/        # useApi, useCurrentUser…
+└── styles/       # app-shell.css, ui-kit.css, tailwind.css
 ```
-
-The exact structure may evolve as development continues.
 
 ## Main Features
 

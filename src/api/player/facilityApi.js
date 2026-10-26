@@ -1,5 +1,4 @@
 import apiClient, { normalizeApiError } from '../apiClient.js'
-import { ENDPOINTS } from '../apiConfig.js'
 
 export const FACILITIES_ENDPOINT = '/api/v1/facilities'
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { createCourt, deleteCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
@@ -229,7 +230,7 @@ export default function CourtManage() {
 
   // Xóa sân: DELETE /facilities/{facilityId}/courts/{courtId} (BE xóa luôn các ca tương lai chưa đặt)
   const handleDeleteCourt = async (court) => {
-    if (!window.confirm(`Xóa ${court.name}? Các ca tương lai chưa có người đặt của sân này cũng bị xóa.`)) return
+    if (!(await confirmDialog(`Xóa ${court.name}? Các ca tương lai chưa có người đặt của sân này cũng bị xóa.`))) return
     setBusyId(court.id)
     try {
       const result = await deleteCourt(facilityId, court.id)

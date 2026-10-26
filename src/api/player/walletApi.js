@@ -61,7 +61,7 @@ export function savePendingDeposit({ orderCode, amount, returnTo } = {}) {
       PENDING_DEPOSIT_KEY,
       JSON.stringify({ orderCode, amount, returnTo: returnTo || null, createdAt: Date.now() })
     )
-  } catch {}
+  } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 }
 
 export function readPendingDeposit() {
@@ -76,7 +76,7 @@ export function readPendingDeposit() {
 export function clearPendingDeposit() {
   try {
     localStorage.removeItem(PENDING_DEPOSIT_KEY)
-  } catch {}
+  } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 }
 
 const unwrap = (body) => {
@@ -111,7 +111,7 @@ export async function getWallet() {
       localStorage.setItem('available_balance', String(availableBalance))
       window.dispatchEvent(new Event('escrow_balance_updated'))
       window.dispatchEvent(new Event('frozen_balance_updated'))
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     return normalized
   } catch (error) {

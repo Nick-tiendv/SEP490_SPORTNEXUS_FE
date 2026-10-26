@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { useNavigate } from 'react-router-dom'
 import {
   getNotifications,
@@ -10,7 +12,7 @@ import {
   getNotificationSettings,
   updateNotificationSettings,
 } from '../../api/player/notificationApi.js'
-import { registerDeviceToken, unregisterDeviceToken } from '../../api/notificationApi.js'
+import { registerDeviceToken, unregisterDeviceToken } from '../../api/player/notificationApi.js'
 
 // Icon / màu theo loại thông báo
 const TYPE_STYLES = {
@@ -247,7 +249,7 @@ export default function NotificationBell({ linkable = true }) {
     try {
       await deleteNotification(id)
     } catch (err) {
-      console.warn('[NotificationBell] deleteNotification error:', err)
+      toast.error(err?.message || 'Không xóa được thông báo.')
     }
     setNotifications((prev) => prev.filter((n) => n.id !== id))
     fetchUnreadCount()
@@ -255,8 +257,8 @@ export default function NotificationBell({ linkable = true }) {
   }
 
   // Xóa các thông báo đã đọc (BE chỉ xóa thông báo đã đọc): DELETE /api/v1/notifications
-  const handleClearAll = () => {
-    if (!window.confirm('Xóa tất cả thông báo đã đọc?')) return
+  const handleClearAll = async () => {
+    if (!(await confirmDialog('Xóa tất cả thông báo đã đọc?'))) return
     setNotifications((prev) => prev.filter((n) => !n.read))
     deleteReadNotifications()
       .then(() => triggerToast('Đã xóa các thông báo đã đọc'))
@@ -322,9 +324,13 @@ export default function NotificationBell({ linkable = true }) {
         }
       }
 
-      // Tạo token ngẫu nhiên giả lập hoặc từ ServiceWorker
-      const generatedToken =
-        pushToken || `web-token-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      // Thông báo đẩy cần token thật từ Firebase Cloud Messaging (FE chưa tích hợp FCM).
+      // Không gửi token tự tạo lên BE vì BE sẽ đẩy FCM tới token không tồn tại.
+      const generatedToken = pushToken
+      if (!generatedToken) {
+        triggerToast('ℹ️ Thông báo đẩy ngoài trình duyệt chưa được bật. Bạn vẫn nhận thông báo trong chuông khi đang mở SportNexus.')
+        return
+      }
       try {
         await registerDeviceToken({ token: generatedToken, platform: 'web' })
         setPushToken(generatedToken)

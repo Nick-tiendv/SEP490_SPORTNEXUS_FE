@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
@@ -283,7 +284,7 @@ export default function WalletEscrow() {
 
   // Hủy yêu cầu rút tiền: POST /api/v1/wallet/withdrawals/{id}/cancel
   const handleCancelWithdrawal = async (requestId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn hủy yêu cầu rút tiền này không?')) return
+    if (!(await confirmDialog('Bạn có chắc chắn muốn hủy yêu cầu rút tiền này không?'))) return
     try {
       await cancelWithdrawalRequest(requestId)
       toast.success('Đã hủy yêu cầu rút tiền thành công.')
@@ -306,7 +307,7 @@ export default function WalletEscrow() {
         if (fullDetail) setSelectedTxDetail(fullDetail)
       }
     } catch (err) {
-      console.warn('[WalletEscrow] Không thể tải chi tiết giao dịch:', err)
+      toast.error(err?.message || 'Không tải được chi tiết giao dịch.')
     } finally {
       setLoadingTxDetail(false)
     }

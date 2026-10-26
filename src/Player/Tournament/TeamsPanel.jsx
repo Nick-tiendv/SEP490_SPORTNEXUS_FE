@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
@@ -138,7 +139,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
                 <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => logoRef.current?.click()}><span className="material-symbols-outlined">image</span>Đổi logo</button>
                 <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && act(() => uploadTeamLogo(teamId, e.target.files[0]), 'Đã cập nhật logo.')} />
                 <span className="snx-spacer" />
-                <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={() => window.confirm(`Giải tán đội "${t.name}"?`) && act(() => deleteTeam(teamId), 'Đã giải tán đội.', true)}><span className="material-symbols-outlined">delete</span>Giải tán đội</button>
+                <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={async () => (await confirmDialog(`Giải tán đội "${t.name}"?`)) && act(() => deleteTeam(teamId), 'Đã giải tán đội.', true)}><span className="material-symbols-outlined">delete</span>Giải tán đội</button>
               </div>
             )}
 
@@ -155,8 +156,8 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
                     </div>
                     {isCaptain && m.accountId !== t.captainId && (
                       <>
-                        <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => window.confirm(`Chuyển quyền đội trưởng cho ${m.fullName}?`) && act(() => transferCaptain(teamId, m.accountId), 'Đã chuyển quyền đội trưởng.')}>Chuyển đội trưởng</button>
-                        <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={() => window.confirm(`Xóa ${m.fullName} khỏi đội?`) && act(() => removeTeamMember(teamId, m.accountId), 'Đã xóa thành viên.')}>Xóa</button>
+                        <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={async () => (await confirmDialog(`Chuyển quyền đội trưởng cho ${m.fullName}?`)) && act(() => transferCaptain(teamId, m.accountId), 'Đã chuyển quyền đội trưởng.')}>Chuyển đội trưởng</button>
+                        <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={async () => (await confirmDialog(`Xóa ${m.fullName} khỏi đội?`)) && act(() => removeTeamMember(teamId, m.accountId), 'Đã xóa thành viên.')}>Xóa</button>
                       </>
                     )}
                   </div>
@@ -212,7 +213,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
 
             {!isCaptain && (
               <div className="snx-row" style={{ justifyContent: 'flex-end' }}>
-                <button type="button" className="snx-btn snx-btn--danger" onClick={() => window.confirm(`Rời đội "${t.name}"?`) && act(() => leaveTeam(teamId), 'Bạn đã rời đội.', true)}>Rời đội</button>
+                <button type="button" className="snx-btn snx-btn--danger" onClick={async () => (await confirmDialog(`Rời đội "${t.name}"?`)) && act(() => leaveTeam(teamId), 'Bạn đã rời đội.', true)}>Rời đội</button>
               </div>
             )}
           </div>

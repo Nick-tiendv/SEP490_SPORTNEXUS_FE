@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
@@ -34,7 +35,7 @@ function ReviewItem({ review, onChanged }) {
     }
   }
   const remove = async () => {
-    if (!window.confirm('Xóa phản hồi này? Đánh giá của khách vẫn được giữ lại.')) return
+    if (!(await confirmDialog('Xóa phản hồi này? Đánh giá của khách vẫn được giữ lại.'))) return
     setBusy(true)
     try {
       await deleteReviewReply(review.id)

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import {
   cancelWithdrawal,
@@ -164,7 +165,7 @@ export default function Settlement() {
   }
 
   const handleCancelWithdrawal = async (item) => {
-    if (!window.confirm(`Hủy yêu cầu rút ${formatVND(item.amount)}? Tiền sẽ được trả lại ví.`)) return
+    if (!(await confirmDialog(`Hủy yêu cầu rút ${formatVND(item.amount)}? Tiền sẽ được trả lại ví.`))) return
     setBusy(true)
     try {
       await cancelWithdrawal(item.id)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
@@ -329,7 +330,7 @@ function TournamentList() {
   }
 
   const cancelRegister = async (tournament) => {
-    if (!window.confirm(`Hủy đăng ký giải "${tournament.name}"?`)) return
+    if (!(await confirmDialog(`Hủy đăng ký giải "${tournament.name}"?`))) return
     setBusyId(tournament.id)
     try {
       await cancelTournamentRegistration(tournament.id)

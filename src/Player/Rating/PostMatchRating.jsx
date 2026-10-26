@@ -5,8 +5,7 @@ import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
   createFacilityReview,
-  rateFacility,
-} from '../../api/reviewApi.js'
+} from '../../api/player/reviewApi.js'
 
 function PostMatchRating() {
   const navigate = useNavigate()
@@ -217,7 +216,7 @@ function PostMatchRating() {
     try {
       const saved = localStorage.getItem('player_match_reviewed_ids')
       if (saved) return JSON.parse(saved)
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return []
   })
 
@@ -226,7 +225,7 @@ function PostMatchRating() {
     try {
       const saved = localStorage.getItem('player_match_reviews')
       if (saved) return JSON.parse(saved)
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return []
   })
 
@@ -242,7 +241,7 @@ function PostMatchRating() {
             setCoPlayers(parsed.coPlayers)
           }
         }
-      } catch (e) {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     }
     window.addEventListener('storage', handleStorageChange)
     window.addEventListener('sportnexus_checkout_updated', handleStorageChange)
@@ -289,7 +288,7 @@ function PostMatchRating() {
       localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
       setCheckoutSession(parsed)
       window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    } catch (err) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     setSelectedPlayerId(newPartner.id)
     setShowAddDoublesModal(false)
@@ -314,32 +313,13 @@ function PostMatchRating() {
         setCheckoutSession(parsed)
         window.dispatchEvent(new Event('sportnexus_checkout_updated'))
       }
-    } catch (err) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     if (selectedPlayerId === id) {
       setSelectedPlayerId(updated[0]?.id || '')
     }
     triggerToast('🗑️ Đã xóa người chơi khỏi danh sách đánh giá.')
   }
 
-  // Mô phỏng Check-in nhanh nếu người dùng đang ở trạng thái chưa check-in
-  const handleSimulateCheckout = () => {
-    const session = {
-      courtId: 'Court 3',
-      courtName: 'Sân Cầu Lông BWF Pro 01',
-      sport: 'Cầu lông',
-      checkInDone: true,
-      checkInTime: '11:00',
-      checkOutDone: true,
-      checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      coPlayers: defaultCoPlayers,
-    }
-    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
-    localStorage.setItem('sportnexus_ticket_checkin_done', 'true')
-    setCheckoutSession(session)
-    setCoPlayers(defaultCoPlayers)
-    window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    triggerToast('✅ Check-in thành công! Bây giờ bạn có thể viết nhận xét và chấm sao cho bạn chơi cùng sân.')
-  }
 
   const isEligibleToRate = Boolean(checkoutSession && (checkoutSession.checkInDone || checkoutSession.checkOutDone))
   const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0]
@@ -849,28 +829,6 @@ function PostMatchRating() {
               Đi Đến Trang Check-in QR
             </Link>
 
-            <button
-              type="button"
-              onClick={handleSimulateCheckout}
-              style={{
-                padding: '12px 22px',
-                borderRadius: '14px',
-                background: '#F0FDF4',
-                border: '1.5px dashed #16A34A',
-                color: '#15803D',
-                cursor: 'pointer',
-                fontWeight: 700,
-                fontSize: '13.5px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                bolt
-              </span>
-              Mô phỏng Check-in thành công ngay
-            </button>
           </div>
         </div>
       )}

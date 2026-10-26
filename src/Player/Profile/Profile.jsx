@@ -1,8 +1,16 @@
 import { useAuth } from '../../context/authContext.js'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getMyProfile, updateMyProfile, logoutApi, logoutAllDevices, getMySports, updateMySports, getSportCategories, skillLabel } from '../../api/player/profileApi.js'
 import {
+  getMyProfile,
+  updateMyProfile,
+  logoutApi,
+  logoutAllDevices,
+  getMySports,
+  updateMySports,
+  getSportCategories,
+  skillLabel,
   uploadAvatar,
   changePassword,
   updatePhone,
@@ -10,7 +18,7 @@ import {
   verifyEmail,
   setPassword,
   deleteMyAccount,
-} from '../../api/authApi.js'
+} from '../../api/player/profileApi.js'
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
@@ -20,15 +28,14 @@ import {
   getFacilityReviewById,
   updateFacilityReview,
   deleteFacilityReview,
-} from '../../api/reviewApi.js'
+} from '../../api/player/reviewApi.js'
 import {
   getReportReasons,
   createReport,
   getMyReports,
   getReportById,
-  updateReport,
   withdrawReport,
-} from '../../api/reportApi.js'
+} from '../../api/player/reportApi.js'
 
 export const PRESET_SPORTS_CATALOG = [
   { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
@@ -309,7 +316,7 @@ export default function Profile() {
 
   // Đăng xuất khỏi tất cả thiết bị: POST /api/auth/logout-all
   const handleLogoutAll = async () => {
-    if (!window.confirm('Đăng xuất tài khoản khỏi tất cả thiết bị (kể cả thiết bị này)?')) return
+    if (!(await confirmDialog('Đăng xuất tài khoản khỏi tất cả thiết bị (kể cả thiết bị này)?'))) return
     try {
       await logoutAllDevices()
       logout()
@@ -321,11 +328,13 @@ export default function Profile() {
 
   // Xóa tài khoản vĩnh viễn: DELETE /api/auth/me
   const handleDeleteAccount = async () => {
-    if (!window.confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản SportNexus không? Dữ liệu không thể khôi phục!')) return
+    if (!(await confirmDialog('CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản SportNexus không? Dữ liệu không thể khôi phục!'))) return
     try {
       await deleteMyAccount()
       triggerToast('Tài khoản đã được xóa.')
-      navigate('/login')
+      // Xóa phiên đăng nhập (AuthContext) rồi về trang đăng nhập
+      logout()
+      navigate('/login', { replace: true })
     } catch (err) {
       triggerToast(`⚠️ ${err?.message || 'Không thể xóa tài khoản'}`)
     }
@@ -370,7 +379,7 @@ export default function Profile() {
 
   // Rút khiếu nại: POST /{reportId}/withdraw
   const handleWithdrawReport = async (reportId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn rút khiếu nại này không?')) return
+    if (!(await confirmDialog('Bạn có chắc chắn muốn rút khiếu nại này không?'))) return
     try {
       await withdrawReport(reportId)
       triggerToast('Đã rút khiếu nại thành công.')
@@ -382,7 +391,7 @@ export default function Profile() {
 
   // Xóa đánh giá cơ sở: DELETE /api/v1/facility-reviews/{reviewId}
   const handleDeleteFacilityReview = async (reviewId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa đánh giá cơ sở này không?')) return
+    if (!(await confirmDialog('Bạn có chắc chắn muốn xóa đánh giá cơ sở này không?'))) return
     try {
       await deleteFacilityReview(reviewId)
       triggerToast('Đã xóa đánh giá cơ sở.')
@@ -560,7 +569,7 @@ export default function Profile() {
         const parsed = JSON.parse(saved)
         if (parsed && parsed.checkOutDone) return parsed
       }
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return defaultCheckoutSession
   })
 
@@ -574,7 +583,7 @@ export default function Profile() {
           return parsed.coPlayers
         }
       }
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return [
       { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', slotRep: 'Đại diện slot 1' },
       { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 2' },
@@ -602,7 +611,7 @@ export default function Profile() {
             setCheckoutCoPlayers(parsed.coPlayers)
           }
         }
-      } catch (e) {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     }
     window.addEventListener('sportnexus_checkout_updated', handleSyncCheckout)
     window.addEventListener('storage', handleSyncCheckout)
@@ -642,7 +651,7 @@ export default function Profile() {
       localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
       setCheckoutSession(parsed)
       window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    } catch (err) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
 
     // Tự động chọn người vừa thêm làm đối tượng đánh giá
     setWriteReviewForm((prev) => ({
@@ -672,32 +681,10 @@ export default function Profile() {
         setCheckoutSession(parsed)
         window.dispatchEvent(new Event('sportnexus_checkout_updated'))
       }
-    } catch (err) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     triggerToast('🗑️ Đã xóa người chơi khỏi danh sách đánh giá của trận.')
   }
 
-  // Mô phỏng check-out thành công nhanh để thử nghiệm
-  const handleSimulateCheckout = () => {
-    const session = {
-      courtId: 'Court 3',
-      courtName: 'Sân Cầu Lông BWF Pro 01',
-      sport: 'Cầu lông',
-      checkInDone: true,
-      checkInTime: '18:00',
-      checkOutDone: true,
-      checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      coPlayers: [
-        { id: 'p1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', slotRep: 'Đại diện slot 1' },
-        { id: 'p2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 2' },
-        { id: 'p3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', slotRep: 'Đại diện slot 3' },
-      ],
-    }
-    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(session))
-    setCheckoutSession(session)
-    setCheckoutCoPlayers(session.coPlayers)
-    window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    triggerToast('✅ Đã kích hoạt phiên chơi check-out thành công tại Sân Cầu Lông BWF Pro 01!')
-  }
 
   // Gửi đánh giá sau trận (chỉ cho phép sau khi check-out thành công)
   const handleSubmitReview = (e) => {
@@ -706,7 +693,7 @@ export default function Profile() {
       try {
         const saved = localStorage.getItem('sportnexus_last_checkout_session')
         return saved ? JSON.parse(saved) : null
-      } catch (e) { return null }
+      } catch { return null }
     })()
 
     if (!session || !session.checkOutDone) {
@@ -851,7 +838,7 @@ export default function Profile() {
       triggerToast('⚠️ Bạn cần giữ ít nhất một môn thể thao trong hồ sơ!')
       return
     }
-    if (window.confirm(`Bạn có chắc chắn muốn xóa môn "${sport.name}" khỏi danh sách trình độ kỹ năng?`)) {
+    if ((await confirmDialog(`Bạn có chắc chắn muốn xóa môn "${sport.name}" khỏi danh sách trình độ kỹ năng?`))) {
       saveSports(sportsData.filter((s) => s.id !== sport.id), `🗑️ Đã xóa môn ${sport.name} khỏi danh sách kỹ năng.`)
     }
   }
@@ -4200,35 +4187,6 @@ export default function Profile() {
                       Đi đến trang Check-in / Check-out sân
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSimulateCheckout()
-                        // Re-trigger re-render
-                        setShowWriteReviewModal(false)
-                        setTimeout(() => setShowWriteReviewModal(true), 200)
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '10px',
-                        borderRadius: '12px',
-                        background: '#F0FDF4',
-                        color: '#15803D',
-                        fontWeight: 700,
-                        fontSize: '12.5px',
-                        border: '1px dashed #16A34A',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                        bolt
-                      </span>
-                      Mô phỏng Check-out thành công ngay (Dùng thử)
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -6222,7 +6180,7 @@ export default function Profile() {
                     localStorage.removeItem('sportnexus_auth_token')
                     localStorage.removeItem('sportnexus_user_id')
                     localStorage.removeItem('sportnexus_user_fullname')
-                  } catch (e) {}
+                  } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
                   setShowLogoutModal(false)
                   logoutApi().catch(() => {})
                   logout()

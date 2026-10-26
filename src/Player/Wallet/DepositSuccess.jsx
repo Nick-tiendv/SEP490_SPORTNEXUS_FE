@@ -74,7 +74,7 @@ export default function DepositSuccess() {
       try {
         const w = await getWallet()
         if (active) setWallet(w)
-      } catch {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       // Tránh báo trùng khi F5 trang
       const notifiedKey = `deposit_notified_${orderCode}`
       if (!sessionStorage.getItem(notifiedKey)) {
