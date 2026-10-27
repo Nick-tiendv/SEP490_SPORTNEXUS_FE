@@ -4,7 +4,9 @@ import { uid } from '../../utils/ids.js'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getCancellationReasons, cancelBooking, getBookingQrTicket, getBookingById, getMyBookings, getUpcomingBookings } from '../../api/player/bookingApi.js'
-import { rateFairPlay, getLfgQrTicket } from '../../api/player/lfgApi.js'
+import { getLfgQrTicket } from '../../api/player/lfgApi.js'
+import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
+import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
 
 const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
@@ -356,52 +358,35 @@ function CheckInQR() {
 
   // Modal Check-out và Đánh giá sau trận
   const [showCheckOutModal, setShowCheckOutModal] = useState(false)
-  const [showRateModal, setShowRateModal] = useState(false)
   const [rightTab, setRightTab] = useState('rating') // 'rating' | 'history'
-  const [selectedCoPlayer, setSelectedCoPlayer] = useState(() => ({
-    id: '1',
-    name: 'Hoàng Nam',
-    email: 'hoang.nam.badminton@gmail.com',
-    role: 'Đồng đội đánh cặp',
-    isSelected: true,
-  }))
-  const [rateStars, setRateStars] = useState(5)
-  const [rateHoverStars, setRateHoverStars] = useState(0)
-  const [writtenReview, setWrittenReview] = useState('')
+  // Người cùng check-in trong trận này mà mình chưa chấm Fair Play (GET /api/v1/fair-play/pending-ratings)
+  const [ticketPending, setTicketPending] = useState(null)
+  useEffect(() => {
+    if (!checkInDone || !ticketData?.id) return undefined
+    let cancelled = false
+    getPendingFairPlayRatings()
+      .then((list) => {
+        if (!cancelled) setTicketPending(list.find((m) => String(m.contextId) === String(ticketData.id)) || null)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [checkInDone, ticketData?.id])
 
-  const getStarLabel = (stars) => {
-    switch (stars) {
-      case 5:
-        return '5 sao: Xuất sắc & Fairplay (Tuyệt vời, sẵn sàng tái đấu)'
-      case 4:
-        return '4 sao: Rất tốt & Chuyên nghiệp (Thái độ chuẩn mực)'
-      case 3:
-        return '3 sao: Bình thường (Trận đấu ổn định)'
-      case 2:
-        return '2 sao: Cần cải thiện (Có hành vi thiếu tinh thần thể thao)'
-      case 1:
-        return '1 sao: Kém / Không fairplay (Có thái độ phi thể thao nghiêm trọng)'
-      default:
-        return 'Chưa chấm điểm sao'
-    }
-  }
-
-  // Danh sách ID người chơi đã được đánh giá
-  const [reviewedPlayerIds, setReviewedPlayerIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_match_reviewed_ids')
-      if (saved) return JSON.parse(saved)
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return []
-  })
+  // Lịch sử check-in của tôi (GET /api/v1/checkin/history)
+  const [checkInHistory, setCheckInHistory] = useState({ items: [], totalItems: 0 })
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    getMyCheckInHistory({ pageSize: 20 })
+      .then((res) => !cancelled && setCheckInHistory(res))
+      .catch(() => {})
+      .finally(() => !cancelled && setIsLoadingHistory(false))
+    return () => { cancelled = true }
+  }, [checkInDone])
 
   // Share QR modal states with participant deletion support
   const [showShareModal, setShowShareModal] = useState(false)
-  const [matchParticipants, setMatchParticipants] = useState([
-    { id: '1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', isSelected: true },
-    { id: '2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', isSelected: false },
-    { id: '3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', isSelected: false },
-  ])
+  const [matchParticipants, setMatchParticipants] = useState([])
   const [emailInput, setEmailInput] = useState('')
 
 
@@ -473,208 +458,26 @@ function CheckInQR() {
     )
   }
 
-  // Restore default participants
-  const handleRestoreDefaultParticipants = () => {
-    setMatchParticipants([
-      { id: '1', name: 'Hoàng Nam', email: 'hoang.nam.badminton@gmail.com', role: 'Đồng đội đánh cặp', isSelected: true },
-      { id: '2', name: 'Đức Trần', email: 'duc_tran92@outlook.com', role: 'Đối thủ cùng sân', isSelected: false },
-      { id: '3', name: 'Tuấn Kiệt', email: 'tuankiet.sports@gmail.com', role: 'Đối thủ cùng sân', isSelected: false },
-    ])
-    setToastMessage('Đã khôi phục danh sách gợi ý ban đầu')
-    setTimeout(() => setToastMessage(null), 3000)
-  }
-
-  // Trạng thái thêm bạn đánh đôi (người đi cùng đại diện slot)
-  const [showAddDoublesPartner, setShowAddDoublesPartner] = useState(false)
-  const [doublesPartnerName, setDoublesPartnerName] = useState('')
-  const [doublesPartnerRole, setDoublesPartnerRole] = useState('Đồng đội đánh cặp')
-  const [doublesPartnerRep, setDoublesPartnerRep] = useState('Hoàng Nam')
-
-  // Thêm người chơi đánh đôi đi cùng đại diện
-  const handleAddDoublesParticipant = (e) => {
-    if (e) e.preventDefault()
-    const trimmed = doublesPartnerName.trim()
-    if (!trimmed) {
-      setToastMessage('⚠️ Vui lòng nhập họ tên hoặc biệt danh người chơi đánh đôi!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-
-    const newParticipant = {
-      id: uid('partner'),
-      name: trimmed,
-      email: `${trimmed.toLowerCase().replace(/\s+/g, '')}@guest.local`,
-      role: doublesPartnerRole,
-      isDoublesGuest: true,
-      representedBy: doublesPartnerRep || 'Người đại diện slot',
-      isSelected: false,
-    }
-
-    const updatedParticipants = [...matchParticipants, newParticipant]
-    setMatchParticipants(updatedParticipants)
-    setSelectedCoPlayer(newParticipant)
-    setShowAddDoublesPartner(false)
-    setDoublesPartnerName('')
-
-    // Tự động đồng bộ và lưu vào session check-out
-    try {
-      const saved = localStorage.getItem('sportnexus_last_checkout_session')
-      const parsed = saved ? JSON.parse(saved) : {
-        courtId: 'Court 3',
-        courtName: 'Sân Cầu Lông BWF Pro 01',
-        sport: 'Cầu Lông',
-        checkOutDone: true,
-        checkOutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      }
-      parsed.coPlayers = updatedParticipants.map((p) => ({
-        id: p.id,
-        name: p.name || p.email.split('@')[0],
-        email: p.email,
-        role: p.role || 'Bạn chơi cùng sân',
-        isDoublesGuest: p.isDoublesGuest,
-        representedBy: p.representedBy,
-      }))
-      parsed.checkOutDone = true
-      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
-      window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-
-    setToastMessage(`🎉 Đã thêm bạn đánh đôi "${trimmed}" (Đi cùng ${newParticipant.representedBy}) vào danh sách đánh giá!`)
-    setTimeout(() => setToastMessage(null), 3500)
-  }
-
-  // Xử lý xác nhận Check-out trả sân
+  // Xử lý xác nhận Check-out trả sân (ghi nhận trên máy, BE không có bước check-out)
   const handleConfirmCheckOut = () => {
     setShowCheckOutModal(false)
     setCheckOutDone(true)
     const checkOutTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    const sessionData = {
-      courtId: 'Court 3',
-      courtName: 'Sân Cầu Lông BWF Pro 01',
-      sport: 'Cầu Lông',
-      checkInDone: true,
-      checkInTime: '18:00',
-      checkOutDone: true,
-      checkOutTime: checkOutTime,
-      coPlayers: matchParticipants.map((p) => ({
-        id: p.id,
-        name: p.name || p.email.split('@')[0],
-        email: p.email,
-        role: p.role || 'Bạn chơi cùng sân',
-        isDoublesGuest: Boolean(p.isDoublesGuest),
-        representedBy: p.representedBy || null,
-      })),
-    }
-    localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(sessionData))
-    window.dispatchEvent(new Event('sportnexus_checkout_updated'))
+    try {
+      const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || '{}') || {}
+      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify({
+        ...saved,
+        ticketCode: (ticketData?.ticketCode || '').replace('#', '').trim(),
+        courtName: ticketData?.courtName || '—',
+        checkInDone: true,
+        checkOutDone: true,
+        checkOutTime,
+      }))
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
+    setRightTab('rating')
     setToastMessage(`🎉 Check-out trả sân thành công lúc ${checkOutTime}! Mời bạn đánh giá bạn chơi cùng sân.`)
     setTimeout(() => setToastMessage(null), 3500)
-
-    // Tự động mở modal đánh giá bạn chơi đầu tiên nếu chưa đánh giá
-    if (matchParticipants.length > 0) {
-      setSelectedCoPlayer(matchParticipants[0])
-      setShowRateModal(true)
-    }
   }
-
-
-  // Xử lý gửi đánh giá sau trận (chỉ cho phép sau khi check-in thành công - Image 2.7)
-  const handleSubmitRateCoPlayer = async (e) => {
-    if (e) e.preventDefault()
-    if (!checkInDone) {
-      setToastMessage('⚠️ Người chơi chỉ được phép đánh giá sau khi check-in thành công (Cả hai phải đã check-in)!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-    if (!rateStars || rateStars < 1 || rateStars > 5) {
-      setToastMessage('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-    if (!writtenReview || writtenReview.trim().length < 10) {
-      setToastMessage('⚠️ Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự)!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-
-    if (selectedCoPlayer && reviewedPlayerIds.includes(selectedCoPlayer.id)) {
-      setToastMessage('⚠️ Mỗi người chỉ được chấm Fair Play 1 lần cho 1 người trong 1 trận!')
-      setTimeout(() => setToastMessage(null), 3000)
-      return
-    }
-
-    const targetName = selectedCoPlayer?.name || selectedCoPlayer?.email?.split('@')[0] || 'Bạn chơi'
-    // 2.7 Bước 3: contextId là id kèo LFG hoặc id đơn đặt sân
-    const contextId = ticketData?.id
-    const revieweeId = selectedCoPlayer?.userId || selectedCoPlayer?.id
-
-    try {
-      await rateFairPlay({
-        revieweeId,
-        contextId,
-        score: rateStars,
-        comment: writtenReview.trim(),
-      })
-    } catch (err) {
-      console.warn('[CheckInQR] Lỗi khi gọi API rateFairPlay:', err)
-      if (err?.message) {
-        setToastMessage(`⚠️ ${err.message}`)
-      }
-    }
-
-    const effectiveRole = selectedCoPlayer?.isDoublesGuest
-      ? `${selectedCoPlayer.role} • Đi cùng ${selectedCoPlayer.representedBy}`
-      : selectedCoPlayer?.role || 'Bạn chơi cùng sân'
-
-    const newReview = {
-      id: Date.now(),
-      author: 'Bạn (Người chơi cùng sân)',
-      targetPlayer: targetName,
-      coPlayerRole: effectiveRole,
-      isDoublesGuest: Boolean(selectedCoPlayer?.isDoublesGuest),
-      representedBy: selectedCoPlayer?.representedBy || null,
-      avatarInitial: targetName.slice(0, 2).toUpperCase(),
-      avatarBg: selectedCoPlayer?.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
-      avatarColor: selectedCoPlayer?.isDoublesGuest ? '#D97706' : '#15803D',
-      matchType: ticketData?.sportType || '—',
-      court: `${ticketData?.courtName || '—'} (${ticketData?.gate || '—'})`,
-      time: 'Vừa xong',
-      rating: rateStars,
-      fairPlayScore: rateStars * 20,
-      content: writtenReview.trim(),
-      verifiedCheckout: true,
-      checkoutTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    }
-
-    // Lưu vào danh sách đánh giá hệ thống
-    try {
-      const saved = localStorage.getItem('player_match_reviews')
-      const currentList = saved ? JSON.parse(saved) : []
-      const updatedList = [newReview, ...currentList]
-      localStorage.setItem('player_match_reviews', JSON.stringify(updatedList))
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-
-    // Đánh dấu người chơi đã được đánh giá (mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận)
-    if (selectedCoPlayer) {
-      const updated = [...new Set([...reviewedPlayerIds, selectedCoPlayer.id])]
-      setReviewedPlayerIds(updated)
-      localStorage.setItem('player_match_reviewed_ids', JSON.stringify(updated))
-    }
-
-    setWrittenReview('')
-    setRateStars(5)
-    setShowRateModal(false)
-    setToastMessage(`🎉 Đã gửi đánh giá Fair Play (+${rateStars * 20} điểm quy đổi) cho ${targetName}!`)
-    setTimeout(() => setToastMessage(null), 3500)
-  }
-
-  // Quick tag suggestions
-  const quickTags = [
-    'Thái độ rất fairplay 🤝',
-    'Kỹ thuật tốt, bọc lót xuất sắc 🏸',
-    'Đúng giờ và chia bill nhanh gọn ⏱️',
-    'Phối hợp ăn ý, tinh thần vui vẻ ✨',
-  ]
 
   // Confirm send QR code
   const handleConfirmSend = () => {
@@ -692,23 +495,21 @@ function CheckInQR() {
   }
 
 
-  // Lịch sử check-in thật: các đơn của tôi đã CHECKED_IN (GET /bookings/my-bookings)
-  const historyList = myBookingsList
-    .filter((b) => String(b.bookingStatus || b.status || '').toUpperCase() === 'CHECKED_IN')
-    .sort((x, y) => new Date(y.startTime) - new Date(x.startTime))
-    .map((b) => ({
-      id: b.bookingId || b.id,
-      time: `${dateVN(b.startTime)}, ${clockVN(b.startTime)}`,
-      location: [b.facilityName, b.courtName].filter(Boolean).join(' · ') || '—',
-      sport: b.sportName || '—',
-      sportColor: 'cyan',
-      sportIcon: 'sports',
-      amount: `${new Intl.NumberFormat('vi-VN').format(Number(b.myAmount ?? b.totalAmount) || 0)} đ`,
-      status: 'Đã check-in',
-      authMethod: 'Quét QR tại cổng',
-      authIcon: 'qr',
-      stars: null, // BE chưa trả điểm Fair Play theo từng đơn
-    }))
+  // Lịch sử check-in thật (GET /api/v1/checkin/history)
+  const TICKET_TYPES = { BOOKING: 'Vé đặt sân', LFG: 'Vé kèo LFG', TOURNAMENT: 'Vé giải đấu' }
+  const historyList = checkInHistory.items.map((h) => ({
+    id: h.id,
+    time: `${dateVN(h.checkedInAt)}, ${clockVN(h.checkedInAt)}`,
+    location: [h.facilityName, h.courtName].filter(Boolean).join(' · ') || '—',
+    sport: h.sportName || '—',
+    sportColor: h.type === 'BOOKING' ? 'cyan' : 'green',
+    sportIcon: 'sports',
+    amount: TICKET_TYPES[h.type] || h.type,
+    status: h.type === 'TOURNAMENT' ? (h.tournamentName || 'Giải đấu') : `Ca ${clockVN(h.startTime)} - ${clockVN(h.endTime)}`,
+    authMethod: 'Quét QR tại cổng',
+    authIcon: 'qr',
+    isLate: h.isLate,
+  }))
 
   if (!isLoadingTicket && !ticketData) {
     return (
@@ -987,7 +788,7 @@ function CheckInQR() {
               const bId = b.id || b.bookingId || idx
               const cName = b.courtName || b.court?.courtName || 'Sân đấu'
               const fName = b.facilityName || b.facility?.name || 'SportNexus'
-              const time = b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : (b.timeSlot || 'Hôm nay')
+              const time = b.startTime && b.endTime ? `${clockVN(b.startTime)} - ${clockVN(b.endTime)} ${dateVN(b.startTime)}` : (b.timeSlot || 'Hôm nay')
               return (
                 <button
                   key={bId}
@@ -1788,7 +1589,7 @@ function CheckInQR() {
                 <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
                   history
                 </span>
-                <span>Lịch Sử Check-in ({historyList.length})</span>
+                <span>Lịch Sử Check-in ({checkInHistory.totalItems})</span>
               </button>
             </div>
 
@@ -1809,755 +1610,57 @@ function CheckInQR() {
             </div>
           </div>
 
-          {/* ================= TAB 1: ĐÁNH GIÁ BẠN CHƠI CÙNG SÂN (FAIR PLAY - YÊU CẦU 2.7) ================= */}
+          {/* ================= TAB 1: ĐÁNH GIÁ BẠN CHƠI CÙNG SÂN (GET /api/v1/fair-play/pending-ratings) ================= */}
           {rightTab === 'rating' && (
             <div>
-              {/* Header Box (Khung tiêu đề đúng như hình screenshot) */}
               <div style={{ marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                  <span
-                    style={{
-                      background: '#DCFCE7',
-                      color: '#15803D',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      padding: '3px 9px',
-                      borderRadius: '6px',
-                      letterSpacing: '0.4px',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    HỆ THỐNG FAIRPLAY SPORTNEXUS
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
-                    Vé #{ticketData?.ticketCode || '—'} • {ticketData?.courtName || '—'}
-                  </span>
-                </div>
-
-                <h2
-                  style={{
-                    margin: '0 0 6px 0',
-                    fontSize: '20px',
-                    fontWeight: 800,
-                    color: '#111827',
-                    letterSpacing: '-0.3px',
-                  }}
-                >
-                  Đánh Giá Sau Trận Đấu Cho Người Chơi Cùng Sân
-                </h2>
-
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#6B7280', lineHeight: 1.5 }}>
-                  Quy định: Người chơi chỉ được phép đánh giá bằng hình thức <strong>viết nhận xét</strong> và <strong>chấm điểm sao</strong> cho người chơi cùng sân sau khi <strong style={{ color: '#15803D' }}>check-in thành công</strong>.
-                </p>
-
-                {/* Banner Trạng Thái Check-in */}
-                {checkInDone ? (
-                  <div
-                    style={{
-                      background: '#F0FDF4',
-                      border: '1.5px solid #BBF7D0',
-                      borderRadius: '12px',
-                      padding: '10px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      marginTop: '12px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        background: '#DCFCE7',
-                        color: '#15803D',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
-                        verified
-                      </span>
-                    </div>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 800,
-                          color: '#15803D',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                        }}
-                      >
-                        TRẠNG THÁI CHECK-IN
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#166534' }}>
-                        Đã check-in ({ticketData?.startTime || '—'}) • Hợp lệ để đánh giá bạn chơi
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      background: '#FEF2F2',
-                      border: '1.5px solid #FECACA',
-                      borderRadius: '12px',
-                      padding: '12px 14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '10px',
-                      marginTop: '12px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#DC2626' }}>
-                        lock_clock
-                      </span>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#991B1B' }}>
-                          Đánh giá sau trận đang tạm khóa (Chờ Check-in)
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#B91C1C' }}>
-                          Bạn cần hoàn tất <strong>Check-in vào sân</strong> để mở quyền viết nhận xét và chấm sao (Quy định 2.7: Cả hai người phải đã check-in).
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowCheckInModal(true)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '10px',
-                        background: '#15803D',
-                        color: '#ffffff',
-                        border: 'none',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                        qr_code_scanner
-                      </span>
-                      <span>Mô phỏng Check-in ngay</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Grid 2 cột: Danh sách bạn chơi (trái) & Form đánh giá (phải) đúng y như hình screenshot */}
-              <div
-                className="rating-subgrid"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(230px, 270px) 1fr',
-                  gap: '16px',
-                  alignItems: 'start',
-                  marginTop: '14px',
-                }}
-              >
-                {/* Cột 1: Danh Sách Bạn Chơi Cùng Sân */}
-                <div
-                  style={{
-                    background: '#F8FAFC',
-                    borderRadius: '16px',
-                    border: '1px solid #E2E8F0',
-                    padding: '14px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div>
-                      <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#111827' }}>
-                        Bạn Chơi Cùng Sân ({matchParticipants.length})
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '1px' }}>
-                        Tự cập nhật sau check-in • Chọn người để đánh giá
-                      </div>
-                    </div>
-                    <span
-                      style={{
-                        background: '#DCFCE7',
-                        color: '#15803D',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        padding: '2px 6px',
-                        borderRadius: '6px',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      ✓ Cùng sân đấu
-                    </span>
-                  </div>
-
-                  {/* Nút Thêm bạn đánh đôi (Đi cùng đại diện slot) */}
-                  <div style={{ marginBottom: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddDoublesPartner(!showAddDoublesPartner)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '10px',
-                        background: showAddDoublesPartner ? '#FEF3C7' : '#F0FDF4',
-                        border: showAddDoublesPartner ? '1.5px solid #F59E0B' : '1px dashed #16A34A',
-                        color: showAddDoublesPartner ? '#B45309' : '#15803D',
-                        fontSize: '11.5px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                        {showAddDoublesPartner ? 'expand_less' : 'person_add'}
-                      </span>
-                      <span>{showAddDoublesPartner ? 'Đóng form thêm bạn' : '+ Thêm bạn đánh đôi (Đi cùng đại diện slot)'}</span>
-                    </button>
-
-                    {showAddDoublesPartner && (
-                      <div
-                        style={{
-                          background: '#FFFBEB',
-                          border: '1px solid #FDE68A',
-                          borderRadius: '12px',
-                          padding: '12px',
-                          marginTop: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                        }}
-                      >
-                        <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#92400E' }}>
-                          Thêm bạn đánh đôi (Đi cùng người đại diện):
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Họ tên bạn đánh đôi..."
-                          value={doublesPartnerName}
-                          onChange={(e) => setDoublesPartnerName(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '7px 9px',
-                            borderRadius: '8px',
-                            border: '1px solid #FCD34D',
-                            fontSize: '11.5px',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            background: '#ffffff',
-                          }}
-                        />
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                          <select
-                            value={doublesPartnerRole}
-                            onChange={(e) => setDoublesPartnerRole(e.target.value)}
-                            style={{
-                              padding: '6px 8px',
-                              borderRadius: '8px',
-                              border: '1px solid #FCD34D',
-                              fontSize: '11px',
-                              background: '#ffffff',
-                              outline: 'none',
-                            }}
-                          >
-                            <option value="Đồng đội đánh cặp">Đồng đội đánh cặp</option>
-                            <option value="Đối thủ cùng sân">Đối thủ cùng sân</option>
-                          </select>
-                          <select
-                            value={doublesPartnerRep}
-                            onChange={(e) => setDoublesPartnerRep(e.target.value)}
-                            style={{
-                              padding: '6px 8px',
-                              borderRadius: '8px',
-                              border: '1px solid #FCD34D',
-                              fontSize: '11px',
-                              background: '#ffffff',
-                              outline: 'none',
-                            }}
-                          >
-                            {matchParticipants
-                              .filter((p) => !p.isDoublesGuest)
-                              .map((p) => (
-                                <option key={p.id} value={p.name}>
-                                  {p.name}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleAddDoublesParticipant}
-                          style={{
-                            padding: '7px',
-                            borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
-                            border: 'none',
-                            color: '#ffffff',
-                            fontSize: '11.5px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Thêm &amp; Chọn Đánh Giá
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Danh sách người chơi */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {matchParticipants.map((p) => {
-                      const isSelected = selectedCoPlayer?.id === p.id
-                      const isReviewed = reviewedPlayerIds.includes(p.id)
-                      return (
-                        <div
-                          key={p.id}
-                          onClick={() => setSelectedCoPlayer(p)}
-                          style={{
-                            padding: '10px 12px',
-                            borderRadius: '12px',
-                            background: isSelected ? '#FFFFFF' : '#F1F5F9',
-                            border: isSelected ? '2px solid #16A34A' : '1px solid #E2E8F0',
-                            boxShadow: isSelected ? '0 3px 10px rgba(22, 163, 74, 0.12)' : 'none',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                            <div
-                              style={{
-                                width: '36px',
-                                height: '36px',
-                                borderRadius: '50%',
-                                background: p.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
-                                color: p.isDoublesGuest ? '#D97706' : '#15803D',
-                                border: isSelected ? '2px solid #16A34A' : '1px solid transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 800,
-                                fontSize: '13px',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {(p.name || p.email).slice(0, 2).toUpperCase()}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div
-                                style={{
-                                  fontSize: '13px',
-                                  fontWeight: 800,
-                                  color: '#111827',
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
-                              >
-                                {p.name || p.email.split('@')[0]}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: '11px',
-                                  color: '#64748B',
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
-                              >
-                                {p.isDoublesGuest
-                                  ? `${p.role} • Đi cùng ${p.representedBy}`
-                                  : p.role || 'Bạn chơi cùng sân'}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ flexShrink: 0, marginLeft: '6px' }}>
-                            {isReviewed ? (
-                              <span
-                                style={{
-                                  background: '#DCFCE7',
-                                  color: '#15803D',
-                                  fontSize: '10.5px',
-                                  fontWeight: 700,
-                                  padding: '3px 7px',
-                                  borderRadius: '6px',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                ✓ Đã chấm
-                              </span>
-                            ) : isSelected ? (
-                              <span
-                                style={{
-                                  background: '#DCFCE7',
-                                  color: '#15803D',
-                                  fontSize: '10.5px',
-                                  fontWeight: 800,
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Đang chọn
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  background: '#E2E8F0',
-                                  color: '#64748B',
-                                  fontSize: '10.5px',
-                                  fontWeight: 700,
-                                  padding: '3px 7px',
-                                  borderRadius: '6px',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Đánh giá
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Cột 2: Form Chấm Sao & Viết Nhận Xét Đánh Giá */}
-                <div
-                  style={{
-                    background: '#ffffff',
-                    borderRadius: '16px',
-                    border: '1px solid #E2E8F0',
-                    padding: '18px 20px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                  }}
-                >
-                  {/* Selected player header */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      paddingBottom: '14px',
-                      borderBottom: '1px solid #F1F5F9',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '50%',
-                        background: '#DCFCE7',
-                        color: '#15803D',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 800,
-                        fontSize: '16px',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {(selectedCoPlayer?.name || 'HO').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '16px', fontWeight: 800, color: '#111827' }}>
-                          Đánh Giá: {selectedCoPlayer?.name || 'Hoàng Nam'}
-                        </span>
-                        <span
-                          style={{
-                            background: '#E0F2FE',
-                            color: '#0284C7',
-                            fontSize: '10.5px',
-                            fontWeight: 700,
-                            padding: '2px 7px',
-                            borderRadius: '6px',
-                          }}
-                        >
-                          {selectedCoPlayer?.role || 'Đồng đội đánh cặp'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '2px' }}>
-                        {ticketData?.courtName || '—'} • {ticketData?.gate || '—'} • Check-in lúc {ticketData?.startTime || '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {reviewedPlayerIds.includes(selectedCoPlayer?.id) ? (
-                    <div
-                      style={{
-                        background: '#F0FDF4',
-                        border: '1.5px solid #BBF7D0',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '36px', color: '#16A34A' }}>
-                        task_alt
-                      </span>
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#15803D', marginTop: '6px' }}>
-                        Bạn đã gửi đánh giá Fair Play cho {selectedCoPlayer?.name}!
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#166534', marginTop: '4px' }}>
-                        Theo quy định 2.7, mỗi người chơi chỉ chấm 1 lần cho 1 người trong 1 trận. Điểm số đã được cộng vào hệ thống Fair Play SportNexus.
-                      </div>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleSubmitRateCoPlayer}>
-                      {/* 1. CHẤM ĐIỂM SAO */}
-                      <div
-                        style={{
-                          background: '#F8FAFC',
-                          borderRadius: '14px',
-                          border: '1px solid #E2E8F0',
-                          padding: '14px 16px',
-                          textAlign: 'center',
-                          marginBottom: '16px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: '12px',
-                            fontWeight: 800,
-                            color: '#334155',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.4px',
-                            marginBottom: '8px',
-                          }}
-                        >
-                          1. CHẤM ĐIỂM SAO CHO BẠN CHƠI CÙNG SÂN (BẮT BUỘC)
-                        </div>
-
-                        {/* Interactive Stars */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                          {[1, 2, 3, 4, 5].map((star) => {
-                            const isFilled = star <= (rateHoverStars || rateStars)
-                            return (
-                              <button
-                                key={star}
-                                type="button"
-                                onClick={() => setRateStars(star)}
-                                onMouseEnter={() => setRateHoverStars(star)}
-                                onMouseLeave={() => setRateHoverStars(0)}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  padding: '2px',
-                                  outline: 'none',
-                                  transform: isFilled ? 'scale(1.15)' : 'scale(1)',
-                                  transition: 'transform 0.15s ease',
-                                }}
-                                title={`${star} sao`}
-                              >
-                                <span
-                                  className="material-symbols-outlined"
-                                  style={{
-                                    fontSize: '38px',
-                                    color: isFilled ? '#EAB308' : '#CBD5E1',
-                                    fontVariationSettings: isFilled ? "'FILL' 1" : "'FILL' 0",
-                                    transition: 'color 0.15s ease',
-                                  }}
-                                >
-                                  star
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Label mô tả */}
-                        <div
-                          style={{
-                            marginTop: '6px',
-                            fontSize: '12.5px',
-                            fontWeight: 700,
-                            color: rateStars >= 4 ? '#15803D' : rateStars === 3 ? '#D97706' : '#DC2626',
-                          }}
-                        >
-                          {getStarLabel(rateHoverStars || rateStars)}
-                        </div>
-
-                        {/* Badge công thức quy đổi */}
-                        <div
-                          style={{
-                            marginTop: '10px',
-                            padding: '6px 12px',
-                            background: '#ECFDF5',
-                            borderRadius: '10px',
-                            border: '1px solid #A7F3D0',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '11.5px',
-                            color: '#065F46',
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#059669' }}>
-                            verified_user
-                          </span>
-                          <span>
-                            Quy đổi Fair Play: <strong>{rateStars} sao = +{rateStars * 20} điểm</strong> (Điểm Fair Play = số sao × 20, thang điểm 0 - 100)
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 2. VIẾT NHẬN XÉT ĐÁNH GIÁ */}
-                      <div style={{ marginBottom: '16px' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: '6px',
-                          }}
-                        >
-                          <label
-                            style={{
-                              fontSize: '12.5px',
-                              fontWeight: 800,
-                              color: '#1E293B',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <span>2. Viết Nhận Xét Đánh Giá (Bắt buộc)</span>
-                            <span style={{ color: '#DC2626' }}>*</span>
-                          </label>
-                          <span
-                            style={{
-                              fontSize: '11.5px',
-                              color: writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {writtenReview.trim().length}/10 ký tự tối thiểu
-                          </span>
-                        </div>
-
-                        <textarea
-                          rows={3}
-                          value={writtenReview}
-                          onChange={(e) => setWrittenReview(e.target.value)}
-                          placeholder="Chia sẻ nhận xét về tinh thần thi đấu, sự phối hợp, thái độ fairplay của bạn chơi..."
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            borderRadius: '10px',
-                            border: '1px solid #CBD5E1',
-                            fontSize: '12.5px',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            resize: 'vertical',
-                            fontFamily: 'inherit',
-                          }}
-                        />
-
-                        {/* Gợi ý nhận xét nhanh */}
-                        <div style={{ marginTop: '8px' }}>
-                          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, marginBottom: '5px' }}>
-                            💡 Gợi ý nhận xét nhanh (nhấn để thêm):
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {quickTags.map((tag) => (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => {
-                                  setWrittenReview((prev) => {
-                                    if (!prev.trim()) return tag
-                                    return `${prev}. ${tag}`
-                                  })
-                                }}
-                                style={{
-                                  padding: '4px 9px',
-                                  borderRadius: '8px',
-                                  background: '#F1F5F9',
-                                  border: '1px solid #E2E8F0',
-                                  color: '#334155',
-                                  fontSize: '11px',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = '#DCFCE7'
-                                  e.currentTarget.style.color = '#15803D'
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = '#F1F5F9'
-                                  e.currentTarget.style.color = '#334155'
-                                }}
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Nút gửi đánh giá */}
-                      <button
-                        type="submit"
-                        disabled={!checkInDone || writtenReview.trim().length < 10}
-                        style={{
-                          width: '100%',
-                          padding: '11px 18px',
-                          borderRadius: '12px',
-                          background:
-                            !checkInDone || writtenReview.trim().length < 10
-                              ? '#E2E8F0'
-                              : 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
-                          color:
-                            !checkInDone || writtenReview.trim().length < 10
-                              ? '#94A3B8'
-                              : '#ffffff',
-                          border: 'none',
-                          fontSize: '13px',
-                          fontWeight: 800,
-                          cursor:
-                            !checkInDone || writtenReview.trim().length < 10
-                              ? 'not-allowed'
-                              : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          boxShadow:
-                            !checkInDone || writtenReview.trim().length < 10
-                              ? 'none'
-                              : '0 4px 14px rgba(22, 163, 74, 0.25)',
-                          transition: 'all 0.2s',
-                        }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                          send
-                        </span>
-                        <span>
-                          {!checkInDone
-                            ? 'Vui lòng Check-in vào sân trước khi gửi đánh giá'
-                            : `Gửi Đánh Giá Fair Play (+${rateStars * 20} điểm quy đổi)`}
-                        </span>
-                      </button>
-                    </form>
-                  )}
+                <span style={{ background: '#DCFCE7', color: '#15803D', fontSize: '11px', fontWeight: 800, padding: '3px 9px', borderRadius: '6px', letterSpacing: '0.4px' }}>
+                  HỆ THỐNG FAIRPLAY SPORTNEXUS
+                </span>
+                <h3 style={{ margin: '8px 0 2px', fontSize: '16px', fontWeight: 800, color: '#111827' }}>Đánh giá bạn chơi cùng sân</h3>
+                <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                  Chỉ chấm được những người <strong>đã cùng check-in</strong> trong trận này, mỗi người một lần.
                 </div>
               </div>
+
+              {!checkInDone ? (
+                <div style={{ padding: '22px', borderRadius: '16px', border: '1.5px dashed #CBD5E1', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '34px', color: '#D97706' }}>lock_clock</span>
+                  <div style={{ fontWeight: 800, color: '#1E293B', margin: '6px 0 4px' }}>Đánh giá đang khóa</div>
+                  Đưa mã QR cho chủ sân quét để check-in, sau đó bạn có thể chấm Fair Play cho bạn chơi.
+                </div>
+              ) : !ticketPending || ticketPending.players.length === 0 ? (
+                <div style={{ padding: '22px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid #E2E8F0', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '34px', color: '#15803D' }}>task_alt</span>
+                  <div style={{ fontWeight: 800, color: '#1E293B', margin: '6px 0 4px' }}>Không có ai chờ bạn chấm điểm</div>
+                  Trận này chưa có người khác check-in, hoặc bạn đã chấm hết.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '12px', color: '#475569' }}>
+                    Hạn chấm điểm: <strong>{clockVN(ticketPending.ratingDeadline)} {dateVN(ticketPending.ratingDeadline)}</strong>
+                  </div>
+                  {ticketPending.players.map((p) => (
+                    <div key={p.userId} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '14px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                      <img
+                        src={p.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.fullName)}&background=DCFCE7&color=15803D`}
+                        alt={p.fullName}
+                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#111827' }}>{p.fullName}</div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B' }}>Đã cùng check-in • Chưa được bạn chấm</div>
+                      </div>
+                    </div>
+                  ))}
+                  <Link
+                    to={`/post-match-rating?contextId=${ticketPending.contextId}`}
+                    style={{ marginTop: '4px', padding: '11px 18px', borderRadius: '12px', background: '#15803D', color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: '13.5px', textAlign: 'center' }}
+                  >
+                    Chấm Fair Play ({ticketPending.players.length} người)
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -2581,7 +1684,7 @@ function CheckInQR() {
                       color: '#111827',
                     }}
                   >
-                    Lịch Sử Check-in &amp; Đánh Giá Fairplay Gần Đây
+                    Lịch Sử Check-in Của Tôi
                   </h3>
                   <div style={{ fontSize: '12px', color: '#6B7280', fontWeight: 500, marginTop: '2px' }}>
                     {ticketData?.venueName || '—'} • {ticketData?.startTime || '—'}, {ticketData?.playDate || '—'}
@@ -2599,7 +1702,7 @@ function CheckInQR() {
                     border: '1px solid #E2E8F0',
                   }}
                 >
-                  3 lượt gần nhất
+                  {checkInHistory.totalItems} lượt check-in
                 </div>
               </div>
 
@@ -2655,7 +1758,7 @@ function CheckInQR() {
                           width: '18%',
                         }}
                       >
-                        SỐ TIỀN KÝ QUỸ
+                        LOẠI VÉ
                       </th>
                       <th
                         style={{
@@ -2684,14 +1787,14 @@ function CheckInQR() {
                           width: '18%',
                         }}
                       >
-                        ĐIỂM FAIRPLAY
+                        ĐÚNG GIỜ
                       </th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {historyList.length === 0 && (
-                      <tr><td colSpan={6} style={{ padding: '18px 4px', textAlign: 'center', color: '#6B7280', fontSize: 13 }}>{isLoadingBookings ? 'Đang tải lịch sử…' : 'Bạn chưa có lượt check-in nào.'}</td></tr>
+                      <tr><td colSpan={6} style={{ padding: '18px 4px', textAlign: 'center', color: '#6B7280', fontSize: 13 }}>{isLoadingHistory ? 'Đang tải lịch sử…' : 'Bạn chưa có lượt check-in nào.'}</td></tr>
                     )}
                     {historyList.map((item, index) => {
                       const isCyan = item.sportColor === 'cyan'
@@ -2755,7 +1858,7 @@ function CheckInQR() {
                             </span>
                           </td>
 
-                          {/* 3. SỐ TIỀN KÝ QUỸ */}
+                          {/* 3. LOẠI VÉ */}
                           <td style={{ padding: '11px 12px', whiteSpace: 'nowrap' }}>
                             <div
                               style={{
@@ -2828,7 +1931,7 @@ function CheckInQR() {
                                   letterSpacing: '1px',
                                 }}
                               >
-                                {item.stars ? '★'.repeat(item.stars) : '—'}
+                                {item.isLate ? '⏰' : '✓'}
                               </span>
                               <span
                                 style={{
@@ -2840,7 +1943,7 @@ function CheckInQR() {
                                   borderRadius: '6px',
                                 }}
                               >
-                                {item.stars ? `${item.stars * 20}đ` : 'Chưa có'}
+                                {item.isLate ? 'Check-in muộn' : 'Đúng giờ'}
                               </span>
                             </div>
                           </td>
@@ -3500,24 +2603,8 @@ function CheckInQR() {
                   {matchParticipants.length === 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '4px 0' }}>
                       <span style={{ fontSize: '12px', color: '#9CA3AF', fontStyle: 'italic' }}>
-                        Đã xóa hết người tham gia. Nhập email ở trên để thêm người chơi.
+                        Chưa có người nhận. Nhập email ở trên để thêm người chơi.
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleRestoreDefaultParticipants}
-                        style={{
-                          background: '#F0FDF4',
-                          border: '1px dashed #16A34A',
-                          color: '#15803D',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Khôi phục gợi ý
-                      </button>
                     </div>
                   )}
                 </div>
@@ -3688,7 +2775,7 @@ function CheckInQR() {
               Xác Nhận Check-out Trả Sân
             </h3>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: '0 0 18px 0', lineHeight: 1.5 }}>
-              Bạn đang trả sân <strong>Sân Cầu Lông BWF Pro 01 (Court 3)</strong>. Sau khi check-out thành công, hệ thống sẽ mở quyền viết nhận xét và chấm sao cho bạn chơi cùng sân.
+              Bạn đang trả sân <strong>{ticketData?.venueName} - {ticketData?.courtName}</strong>. Sau khi check-out thành công, hệ thống sẽ mở quyền viết nhận xét và chấm sao cho bạn chơi cùng sân.
             </p>
 
             <div
@@ -3749,508 +2836,6 @@ function CheckInQR() {
                 Xác Nhận Check-out
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== MODAL: ĐÁNH GIÁ NGƯỜI CHƠI CÙNG SÂN (CHẤM SAO + VIẾT) ===================== */}
-      {showRateModal && selectedCoPlayer && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.55)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            animation: 'fadeIn 0.2s ease-out',
-          }}
-          onClick={() => setShowRateModal(false)}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '520px',
-              background: '#ffffff',
-              borderRadius: '24px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              overflow: 'hidden',
-              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div
-              style={{
-                padding: '20px 24px 16px 24px',
-                borderBottom: '1px solid #F1F5F9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '12px',
-                    background: '#DCFCE7',
-                    color: '#15803D',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
-                    rate_review
-                  </span>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
-                    Đánh Giá Người Chơi Cùng Sân
-                  </h3>
-                  <div style={{ fontSize: '11px', color: '#15803D', fontWeight: 700, marginTop: '2px' }}>
-                    ✓ Đã Check-out Thành Công • Court 3
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowRateModal(false)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94A3B8',
-                  cursor: 'pointer',
-                  padding: '4px',
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                  close
-                </span>
-              </button>
-            </div>
-
-            {/* Form Body */}
-            <form onSubmit={handleSubmitRateCoPlayer} style={{ padding: '20px 24px' }}>
-              {/* Thông tin người chơi cùng sân */}
-              <div
-                style={{
-                  background: '#F8FAFC',
-                  borderRadius: '14px',
-                  padding: '12px 14px',
-                  marginBottom: '18px',
-                  border: '1px solid #E2E8F0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      background: '#DCFCE7',
-                      color: '#15803D',
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {(selectedCoPlayer.name || selectedCoPlayer.email).slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#1E293B' }}>
-                      {selectedCoPlayer.name || selectedCoPlayer.email.split('@')[0]}
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#64748B' }}>
-                      {selectedCoPlayer.role || 'Bạn cùng sân'}
-                    </div>
-                    {selectedCoPlayer.isDoublesGuest && (
-                      <span
-                        style={{
-                          background: '#FEF3C7',
-                          color: '#B45309',
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          border: '1px solid #FDE68A',
-                          display: 'inline-block',
-                          marginTop: '2px',
-                        }}
-                      >
-                        🏸 Đánh đôi (Đi cùng {selectedCoPlayer.representedBy})
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Chọn bạn khác nếu có */}
-                {matchParticipants.length > 1 && (
-                  <select
-                    value={selectedCoPlayer.id}
-                    onChange={(e) => {
-                      const target = matchParticipants.find((p) => p.id === e.target.value)
-                      if (target) setSelectedCoPlayer(target)
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '8px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      color: '#334155',
-                      background: '#ffffff',
-                    }}
-                  >
-                    {matchParticipants.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name || p.email.split('@')[0]} {p.isDoublesGuest ? '(Đánh đôi)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Nút mở form thêm bạn đánh đôi (nếu chỉ 1 người đại diện đăng ký slot) */}
-              <div style={{ marginBottom: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddDoublesPartner(!showAddDoublesPartner)}
-                  style={{
-                    width: '100%',
-                    padding: '7px 10px',
-                    borderRadius: '10px',
-                    background: showAddDoublesPartner ? '#FEF3C7' : '#F0FDF4',
-                    border: showAddDoublesPartner ? '1px solid #F59E0B' : '1px dashed #16A34A',
-                    color: showAddDoublesPartner ? '#B45309' : '#15803D',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '5px',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                    {showAddDoublesPartner ? 'expand_less' : 'person_add'}
-                  </span>
-                  {showAddDoublesPartner ? 'Đóng form thêm bạn đánh đôi' : '+ Thêm bạn đánh đôi (Đi cùng đại diện slot)'}
-                </button>
-
-                {showAddDoublesPartner && (
-                  <div
-                    style={{
-                      background: '#FFFBEB',
-                      border: '1px solid #FDE68A',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      marginTop: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                    }}
-                  >
-                    <div style={{ fontSize: '11px', color: '#92400E', fontWeight: 600 }}>
-                      Dành cho trường hợp đánh đôi chỉ có 1 đại diện đặt slot trên app:
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Nhập họ tên / biệt danh bạn đánh đôi..."
-                      value={doublesPartnerName}
-                      onChange={(e) => setDoublesPartnerName(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '7px 10px',
-                        borderRadius: '8px',
-                        border: '1px solid #FCD34D',
-                        fontSize: '12px',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        background: '#ffffff',
-                      }}
-                    />
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                      <select
-                        value={doublesPartnerRole}
-                        onChange={(e) => setDoublesPartnerRole(e.target.value)}
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: '6px',
-                          border: '1px solid #FCD34D',
-                          fontSize: '11px',
-                          background: '#ffffff',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value="Đồng đội đánh cặp">Đồng đội đánh cặp</option>
-                        <option value="Đối thủ đánh đôi">Đối thủ đánh đôi</option>
-                      </select>
-                      <select
-                        value={doublesPartnerRep}
-                        onChange={(e) => setDoublesPartnerRep(e.target.value)}
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: '6px',
-                          border: '1px solid #FCD34D',
-                          fontSize: '11px',
-                          background: '#ffffff',
-                          outline: 'none',
-                        }}
-                      >
-                        {matchParticipants
-                          .filter((p) => !p.isDoublesGuest)
-                          .map((p) => (
-                            <option key={p.id} value={p.name || p.email.split('@')[0]}>
-                              Đi cùng: {p.name || p.email.split('@')[0]}
-                            </option>
-                          ))}
-                        <option value="Người chơi chính">Đi cùng: Người chơi chính</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddDoublesPartner(false)}
-                        style={{
-                          flex: 1,
-                          padding: '6px',
-                          borderRadius: '6px',
-                          background: '#F1F5F9',
-                          border: 'none',
-                          color: '#475569',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddDoublesParticipant}
-                        style={{
-                          flex: 2,
-                          padding: '6px',
-                          borderRadius: '6px',
-                          background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
-                          border: 'none',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Thêm & Chọn Đánh Giá
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 1. Chấm điểm sao */}
-              <div style={{ marginBottom: '18px', textAlign: 'center' }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    color: '#475569',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    marginBottom: '8px',
-                  }}
-                >
-                  1. Chấm Điểm Sao (1 Đến 5 Sao) *
-                </label>
-
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                  {[1, 2, 3, 4, 5].map((s) => {
-                    const isFilled = s <= (rateHoverStars || rateStars)
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setRateStars(s)}
-                        onMouseEnter={() => setRateHoverStars(s)}
-                        onMouseLeave={() => setRateHoverStars(0)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '2px',
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{
-                            fontSize: '36px',
-                            color: isFilled ? '#EAB308' : '#CBD5E1',
-                            fontVariationSettings: isFilled ? "'FILL' 1" : "'FILL' 0",
-                            transition: 'color 0.15s',
-                          }}
-                        >
-                          star
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                <div
-                  style={{
-                    marginTop: '4px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    color: rateStars >= 4 ? '#15803D' : '#D97706',
-                  }}
-                >
-                  {rateStars === 5
-                    ? '5 sao: Xuất sắc & Fairplay'
-                    : rateStars === 4
-                    ? '4 sao: Rất tốt & Nhiệt tình'
-                    : rateStars === 3
-                    ? '3 sao: Khá tốt'
-                    : rateStars === 2
-                    ? '2 sao: Tạm được'
-                    : '1 sao: Cần cải thiện'}
-                </div>
-              </div>
-
-              {/* 2. Viết nhận xét bằng chữ (bắt buộc) */}
-              <div style={{ marginBottom: '18px' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '6px',
-                  }}
-                >
-                  <label style={{ fontSize: '12.5px', fontWeight: 800, color: '#1E293B' }}>
-                    2. Viết Nhận Xét Bằng Chữ (Bắt buộc) *
-                  </label>
-                  <span
-                    style={{
-                      fontSize: '11px',
-                      color: writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {writtenReview.trim().length}/10 ký tự
-                  </span>
-                </div>
-
-                <textarea
-                  rows={3}
-                  value={writtenReview}
-                  onChange={(e) => setWrittenReview(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    border:
-                      writtenReview.trim().length > 0 && writtenReview.trim().length < 10
-                        ? '1.5px solid #F87171'
-                        : '1.5px solid #CBD5E1',
-                    fontSize: '13px',
-                    fontFamily: 'inherit',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    resize: 'vertical',
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = '#16A34A')}
-                  onBlur={(e) => (e.target.style.borderColor = '#CBD5E1')}
-                />
-
-                {/* Quick tags */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
-                  {quickTags.map((tag, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() =>
-                        setWrittenReview((prev) => (prev.trim() ? `${prev}. ${tag}` : tag))
-                      }
-                      style={{
-                        background: '#F1F5F9',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '6px',
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        color: '#334155',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      + {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div style={{ display: 'flex', gap: '10px', paddingTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowRateModal(false)}
-                  style={{
-                    flex: 1,
-                    padding: '10px 0',
-                    borderRadius: '12px',
-                    background: '#F1F5F9',
-                    border: 'none',
-                    color: '#475569',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Đóng
-                </button>
-                <button
-                  type="submit"
-                  disabled={writtenReview.trim().length < 10}
-                  style={{
-                    flex: 2,
-                    padding: '10px 0',
-                    borderRadius: '12px',
-                    background:
-                      writtenReview.trim().length >= 10
-                        ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
-                        : '#CBD5E1',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    cursor: writtenReview.trim().length >= 10 ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow:
-                      writtenReview.trim().length >= 10
-                        ? '0 4px 12px rgba(22, 163, 74, 0.25)'
-                        : 'none',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>
-                    send
-                  </span>
-                  Gửi Đánh Giá Sau Trận
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

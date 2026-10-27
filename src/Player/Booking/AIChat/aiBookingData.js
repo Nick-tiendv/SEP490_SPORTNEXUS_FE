@@ -585,42 +585,29 @@ export function buildSlotsForCourt(court) {
 }
 
 // Tạo thông điệp chào mừng đồng bộ theo vị trí mới của người chơi
+// Lời chào trung tính: không gợi ý sân / ca dựng sẵn, sân và ca thật do Trợ lý AI (BE) trả về khi người dùng hỏi
 export function buildWelcomeMessage(userLocation) {
-  const loc = userLocation || DISTRICT_CENTERS.q7
-  const addressName = loc.address || loc.name || 'Quận 7, TP.HCM'
-  const nowTime = loc.updatedAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-
-  // Tìm sân gần vị trí mới nhất
-  const courtsWithDist = COURTS.map((c) => ({
-    ...c,
-    distance: calculateCourtDistance(c, loc),
-  })).sort((a, b) => a.distance - b.distance)
-
-  const topCourt = courtsWithDist[0] || COURTS[0]
-  const slots = buildSlotsForCourt(topCourt)
-  const goldenSlot = slots.find((s) => s.id === 's5' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
+  const addressName = userLocation?.address || userLocation?.name
+  const nowTime = userLocation?.updatedAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 
   return {
     id: `welcome-${Date.now()}`,
     sender: 'bot',
     time: nowTime,
     text:
-      `Xin chào! Tôi là **SportNexus AI Concierge** — trợ lý đặt sân thể thao thời gian thực.\n\n` +
-      `📍 **Vị trí hiện tại của bạn**: **${addressName}** *(Cập nhật lúc ${nowTime})*.\n\n` +
-      `• **Sân gần nhất**: **${topCourt.name}** (Chỉ cách **${topCourt.distance} km** • ${topCourt.sportName}).\n` +
-      `• **Khung giờ vàng sẵn sàng**: **${goldenSlot.start} - ${goldenSlot.end}** (Giá: **${formatVnd(goldenSlot.price)}**).\n` +
-      `• **Chính sách**: Khóa slot độc quyền **15 phút** chống trùng lịch & Bảo chứng ký quỹ Escrow 24/7 an toàn 100%.\n\n` +
-      `Bạn có thể nhập câu hỏi hoặc bấm **Micro** để nói yêu cầu (ví dụ: *"tìm sân pickleball gần đây"*, *"sân cầu lông nào dưới 180k"*, *"đặt sân lúc 19h30"*).`,
-    recommendedCourt: topCourt,
-    recommendedSlot: goldenSlot,
-    priorityBadge: `📍 GẦN BẠN NHẤT HIỆN TẠI (${topCourt.distance} KM)`,
-    priorityReason: `Khoảng cách tối ưu từ vị trí ${loc.name || addressName} • Khung giờ đẹp sẵn sàng`,
+      `Xin chào! Tôi là **SportNexus AI Concierge**, trợ lý tìm và đặt sân thể thao.
+
+` +
+      (addressName ? `📍 **Khu vực của bạn**: **${addressName}**.
+
+` : '') +
+      `Hãy cho tôi biết môn, khu vực, ngày giờ hoặc mức giá bạn muốn, tôi sẽ tìm các cơ sở và ca còn trống phù hợp ` +
+      `(ví dụ: "tìm sân pickleball ở Thủ Đức tối nay", "sân cầu lông dưới 150k ngày mai").`,
     quickReplies: [
-      `Đặt nhanh ${topCourt.name}`,
-      '💰 Sân cầu lông giá rẻ nhất',
-      '🏓 Sân Pickleball tốt nhất',
-      '⏰ Khung giờ trống tối nay',
-      '🛡️ Cơ chế giữ chỗ 15p & Escrow',
+      '🏸 Sân cầu lông còn trống tối nay',
+      '🏓 Sân pickleball gần tôi',
+      '💰 Sân giá rẻ nhất ngày mai',
+      '🛡️ Chính sách huỷ và hoàn tiền',
     ],
   }
 }

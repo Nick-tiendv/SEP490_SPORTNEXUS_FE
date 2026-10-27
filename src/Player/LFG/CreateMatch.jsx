@@ -4,286 +4,47 @@ import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
+import { searchFacilities } from '../../api/player/facilityApi.js'
+import { getFacilityAvailability } from '../../api/player/bookingApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
-// District courts database for dynamic map & closest court detection
-const DISTRICT_DATA = {
-  q7: {
-    name: 'Quận 7',
-    label: 'Quận 7 (Đang chọn)',
-    mapQuery: 'CLB The Thao Nam Sai Gon, Quan 7, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q7-1',
-        name: 'CLB Thể Thao Nam Sài Gòn',
-        address: 'Đường số 9, P. Tân Phú, Quận 7',
-        distance: '2.1 km',
-        courtCount: '4 sân thảm',
-        price: '98k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q7-2',
-        name: 'SportNexus Arena Q.7',
-        address: '35 Huỳnh Tấn Phát, Tân Thuận Đông, Quận 7',
-        distance: '0.8 km',
-        courtCount: '5 sân Yonex',
-        price: '110k/h',
-        rating: 4.95,
-      },
-      {
-        id: 'c-q7-3',
-        name: 'Sân Cầu Lông & Pickleball Tân Mỹ',
-        address: 'Đường Tân Mỹ, P. Tân Phú, Quận 7',
-        distance: '3.2 km',
-        courtCount: '6 sân thảm tiêu chuẩn',
-        price: '85k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  binhthanh: {
-    name: 'Bình Thạnh',
-    label: 'Bình Thạnh',
-    mapQuery: 'San Cau Long Tre Xanh, Dinh Bo Linh, Binh Thanh, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-bt-1',
-        name: 'Sân Cầu Lông Tre Xanh',
-        address: '128 Đinh Bộ Lĩnh, P.26, Bình Thạnh',
-        distance: '1.8 km',
-        courtCount: '6 sân thảm xịn',
-        price: '90k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-bt-2',
-        name: 'CLB YONEX Điện Biên Phủ',
-        address: '128 Điện Biên Phủ, P.25, Bình Thạnh',
-        distance: '3.5 km',
-        courtCount: '8 sân thi đấu BWF',
-        price: '105k/h',
-        rating: 4.85,
-      },
-      {
-        id: 'c-bt-3',
-        name: 'Pickleball D2 Saigon Hub',
-        address: 'Đường D2 (Nguyễn Gia Trí), Bình Thạnh',
-        distance: '2.4 km',
-        courtCount: '4 sân ngoài trời',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  phunhuan: {
-    name: 'Phú Nhuận',
-    label: 'Phú Nhuận',
-    mapQuery: 'CLB The Thao Rach Mieu, Hoa Phuong, Phu Nhuan, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-pn-1',
-        name: 'CLB Thể Thao Rạch Miễu',
-        address: 'Số 1 Hoa Phượng, P.2, Phú Nhuận',
-        distance: '1.5 km',
-        courtCount: '10 sân tiêu chuẩn',
-        price: '115k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-pn-2',
-        name: 'Sân Cầu Lông Ga Trực Thăng',
-        address: 'Hoàng Văn Thụ, P.8, Phú Nhuận',
-        distance: '2.9 km',
-        courtCount: '5 sân thảm PU',
-        price: '95k/h',
-        rating: 4.75,
-      },
-    ],
-  },
-  thuduc: {
-    name: 'TP. Thủ Đức',
-    label: 'TP. Thủ Đức',
-    mapQuery: 'D-Pickleball Hub Thao Dien, Thu Duc, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-td-1',
-        name: 'D-Pickleball & Badminton Hub',
-        address: '28 Thảo Điền, TP. Thủ Đức',
-        distance: '3.1 km',
-        courtCount: '8 sân máy lạnh',
-        price: '120k/h',
-        rating: 4.95,
-      },
-      {
-        id: 'c-td-2',
-        name: 'CLB Cầu Lông Hiệp Phú',
-        address: 'Đường Võ Văn Ngân, TP. Thủ Đức',
-        distance: '4.8 km',
-        courtCount: '6 sân thảm',
-        price: '80k/h',
-        rating: 4.7,
-      },
-    ],
-  },
-  q1: {
-    name: 'Quận 1',
-    label: 'Quận 1',
-    mapQuery: 'San Cau Long Tao Dan, Quan 1, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q1-1',
-        name: 'Sân Cầu Lông Tao Đàn Q.1',
-        address: 'Số 1 Huyền Trân Công Chúa, Bến Thành, Q.1',
-        distance: '1.2 km',
-        courtCount: '6 sân thảm cao cấp',
-        price: '130k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q1-2',
-        name: 'CLB Thể Thao Hoa Lư',
-        address: 'Số 2 Đinh Tiên Hoàng, Đa Kao, Q.1',
-        distance: '2.0 km',
-        courtCount: '8 sân đa năng',
-        price: '125k/h',
-        rating: 4.85,
-      },
-    ],
-  },
-  q2: {
-    name: 'Quận 2',
-    label: 'Quận 2 (Thảo Điền / An Phú)',
-    mapQuery: 'San Cau Long An Phu, Quan 2, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q2-1',
-        name: 'CLB Cầu Lông & Pickleball An Phú',
-        address: 'Đường Thảo Điền, An Phú, TP. Thủ Đức (Quận 2)',
-        distance: '2.7 km',
-        courtCount: '6 sân thảm BWF',
-        price: '115k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q2-2',
-        name: 'Thảo Điền Sports Hub',
-        address: '12 Quốc Hương, Thảo Điền, Quận 2',
-        distance: '3.4 km',
-        courtCount: '4 sân ngoài trời',
-        price: '100k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  q3: {
-    name: 'Quận 3',
-    label: 'Quận 3',
-    mapQuery: 'CLB The Thao Ho Xuan Huong, Quan 3, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q3-1',
-        name: 'CLB Thể Thao Hồ Xuân Hương',
-        address: 'Số 2 Hồ Xuân Hương, P.6, Quận 3',
-        distance: '2.5 km',
-        courtCount: '8 sân máy lạnh tiêu chuẩn',
-        price: '120k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q3-2',
-        name: 'Sân Cầu Lông Ga Sài Gòn',
-        address: 'Số 1 Nguyễn Thông, P.9, Quận 3',
-        distance: '3.1 km',
-        courtCount: '4 sân thảm cao cấp',
-        price: '95k/h',
-        rating: 4.75,
-      },
-    ],
-  },
-  q4: {
-    name: 'Quận 4',
-    label: 'Quận 4',
-    mapQuery: 'CLB The Thao Khanh Hoi, Quan 4, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q4-1',
-        name: 'Trung Tâm Thể Thao Khánh Hội',
-        address: 'Đường Hoàng Diệu, P.5, Quận 4',
-        distance: '1.9 km',
-        courtCount: '6 sân thảm tiêu chuẩn',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  q10: {
-    name: 'Quận 10',
-    label: 'Quận 10',
-    mapQuery: 'CLB The Thao Ky Hoa, Quan 10, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q10-1',
-        name: 'CLB Cầu Lông & Tennis Kỳ Hòa',
-        address: 'Sư Vạn Hạnh, P.12, Quận 10',
-        distance: '2.8 km',
-        courtCount: '10 sân tiêu chuẩn',
-        price: '110k/h',
-        rating: 4.85,
-      },
-      {
-        id: 'c-q10-2',
-        name: 'Sân Cầu Lông Bắc Hải',
-        address: 'Đường Bắc Hải, P.15, Quận 10',
-        distance: '3.6 km',
-        courtCount: '5 sân thảm PU',
-        price: '90k/h',
-        rating: 4.7,
-      },
-    ],
-  },
-  tanbinh: {
-    name: 'Tân Bình',
-    label: 'Tân Bình',
-    mapQuery: 'CLB Cau Long Hoang Hoa Tham, Tan Binh, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-tb-1',
-        name: 'CLB Cầu Lông Viettel Hoàng Hoa Thám',
-        address: '158 Hoàng Hoa Thám, P.12, Tân Bình',
-        distance: '4.2 km',
-        courtCount: '12 sân thảm cao cấp',
-        price: '105k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-tb-2',
-        name: 'Sân Cầu Lông & Pickleball Cộng Hòa',
-        address: '19 Cộng Hòa, P.12, Tân Bình',
-        distance: '3.9 km',
-        courtCount: '6 sân thi đấu',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  govap: {
-    name: 'Gò Vấp',
-    label: 'Gò Vấp',
-    mapQuery: 'CLB Cau Long Dat Duc, Go Vap, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-gv-1',
-        name: 'CLB Cầu Lông Đạt Đức Gò Vấp',
-        address: '5A Lương Ngọc Quyến, P.5, Gò Vấp',
-        distance: '5.1 km',
-        courtCount: '8 sân thảm',
-        price: '85k/h',
-        rating: 4.8,
-      },
-    ],
-  },
+// Môn trên giao diện -> tên môn trong danh mục BE
+const SPORT_NAMES = {
+  badminton: 'cầu lông',
+  pickleball: 'pickleball',
+  football: 'bóng đá',
+  basketball: 'bóng rổ',
+  tennis: 'tennis',
 }
+
+const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const clock = (v) => new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+const vnd = (n) => new Intl.NumberFormat('vi-VN').format(Number(n) || 0)
+const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+// Gom cơ sở thật (GET /api/v1/facilities/search) theo quận để chọn khu vực
+const groupByDistrict = (facilities) => {
+  const map = {}
+  facilities.forEach((f) => {
+    const name = f.district || f.province || 'Khác'
+    const key = normalize(name).replace(/[^a-z0-9]/g, '') || 'khac'
+    if (!map[key]) map[key] = { name, label: name, courts: [] }
+    map[key].courts.push({
+      id: f.id,
+      name: f.name,
+      address: f.address || '',
+      distance: f.distanceKm != null ? `${Number(f.distanceKm).toFixed(1)} km` : name,
+      courtCount: `${f.courtCount || 0} sân`,
+      price: f.minPrice ? `${Math.round(f.minPrice / 1000)}k/h` : '—',
+      rating: f.averageRating,
+      lat: f.latitude,
+      lng: f.longitude,
+      sports: (f.sports || []).map((x) => normalize(x.name)),
+    })
+  })
+  return map
+}
+
 
 function CreateMatch() {
   const currentUser = useCurrentUser()
@@ -304,28 +65,21 @@ function CreateMatch() {
     return 'Thủ Đức'
   })
 
-  const detectDistrictKey = (loc = '') => {
-    const norm = loc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    if (norm.includes('thu duc') || norm.includes('thao dien') || norm.includes('quan 2') || norm.includes('q2')) return 'thuduc'
-    if (norm.includes('binh thanh')) return 'binhthanh'
-    if (norm.includes('quan 7') || norm.includes('q7') || norm.includes('phu my hung')) return 'q7'
-    if (norm.includes('quan 1') || norm.includes('q1')) return 'q1'
-    if (norm.includes('phu nhuan')) return 'phunhuan'
-    if (norm.includes('quan 10') || norm.includes('q10')) return 'q10'
-    return 'thuduc'
-  }
-
-  // Khởi tạo quận và sân mặc định đồng bộ từ Hồ sơ cá nhân
-  const userDistrictKey = detectDistrictKey(userProfileLocation)
-  const [selectedDistrict, setSelectedDistrict] = useState(userDistrictKey)
+  // Cơ sở thật theo quận
+  const [districtData, setDistrictData] = useState({})
+  useEffect(() => {
+    searchFacilities({ pageSize: 100 })
+      .then((res) => setDistrictData(groupByDistrict(res.items || [])))
+      .catch(() => toast.error('Không tải được danh sách cơ sở.'))
+  }, [])
+  const districtKeys = Object.keys(districtData)
+  const userDistrictKey = districtKeys.find((k) => normalize(userProfileLocation).includes(k) || k.includes(normalize(userProfileLocation).replace(/[^a-z0-9]/g, ''))) || districtKeys[0]
+  const [pickedDistrict, setSelectedDistrict] = useState(null)
+  const selectedDistrict = pickedDistrict && districtData[pickedDistrict] ? pickedDistrict : userDistrictKey
   const [districtSearchQuery, setDistrictSearchQuery] = useState('')
   const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false)
-  const [selectedCourtId, setSelectedCourtId] = useState(() => {
-    return DISTRICT_DATA[userDistrictKey]?.courts[0]?.id || 'c-td-1'
-  })
+  const [pickedCourtId, setSelectedCourtId] = useState(null)
   const [selectedDate, setSelectedDate] = useState('today') // 'today' | 'tomorrow'
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState('17:30 - 19:30')
-  const [preferredTimeRange, setPreferredTimeRange] = useState('18:00 - 20:30')
 
   // Formats (multi-select)
   const [selectedFormats, setSelectedFormats] = useState(['mixed']) // 'mixed', 'men', 'women', 'single'
@@ -365,12 +119,12 @@ function CreateMatch() {
   const isEditMode = Boolean(editCardId)
   // Kèo LFG phải gắn với một ca sân thật, truyền sang từ màn hình chọn ca.
   const initialSlotId = location.state?.courtSlotId || location.state?.slotId || null
-  const [courtSlotId] = useState(initialSlotId)
+  const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
   const [slotsNeeded, setSlotsNeeded] = useState(3)
   const [pricePerPerson, setPricePerPerson] = useState('')
   const [requireApproval, setRequireApproval] = useState(false)
   const [description, setDescription] = useState('')
-  const [courtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
+  const [courtFee, setCourtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
   const [createError, setCreateError] = useState(null)
 
   // Tải dữ liệu kèo cũ khi ở chế độ chỉnh sửa: GET /api/v1/lfgs/{cardId}
@@ -407,21 +161,14 @@ function CreateMatch() {
     return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
   }, [])
 
-  // When district changes, automatically select the first closest court of that district
-  useEffect(() => {
-    const courts = DISTRICT_DATA[selectedDistrict]?.courts || []
-    if (courts.length > 0) {
-      setSelectedCourtId(courts[0].id)
-    }
-  }, [selectedDistrict])
-
-  // Current district object & active court
-  const currentDistrictData = DISTRICT_DATA[selectedDistrict] || DISTRICT_DATA.q7
+  // Khu vực & cơ sở đang chọn
+  const currentDistrictData = districtData[selectedDistrict] || { name: 'Đang tải…', courts: [] }
   const currentCourt =
-    currentDistrictData.courts.find((c) => c.id === selectedCourtId) || currentDistrictData.courts[0]
+    currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
+  const selectedCourtId = currentCourt.id
 
-  // Filtered districts based on user search query (by district name or court name/address)
-  const filteredDistricts = Object.entries(DISTRICT_DATA).filter(([, item]) => {
+  // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở
+  const filteredDistricts = Object.entries(districtData).filter(([, item]) => {
     if (!districtSearchQuery.trim()) return true
     const q = districtSearchQuery.toLowerCase().trim()
     const matchName = item.name.toLowerCase().includes(q)
@@ -431,11 +178,44 @@ function CreateMatch() {
     return matchName || matchCourts
   })
 
-  // Select district from search dropdown
   const handleSelectDistrict = (key) => {
     setSelectedDistrict(key)
+    setSelectedCourtId(null)
     setDistrictSearchQuery('')
     setIsDistrictDropdownOpen(false)
+  }
+
+  // Ca trống thật của cơ sở đang chọn (GET /api/v1/facilities/{id}/availability)
+  const playDate = new Date()
+  if (selectedDate === 'tomorrow') playDate.setDate(playDate.getDate() + 1)
+  const playDateStr = toDateStr(playDate)
+  const [availability, setAvailability] = useState({ key: '', slots: [] })
+  const availabilityKey = selectedCourtId ? `${selectedCourtId}|${playDateStr}|${sport}` : ''
+  useEffect(() => {
+    if (isEditMode || !availabilityKey) return undefined
+    const [facilityId, date, sportKey] = availabilityKey.split('|')
+    let cancelled = false
+    getFacilityAvailability(facilityId, date)
+      .then((res) => {
+        if (cancelled) return
+        const wanted = SPORT_NAMES[sportKey]
+        const slots = (res?.courts || [])
+          .filter((c) => c.isBookable !== false && (!wanted || normalize(c.sportName || '').includes(normalize(wanted))))
+          .flatMap((c) => (c.slots || []).filter((x) => x.isBookable && !x.isPast).map((x) => ({ ...x, courtName: c.courtName })))
+          .sort((x, y) => new Date(x.startTime) - new Date(y.startTime))
+        setAvailability({ key: availabilityKey, slots })
+      })
+      .catch(() => !cancelled && setAvailability({ key: availabilityKey, slots: [] }))
+    return () => { cancelled = true }
+  }, [availabilityKey, isEditMode])
+  const availableSlots = availability.key === availabilityKey ? availability.slots : []
+  const loadingSlots = Boolean(availabilityKey) && availability.key !== availabilityKey
+  const [pickedSlot, setPickedSlot] = useState(null)
+
+  const handlePickSlot = (slot) => {
+    setPickedSlot(slot)
+    setCourtSlotId(slot.id)
+    setCourtFee(Number(slot.price) || 0)
   }
 
   // Toggle format helper
@@ -456,7 +236,7 @@ function CreateMatch() {
     setCreateError(null)
 
     if (!isEditMode && !courtSlotId) {
-      setCreateError('Chưa chọn ca sân. Vui lòng chọn sân và ca trống trước khi tạo kèo.')
+      setCreateError('Chưa chọn ca sân. Vui lòng chọn cơ sở và một ca trống ở mục 03 trước khi tạo kèo.')
       setSubmitting(false)
       return
     }
@@ -866,121 +646,82 @@ function CreateMatch() {
                 </div>
               </div>
 
-              {/* 03. KHUNG GIỜ CẦN THIẾT (PROMINENT & HIGHLIGHTED) */}
+              {/* 03. CHỌN CA TRỐNG (GET /api/v1/facilities/{id}/availability) */}
               <div className="relative rounded-3xl bg-gradient-to-br from-[#FFFDF9] via-[#FAFBF8] to-[#F2F9F3] border-2 border-[#86EFAC] p-5 sm:p-6 shadow-[0_8px_30px_rgba(45,95,63,0.08)] overflow-hidden">
-                {/* Glowing neon accent line */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#F59E0B] via-[#10B981] to-[#2D5F3F]" />
 
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#F59E0B] text-[20px] animate-bounce">
-                      local_fire_department
-                    </span>
+                    <span className="material-symbols-outlined text-[#F59E0B] text-[20px]">event_available</span>
                     <label className="text-[13px] font-black text-[#111827] uppercase tracking-wide">
-                      03. KHUNG GIỜ CẦN THIẾT
+                      03. CHỌN CA TRỐNG TẠI {currentCourt.name}
                     </label>
                   </div>
 
                   <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-gray-200 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate('today')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        selectedDate === 'today'
-                          ? 'bg-[#2D5F3F] text-white shadow-2xs'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Hôm nay (T6, ...)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate('tomorrow')}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        selectedDate === 'tomorrow'
-                          ? 'bg-[#2D5F3F] text-white shadow-2xs'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      Ngày mai
-                    </button>
+                    {[['today', 0], ['tomorrow', 1]].map(([key, plus]) => {
+                      const d = new Date()
+                      d.setDate(d.getDate() + plus)
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setSelectedDate(key)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            selectedDate === key ? 'bg-[#2D5F3F] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                        >
+                          {plus === 0 ? 'Hôm nay' : 'Ngày mai'} ({d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
-                {/* PROMINENT Preferred Time Range Card */}
-                <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-white to-[#F0FDF4] border-2 border-[#86EFAC] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md shadow-[#2D5F3F]/10 relative overflow-hidden mb-4">
-                  {/* Glowing background halo */}
-                  <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-[#34D399]/15 rounded-full blur-2xl pointer-events-none" />
-
-                  <div className="flex items-center gap-4 relative z-10">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] flex items-center justify-center text-white shadow-md shadow-[#F59E0B]/30 shrink-0">
-                      <span className="material-symbols-outlined text-[28px] animate-pulse">
-                        alarm_on
-                      </span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-black uppercase tracking-wider text-[#15803D]">
-                          KHUNG GIỜ CHỌN ƯU TIÊN
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] text-[10px] font-black uppercase">
-                          Hot Slot
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2.5 mt-1">
-                        <span className="text-[26px] sm:text-[30px] font-black text-[#111827] tracking-tight leading-none">
-                          {preferredTimeRange}
-                        </span>
-                        <span className="text-xs sm:text-sm text-[#15803D] font-bold">
-                          (2.5 giờ sân chuẩn)
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px] text-amber-500">
-                          bolt
-                        </span>
-                        Tỷ lệ ghép tự động thành công: <strong>98.4%</strong> trong khung giờ này
-                      </p>
-                    </div>
+                {/* Ca đã chọn */}
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-white to-[#F0FDF4] border-2 border-[#86EFAC] flex items-center gap-4 shadow-md shadow-[#2D5F3F]/10 mb-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] flex items-center justify-center text-white shrink-0">
+                    <span className="material-symbols-outlined text-[28px]">alarm_on</span>
                   </div>
-
-                  <div className="flex flex-col items-start sm:items-end gap-2 relative z-10 shrink-0">
-                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#FEF3C7] to-[#FDE68A] text-[#B45309] border border-[#F59E0B]/40 text-xs font-black uppercase tracking-wide shadow-xs">
-                      <span>🔥</span>
-                      GIỜ VÀNG CAO ĐIỂM
-                    </span>
-                    <span className="text-[11px] text-gray-500 font-semibold">
-                      Cam kết giữ chỗ Escrow
-                    </span>
+                  <div>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-[#15803D]">CA SÂN CỦA KÈO</span>
+                    {pickedSlot ? (
+                      <>
+                        <div className="text-[26px] font-black text-[#111827] tracking-tight leading-none mt-1">
+                          {clock(pickedSlot.startTime)} - {clock(pickedSlot.endTime)}
+                        </div>
+                        <p className="text-[12px] text-gray-500 mt-1">
+                          {pickedSlot.courtName} • {new Date(pickedSlot.startTime).toLocaleDateString('vi-VN')} • {vnd(pickedSlot.price)} đ
+                        </p>
+                      </>
+                    ) : (
+                      <div className="text-[15px] font-bold text-gray-500 mt-1">
+                        {courtSlotId ? 'Đã chọn ca từ màn hình đặt sân' : 'Chưa chọn ca, hãy chọn một ca trống bên dưới'}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Quick Suggestion Time Pills */}
-                <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                  <span className="text-gray-500 font-bold text-[11px] mr-1 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">tune</span>
-                    Chọn giờ khác nhanh:
-                  </span>
-                  {[
-                    { id: 'morning', label: '06:00 - 08:00 (Sáng sớm)' },
-                    { id: 'afternoon', label: '17:30 - 19:30 (Chiều tối)' },
-                    { id: 'prime', label: '18:00 - 20:30 (Tối vàng)' },
-                    { id: 'night', label: '20:00 - 22:00 (Tối muộn)' },
-                  ].map((t) => (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {loadingSlots && <span className="text-gray-500">Đang tải ca trống…</span>}
+                  {!loadingSlots && availableSlots.length === 0 && (
+                    <span className="text-gray-500">Cơ sở này không còn ca trống cho môn đã chọn trong ngày.</span>
+                  )}
+                  {availableSlots.slice(0, 24).map((slot) => (
                     <button
-                      key={t.id}
+                      key={slot.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedTimeSlot(t.label)
-                        setPreferredTimeRange(t.label.split(' ')[0] + ' - ' + t.label.split(' ')[2])
-                      }}
-                      className={`px-3.5 py-2 rounded-xl font-extrabold transition-all cursor-pointer ${
-                        selectedTimeSlot === t.label
+                      onClick={() => handlePickSlot(slot)}
+                      className={`px-3 py-2 rounded-xl font-extrabold transition-all cursor-pointer text-left ${
+                        courtSlotId === slot.id
                           ? 'bg-[#2D5F3F] text-white shadow-sm'
                           : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300'
                       }`}
                     >
-                      {t.label}
+                      {clock(slot.startTime)} - {clock(slot.endTime)}
+                      <span className={`block text-[10px] font-semibold ${courtSlotId === slot.id ? 'text-green-100' : 'text-gray-400'}`}>
+                        {slot.courtName} • {Math.round(slot.price / 1000)}k
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -992,9 +733,6 @@ function CreateMatch() {
                   <label className="text-[12px] font-black text-[#111827] uppercase tracking-wide">
                     04. TIÊU CHÍ GHÉP TRẬN &amp; CẤU HÌNH KÈO
                   </label>
-                  <span className="text-[11px] font-extrabold text-[#15803D]">
-                    Tối ưu ghép 99.2%
-                  </span>
                 </div>
 
                 {/* Thể thức thi đấu */}
@@ -1319,7 +1057,7 @@ function CreateMatch() {
                     <span>CỤM SÂN TRONG BÁN KÍNH</span>
                   </div>
                   <span className="text-[11px] font-extrabold text-[#15803D]">
-                    {currentDistrictData.courts.length} SÂN TRỐNG KHẢ DỤNG
+                    {currentDistrictData.courts.length} CƠ SỞ TRONG KHU VỰC
                   </span>
                 </div>
 
@@ -1329,7 +1067,7 @@ function CreateMatch() {
                     title="Bản đồ cụm sân thể thao"
                     className="w-full h-full border-0 pointer-events-auto"
                     src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      currentCourt.name + ', ' + currentDistrictData.name + ', TP Ho Chi Minh'
+                      currentCourt.lat ? `${currentCourt.lat},${currentCourt.lng}` : `${currentCourt.name}, ${currentDistrictData.name}`
                     )}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
                     loading="lazy"
                   />
@@ -1357,7 +1095,7 @@ function CreateMatch() {
                         <span className="truncate">{currentCourt.name}</span>
                       </p>
                       <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                        Cách bạn {currentCourt.distance} • {currentCourt.courtCount}
+                        {currentCourt.address || currentCourt.distance} • {currentCourt.courtCount}
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-md bg-[#EAF7EE] text-[#15803D] font-black text-xs shrink-0">
@@ -1375,7 +1113,7 @@ function CreateMatch() {
                     <button
                       key={court.id}
                       type="button"
-                      onClick={() => setSelectedCourtId(court.id)}
+                      onClick={() => { setSelectedCourtId(court.id); setPickedSlot(null) }}
                       className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between cursor-pointer ${
                         selectedCourtId === court.id
                           ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] font-bold'
@@ -1416,42 +1154,6 @@ function CreateMatch() {
                   <span className="text-xs font-black text-[#15803D]">
                     {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
                   </span>
-                </div>
-              </div>
-
-              {/* Card 3: TỈ LỆ KHỚP KÈO DỰ BÁO */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
-                    TỈ LỆ KHỚP KÈO DỰ BÁO
-                  </span>
-                  <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
-                  <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng trình độ trực tuyến
-                  </p>
-                </div>
-
-                {/* Donut progress 88% */}
-                <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path
-                      className="text-gray-100"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-[#2D5F3F]"
-                      strokeDasharray="88, 100"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <span className="absolute text-xs font-black text-[#111827]">88%</span>
                 </div>
               </div>
 
