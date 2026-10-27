@@ -73,6 +73,9 @@ function App() {
         <Route path="/verify-account" element={<VerifyAccount />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/test-court-finder" element={<MapBooking />} />
+        <Route path="/test-split-payment" element={<SplitPayment />} />
+        <Route path="/test-create-match" element={<CreateMatch />} />
 
         {/* Onboarding */}
 

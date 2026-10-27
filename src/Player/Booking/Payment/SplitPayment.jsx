@@ -1,5 +1,4 @@
-// SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { initialsOf, useCurrentUser } from '../../../hooks/useCurrentUser.js'
@@ -92,6 +91,28 @@ function SplitPayment() {
     'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop'
   const sportLabel = state.sport === 'pickleball' ? 'PICKLEBALL CHUYÊN NGHIỆP' : 'CẦU LÔNG CHUYÊN NGHIỆP'
   const floorType = state.subCourtDesc || 'Sân đạt chuẩn thi đấu'
+
+  const bookingDateStr = (state.date || new Date().toISOString()).slice(0, 10)
+  const displayBookingDate = useMemo(() => {
+    if (state.dateLabel) return state.dateLabel
+    if (!state.date) return 'Hôm nay'
+    try {
+      const parts = bookingDateStr.split('-').map(Number)
+      const d = new Date(parts[0], parts[1] - 1, parts[2])
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      d.setHours(0, 0, 0, 0)
+      const diffDays = Math.round((d - today) / (1000 * 60 * 60 * 24))
+      const dayNames = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+      const dayName = dayNames[d.getDay()]
+      const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+      if (diffDays === 0) return `Hôm nay (${dayName}, ${dateFormatted})`
+      if (diffDays === 1) return `Ngày mai (${dayName}, ${dateFormatted})`
+      return `${dayName} (${dateFormatted}/${d.getFullYear()})`
+    } catch {
+      return state.date
+    }
+  }, [state.date, state.dateLabel, bookingDateStr])
 
   // Booking step: 'confirm' | 'bank_qr' | 'ticket_pass'
   const [step, setStep] = useState('confirm')
@@ -975,7 +996,7 @@ function SplitPayment() {
               ? 'Đặt sân qua PayOS thành công (Trạng thái: PENDING)!'
               : 'Đặt sân & Thanh toán PayOS thành công (PAID)!',
             message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
-            details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
+            details: `Khung giờ: ${slotTime} (${displayBookingDate}) • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
             time: 'Vừa xong',
             unread: true,
             link: '/checkin',
@@ -1193,7 +1214,7 @@ function SplitPayment() {
                     <div className="sp-stat-item">
                       <small>KHUNG GIỜ</small>
                       <strong>{slotTime}</strong>
-                      <span>Hôm nay (T6, 24/10)</span>
+                      <span>{displayBookingDate}</span>
                     </div>
                     <div className="sp-stat-item">
                       <small>TỔNG TIỀN ({hours}H)</small>
@@ -1610,7 +1631,7 @@ function SplitPayment() {
                   <div className="sp-receipt-slot-highlight">
                     <span className="material-symbols-outlined">schedule</span>
                     <strong>{slotTime}</strong>
-                    <span>• Hôm nay {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
+                    <span>• {displayBookingDate} {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
                   </div>
                 </div>
                 <div className="sp-receipt-line">
@@ -2105,14 +2126,6 @@ function SplitPayment() {
 
               <div className="sp-ticket-token-id">MÃ VÉ CHECK-IN: #{qrToken}</div>
 
-              <div className="sp-ticket-escrow-pledge">
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>
-                  shield
-                </span>
-                <span>
-                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công. Sau giờ chơi, tiền giữ được chuyển cho chủ sân (trừ phí nền tảng).
-                </span>
-              </div>
             </div>
 
             {/* Khung Tải ảnh vé QR về máy, Gửi mã cho bạn chơi, và HỦY ĐƠN VÀ HOÀN TIỀN (Image 2) */}
@@ -2230,7 +2243,7 @@ function SplitPayment() {
                 <div className="sp-spec-item">
                   <small>KHUNG GIỜ THI ĐẤU</small>
                   <strong style={{ color: '#111827' }}>{slotTime} ({hours}H)</strong>
-                  <span style={{ fontSize: 11.5, color: '#6b7280' }}>Hôm nay (T6, 24/10/2026)</span>
+                  <span style={{ fontSize: 11.5, color: '#6b7280' }}>{displayBookingDate}</span>
                 </div>
 
                 <div className="sp-spec-item">
@@ -2260,100 +2273,7 @@ function SplitPayment() {
               </div>
             </div>
 
-            {/* Khối 3: Phản Hồi Xác Nhận Từ Máy Chủ (Server API Response) */}
-            <div className="sp-info-card" style={{ border: '1.5px solid #86efac', background: '#f8fafc' }}>
-              <div className="sp-info-card-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
-                <div className="sp-info-header-title">
-                  <span className="material-symbols-outlined" style={{ color: '#16a34a' }}>cloud_done</span>
-                  <span style={{ fontWeight: 700, color: '#15803d' }}>Phản Hồi Xác Nhận Từ Máy Chủ (API Response)</span>
-                </div>
-                <span className="sp-badge-closed" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', fontWeight: 700 }}>
-                  HTTP 201 CREATED
-                </span>
-              </div>
 
-              <div style={{ padding: '14px 16px', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Đơn Đặt Sân (Booking ID):</span>
-                  <strong style={{ fontFamily: 'monospace', color: '#0f172a', background: '#e2e8f0', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {bookingResult?.id || bookingResult?.bookingId || (typeof bookingResult === 'string' ? bookingResult : 'SNX-' + Date.now())}
-                  </strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Trạng Thái Đơn Hàng:</span>
-                  <span style={{ fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {bookingResult?.status || qrTicketData?.status || 'PAID (Đã thanh toán)'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Vé Check-in (QR Token):</span>
-                  <strong style={{ fontFamily: 'monospace', color: '#166534', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    #{qrToken}
-                  </strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>Thời Điểm Xác Nhận:</span>
-                  <span style={{ color: '#334155', fontSize: 12, fontWeight: 500 }}>
-                    {bookingResult?.createdAt ? new Date(bookingResult.createdAt).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN')}
-                  </span>
-                </div>
-
-                {/* Nút bấm xem JSON thô từ Server */}
-                <div style={{ marginTop: 6, borderTop: '1px dashed #cbd5e1', paddingTop: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowRawResponse(prev => !prev)}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      padding: '8px 12px',
-                      background: showRawResponse ? '#e2e8f0' : '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#334155',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                      {showRawResponse ? 'expand_less' : 'data_object'}
-                    </span>
-                    <span>{showRawResponse ? 'Thu gọn dữ liệu JSON' : 'Xem Chi Tiết Dữ Liệu Phản Hồi (JSON Response)'}</span>
-                  </button>
-
-                  {showRawResponse && (
-                    <pre
-                      style={{
-                        marginTop: 10,
-                        padding: 12,
-                        background: '#0f172a',
-                        color: '#38bdf8',
-                        borderRadius: 6,
-                        fontSize: 11,
-                        lineHeight: 1.5,
-                        overflowX: 'auto',
-                        maxHeight: 250,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all',
-                      }}
-                    >
-                      {JSON.stringify({
-                        bookingResult: bookingResult || { status: 'PAID', note: 'Đặt sân hoàn tất thành công' },
-                        qrTicketData: qrTicketData || { ticketCode: qrToken, status: 'PAID' },
-                      }, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              </div>
-            </div>
 
             {/* Khung Đặt thêm sân khác và Xem ví Escrow - Dưới phần Thông tin cụm sân */}
             <div className="sp-pass-nav-actions">
