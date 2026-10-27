@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { uid } from '../../utils/ids.js'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
 import {
   getPendingFairPlayRatings,
@@ -8,79 +8,66 @@ import {
   createFacilityReview,
 } from '../../api/player/reviewApi.js'
 
+const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')
+const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('vi-VN') : '')
+
 function PostMatchRating() {
   const navigate = useNavigate()
 
-  // Lấy dữ liệu phiên check-out / check-in gần nhất từ localStorage
-  const [checkoutSession, setCheckoutSession] = useState(() => {
+  // Toast thông báo
+  const [toastMessage, setToastMessage] = useState(null)
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false)
+  const triggerToast = (msg) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  /* ------------------- Trận chờ chấm Fair Play (GET /api/v1/fair-play/pending-ratings) ------------------- */
+  // Chỉ những trận mình đã check-in, còn trong hạn đánh giá và còn người cùng check-in chưa được mình chấm
+  const [pendingRatings, setPendingRatings] = useState([])
+  const [loadingPending, setLoadingPending] = useState(true)
+  const [searchParams] = useSearchParams()
+  // Mở từ trang Check-in QR: ?contextId= chọn sẵn trận đó
+  const [selectedContextId, setSelectedContextId] = useState(() => searchParams.get('contextId'))
+
+  const loadPendingRatings = async () => {
+    setLoadingPending(true)
     try {
-      const saved = localStorage.getItem('sportnexus_last_checkout_session')
-      if (saved) {
-        return JSON.parse(saved)
-      }
-      const checkinDone = localStorage.getItem('sportnexus_ticket_checkin_done')
-      if (checkinDone === 'true') {
-        return {
-          courtId: 'Court 3',
-          courtName: 'Sân Cầu Lông BWF Pro 01',
-          sport: 'Cầu lông',
-          checkInDone: true,
-          checkInTime: '11:00',
-        }
-      }
-    } catch (e) {
-      console.error(e)
+      const data = await getPendingFairPlayRatings()
+      setPendingRatings(Array.isArray(data) ? data : [])
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không tải được danh sách trận chờ đánh giá.'}`)
+    } finally {
+      setLoadingPending(false)
     }
-    // Mặc định kiểm tra nếu chưa có
-    return null
-  })
+  }
 
-  // Danh sách người chơi cùng sân
-  const defaultCoPlayers = [
-    {
-      id: 'p1',
-      name: 'Hoàng Nam',
-      email: 'hoang.nam.badminton@gmail.com',
-      role: 'Đồng đội đánh cặp',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&h=120&fit=crop',
-      level: 'Khá (BWF Grade B)',
-    },
-    {
-      id: 'p2',
-      name: 'Đức Trần',
-      email: 'duc_tran92@outlook.com',
-      role: 'Đối thủ cùng sân',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop',
-      level: 'Trung bình - Khá',
-    },
-    {
-      id: 'p3',
-      name: 'Tuấn Kiệt',
-      email: 'tuankiet.sports@gmail.com',
-      role: 'Đối thủ cùng sân',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop',
-      level: 'Khá',
-    },
-  ]
+  useEffect(() => {
+    loadPendingRatings()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // Danh sách bạn chơi cùng sân (Đồng bộ với session check-out)
-  const [coPlayers, setCoPlayers] = useState(() => {
-    if (checkoutSession && checkoutSession.coPlayers && checkoutSession.coPlayers.length > 0) {
-      return checkoutSession.coPlayers
-    }
-    return defaultCoPlayers
-  })
+  const selectedMatch = pendingRatings.find((m) => m.contextId === selectedContextId) || pendingRatings[0] || null
+  const checkoutSession = selectedMatch
+    ? {
+        contextId: selectedMatch.contextId,
+        facilityId: selectedMatch.facilityId,
+        courtName: [selectedMatch.facilityName, selectedMatch.courtName].filter(Boolean).join(' - '),
+        courtId: selectedMatch.sportName || (selectedMatch.contextType === 'LFG' ? 'Kèo LFG' : 'Đặt sân'),
+        checkInTime: `${fmtTime(selectedMatch.startTime)} - ${fmtTime(selectedMatch.endTime)}, ${fmtDate(selectedMatch.startTime)}`,
+        checkOutTime: `${fmtTime(selectedMatch.endTime)}; hạn chấm ${fmtTime(selectedMatch.ratingDeadline)} ${fmtDate(selectedMatch.ratingDeadline)}`,
+      }
+    : null
+  const coPlayers = (selectedMatch?.players || []).map((u) => ({
+    id: u.userId,
+    userId: u.userId,
+    name: u.fullName,
+    avatar: u.avatarUrl,
+    role: selectedMatch.contextType === 'LFG' ? 'Thành viên kèo LFG' : 'Người góp tiền cùng sân',
+  }))
 
-  // Trạng thái form thêm bạn đánh đôi đi cùng
-  const [showAddDoublesModal, setShowAddDoublesModal] = useState(false)
-  const [doublesForm, setDoublesForm] = useState({
-    name: '',
-    role: 'Đồng đội đánh cặp',
-    representedBy: 'Hoàng Nam',
-  })
-
-  // Người chơi đang chọn để đánh giá
-  const [selectedPlayerId, setSelectedPlayerId] = useState(coPlayers[0]?.id || 'p1')
+  const [selectedPlayerId, setSelectedPlayerId] = useState(null)
+  const [reviewedPlayers, setReviewedPlayers] = useState([])
 
   // Đánh giá: Chấm điểm sao (1 đến 5 sao)
   const [rating, setRating] = useState(5)
@@ -89,62 +76,48 @@ function PostMatchRating() {
   // Đánh giá: Hình thức viết nhận xét (bắt buộc)
   const [writtenReview, setWrittenReview] = useState('')
 
-  // Toast thông báo
-  const [toastMessage, setToastMessage] = useState(null)
-  const [isSubmittingRating, setIsSubmittingRating] = useState(false)
-
-  /* ------------------- Pending Fair Play Ratings (GET /api/v1/fair-play/pending-ratings) ------------------- */
-  const [pendingRatings, setPendingRatings] = useState([])
-  const [loadingPending, setLoadingPending] = useState(false)
-
-  const loadPendingRatings = async () => {
-    setLoadingPending(true)
-    try {
-      const data = await getPendingFairPlayRatings()
-      if (Array.isArray(data)) {
-        setPendingRatings(data)
-      }
-    } catch (err) {
-      console.warn('[PostMatchRating] Không thể tải danh sách pending ratings:', err)
-    } finally {
-      setLoadingPending(false)
-    }
-  }
-
-  useEffect(() => {
-    loadPendingRatings()
-  }, [])
+  // Đánh giá đã gửi trong phiên làm việc này
+  const [submittedReviews, setSubmittedReviews] = useState([])
 
   /* ------------------- Tab Switcher: Người chơi (Fair Play) vs Cơ sở (Facility) ------------------- */
   const [activeRatingTab, setActiveRatingTab] = useState('player') // 'player' | 'facility'
 
-  /* ------------------- Đánh giá cơ sở thể thao ------------------- */
-  const currentFacilityId = checkoutSession?.facilityId || checkoutSession?.facility?.id || 'fac-bwf-01'
-  const currentFacilityName = checkoutSession?.courtName || 'Sân Cầu Lông BWF Pro 01'
+  /* ------------------- Đánh giá cơ sở thể thao (cơ sở của trận đang chọn) ------------------- */
+  const currentFacilityId = selectedMatch?.facilityId || null
+  const currentFacilityName = selectedMatch?.facilityName || 'Chưa có trận đã check-in'
   const [facilityRating, setFacilityRating] = useState(5)
   const [facilityHoverRating, setFacilityHoverRating] = useState(0)
   const [facilityComment, setFacilityComment] = useState('')
-  const [facilityEligibility, setFacilityEligibility] = useState({ isEligible: true, message: '' })
+  const [facilityEligibility, setFacilityEligibility] = useState({ isEligible: false, message: '' })
   const [checkingEligibility, setCheckingEligibility] = useState(false)
   const [submittingFacilityReview, setSubmittingFacilityReview] = useState(false)
   const [submittedFacilityReviews, setSubmittedFacilityReviews] = useState([])
 
   // Kiểm tra điều kiện đánh giá cơ sở: GET /api/v1/facility-reviews/eligibility/{facilityId}
   useEffect(() => {
-    if (currentFacilityId) {
-      setCheckingEligibility(true)
-      checkFacilityReviewEligibility(currentFacilityId)
-        .then((res) => {
-          if (res) setFacilityEligibility(res)
-        })
-        .catch((err) => console.warn('[PostMatchRating] Lỗi kiểm tra eligibility facility:', err))
-        .finally(() => setCheckingEligibility(false))
-    }
+    if (!currentFacilityId) return
+    let cancelled = false
+    setCheckingEligibility(true)
+    checkFacilityReviewEligibility(currentFacilityId)
+      .then((res) => {
+        if (!cancelled && res) setFacilityEligibility(res)
+      })
+      .catch((err) => {
+        if (!cancelled) setFacilityEligibility({ isEligible: false, message: err?.message || '' })
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingEligibility(false)
+      })
+    return () => { cancelled = true }
   }, [currentFacilityId])
 
-  // Gửi đánh giá cơ sở: POST /api/v1/facility-reviews hoặc POST /api/v1/reviews/facility
+  // Gửi đánh giá cơ sở: POST /api/v1/facility-reviews
   const handleSubmitFacilityReview = async (e) => {
     if (e) e.preventDefault()
+    if (!currentFacilityId) {
+      triggerToast('⚠️ Chưa có trận đã check-in để đánh giá cơ sở.')
+      return
+    }
     if (!facilityRating || facilityRating < 1) {
       triggerToast('⚠️ Vui lòng chọn số sao đánh giá cơ sở (1 - 5 sao)!')
       return
@@ -164,7 +137,7 @@ function PostMatchRating() {
       triggerToast('🎉 Đã gửi đánh giá cơ sở thể thao thành công!')
       setSubmittedFacilityReviews((prev) => [
         {
-          id: Date.now(),
+          id: uid('facility-review'),
           facilityName: currentFacilityName,
           rating: facilityRating,
           comment: facilityComment.trim(),
@@ -174,6 +147,7 @@ function PostMatchRating() {
       ])
       setFacilityComment('')
       setFacilityRating(5)
+      setFacilityEligibility({ isEligible: false, message: 'Bạn đã đánh giá cơ sở này.' })
     } catch (err) {
       triggerToast(`⚠️ ${err?.message || 'Không thể gửi đánh giá cơ sở'}`)
     } finally {
@@ -184,137 +158,14 @@ function PostMatchRating() {
   // Chọn trận từ danh sách Pending Ratings
   const handleSelectPendingRating = (item) => {
     if (!item) return
-    const matchSession = {
-      facilityId: item.facilityId || currentFacilityId,
-      courtId: item.courtId || 'Court 1',
-      courtName: item.courtName || item.facilityName || 'Sân thể thao',
-      sport: item.sport || 'Cầu lông',
-      checkInDone: true,
-      checkInTime: item.matchTime || '10:00',
-      contextId: item.contextId || item.bookingId || item.lfgId || null,
-      coPlayers: item.coPlayers && item.coPlayers.length > 0 ? item.coPlayers : defaultCoPlayers,
-    }
-    setCheckoutSession(matchSession)
-    if (matchSession.coPlayers && matchSession.coPlayers.length > 0) {
-      setCoPlayers(matchSession.coPlayers)
-      setSelectedPlayerId(matchSession.coPlayers[0]?.id || '')
-    }
-    triggerToast(`Đã chọn trận: ${matchSession.courtName} để chấm điểm!`)
+    setSelectedContextId(item.contextId)
+    setSelectedPlayerId(null)
+    triggerToast(`Đã chọn trận: ${item.facilityName || ''} ${item.courtName || ''} để chấm điểm!`)
   }
 
-  // Danh sách ID người chơi đã được đánh giá trong phiên này
-  const [reviewedPlayers, setReviewedPlayers] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_match_reviewed_ids')
-      if (saved) return JSON.parse(saved)
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return []
-  })
-
-  // Đánh giá đã gửi trong hệ thống
-  const [submittedReviews, setSubmittedReviews] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_match_reviews')
-      if (saved) return JSON.parse(saved)
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return []
-  })
-
-  // Cập nhật session nếu có sự kiện storage hoặc checkout mới
-  useEffect(() => {
-    const handleStorageChange = () => {
-      try {
-        const saved = localStorage.getItem('sportnexus_last_checkout_session')
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          setCheckoutSession(parsed)
-          if (parsed.coPlayers && parsed.coPlayers.length > 0) {
-            setCoPlayers(parsed.coPlayers)
-          }
-        }
-      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    }
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('sportnexus_checkout_updated', handleStorageChange)
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('sportnexus_checkout_updated', handleStorageChange)
-    }
-  }, [])
-
-  const triggerToast = (msg) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3500)
-  }
-
-  // Thêm người chơi đánh đôi (người đi cùng đại diện)
-  const handleAddDoublesPartner = (e) => {
-    if (e) e.preventDefault()
-    const name = doublesForm.name.trim()
-    if (!name) {
-      triggerToast('⚠️ Vui lòng nhập họ tên hoặc biệt danh người chơi đánh đôi!')
-      return
-    }
-
-    const newPartner = {
-      id: uid('partner'),
-      name: name,
-      email: `${name.toLowerCase().replace(/\s+/g, '')}@guest.local`,
-      role: doublesForm.role,
-      isDoublesGuest: true,
-      representedBy: doublesForm.representedBy || 'Người đại diện slot',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=FEF3C7&color=D97706`,
-      level: 'Trung bình',
-    }
-
-    const updated = [...coPlayers, newPartner]
-    setCoPlayers(updated)
-
-    // Cập nhật lưu bền vững vào session
-    try {
-      const saved = localStorage.getItem('sportnexus_last_checkout_session')
-      const parsed = saved ? JSON.parse(saved) : { checkOutDone: true, courtId: 'Court 3', courtName: 'Sân Cầu Lông BWF Pro 01' }
-      parsed.coPlayers = updated
-      parsed.checkOutDone = true
-      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
-      setCheckoutSession(parsed)
-      window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-
-    setSelectedPlayerId(newPartner.id)
-    setShowAddDoublesModal(false)
-    setDoublesForm({
-      name: '',
-      role: 'Đồng đội đánh cặp',
-      representedBy: coPlayers[0]?.name || 'Hoàng Nam',
-    })
-    triggerToast(`🎉 Đã thêm bạn đánh đôi "${name}" (${newPartner.role} • Đi cùng ${newPartner.representedBy}) vào danh sách đánh giá!`)
-  }
-
-  // Xóa bạn đánh đôi khỏi danh sách
-  const handleRemoveDoublesPartner = (id) => {
-    const updated = coPlayers.filter((p) => p.id !== id)
-    setCoPlayers(updated)
-    try {
-      const saved = localStorage.getItem('sportnexus_last_checkout_session')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        parsed.coPlayers = updated
-        localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify(parsed))
-        setCheckoutSession(parsed)
-        window.dispatchEvent(new Event('sportnexus_checkout_updated'))
-      }
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    if (selectedPlayerId === id) {
-      setSelectedPlayerId(updated[0]?.id || '')
-    }
-    triggerToast('🗑️ Đã xóa người chơi khỏi danh sách đánh giá.')
-  }
-
-
-  const isEligibleToRate = Boolean(checkoutSession && (checkoutSession.checkInDone || checkoutSession.checkOutDone))
-  const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0]
-  const isAlreadyReviewed = reviewedPlayers.includes(selectedPlayerId)
+  const isEligibleToRate = Boolean(selectedMatch)
+  const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0] || { name: '', role: '' }
+  const isAlreadyReviewed = reviewedPlayers.includes(`${selectedMatch?.contextId}:${selectedPlayer.id}`)
 
   // Quick suggestion tags để chèn vào phần viết nhận xét
   const quickTags = [
@@ -332,98 +183,63 @@ function PostMatchRating() {
     })
   }
 
-  // Xử lý gửi đánh giá sau trận - 2.7 Bước 3: POST /api/v1/reviews/fair-play
+  // Gửi đánh giá Fair Play: POST /api/v1/reviews/fair-play
   const handleSubmitRating = async (e) => {
     e.preventDefault()
-
-    // 1. Kiểm tra điều kiện check-in thành công (Cả hai người phải đã check-in)
-    if (!isEligibleToRate) {
-      triggerToast('⚠️ Người chơi chỉ được phép đánh giá sau khi check-in thành công (Cả hai người phải đã check-in)!')
+    if (!isEligibleToRate || !selectedPlayer.id) {
+      triggerToast('⚠️ Chỉ được đánh giá người đã cùng check-in trong trận còn hạn chấm điểm!')
       return
     }
-
-    // 2. Kiểm tra hình thức chấm điểm sao (1 - 5 sao)
     if (!rating || rating < 1 || rating > 5) {
       triggerToast('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
       return
     }
-
-    // 3. Kiểm tra hình thức viết nhận xét (bắt buộc, tối thiểu 10 ký tự)
     if (!writtenReview || writtenReview.trim().length < 10) {
       triggerToast('⚠️ Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự) cho người chơi cùng sân!')
       return
     }
-
-    // 4. Kiểm tra mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận
-    if (reviewedPlayers.includes(selectedPlayerId)) {
+    if (isAlreadyReviewed) {
       triggerToast('⚠️ Mỗi người chỉ được chấm Fair Play 1 lần cho 1 người trong 1 trận!')
       return
     }
 
-    // contextId = mã trận / kèo lấy từ GET /api/v1/fair-play/pending-ratings; không dùng mã cố định
-    const contextId = checkoutSession.contextId || checkoutSession.lfgId
-    const revieweeId = selectedPlayer?.userId || selectedPlayer?.id
-    if (!contextId || !revieweeId) {
-      triggerToast('⚠️ Chưa xác định được trận đấu hoặc người chơi cần đánh giá.')
-      return
-    }
     setIsSubmittingRating(true)
-
     try {
       await rateFairPlay({
-        revieweeId,
-        contextId,
+        revieweeId: selectedPlayer.userId,
+        contextId: selectedMatch.contextId,
         score: rating,
         comment: writtenReview.trim(),
       })
     } catch (apiErr) {
-      console.warn('[PostMatchRating] Lỗi gọi API rateFairPlay:', apiErr)
-      if (apiErr?.message) {
-        triggerToast(`⚠️ ${apiErr.message}`)
-      }
-    } finally {
+      triggerToast(`⚠️ ${apiErr?.message || 'Không gửi được đánh giá.'}`)
       setIsSubmittingRating(false)
+      return
     }
+    setIsSubmittingRating(false)
 
-    const effectiveRole = selectedPlayer.isDoublesGuest
-      ? `${selectedPlayer.role} • Đi cùng ${selectedPlayer.representedBy}`
-      : selectedPlayer.role || 'Bạn chơi cùng sân'
-
-    const newReview = {
-      id: uid('review'),
-      author: 'Bạn (Người chơi cùng sân)',
-      targetPlayer: selectedPlayer.name,
-      coPlayerRole: effectiveRole,
-      isDoublesGuest: Boolean(selectedPlayer.isDoublesGuest),
-      representedBy: selectedPlayer.representedBy || null,
-      avatarInitial: selectedPlayer.name.slice(0, 2).toUpperCase(),
-      avatarBg: selectedPlayer.isDoublesGuest ? '#FEF3C7' : '#DCFCE7',
-      avatarColor: selectedPlayer.isDoublesGuest ? '#D97706' : '#15803D',
-      matchType: `Kèo ${checkoutSession.sport || 'Cầu lông'}`,
-      court: `${checkoutSession.courtName || 'Sân Cầu Lông BWF Pro 01'} (${checkoutSession.courtId || 'Court 3'})`,
-      time: 'Vừa xong',
-      rating: rating,
-      fairPlayPoints: rating * 20,
-      content: writtenReview.trim(),
-      verifiedCheckout: true,
-      checkoutTime: checkoutSession.checkOutTime || '19:30',
-    }
-
-    // Cập nhật danh sách reviews trong localStorage
-    const updatedReviews = [newReview, ...submittedReviews]
-    setSubmittedReviews(updatedReviews)
-    localStorage.setItem('player_match_reviews', JSON.stringify(updatedReviews))
-
-    // Lưu danh sách người đã được đánh giá (mỗi người chỉ chấm 1 lần cho 1 người trong 1 trận)
-    const updatedReviewedIds = [...new Set([...reviewedPlayers, selectedPlayerId])]
-    setReviewedPlayers(updatedReviewedIds)
-    localStorage.setItem('player_match_reviewed_ids', JSON.stringify(updatedReviewedIds))
-
-    // Reset form viết
+    setSubmittedReviews((prev) => [
+      {
+        id: uid('review'),
+        author: 'Bạn',
+        targetPlayer: selectedPlayer.name,
+        coPlayerRole: selectedPlayer.role,
+        avatarInitial: selectedPlayer.name.slice(0, 2).toUpperCase(),
+        avatarBg: '#DCFCE7',
+        avatarColor: '#15803D',
+        matchType: checkoutSession.courtId,
+        court: checkoutSession.courtName,
+        time: 'Vừa xong',
+        rating,
+        content: writtenReview.trim(),
+        verifiedCheckout: true,
+      },
+      ...prev,
+    ])
+    setReviewedPlayers((prev) => [...prev, `${selectedMatch.contextId}:${selectedPlayer.id}`])
     setWrittenReview('')
     setRating(5)
-
-    triggerToast(`🎉 Đã chấm Fair Play thành công cho ${selectedPlayer.name} (+${rating * 20} điểm quy đổi)!`)
+    triggerToast(`🎉 Đã chấm Fair Play ${rating} sao cho ${selectedPlayer.name}!`)
   }
 
   // Diễn giải ý nghĩa số sao
@@ -530,7 +346,7 @@ function PostMatchRating() {
               HỆ THỐNG FAIRPLAY SPORTNEXUS
             </span>
             <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
-              Vé #TK-8849 • Sân Cầu Lông BWF Pro 01
+              {checkoutSession ? `${checkoutSession.courtName} • ${checkoutSession.checkInTime}` : 'Chưa có trận chờ đánh giá'}
             </span>
           </div>
           <h1 className="snx-page-title">
@@ -583,7 +399,7 @@ function PostMatchRating() {
               }}
             >
               {isEligibleToRate
-                ? `Đã check-in (${checkoutSession?.checkInTime || checkoutSession?.checkOutTime || '11:00'}) • Hợp lệ để đánh giá`
+                ? `Đã check-in (${checkoutSession.checkInTime}) • Hợp lệ để đánh giá`
                 : 'Chưa check-in • Đang khóa đánh giá'}
             </div>
           </div>
@@ -591,7 +407,7 @@ function PostMatchRating() {
       </div>
 
       {/* ===================== BANNER: TRẬN ĐẤU ĐANG CHỜ CHẤM FAIR PLAY (GET /api/v1/fair-play/pending-ratings) ===================== */}
-      {loadingPending && pendingRatings.length === 0 && (
+      {loadingPending && (
         <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6B7280' }}>Đang tải các trận chờ chấm Fair Play…</p>
       )}
       {pendingRatings.length > 0 && (
@@ -631,15 +447,15 @@ function PostMatchRating() {
                 Bạn có {pendingRatings.length} trận đấu đang chờ chấm điểm Fair Play!
               </div>
               <div style={{ fontSize: '12px', color: '#166534' }}>
-                GET /api/v1/fair-play/pending-ratings • Hoàn thành đánh giá giúp nâng cao uy tín thể thao cộng đồng.
+                Chọn trận để chấm điểm người chơi đã cùng check-in. Hoàn thành đánh giá giúp nâng cao uy tín thể thao cộng đồng.
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {pendingRatings.slice(0, 3).map((item, idx) => (
+            {pendingRatings.slice(0, 4).map((item, idx) => (
               <button
-                key={item.id || idx}
+                key={item.contextId || idx}
                 type="button"
                 onClick={() => handleSelectPendingRating(item)}
                 style={{
@@ -656,7 +472,7 @@ function PostMatchRating() {
                   gap: '4px',
                 }}
               >
-                <span>{item.courtName || item.facilityName || `Trận #${idx + 1}`}</span>
+                <span>{[item.courtName || item.facilityName || `Trận #${idx + 1}`, fmtTime(item.startTime)].filter(Boolean).join(' • ')}</span>
                 <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
                   arrow_forward
                 </span>
@@ -732,7 +548,7 @@ function PostMatchRating() {
       {activeRatingTab === 'player' && (
         <>
           {/* ===================== TRƯỜNG HỢP 1: CHƯA CHECK-IN ===================== */}
-          {!isEligibleToRate && (
+          {!isEligibleToRate && !loadingPending && (
         <div
           style={{
             background: '#ffffff',
@@ -771,7 +587,7 @@ function PostMatchRating() {
           <p style={{ fontSize: '14.5px', color: '#64748B', lineHeight: 1.6, margin: '0 0 24px 0' }}>
             Theo quy định minh bạch của <strong>SportNexus</strong>, người chơi chỉ được phép đánh giá bằng hình thức{' '}
             <strong>viết nhận xét</strong> và <strong>chấm điểm sao</strong> cho bạn chơi cùng sân{' '}
-            <span style={{ color: '#15803D', fontWeight: 700 }}>sau khi đã check-in thành công</span> vào sân đấu.
+            <span style={{ color: '#15803D', fontWeight: 700 }}>sau khi đã check-in thành công</span> vào sân đấu. Hiện bạn không có trận nào đang chờ chấm điểm.
           </p>
 
           <div
@@ -796,7 +612,7 @@ function PostMatchRating() {
             <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <li>Đảm bảo người chơi đã có mặt thực tế tại sân đấu (Quy định 2.7: Cả hai người phải đã check-in).</li>
               <li>Chống spam đánh giá ảo hoặc gian lận điểm danh tiếng Fair Play thể thao.</li>
-              <li>Hệ thống tự động đồng bộ danh sách bạn chơi cùng sân sau khi quét mã QR thành công.</li>
+              <li>Danh sách bạn chơi lấy từ những người đã cùng check-in; hạn chấm điểm kéo dài sau giờ kết thúc ca.</li>
             </ul>
           </div>
 
@@ -854,7 +670,7 @@ function PostMatchRating() {
                     Bạn Chơi Cùng Sân ({coPlayers.length})
                   </h3>
                   <div style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: 500, marginTop: '2px' }}>
-                    Tự cập nhật sau check-out • Chọn người để đánh giá
+                    Đã cùng check-in • Chọn người để đánh giá
                   </div>
                 </div>
                 <span
@@ -871,181 +687,11 @@ function PostMatchRating() {
                 </span>
               </div>
 
-              {/* Nút & Form Thêm bạn đánh đôi (Trường hợp 1 người đại diện đăng ký slot) */}
-              <div style={{ marginBottom: '14px' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddDoublesModal(!showAddDoublesModal)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '12px',
-                    background: showAddDoublesModal ? '#FEF3C7' : '#F0FDF4',
-                    border: showAddDoublesModal ? '1.5px solid #F59E0B' : '1px dashed #16A34A',
-                    color: showAddDoublesModal ? '#B45309' : '#15803D',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                    {showAddDoublesModal ? 'expand_less' : 'person_add'}
-                  </span>
-                  {showAddDoublesModal ? 'Đóng form thêm bạn đánh đôi' : '+ Thêm bạn đánh đôi (Đi cùng đại diện slot)'}
-                </button>
-
-                {showAddDoublesModal && (
-                  <div
-                    style={{
-                      background: '#FFFBEB',
-                      border: '1.5px solid #FDE68A',
-                      borderRadius: '14px',
-                      padding: '14px',
-                      marginTop: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#D97706' }}>
-                        group_add
-                      </span>
-                      <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#92400E' }}>
-                        Thêm người chơi đánh đôi (Chưa có slot riêng)
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#B45309', lineHeight: 1.4 }}>
-                      Dành cho trường hợp đánh đôi mà chỉ có 1 người đại diện đăng ký slot trên hệ thống.
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
-                        Họ tên / Biệt danh bạn chơi đánh đôi *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ví dụ: Hoàng Minh Quân"
-                        value={doublesForm.name}
-                        onChange={(e) => setDoublesForm({ ...doublesForm, name: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '8px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #FCD34D',
-                          fontSize: '12px',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          background: '#ffffff',
-                        }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
-                          Vai trò
-                        </label>
-                        <select
-                          value={doublesForm.role}
-                          onChange={(e) => setDoublesForm({ ...doublesForm, role: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '7px 8px',
-                            borderRadius: '8px',
-                            border: '1px solid #FCD34D',
-                            fontSize: '11.5px',
-                            background: '#ffffff',
-                            fontWeight: 600,
-                            outline: 'none',
-                          }}
-                        >
-                          <option value="Đồng đội đánh cặp">Đồng đội đánh cặp</option>
-                          <option value="Đối thủ đánh đôi">Đối thủ đánh đôi</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#78350F', marginBottom: '4px' }}>
-                          Đi cùng đại diện slot
-                        </label>
-                        <select
-                          value={doublesForm.representedBy}
-                          onChange={(e) => setDoublesForm({ ...doublesForm, representedBy: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '7px 8px',
-                            borderRadius: '8px',
-                            border: '1px solid #FCD34D',
-                            fontSize: '11.5px',
-                            background: '#ffffff',
-                            fontWeight: 600,
-                            outline: 'none',
-                          }}
-                        >
-                          {coPlayers
-                            .filter((p) => !p.isDoublesGuest)
-                            .map((p) => (
-                              <option key={p.id} value={p.name}>
-                                {p.name}
-                              </option>
-                            ))}
-                          <option value="Người chơi chính">Người chơi chính</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddDoublesModal(false)}
-                        style={{
-                          flex: 1,
-                          padding: '7px',
-                          borderRadius: '8px',
-                          background: '#F3F4F6',
-                          border: 'none',
-                          color: '#4B5563',
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddDoublesPartner}
-                        style={{
-                          flex: 2,
-                          padding: '7px',
-                          borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
-                          border: 'none',
-                          color: '#ffffff',
-                          fontSize: '11.5px',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)',
-                        }}
-                      >
-                        Thêm & Chọn Đánh Giá
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Danh sách người chơi cùng sân */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {coPlayers.map((player) => {
-                  const isSelected = player.id === selectedPlayerId
-                  const isReviewed = reviewedPlayers.includes(player.id)
+                  const isSelected = player.id === selectedPlayer.id
+                  const isReviewed = reviewedPlayers.includes(`${selectedMatch?.contextId}:${player.id}`)
 
                   return (
                     <div
@@ -1151,32 +797,6 @@ function PostMatchRating() {
                           </span>
                         )}
 
-                        {player.isDoublesGuest && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleRemoveDoublesPartner(player.id)
-                            }}
-                            title="Xóa bạn đánh đôi này"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#9CA3AF',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              borderRadius: '4px',
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = '#EF4444')}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = '#9CA3AF')}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                              close
-                            </span>
-                          </button>
-                        )}
                       </div>
                     </div>
                   )
@@ -1268,7 +888,7 @@ function PostMatchRating() {
                     </span>
                   </div>
                   <div style={{ fontSize: '12.5px', color: '#64748B', marginTop: '2px' }}>
-                    {checkoutSession.courtName} • {checkoutSession.courtId} • Check-out lúc {checkoutSession.checkOutTime}
+                    {checkoutSession.courtName} • {checkoutSession.courtId} • Kết thúc {checkoutSession.checkOutTime}
                   </div>
                 </div>
               </div>
@@ -1692,7 +1312,7 @@ function PostMatchRating() {
                   {currentFacilityName}
                 </h2>
                 <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                  Mã cơ sở: <span className="font-mono font-semibold">{currentFacilityId}</span>
+                  Sân: <span className="font-semibold">{selectedMatch ? `${selectedMatch.courtName} • ${checkoutSession.checkInTime}` : 'Chọn một trận đã check-in ở trên'}</span>
                 </div>
               </div>
             </div>
