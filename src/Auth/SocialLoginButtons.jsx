@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { socialLogin } from '../api/auth/authApi.js'
+import { confirmDialog } from '../components/common/confirm.js'
 import { useAuth } from '../context/authContext.js'
 import { finishLogin } from './finishLogin.js'
 import { FACEBOOK_APP_ID, GOOGLE_CLIENT_ID, facebookAccessToken, renderGoogleButton } from './socialSdk.js'
@@ -21,7 +22,17 @@ export default function SocialLoginButtons({ role, mode = 'login' }) {
   const complete = async (provider, token) => {
     setBusy(provider)
     try {
-      const data = await socialLogin(provider, token, roleRef.current)
+      let data = await socialLogin(provider, token, roleRef.current)
+      if (data.needsConfirmation) {
+        const who = [data.fullName, data.email && `(${data.email})`].filter(Boolean).join(' ') || 'tài khoản này'
+        const ok = await confirmDialog(`Chưa có tài khoản SportNexus liên kết với ${who}. Tạo tài khoản mới?`, {
+          title: 'Tạo tài khoản mới', confirmLabel: 'Tạo tài khoản', cancelLabel: 'Huỷ', danger: false, image: data.avatarUrl,
+        })
+        if (!ok) return
+        // Dùng lại đúng token cũ (không mở lại popup) + cùng role
+        data = await socialLogin(provider, token, roleRef.current, { confirmCreate: true })
+        if (data.needsConfirmation) throw new Error('Không tạo được tài khoản. Vui lòng thử lại.')
+      }
       const target = finishLogin(data, { contextLogin })
       toast.success(data.isNewUser ? `Chào mừng ${data.fullName || 'bạn'} đến với SportNexus!` : `Đăng nhập thành công! Chào mừng ${data.fullName || ''}.`)
       if (data.needsPhone) {
