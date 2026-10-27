@@ -71,9 +71,14 @@ export async function resetPassword({ phone, otpCode, newPassword, confirmPasswo
 // ---------- Đăng nhập mạng xã hội: POST /api/auth/google | /api/auth/facebook ----------
 // SocialLoginRequest: token (Google idToken | Facebook accessToken), role (Player | Owner, chỉ dùng khi tạo tài khoản mới)
 // LoginResponse như đăng nhập thường + isNewUser, needsPhone (chưa có SĐT), hasPassword.
-export async function socialLogin(provider, token, role) {
-  const response = await apiClient.post(`/api/auth/${provider}`, { token, ...(role ? { role } : {}) }, { skipAuth: true })
+// Chưa có tài khoản liên kết: BE trả needsConfirmation = true, token = null (kèm fullName, email, avatarUrl)
+// -> hỏi người dùng rồi gọi lại với cùng token + confirmCreate = true.
+export async function socialLogin(provider, token, role, { confirmCreate = false } = {}) {
+  const payload = { token, ...(role ? { role } : {}), ...(confirmCreate ? { confirmCreate: true } : {}) }
+  const response = await apiClient.post(`/api/auth/${provider}`, payload, { skipAuth: true })
   const body = validateResponse(response.data)
+  // Kiểm tra needsConfirmation trước token: lúc này chưa đăng nhập, không lưu gì.
+  if (body.data?.needsConfirmation) return body.data
   if (typeof body.data?.token !== 'string' || !body.data.token.trim() || typeof body.data?.role !== 'string') {
     throw Object.assign(new Error('Phản hồi đăng nhập thiếu token hoặc vai trò.'), { isNormalized: true })
   }

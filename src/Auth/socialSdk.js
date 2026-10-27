@@ -51,7 +51,9 @@ export async function facebookAccessToken() {
   await fbReady
   return new Promise((resolve, reject) => {
     window.FB.login((res) => {
-      const token = res?.authResponse?.accessToken
+      // Chỉ nhận token khi người dùng thật sự đồng ý trong popup (bấm X -> status khác 'connected').
+      // Không dùng FB.getLoginStatus / gọi API khi tải trang.
+      const token = res?.status === 'connected' ? res.authResponse?.accessToken : null
       if (token) resolve(token)
       else reject(Object.assign(new Error('Bạn đã hủy đăng nhập Facebook.'), { cancelled: true }))
     }, { scope: 'public_profile,email' })

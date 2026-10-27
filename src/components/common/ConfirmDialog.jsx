@@ -18,7 +18,9 @@ export default function ConfirmHost() {
     <div className="snx-modal-backdrop" role="presentation" style={{ zIndex: 1000 }} onMouseDown={(event) => event.target === event.currentTarget && dialog.resolve(false)}>
       <div className="snx-modal" role="alertdialog" aria-modal="true" aria-labelledby="snx-confirm-title" aria-describedby="snx-confirm-message" style={{ width: 'min(440px, 100%)' }}>
         <div className="snx-row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap', gap: 12 }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 28, color: dialog.danger ? '#dc2626' : '#15803d' }}>{dialog.danger ? 'warning' : 'help'}</span>
+          {dialog.image
+            ? <img src={dialog.image} alt="" referrerPolicy="no-referrer" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            : <span className="material-symbols-outlined" style={{ fontSize: 28, color: dialog.danger ? '#dc2626' : '#15803d' }}>{dialog.danger ? 'warning' : 'help'}</span>}
           <div>
             <h2 id="snx-confirm-title" className="snx-card-title" style={{ fontSize: 17 }}>{dialog.title}</h2>
             <p id="snx-confirm-message" style={{ margin: '6px 0 0', whiteSpace: 'pre-line', fontSize: 14, color: '#334155' }}>{dialog.message}</p>
