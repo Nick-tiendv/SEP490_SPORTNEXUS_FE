@@ -165,39 +165,36 @@ export function storeAiSessionId(sessionId) {
 
 /**
  * Chuyển lịch sử từ GET /sessions/{id}/messages sang tin nhắn hiển thị.
- * Hỗ trợ cả dạng mỗi bản ghi là 1 tin (role/content) và dạng cặp { userMessage, reply }.
+ * Lịch sử là mảng phẳng AiMessageResponse (sender USER/BOT, message); dạng cặp chỉ dùng cho response gửi tin.
  */
 export function mapAiHistoryToMessages(items = []) {
   const toTime = (iso) =>
     iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'
   const result = []
   items.forEach((m, idx) => {
-    const time = toTime(m.createdAt)
-    if (m.userMessage !== undefined && m.reply) {
-      result.push({ id: `${m.id || idx}-u`, sender: 'user', text: m.userMessage, time })
-      result.push({
-        id: `${m.id || idx}-b`,
-        sender: 'bot',
-        text: m.reply.message || '',
-        time,
-        facilities: m.reply.facilities,
-        lfgCards: m.reply.lfgCards,
-        slots: m.reply.slots,
-      })
+    // Dạng cặp chỉ có ở response gửi tin (AiChatResponse): userMessage và reply đều là AiMessageResponse
+    if (m?.userMessage && m?.reply) {
+      result.push(mapAiMessage(m.userMessage, `${idx}-u`, toTime))
+      result.push(mapAiMessage(m.reply, `${idx}-b`, toTime))
       return
     }
-    const role = String(m.sender || m.role || '').toLowerCase()
-    result.push({
-      id: m.id || `msg-${idx}`,
-      sender: role === 'user' ? 'user' : 'bot',
-      text: m.content || m.message || m.text || '',
-      time,
-      facilities: m.reply?.facilities || m.facilities,
-      lfgCards: m.reply?.lfgCards || m.lfgCards,
-      slots: m.reply?.slots || m.slots,
-    })
+    result.push(mapAiMessage(m, `msg-${idx}`, toTime))
   })
   return result
+}
+
+// AiMessageResponse: { id, sender: 'USER' | 'BOT', message, intent, facilities, lfgCards, createdAt }
+function mapAiMessage(m, fallbackId, toTime) {
+  const isUser = String(m?.sender || '').toUpperCase() === 'USER'
+  return {
+    id: m?.id || fallbackId,
+    sender: isUser ? 'user' : 'bot',
+    text: m?.message || '',
+    time: toTime(m?.createdAt),
+    intent: isUser ? undefined : m?.intent,
+    facilities: isUser ? undefined : m?.facilities,
+    lfgCards: isUser ? undefined : m?.lfgCards,
+  }
 }
 
 export default {
