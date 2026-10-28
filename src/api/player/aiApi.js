@@ -143,6 +143,63 @@ export async function deleteAiSession(sessionId) {
   }
 }
 
+// Phiên AI đang dùng được chia sẻ giữa modal chat và trang /ai-chat để hai nơi đồng bộ cùng một cuộc trò chuyện
+const CURRENT_SESSION_KEY = 'snx-ai-current-session'
+
+export function getStoredAiSessionId() {
+  try {
+    return localStorage.getItem(CURRENT_SESSION_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function storeAiSessionId(sessionId) {
+  try {
+    if (sessionId) localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
+    else localStorage.removeItem(CURRENT_SESSION_KEY)
+  } catch {
+    // Bỏ qua nếu trình duyệt chặn storage
+  }
+}
+
+/**
+ * Chuyển lịch sử từ GET /sessions/{id}/messages sang tin nhắn hiển thị.
+ * Hỗ trợ cả dạng mỗi bản ghi là 1 tin (role/content) và dạng cặp { userMessage, reply }.
+ */
+export function mapAiHistoryToMessages(items = []) {
+  const toTime = (iso) =>
+    iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'
+  const result = []
+  items.forEach((m, idx) => {
+    const time = toTime(m.createdAt)
+    if (m.userMessage !== undefined && m.reply) {
+      result.push({ id: `${m.id || idx}-u`, sender: 'user', text: m.userMessage, time })
+      result.push({
+        id: `${m.id || idx}-b`,
+        sender: 'bot',
+        text: m.reply.message || '',
+        time,
+        facilities: m.reply.facilities,
+        lfgCards: m.reply.lfgCards,
+        slots: m.reply.slots,
+      })
+      return
+    }
+    const role = String(m.sender || m.role || '').toLowerCase()
+    result.push({
+      id: m.id || `msg-${idx}`,
+      sender: role === 'user' ? 'user' : 'bot',
+      text: m.content || m.message || m.text || '',
+      time,
+      facilities: m.reply?.facilities || m.facilities,
+      lfgCards: m.reply?.lfgCards || m.lfgCards,
+      slots: m.reply?.slots || m.slots,
+    })
+  })
+  return result
+}
+
 export default {
   sendChatMessage,
   createAiSession,

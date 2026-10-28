@@ -17,6 +17,9 @@ import {
   getAiSessionMessages,
   sendSessionChatMessage,
   deleteAiSession,
+  getStoredAiSessionId,
+  mapAiHistoryToMessages,
+  storeAiSessionId,
 } from '../../../api/player/aiApi.js'
 import './AIChatModal.css'
 
@@ -62,7 +65,10 @@ function AIChatBooking() {
             updatedAt: nowStr,
           }
           setUserLocation(newLoc)
-          setMessages([buildWelcomeMessage(newLoc)])
+          // Chỉ cập nhật lời chào, không ghi đè lịch sử đã tải
+          setMessages((prev) =>
+            prev.length === 1 && prev[0].sender !== 'user' ? [buildWelcomeMessage(newLoc)] : prev
+          )
         },
         () => { },
         { enableHighAccuracy: true, timeout: 5000 }
@@ -77,10 +83,16 @@ function AIChatBooking() {
 
   const [activeCourtId, setActiveCourtId] = useState('snx-q7')
   const [sessionsList, setSessionsList] = useState([])
-  const [currentSessionId, setCurrentSessionId] = useState(null)
+  const [currentSessionId, setCurrentSessionIdState] = useState(null)
   const [isLoadingSession, setIsLoadingSession] = useState(false)
 
-  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions
+  // Luôn lưu phiên hiện tại để modal chat dùng chung cùng cuộc trò chuyện
+  const setCurrentSessionId = (id) => {
+    setCurrentSessionIdState(id)
+    storeAiSessionId(id)
+  }
+
+  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions và khôi phục phiên đang dùng
   useEffect(() => {
     let isMounted = true
     async function loadSessions() {
@@ -88,6 +100,12 @@ function AIChatBooking() {
         const list = await getAiSessions()
         if (isMounted && Array.isArray(list)) {
           setSessionsList(list)
+          const storedId = getStoredAiSessionId()
+          if (storedId && list.some((s) => s.id === storedId)) {
+            handleSelectSession(storedId)
+          } else if (storedId) {
+            storeAiSessionId(null)
+          }
         }
       } catch (e) {
         console.warn('AIChatBooking: Lỗi lấy danh sách sessions:', e)
@@ -95,25 +113,18 @@ function AIChatBooking() {
     }
     loadSessions()
     return () => { isMounted = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Chuyển sang phiên hội thoại khác: GET /api/v1/ai/sessions/{id}/messages
-  const handleSelectSession = async (sessionId) => {
+  async function handleSelectSession(sessionId) {
     if (!sessionId) return
     setCurrentSessionId(sessionId)
     setIsLoadingSession(true)
     try {
       const msgs = await getAiSessionMessages(sessionId)
-      if (Array.isArray(msgs) && msgs.length > 0) {
-        const mapped = msgs.map((m, idx) => ({
-          id: m.id || `msg-${idx}`,
-          sender: m.sender === 'user' || m.role === 'user' ? 'user' : 'bot',
-          text: m.content || m.message || m.text || '',
-          time: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong',
-          facilities: m.reply?.facilities || m.facilities,
-          lfgCards: m.reply?.lfgCards || m.lfgCards,
-          slots: m.slots,
-        }))
+      const mapped = mapAiHistoryToMessages(Array.isArray(msgs) ? msgs : [])
+      if (mapped.length > 0) {
         setMessages(mapped)
       } else {
         setMessages([buildWelcomeMessage(userLocation)])
@@ -243,6 +254,8 @@ function AIChatBooking() {
       setUserLocation(newLoc)
       const welcome = buildWelcomeMessage(newLoc)
       setMessages([welcome])
+      // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
+      setCurrentSessionId(null)
       setInputValue('')
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }

@@ -10,7 +10,14 @@ import {
   formatVnd,
   processAIChatQuery,
 } from './aiBookingData.js'
-import { sendChatMessage } from '../../../api/player/aiApi.js'
+import {
+  getAiSessionMessages,
+  getStoredAiSessionId,
+  mapAiHistoryToMessages,
+  sendChatMessage,
+  sendSessionChatMessage,
+  storeAiSessionId,
+} from '../../../api/player/aiApi.js'
 import './AIChatModal.css'
 
 function AIChatModal({
@@ -56,13 +63,38 @@ function AIChatModal({
             updatedAt: nowStr,
           }
           setUserLocation(newLoc)
-          setMessages([buildWelcomeMessage(newLoc)])
+          // Chỉ cập nhật lời chào, không xoá cuộc trò chuyện đang có
+          setMessages((prev) =>
+            prev.length === 1 && prev[0].sender !== 'user' ? [buildWelcomeMessage(newLoc)] : prev
+          )
         },
         () => {
           // Giữ mặc định nếu không cấp quyền
         },
         { enableHighAccuracy: true, timeout: 5000 }
       )
+    }
+  }, [isOpen])
+
+  // Đồng bộ lịch sử từ server mỗi khi mở modal (phiên có thể đã thay đổi ở trang /ai-chat)
+  useEffect(() => {
+    if (!isOpen) return
+    const storedId = getStoredAiSessionId()
+    if (!storedId) return
+    let cancelled = false
+    getAiSessionMessages(storedId)
+      .then((items) => {
+        if (cancelled) return
+        const mapped = mapAiHistoryToMessages(items)
+        if (mapped.length > 0) setMessages(mapped)
+      })
+      .catch(() => {
+        // Phiên không còn tồn tại → bắt đầu phiên mới ở lần gửi tiếp theo
+        if (cancelled) return
+        storeAiSessionId(null)
+      })
+    return () => {
+      cancelled = true
     }
   }, [isOpen])
 
@@ -134,11 +166,15 @@ function AIChatModal({
     setIsTyping(true)
 
     try {
-      const aiResult = await sendChatMessage({
-        message: text,
-        lat: userLocation.lat,
-        lng: userLocation.lng,
-      })
+      // Đọc phiên dùng chung ngay lúc gửi để luôn khớp với trang /ai-chat
+      const sessionId = getStoredAiSessionId()
+      const params = { message: text, lat: userLocation.lat, lng: userLocation.lng }
+      const aiResult = sessionId
+        ? await sendSessionChatMessage(sessionId, params)
+        : await sendChatMessage(params)
+      if (!sessionId && aiResult?.sessionId) {
+        storeAiSessionId(aiResult.sessionId)
+      }
       const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Dưới đây là gợi ý từ AI:'
       const botMsg = {
         id: uid('bot'),
@@ -234,6 +270,8 @@ function AIChatModal({
       setUserLocation(newLoc)
       const welcome = buildWelcomeMessage(newLoc)
       setMessages([welcome])
+      // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
+      storeAiSessionId(null)
       setInputValue('')
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }
