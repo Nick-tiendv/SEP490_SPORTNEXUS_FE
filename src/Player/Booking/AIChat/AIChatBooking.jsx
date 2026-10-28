@@ -7,7 +7,6 @@ import {
   buildWelcomeMessage,
   detectClosestDistrict,
   getUserProfileContext,
-  syncFacilitiesWithAIChat,
 } from './aiBookingData.js'
 import {
   sendChatMessage,
@@ -20,7 +19,6 @@ import {
   mapAiHistoryToMessages,
   storeAiSessionId,
 } from '../../../api/player/aiApi.js'
-import { getFacilities } from '../../../api/player/facilityApi.js'
 import AiSuggestions from './AiSuggestions.jsx'
 import { buildPaymentState } from './aiRealBooking.js'
 import './AIChatModal.css'
@@ -51,19 +49,6 @@ function AIChatBooking() {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
   }, [messages, isTyping])
-
-  // Tự động đồng bộ danh sách cơ sở & sân từ website vào AI
-  useEffect(() => {
-    let isMounted = true
-    getFacilities()
-      .then((facilities) => {
-        if (isMounted && Array.isArray(facilities)) {
-          syncFacilitiesWithAIChat(facilities)
-        }
-      })
-      .catch((err) => console.warn('[AIChatBooking] Không thể tải facilities từ API:', err))
-    return () => { isMounted = false }
-  }, [])
 
   // Lắng nghe cập nhật hồ sơ người dùng
   useEffect(() => {

@@ -28,28 +28,12 @@ import {
   clearPendingDeposit,
   DEPOSIT_STATUS,
 } from '../../../api/player/walletApi.js'
-import { COURTS } from '../AIChat/aiBookingData.js'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
   if (!state) return null
   const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (state.subCourtId && isGuidRegex.test(state.subCourtId)) return state.subCourtId
-
-  // Kiểm tra nếu courtSlotId hoặc courtId trùng với bất kỳ subCourt nào trong COURTS
-  if (Array.isArray(COURTS)) {
-    for (const facility of COURTS) {
-      if (Array.isArray(facility.subCourts)) {
-        for (const sub of facility.subCourts) {
-          if (state.courtSlotId === sub.id) return sub.id
-          if (state.courtId === sub.id) return sub.id
-          if (state.subCourt && sub.name && (state.subCourt.toLowerCase().includes(sub.name.toLowerCase()) || sub.name.toLowerCase().includes(state.subCourt.toLowerCase()))) {
-            return sub.id
-          }
-        }
-      }
-    }
-  }
 
   // Nếu state.courtId là GUID hợp lệ
   if (state.courtId && isGuidRegex.test(state.courtId)) {
