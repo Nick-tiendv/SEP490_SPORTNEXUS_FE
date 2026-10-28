@@ -1,4 +1,4 @@
-import { get, getList, pick, post, put, upload } from '../owner/request.js'
+import { del, get, getList, pick, post, put, upload } from '../owner/request.js'
 
 // ---------- Tài khoản: /api/auth/me ----------
 export const getMyProfile = () => get('/api/auth/me')
@@ -8,6 +8,8 @@ export const uploadMyAvatar = file => upload('/api/auth/me/avatar', 'file', file
 // ChangePasswordRequest: oldPassword, newPassword, confirmPassword
 export const changePassword = ({ oldPassword, newPassword, confirmPassword }) => post('/api/auth/change-password', { oldPassword, newPassword, confirmPassword })
 export const logoutApi = () => post('/api/auth/logout')
+// POST /api/auth/logout-all: thu hồi mọi phiên đăng nhập trên tất cả thiết bị
+export const logoutAllDevices = () => post('/api/auth/logout-all')
 
 // ---------- Môn thể thao của tôi: /api/auth/me/sports ----------
 export const getSportCategories = async () => (await getList('/api/v1/master-data/sports')).items.map(item => ({
@@ -47,3 +49,13 @@ export function toSkillEnum(label) {
 export const updateMySports = sports => put('/api/auth/me/sports', {
   sports: sports.map(sport => ({ sportCategoryId: sport.sportCategoryId, skillLevel: toSkillEnum(sport.skillLevel) })),
 })
+
+// ---------- Bảo mật tài khoản (trang Hồ sơ) ----------
+export const uploadAvatar = file => upload('/api/auth/me/avatar', 'file', file)
+// AddPhoneRequest: phone, otpCode | firebaseIdToken
+export const updatePhone = payload => post('/api/auth/me/phone', payload)
+export const sendEmailOtp = () => post('/api/auth/me/email/send-otp', {})
+export const verifyEmail = ({ otpCode }) => post('/api/auth/me/email/verify', { otpCode: String(otpCode || '').trim() })
+// Đặt mật khẩu cho tài khoản đăng nhập Google / Facebook chưa có mật khẩu: newPassword, confirmPassword
+export const setPassword = payload => post('/api/auth/set-password', payload)
+export const deleteMyAccount = () => del('/api/auth/me')

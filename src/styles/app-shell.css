@@ -1,0 +1,437 @@
+/* =====================================================================
+   SportNexus — Khung giao diện dùng chung cho mọi role (Player, Chủ sân, Admin)
+   Sidebar 260px · Thanh trên 60px · Footer · Tiêu đề trang.
+   Kích thước và màu lấy theo bộ token của Admin (admin-theme.css) để 3 role giống nhau.
+   ===================================================================== */
+
+:root {
+  --snx-sidebar-w: 260px;
+  --snx-topbar-h: 60px;
+
+  --snx-green-950: #12261a;
+  --snx-green-900: #1c3524;
+  --snx-green-800: #2d5f3f;
+  --snx-green-700: #247348;
+  --snx-green-600: #15803d;
+  --snx-green-500: #22a05a;
+  --snx-green-300: #86efac;
+  --snx-green-100: #dcfce7;
+  --snx-green-50: #f0fdf4;
+
+  --snx-text: #16201d;
+  --snx-text-secondary: #374541;
+  --snx-text-muted: #6b7a75;
+  --snx-border: rgba(226, 232, 230, .9);
+  --snx-border-green: rgba(45, 95, 63, .12);
+
+  --snx-gradient-brand: linear-gradient(135deg, #2d5f3f 0%, #15803d 100%);
+  --snx-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --snx-font-display: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+
+  --snx-radius-sm: 8px;
+  --snx-radius-md: 10px;
+  --snx-radius-lg: 14px;
+  --snx-radius-xl: 20px;
+  --snx-shadow-card: 0 4px 20px rgba(15, 23, 42, .05);
+}
+
+/* ---------- Sidebar ---------- */
+.snx-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: var(--snx-sidebar-w);
+  font-family: var(--snx-font-sans);
+  background: linear-gradient(180deg, rgba(246, 253, 248, .94) 0%, rgba(232, 248, 237, .92) 100%);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border-right: 1px solid var(--snx-border-green);
+  box-shadow: 10px 0 40px -20px rgba(12, 40, 24, .35);
+  user-select: none;
+  transition: transform .25s ease;
+}
+.snx-sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  height: var(--snx-topbar-h);
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--snx-border-green);
+}
+.snx-brand { display: flex; align-items: center; gap: 12px; min-width: 0; text-decoration: none; }
+.snx-brand-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--snx-gradient-brand);
+  box-shadow: 0 4px 14px rgba(45, 95, 63, .28);
+  transition: transform .2s ease;
+}
+.snx-brand:hover .snx-brand-mark { transform: rotate(-6deg) scale(1.04); }
+.snx-brand-mark .material-symbols-outlined { font-size: 22px; color: #fff; }
+.snx-brand-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.snx-brand-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--snx-font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--snx-green-900);
+}
+.snx-brand-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--snx-green-500); box-shadow: 0 0 0 3px rgba(34, 160, 90, .18); }
+.snx-brand-copy small {
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--snx-green-700);
+  white-space: nowrap;
+}
+.snx-sidebar-close { display: none; }
+.snx-sidebar-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding: 12px 12px 16px; display: flex; flex-direction: column; gap: 16px; }
+
+.snx-nav { display: flex; flex-direction: column; gap: 2px; }
+.snx-nav-title {
+  margin: 0;
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #9aa8a3;
+  white-space: nowrap;
+}
+.snx-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: var(--snx-radius-md);
+  color: var(--snx-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.snx-nav-item .material-symbols-outlined { font-size: 20px; color: #6b7a75; transition: color .15s ease; }
+.snx-nav-item:hover:not(.active) { background: rgba(255, 255, 255, .8); color: var(--snx-green-900); box-shadow: 0 2px 8px -4px rgba(12, 40, 24, .18); }
+.snx-nav-item:hover:not(.active) .material-symbols-outlined { color: var(--snx-green-600); }
+.snx-nav-item.active {
+  background: var(--snx-gradient-brand);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 18px -8px rgba(21, 128, 61, .65), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.snx-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--snx-green-500);
+  box-shadow: 0 0 10px rgba(34, 160, 90, .7);
+}
+.snx-nav-item.active .material-symbols-outlined { color: #fff; }
+.snx-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.snx-overlay { position: fixed; inset: 0; z-index: 45; border: 0; background: rgba(15, 23, 42, .4); backdrop-filter: blur(2px); }
+
+/* ---------- Vùng nội dung & thanh trên ---------- */
+.snx-workspace { min-height: 100vh; padding-left: var(--snx-sidebar-w); box-sizing: border-box; display: flex; flex-direction: column; }
+.snx-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--snx-topbar-h);
+  padding: 0 24px;
+  font-family: var(--snx-font-sans);
+  background: rgba(255, 255, 255, .94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--snx-border);
+  box-shadow: var(--snx-shadow-card);
+  box-sizing: border-box;
+}
+.snx-menu-button {
+  display: none;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(45, 95, 63, .2);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--snx-green-900);
+  cursor: pointer;
+}
+.snx-crumb { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; overflow: hidden; font-size: 14px; }
+.snx-crumb-root { color: var(--snx-text-muted); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.snx-crumb-root:hover { color: var(--snx-green-700); }
+.snx-crumb-sep { color: #9aa8a3; }
+.snx-crumb-current { color: var(--snx-green-900); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snx-topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* Ô số liệu nhỏ trên thanh trên (ví, tiền tạm giữ...) */
+.snx-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(45, 95, 63, .2);
+  border-radius: 12px;
+  background: var(--snx-green-50);
+  color: var(--snx-green-900);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.snx-pill .material-symbols-outlined { font-size: 18px; color: var(--snx-green-600); }
+.snx-pill-label { display: block; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--snx-green-600); }
+.snx-pill-value { display: block; font-size: 13px; font-weight: 800; color: var(--snx-green-900); }
+.snx-pill--warning { border-color: #fde68a; background: #fffbeb; }
+.snx-pill--warning .material-symbols-outlined,
+.snx-pill--warning .snx-pill-label { color: #b45309; }
+.snx-pill--warning .snx-pill-value { color: #78350f; }
+
+/* Menu tài khoản */
+.snx-user { position: relative; }
+.snx-user-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.snx-user-button:hover,
+.snx-user-button[aria-expanded="true"] { border-color: var(--snx-border); background: #fff; }
+.snx-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--snx-gradient-brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(16, 185, 129, .6);
+}
+.snx-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.snx-user-copy { display: flex; flex-direction: column; line-height: 1.25; }
+.snx-user-copy strong { font-size: 13px; font-weight: 700; color: var(--snx-green-900); white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.snx-user-copy small { font-size: 11px; font-weight: 600; color: var(--snx-green-600); white-space: nowrap; }
+.snx-user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 200px;
+  padding: 6px;
+  border: 1px solid var(--snx-border);
+  border-radius: var(--snx-radius-lg);
+  background: #fff;
+  box-shadow: 0 16px 40px -12px rgba(15, 23, 42, .25);
+}
+.snx-user-menu a,
+.snx-user-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--snx-radius-sm);
+  background: transparent;
+  color: var(--snx-text-secondary);
+  font: 500 14px var(--snx-font-sans);
+  text-decoration: none;
+  cursor: pointer;
+}
+.snx-user-menu a:hover,
+.snx-user-menu button:hover { background: var(--snx-green-50); color: var(--snx-green-900); }
+.snx-user-menu .material-symbols-outlined { font-size: 19px; }
+.snx-user-menu .snx-danger { color: #dc2626; }
+.snx-user-menu .snx-danger:hover { background: #fef2f2; color: #b91c1c; }
+
+.snx-main { flex: 1; width: 100%; min-width: 0; box-sizing: border-box; }
+
+/* ---------- Footer ---------- */
+.snx-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 14px 28px;
+  font-family: var(--snx-font-sans);
+  font-size: 12.5px;
+  color: var(--snx-text-muted);
+  background: rgba(255, 255, 255, .78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--snx-border);
+}
+.snx-footer-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--snx-text-secondary); }
+.snx-footer-brand .material-symbols-outlined { font-size: 18px; color: var(--snx-green-600); }
+.snx-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.snx-footer-links span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.snx-footer-links .material-symbols-outlined { font-size: 16px; color: var(--snx-green-600); }
+
+/* ---------- Tiêu đề trang (giống .admin-page-header của Admin) ---------- */
+.snx-page-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-bottom: 24px;
+  padding: 24px 32px;
+  border: 1px solid rgba(255, 255, 255, .7);
+  border-radius: var(--snx-radius-xl);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='380' height='210' viewBox='0 0 380 210' fill='none' stroke='%2315803d' stroke-opacity='.16' stroke-width='2'%3E%3Crect x='20' y='20' width='340' height='170' rx='6'/%3E%3Cline x1='190' y1='20' x2='190' y2='190'/%3E%3Cline x1='20' y1='46' x2='360' y2='46'/%3E%3Cline x1='20' y1='164' x2='360' y2='164'/%3E%3Cline x1='95' y1='46' x2='95' y2='164'/%3E%3Cline x1='285' y1='46' x2='285' y2='164'/%3E%3Cline x1='95' y1='105' x2='285' y2='105'/%3E%3C/svg%3E") right -40px center / 380px auto no-repeat,
+    radial-gradient(420px 220px at 92% 0%, rgba(74, 222, 128, .28), transparent 70%),
+    linear-gradient(135deg, rgba(255, 255, 255, .92) 0%, rgba(240, 253, 244, .9) 100%);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 10px 30px -12px rgba(12, 40, 24, .25);
+  font-family: var(--snx-font-sans);
+}
+.snx-page-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 5px;
+  border-radius: 0 6px 6px 0;
+  background: var(--snx-gradient-brand);
+}
+.snx-page-header-copy { min-width: 0; flex: 1 1 320px; }
+.snx-page-eyebrow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 8px; }
+.snx-page-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .75);
+  color: var(--snx-green-700);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.snx-page-eyebrow .material-symbols-outlined { font-size: 15px; }
+.snx-page-title {
+  margin: 0;
+  font-family: var(--snx-font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  color: var(--snx-green-950);
+}
+.snx-page-subtitle { max-width: 720px; margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--snx-text-muted); }
+.snx-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Khung nội dung trang dùng chung */
+.snx-page { padding: 24px 28px 40px; width: 100%; min-height: calc(100vh - var(--snx-topbar-h)); box-sizing: border-box; }
+.snx-page--narrow { max-width: 1160px; margin: 0 auto; }
+
+/* ---------- Điện thoại & máy tính bảng ---------- */
+@media (max-width: 1023px) {
+  .snx-sidebar { transform: translateX(-100%); }
+  .snx-sidebar.is-open { transform: translateX(0); }
+  .snx-sidebar-close { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--snx-text-muted); cursor: pointer; }
+  .snx-workspace { padding-left: 0; }
+  .snx-topbar { padding: 0 12px; gap: 8px; }
+  .snx-menu-button { display: grid; }
+  .snx-page { padding: 16px 12px 32px; }
+  .snx-footer { padding: 12px 16px; }
+}
+@media (max-width: 640px) {
+  .snx-user-copy, .snx-pill-label, .snx-hide-sm { display: none; }
+  .snx-crumb-root, .snx-crumb-sep { display: none; }
+  .snx-page-title { font-size: 22px; }
+  .snx-page-header { padding: 16px; }
+}
+
+/* ---------- Ô "Cơ sở đang quản lý" trên sidebar Chủ sân ---------- */
+.snx-owner-facility { padding: 10px 12px; border: 1px solid rgba(45, 95, 63, .16); border-radius: 12px; background: linear-gradient(135deg, #eaf7ee 0%, #e0f5e6 100%); }
+.snx-owner-facility-label { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--snx-green-600); }
+.snx-owner-facility-name { margin-top: 2px; font-size: 13px; font-weight: 800; color: var(--snx-green-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snx-owner-facility select { width: 100%; margin-top: 4px; padding: 4px 6px; border: 1px solid rgba(45, 95, 63, .25); border-radius: 8px; background: #fff; font: 800 12.5px var(--snx-font-sans); color: var(--snx-green-900); cursor: pointer; }
+.snx-owner-facility-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; color: #047857; }
+.snx-owner-facility-meta > span { width: 6px; height: 6px; border-radius: 50%; background: #9ca3af; }
+.snx-owner-facility-meta > span.is-on { background: #10b981; }
+
+/* ---------- Nhãn phụ cạnh tên trang (vd. môn đang lọc) ---------- */
+.snx-crumb-chip { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 3px 10px; border: 1px solid rgba(45, 95, 63, .2); border-radius: 999px; background: var(--snx-green-50); color: var(--snx-green-600); font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+/* ---------- Bộ lọc môn trên sidebar Player ---------- */
+.snx-sport-filter { display: flex; flex-direction: column; gap: 8px; }
+.snx-sport-filter-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; }
+.snx-sport-filter-status { padding: 2px 8px; border: 1px solid #bbf7d0; border-radius: 999px; background: var(--snx-green-100); color: var(--snx-green-600); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.snx-sport-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.snx-sport-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid rgba(45, 95, 63, .16); border-radius: var(--snx-radius-md); background: rgba(255, 255, 255, .85); color: var(--snx-text-secondary); font: 600 11px var(--snx-font-sans); cursor: pointer; transition: all .15s ease; }
+.snx-sport-chip > span:first-child { font-size: 18px; line-height: 1; }
+.snx-sport-chip:hover:not(.active) { border-color: var(--snx-green-500); background: #ecfdf5; }
+.snx-sport-chip.active { border-color: transparent; background: var(--snx-gradient-brand); color: #fff; box-shadow: 0 4px 12px rgba(45, 95, 63, .24); }
+.snx-sport-chip-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snx-sport-all { padding: 6px 8px; border: 1px dashed var(--snx-green-500); border-radius: var(--snx-radius-md); background: var(--snx-green-50); color: #047857; font: 700 11px var(--snx-font-sans); cursor: pointer; }
+.snx-sport-all:hover { background: var(--snx-green-100); }
+
+/* ---------- Đưa khung trang riêng của từng màn về cùng lề với .snx-page ---------- */
+.snx-main .mb-page,
+.snx-main .sp-page,
+.snx-main .responsive-page-container { max-width: none; margin: 0; padding: 24px 28px 40px; }
+.snx-page-header .mb-title,
+.snx-page-header .sp-main-title { margin: 0; }
+.snx-page > .snx-page-header:first-child,
+.snx-page > .snx-page-header { margin-top: 0; }
+@media (max-width: 1023px) {
+  .snx-main .mb-page,
+  .snx-main .sp-page,
+  .snx-main .responsive-page-container { padding: 16px 12px 32px; }
+}
+
+/* Nền dịu cho khu quản trị (Chủ sân): bỏ ảnh nền thể thao để bảng, số liệu dễ đọc */
+.snx-calm-bg {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, rgba(36, 115, 72, .08), transparent 60%),
+    radial-gradient(900px 400px at -10% 110%, rgba(36, 115, 72, .06), transparent 60%),
+    #f4f7f5;
+  color: #0f172a;
+}

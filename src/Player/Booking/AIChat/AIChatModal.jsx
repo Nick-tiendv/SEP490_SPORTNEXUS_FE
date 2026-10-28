@@ -1,8 +1,8 @@
 // AIChatModal.jsx — Khung chat thông minh giữa Người chơi và Trợ lý AI SportNexus
 import { useEffect, useRef, useState } from 'react'
+import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
-  COURTS,
   DISTRICT_CENTERS,
   buildSlotsForCourt,
   buildWelcomeMessage,
@@ -183,7 +183,7 @@ function AIChatModal({
 
     const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     const userMsg = {
-      id: `user-${Date.now()}`,
+      id: uid('user'),
       sender: 'user',
       text,
       time: nowStr,
@@ -212,7 +212,7 @@ function AIChatModal({
         setActiveCourtId(response.recommendedCourt.id)
       }
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         ...response,
@@ -297,7 +297,7 @@ function AIChatModal({
         setActiveCourtId(response.recommendedCourt.id)
       }
       const botMsg = {
-        id: `bot-${Date.now()}`,
+        id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         ...response,
@@ -514,7 +514,7 @@ function AIChatModal({
 
       recognitionRef.current = recognition
       recognition.start()
-    } catch (err) {
+    } catch {
       setIsListening(false)
       showToast('⚠️ Không thể khởi động Micro. Vui lòng thử lại!')
     }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { cancelOwnerBooking, checkInBooking, createWalkInBooking, getCancellationReasons, getFacilitySlots, updateSlotStatus } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 // Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
@@ -45,10 +47,10 @@ function cellState(slot) {
 }
 
 const CELL_STYLES = {
-  checked_in: { bg: '#ECFDF5', chip: '#10B981', label: 'Đã Vào Sân' },
-  paid: { bg: '#FEF3C7', chip: '#F59E0B', label: 'Đã Thanh Toán' },
-  pending: { bg: '#EFF6FF', chip: '#3B82F6', label: 'Chờ Góp Tiền' },
-  reserved: { bg: '#F5F3FF', chip: '#8B5CF6', label: 'Giữ Cho Giải' },
+  checked_in: { bg: '#ECFDF5', chip: '#10B981', label: 'Đã vào sân' },
+  paid: { bg: '#FEF3C7', chip: '#F59E0B', label: 'Đã thanh toán' },
+  pending: { bg: '#EFF6FF', chip: '#3B82F6', label: 'Chờ góp tiền' },
+  reserved: { bg: '#F5F3FF', chip: '#8B5CF6', label: 'Giữ cho giải' },
 }
 
 const BOOKING_STATUS_LABEL = {
@@ -84,12 +86,8 @@ export default function ViewCourtBookingSchedule() {
   const [cancelReasonText, setCancelReasonText] = useState('')
   const [lockAfterCancel, setLockAfterCancel] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [toastMessage, setToastMessage] = useState(null)
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type })
-    setTimeout(() => setToastMessage(null), 3500)
-  }
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
   useEffect(() => {
     if (!facilityId) return
@@ -264,6 +262,22 @@ export default function ViewCourtBookingSchedule() {
     )
   }
 
+  // Đổi giá 1 ca trống: PUT /slots/{id}/status { status: Available, price }
+  // priceDraft gắn với id ca đang sửa để tự bỏ khi mở ca khác.
+  const [priceDraft, setPriceDraft] = useState(null) // { slotId, value }
+  const handleChangeSlotPrice = (slot) => {
+    const price = Number(priceDraft?.value)
+    if (!Number.isFinite(price) || price < 1000) {
+      showToast('Giá ca phải từ 1.000 đ trở lên.', 'error')
+      return
+    }
+    runAction(
+      () => updateSlotStatus(slot.id, { status: SLOT_STATUS_CODE.AVAILABLE, price }),
+      `Đã đổi giá ca ${toClockVN(slot.startTime)} thành ${formatVND(price)}.`,
+      () => { setPriceDraft(null); setWalkinSlot(null) },
+    )
+  }
+
   // Khóa / mở lại ca trống: PUT /slots/{id}/status
   const handleToggleSlotLock = (slot, lock) => {
     runAction(
@@ -310,87 +324,30 @@ export default function ViewCourtBookingSchedule() {
 
   if (!layoutLoading && !layoutError && !facilityId) {
     return (
-      <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{ ...panelStyle, padding: '48px 28px', textAlign: 'center' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '44px', color: '#10B981' }}>domain_add</span>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '12px 0 6px' }}>Bạn chưa có cơ sở nào</h2>
-          <p style={{ margin: 0, color: '#475569', fontSize: '14px', fontWeight: 600 }}>
-            Hãy đăng ký cơ sở thể thao và chờ quản trị viên phê duyệt để xem lịch đặt sân.
-          </p>
-        </div>
+      <div className="snx-page">
+        <NoFacilityState what="nhận lịch đặt sân" />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
-            color: '#FFFFFF',
-            padding: '14px 22px',
-            borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-            fontWeight: 600,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            maxWidth: '420px',
-            animation: 'fadeInSlide 0.3s ease',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            {toastMessage.type === 'error' ? 'error' : 'check_circle'}
-          </span>
-          {toastMessage.msg}
-        </div>
-      )}
+    <div className="snx-page">
 
       {/* Header section */}
-      <div
-        style={{
-          ...panelStyle,
-          borderRadius: '20px',
-          padding: '24px 28px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-          marginBottom: '24px',
-        }}
-      >
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                color: '#fff',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                textTransform: 'uppercase',
-              }}
-            >
-              Unified Multi-Sport Scheduler
+            <span className="snx-page-eyebrow">
+              Vận hành
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
               {data?.facilityName || facility?.name || ''}
             </span>
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>
-            Lịch Đặt Sân Ngày {formatDateVN(selectedDate)}
+          <h1 className="snx-page-title">
+            Lịch đặt sân ngày {formatDateVN(selectedDate)}
           </h1>
-          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+          <p className="snx-page-subtitle">
             Xem toàn bộ {courts.length} sân{sports.length ? ` (${sports.join(', ')})` : ''} trên một bảng lưới duy nhất. Bấm ô trống để nhận khách vãng lai.
           </p>
         </div>
@@ -411,10 +368,10 @@ export default function ViewCourtBookingSchedule() {
               calendar_view_week
             </span>
             <div>
-              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase' }}>
-                Tổng Quy Mô Lưới
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 600, textTransform: 'uppercase' }}>
+                Tổng quy mô lưới
               </div>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
                 {data ? `${data.totalSlots} ca • ${data.availableSlots} trống • ${data.lockedSlots} khóa` : '—'}
               </div>
             </div>
@@ -425,31 +382,31 @@ export default function ViewCourtBookingSchedule() {
       {/* Analytics KPI Bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Tỷ Lệ Lấp Đầy Trong Ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>{occupancyRate}%</div>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Tỷ lệ lấp đầy trong ngày</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', margin: '4px 0' }}>{occupancyRate}%</div>
           <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>
             {bookedCount}/{totalSlotsCount} ca đã có khách
           </div>
         </div>
 
         <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Đã Check-in & Vào Sân</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>{checkedInCount} Ca</div>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Đã check-in & vào sân</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#047857', margin: '4px 0' }}>{checkedInCount} ca</div>
           <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
             {bookedCount - checkedInCount} ca đang chờ khách tới
           </div>
         </div>
 
         <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Doanh Thu Dự Kiến Trong Ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#1D4ED8', margin: '4px 0' }}>{formatVND(expectedRevenue)}</div>
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Doanh thu dự kiến trong ngày</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#1D4ED8', margin: '4px 0' }}>{formatVND(expectedRevenue)}</div>
           <div style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700 }}>Tổng giá các ca đã có khách</div>
         </div>
 
         <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 800 }}>Sân Sẵn Sàng Phục Vụ</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#047857', margin: '4px 0' }}>
-            {activeCourtCount}/{filteredCourts.length} Sân
+          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Sân sẵn sàng phục vụ</div>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#047857', margin: '4px 0' }}>
+            {activeCourtCount}/{filteredCourts.length} sân
           </div>
           <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>Sân con đang hoạt động</div>
         </div>
@@ -471,7 +428,7 @@ export default function ViewCourtBookingSchedule() {
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
           {/* Date picker */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Ngày:</span>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>Ngày:</span>
             <button type="button" style={dateButtonStyle} onClick={() => setSelectedDate((d) => shiftDate(d, -1))} title="Ngày trước">
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>chevron_left</span>
             </button>
@@ -492,7 +449,7 @@ export default function ViewCourtBookingSchedule() {
 
           {/* Sport Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>Bộ môn:</span>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>Bộ môn:</span>
             <select
               value={filterSport}
               onChange={(e) => setFilterSport(e.target.value)}
@@ -525,11 +482,11 @@ export default function ViewCourtBookingSchedule() {
         {/* Legend */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', fontSize: '12px', fontWeight: 600 }}>
           {[
-            ['#10B981', 'Đã Check-in'],
-            ['#F59E0B', 'Đã Thanh Toán (Chờ vào sân)'],
-            ['#3B82F6', 'Chờ Góp Tiền'],
-            ['#8B5CF6', 'Giữ Cho Giải Đấu'],
-            ['#94A3B8', 'Bảo Trì / Khóa'],
+            ['#10B981', 'Đã check-in'],
+            ['#F59E0B', 'Đã thanh toán (Chờ vào sân)'],
+            ['#3B82F6', 'Chờ góp tiền'],
+            ['#8B5CF6', 'Giữ cho giải đấu'],
+            ['#94A3B8', 'Bảo trì / khóa'],
           ].map(([color, label]) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: color }} />
@@ -538,7 +495,7 @@ export default function ViewCourtBookingSchedule() {
           ))}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '12px', height: '12px', borderRadius: '4px', background: '#F1F5F9', border: '1px solid #CBD5E1' }} />
-            <span>Còn Trống (Bấm để nhận khách)</span>
+            <span>Còn trống (Bấm để nhận khách)</span>
           </div>
         </div>
       </div>
@@ -561,13 +518,13 @@ export default function ViewCourtBookingSchedule() {
             <span className="material-symbols-outlined" style={{ fontSize: '40px', color: loadError ? '#EF4444' : '#10B981' }}>
               {loading ? 'progress_activity' : loadError ? 'error' : 'event_busy'}
             </span>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', marginTop: '8px' }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: '#0F172A', marginTop: '8px' }}>
               {loading ? 'Đang tải lịch đặt sân...' : loadError ? 'Không thể tải lịch đặt sân' : 'Chưa có ca sân nào trong ngày này'}
             </div>
             <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
               {loading
                 ? 'Lần tải đầu có thể mất 30–60 giây khi máy chủ khởi động.'
-                : loadError || 'Vào Quản Lý Cụm Sân để sinh ca cho các sân con, hoặc chọn ngày khác.'}
+                : loadError || 'Vào quản lý cụm sân để sinh ca cho các sân con, hoặc chọn ngày khác.'}
             </div>
           </div>
         ) : (
@@ -578,7 +535,7 @@ export default function ViewCourtBookingSchedule() {
                   style={{
                     padding: '14px 18px',
                     fontSize: '13px',
-                    fontWeight: 800,
+                    fontWeight: 600,
                     color: '#1E293B',
                     textAlign: 'left',
                     width: '240px',
@@ -597,7 +554,7 @@ export default function ViewCourtBookingSchedule() {
                     style={{
                       padding: '12px 10px',
                       fontSize: '12px',
-                      fontWeight: 800,
+                      fontWeight: 600,
                       color: '#475569',
                       textAlign: 'center',
                       background: '#F8FAFC',
@@ -628,7 +585,7 @@ export default function ViewCourtBookingSchedule() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: sportColor(court.sport), flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{court.name}</div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{court.name}</div>
                         <div style={{ fontSize: '11.5px', color: court.status === 'ACTIVE' ? '#1E293B' : '#B45309', fontWeight: 700 }}>
                           {court.sport}{court.status !== 'ACTIVE' ? ' • Tạm ngưng' : ''}
                         </div>
@@ -677,7 +634,7 @@ export default function ViewCourtBookingSchedule() {
                               boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
                             }}
                           >
-                            <div style={{ fontSize: '11px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '110px' }}>
                               {state === 'reserved' ? slot.matchName || slot.tournamentName || 'Trận đấu giải' : slot.customerName || 'Khách hàng'}
                             </div>
                             <div style={{ fontSize: '10px', opacity: 0.9, marginTop: '2px' }}>
@@ -699,7 +656,7 @@ export default function ViewCourtBookingSchedule() {
                           >
                             {state === 'available' && picked && (
                               <>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#047857', fontWeight: 800 }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#047857', fontWeight: 600 }}>
                                   <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>check_circle</span>
                                   Đã chọn
                                 </span>
@@ -800,7 +757,7 @@ export default function ViewCourtBookingSchedule() {
                 return (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Ca Đang Khóa / Bảo Trì</h3>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Ca đang khóa / bảo trì</h3>
                       <button onClick={() => setSelectedSlot(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                         <span className="material-symbols-outlined">close</span>
                       </button>
@@ -813,7 +770,7 @@ export default function ViewCourtBookingSchedule() {
                       disabled={busy || slot.isPast}
                       style={{ width: '100%', background: '#10B981', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy || slot.isPast ? 0.6 : 1 }}
                     >
-                      {slot.isPast ? 'Ca đã qua giờ' : busy ? 'Đang xử lý...' : 'Mở Lại Ca'}
+                      {slot.isPast ? 'Ca đã qua giờ' : busy ? 'Đang xử lý...' : 'Mở lại ca'}
                     </button>
                   </>
                 )
@@ -827,7 +784,7 @@ export default function ViewCourtBookingSchedule() {
                         background: state === 'checked_in' ? '#DCFCE7' : state === 'pending' ? '#DBEAFE' : '#FEF3C7',
                         color: state === 'checked_in' ? '#15803D' : state === 'pending' ? '#1D4ED8' : '#B45309',
                         fontSize: '12px',
-                        fontWeight: 800,
+                        fontWeight: 600,
                         padding: '4px 8px',
                         borderRadius: '6px',
                       }}
@@ -839,8 +796,8 @@ export default function ViewCourtBookingSchedule() {
                     </button>
                   </div>
 
-                  <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: '0 0 16px 0' }}>
-                    Chi Tiết Đặt Sân: {court.name}
+                  <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#0F172A', margin: '0 0 16px 0' }}>
+                    Chi tiết đặt sân: {court.name}
                   </h3>
 
                   <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', border: '1px solid #CBD5E1', marginBottom: '20px' }}>
@@ -860,7 +817,7 @@ export default function ViewCourtBookingSchedule() {
 
                   {cancelMode ? (
                     <form onSubmit={handleCancelBooking}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Lý do hủy:</label>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Lý do hủy:</label>
                       <select value={cancelReasonCode} onChange={(e) => setCancelReasonCode(e.target.value)} style={{ ...inputStyle, marginBottom: '10px', background: '#FFFFFF' }}>
                         {cancelReasons.map((reason) => (
                           <option key={reason.code} value={String(reason.code)}>{reason.label}</option>
@@ -887,7 +844,7 @@ export default function ViewCourtBookingSchedule() {
                           Quay lại
                         </button>
                         <button type="submit" disabled={busy} style={{ flex: 1, background: '#DC2626', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                          {busy ? 'Đang hủy...' : 'Xác Nhận Hủy Đơn'}
+                          {busy ? 'Đang hủy...' : 'Xác nhận hủy đơn'}
                         </button>
                       </div>
                     </form>
@@ -915,7 +872,7 @@ export default function ViewCourtBookingSchedule() {
                           }}
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>how_to_reg</span>
-                          {busy ? 'Đang check-in...' : 'Check-in Thủ Công'}
+                          {busy ? 'Đang check-in...' : 'Check-in thủ công'}
                         </button>
                       )}
                       {state !== 'checked_in' && (
@@ -923,7 +880,7 @@ export default function ViewCourtBookingSchedule() {
                           onClick={() => setCancelMode(true)}
                           style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', flex: state === 'paid' ? undefined : 1 }}
                         >
-                          Hủy Đặt Sân
+                          Hủy đặt sân
                         </button>
                       )}
                       {state === 'checked_in' && (
@@ -957,7 +914,7 @@ export default function ViewCourtBookingSchedule() {
         >
           <div style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Đặt Giữ Chỗ Nhanh (Khách Vãng Lai)</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Đặt giữ chỗ nhanh (Khách vãng lai)</h3>
               <button onClick={() => setWalkinSlot(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -965,7 +922,7 @@ export default function ViewCourtBookingSchedule() {
 
             {walkinSlot.items ? (
               <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>
                   {walkinSlot.items.length} ca ngày {formatDateVN(selectedDate)}
                 </div>
                 <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
@@ -976,30 +933,40 @@ export default function ViewCourtBookingSchedule() {
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#047857', borderTop: '1px dashed #CBD5E1', marginTop: '6px', paddingTop: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600, color: '#047857', borderTop: '1px dashed #CBD5E1', marginTop: '6px', paddingTop: '6px' }}>
                   <span>Tổng cộng</span>
                   <span>{formatVND(walkinSlot.items.reduce((sum, { slot }) => sum + (Number(slot.price) || 0), 0))}</span>
                 </div>
               </div>
             ) : (
               <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px', border: '1px solid #CBD5E1' }}>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>{walkinSlot.court.name}</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{walkinSlot.court.name}</div>
                 <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 600, marginTop: '2px' }}>
                   Bắt đầu: <strong>{toClockVN(walkinSlot.slot.startTime)}</strong> ngày {formatDateVN(selectedDate)} • Giá:{' '}
                   <strong>{formatVND(walkinSlot.slot.price)}</strong>/ca
+                  {priceDraft?.slotId !== walkinSlot.slot.id && (
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" style={{ marginLeft: 6 }} onClick={() => setPriceDraft({ slotId: walkinSlot.slot.id, value: String(walkinSlot.slot.price ?? '') })}>Đổi giá</button>
+                  )}
                 </div>
+                {priceDraft?.slotId === walkinSlot.slot.id && (
+                  <div className="snx-row" style={{ marginTop: 8 }}>
+                    <input className="snx-input" style={{ width: 160 }} type="number" min={1000} step={1000} value={priceDraft.value} onChange={(e) => setPriceDraft({ ...priceDraft, value: e.target.value })} aria-label="Giá mới của ca" />
+                    <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busy} onClick={() => handleChangeSlotPrice(walkinSlot.slot)}>Lưu giá</button>
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setPriceDraft(null)}>Hủy</button>
+                  </div>
+                )}
               </div>
             )}
 
             <form onSubmit={handleCreateWalkinBooking}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Tên Khách Hàng / Đội Bóng:</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Tên khách hàng / đội bóng:</label>
                 <input type="text" required placeholder="VD: Anh Tuấn, FC Hoàng Gia..." value={walkinName} onChange={(e) => setWalkinName(e.target.value)} style={inputStyle} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: walkinSlot.items ? '1fr' : '1fr 140px', gap: '12px', marginBottom: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số Điện Thoại:</label>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>Số điện thoại:</label>
                   <input type="tel" placeholder="09xx xxx xxx" value={walkinPhone} onChange={(e) => setWalkinPhone(e.target.value)} style={inputStyle} />
                 </div>
                 {!walkinSlot.items && <div>
@@ -1047,7 +1014,7 @@ export default function ViewCourtBookingSchedule() {
                     disabled={busy}
                     style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}
                   >
-                    {busy ? 'Đang tạo đơn...' : 'Xác Nhận Giữ Sân'}
+                    {busy ? 'Đang tạo đơn...' : 'Xác nhận giữ sân'}
                   </button>
                 </div>
               </div>

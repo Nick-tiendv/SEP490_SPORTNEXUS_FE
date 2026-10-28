@@ -1,11 +1,14 @@
 import apiClient from '../apiClient.js'
 import { pick, toList, unwrap } from './dashboardApi.js'
 
+// Ngày (yyyy-MM-dd) theo giờ Việt Nam. Chuỗi không kèm múi giờ giữ nguyên phần ngày;
+// chuỗi có Z/offset (DateTimeOffset) là một thời điểm → quy về ngày Việt Nam.
+const vnDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' })
 const toIsoDate = value => {
   if (!value) return ''
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) && !/(Z|[+-]\d{2}:?\d{2})$/.test(value)) return value.slice(0, 10)
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
+  return Number.isNaN(date.getTime()) ? '' : vnDate.format(date)
 }
 const toNumberOrNull = value => (value === undefined || value === null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value))
 
@@ -24,11 +27,12 @@ export function toAccount(raw) {
     role: String(pick(raw, 'roleName', 'role.name', 'role', 'role.roleName') ?? ''),
     roleId: String(pick(raw, 'roleId', 'role.id') ?? ''),
     status: active ? 'Active' : 'Suspended',
-    joined: toIsoDate(pick(raw, 'createdAt', 'createdDate', 'createdOn', 'joinedAt')),
+    // AccountReponse (docs 06) đặt tên trường là `createAt`.
+    joined: toIsoDate(pick(raw, 'createAt', 'createdAt', 'createdDate', 'createdOn', 'joinedAt')),
+    modifiedAt: pick(raw, 'modifiedAt', 'updatedAt') || '',
     avatarUrl: pick(raw, 'avatarUrl', 'avatar') || '',
     fairplay: toNumberOrNull(pick(raw, 'fairPlayScore', 'fairplayScore')),
     wallet: toNumberOrNull(pick(raw, 'walletBalance', 'wallet.balance', 'balance')),
-    verified: pick(raw, 'isVerified', 'emailConfirmed', 'isEmailVerified'),
   }
 }
 
@@ -54,4 +58,8 @@ export async function toggleAccountStatus(id) {
 }
 export async function deleteAccount(id) {
   return unwrap((await apiClient.delete(`/api/accounts/${encodeURIComponent(id)}`)).data)
+}
+// GET /api/accounts/admin/by-phone?phone= : tra cứu đầy đủ tài khoản theo SĐT (có thể trả nhiều tài khoản).
+export async function findAccountsByPhone(phone) {
+  return toList(unwrap((await apiClient.get('/api/accounts/admin/by-phone', { params: { phone } })).data)).items.map(toAccount)
 }

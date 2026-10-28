@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
@@ -42,7 +43,7 @@ const toWithdrawalItem = (raw) => {
     bank: { bankName: raw.bankName || '', accountNumber: raw.bankAccountNumber || '', accountHolder: raw.bankAccountHolder || '' },
   }
 }
-import { isSafeInternalPath } from './DepositResultCard.jsx'
+import { isSafeInternalPath } from './depositUtils.js'
 
 /**
  * Màn Ví Escrow — luồng nạp tiền PayOS
@@ -283,7 +284,7 @@ export default function WalletEscrow() {
 
   // Hủy yêu cầu rút tiền: POST /api/v1/wallet/withdrawals/{id}/cancel
   const handleCancelWithdrawal = async (requestId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn hủy yêu cầu rút tiền này không?')) return
+    if (!(await confirmDialog('Bạn có chắc chắn muốn hủy yêu cầu rút tiền này không?'))) return
     try {
       await cancelWithdrawalRequest(requestId)
       toast.success('Đã hủy yêu cầu rút tiền thành công.')
@@ -306,7 +307,7 @@ export default function WalletEscrow() {
         if (fullDetail) setSelectedTxDetail(fullDetail)
       }
     } catch (err) {
-      console.warn('[WalletEscrow] Không thể tải chi tiết giao dịch:', err)
+      toast.error(err?.message || 'Không tải được chi tiết giao dịch.')
     } finally {
       setLoadingTxDetail(false)
     }
@@ -318,6 +319,8 @@ export default function WalletEscrow() {
   const [payMode, setPayMode] = useState('qr') // Mặc định hiển thị VietQR tại chỗ để thuận tiện trên mọi thiết bị
   const [submitting, setSubmitting] = useState(false)
   const amountError = validateDepositAmount(amount)
+  // Chỉ tô đỏ / báo lỗi sau khi người dùng đã nhập hoặc bấm nạp
+  const showAmountError = touched && Boolean(amountError)
 
   const handleAmountInput = (e) => {
     const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -331,7 +334,7 @@ export default function WalletEscrow() {
   const [qrPhase, setQrPhase] = useState(DEPOSIT_STATUS.PENDING)
   const [cancelling, setCancelling] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
 
   const handleSubmit = async () => {
     setTouched(true)
@@ -515,12 +518,12 @@ export default function WalletEscrow() {
   /* ============================== RENDER ============================== */
   return (
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
-      <div className="max-w-[1240px] mx-auto px-4 md:px-6 pt-6 pb-12">
+      <div className="snx-page">
         {/* ---------- Header ---------- */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+        <header className="snx-page-header">
           <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]/60">
+            <div className="snx-page-eyebrow-row">
+              <span className="snx-page-eyebrow">
                 Cổng thanh toán PayOS
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC]/60">
@@ -528,7 +531,7 @@ export default function WalletEscrow() {
                 VietQR • Napas 24/7
               </span>
             </div>
-            <h1 className="text-2xl md:text-[32px] font-extrabold text-[#111827] tracking-tight leading-snug">Ví Escrow &amp; Nạp tiền</h1>
+            <h1 className="snx-page-title">Ví Escrow &amp; Nạp tiền</h1>
           </div>
           <button
             id="wallet-refresh-btn"
@@ -687,7 +690,7 @@ export default function WalletEscrow() {
                 className={`border rounded-2xl px-5 py-4 flex items-center gap-4 transition-all focus-within:ring-2 ${
                   amount > DEPOSIT_MAX
                     ? 'bg-rose-50/60 border-2 border-rose-500 focus-within:ring-rose-200'
-                    : amountError
+                    : showAmountError
                     ? 'bg-rose-50/30 border border-rose-400 focus-within:ring-rose-200'
                     : 'bg-[#F8FAFC] border-[#E2E8F0] focus-within:border-[#10B981] focus-within:ring-[#10B981]/20'
                 }`}
@@ -704,7 +707,7 @@ export default function WalletEscrow() {
                   placeholder="0"
                   onChange={handleAmountInput}
                   onBlur={() => setTouched(true)}
-                  aria-invalid={Boolean(amountError)}
+                  aria-invalid={showAmountError}
                   aria-describedby="deposit-amount-hint"
                   className={`w-full bg-transparent text-2xl md:text-[28px] font-extrabold outline-none tracking-tight ${
                     amount > DEPOSIT_MAX ? 'text-rose-700' : 'text-[#111827]'
@@ -747,8 +750,8 @@ export default function WalletEscrow() {
                 </div>
               )}
 
-              <p id="deposit-amount-hint" className={`mt-2 text-xs font-semibold ${amountError ? 'text-rose-600' : 'text-[#6B7280]'}`}>
-                {amountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)}đ, tối đa ${formatVND(DEPOSIT_MAX)}đ.`}
+              <p id="deposit-amount-hint" className={`mt-2 text-xs font-semibold ${showAmountError ? 'text-rose-600' : 'text-[#6B7280]'}`}>
+                {showAmountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)}đ, tối đa ${formatVND(DEPOSIT_MAX)}đ.`}
               </p>
 
               <div className="mt-5">

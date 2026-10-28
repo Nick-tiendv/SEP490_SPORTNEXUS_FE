@@ -442,3 +442,30 @@
   .sn-admin .admin-chart-summary { margin: 0 var(--sp-4); }
   .sn-admin .admin-page-header__actions .admin-segmented { overflow-x: auto; }
 }
+
+/* ---------- Xu hướng giảm trên thẻ thống kê ---------- */
+.sn-admin .admin-stat-trend.is-down > svg { background: var(--sn-danger-bg); color: var(--sn-danger-text); }
+.sn-admin .admin-stat-trend.is-down > span { color: var(--sn-danger-text); }
+.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-trend.is-down > span { color: #fecaca; }
+
+/* ---------- Nút làm mới ---------- */
+.sn-admin .admin-dashboard-refresh .is-spinning { animation: admin-dashboard-spin .9s linear infinite; }
+@keyframes admin-dashboard-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sn-admin .admin-dashboard-refresh .is-spinning { animation: none; } }
+
+/* ---------- Hình thức đặt sân (bảng đơn gần đây) ---------- */
+.sn-admin .admin-booking-channel { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--sn-success-text); white-space: nowrap; }
+.sn-admin .admin-booking-channel::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sn-admin .admin-booking-channel.walk-in { color: var(--sn-info-text); }
+
+/* ---------- Tài chính & hoạt động ---------- */
+.sn-admin .admin-platform-summary { display: flex; flex-direction: column; }
+.sn-admin .admin-summary-groups { display: flex; flex-direction: column; gap: var(--sp-4); flex: 1; padding: 0 var(--sp-5) var(--sp-4); }
+.sn-admin .admin-summary-group h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: .04em; color: var(--admin-text-muted); }
+.sn-admin .admin-summary-group dl { display: flex; flex-direction: column; margin: 0; }
+.sn-admin .admin-summary-group dl > div { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 6px 0; border-bottom: 1px dashed var(--admin-divider); font-size: var(--fs-sm); }
+.sn-admin .admin-summary-group dl > div:last-child { border-bottom: 0; }
+.sn-admin .admin-summary-group dt { color: var(--admin-text-muted); }
+.sn-admin .admin-summary-group dd { margin: 0; font-weight: var(--fw-semibold); color: var(--admin-text); font-variant-numeric: tabular-nums; text-align: right; }
+.sn-admin .admin-summary-link { color: var(--admin-primary); text-decoration: none; border-style: solid; }
+.sn-admin .admin-summary-link:hover { background: var(--sn-green-50); border-color: var(--sn-green-200); }

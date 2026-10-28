@@ -1,15 +1,18 @@
 // Nhãn hiển thị và hàm tiện ích cho trang Đánh giá & Báo cáo (dữ liệu thật lấy qua src/api/admin/reportApi.js).
-// Các giá trị enum (trạng thái, loại đối tượng, quyết định) là phỏng đoán — cần đối chiếu với BE.
+// Enum theo BE: ReportStatus, ReportTargetType (ReportEnums.cs) và Decision của AdminResolveReportRequest.
 
-export const reportStatusLabels = { Pending: 'Đang chờ xử lý', InReview: 'Đang xem xét', OwnerResponded: 'Chủ sân đã phản hồi', Resolved: 'Đã giải quyết', Rejected: 'Đã bác bỏ', Withdrawn: 'Đã rút' }
-export const targetTypeLabels = { Booking: 'Đặt sân', Facility: 'Cơ sở thể thao', User: 'Người chơi', Player: 'Người chơi', CommunityPost: 'Bài viết cộng đồng', Post: 'Bài viết cộng đồng', Review: 'Đánh giá', Other: 'Khác' }
-// Giá trị `decision` gửi lên POST /reports/admin/{id}/resolve.
+export const reportStatusLabels = { PENDING: 'Chờ xử lý', OWNER_RESPONDED: 'Chủ sân đã giải trình', RESOLVED_REFUNDED: 'Đã hoàn tiền', RESOLVED_NO_REFUND: 'Đã xử lý, không hoàn tiền', REJECTED: 'Đã bác bỏ', WITHDRAWN: 'Người báo cáo đã rút' }
+export const targetTypeLabels = { BOOKING: 'Đặt sân', FACILITY: 'Cơ sở thể thao', USER: 'Người chơi', COMMUNITY_POST: 'Bài viết cộng đồng' }
+// Giá trị `decision` gửi lên POST /reports/admin/{id}/resolve: REFUND | RESOLVE_NO_REFUND | REJECT.
 export const decisionOptions = [
-  { value: 'Approved', label: 'Chấp nhận báo cáo (xác nhận vi phạm)' },
-  { value: 'Rejected', label: 'Bác bỏ báo cáo (không vi phạm)' },
+  { value: 'REFUND', label: 'Chấp nhận, hoàn tiền cho người báo cáo' },
+  { value: 'RESOLVE_NO_REFUND', label: 'Chấp nhận, không hoàn tiền' },
+  { value: 'REJECT', label: 'Bác bỏ báo cáo (không vi phạm)' },
 ]
+// 'OwnerResponded' / 'owner_responded' -> 'OWNER_RESPONDED'
+export const toEnumKey = value => String(value ?? '').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
 export const label = value => reportStatusLabels[value] || targetTypeLabels[value] || value || '—'
-export const isActiveReport = report => !/resolv|reject|dismiss|withdraw|closed/i.test(report.status)
+export const isActiveReport = report => ['PENDING', 'OWNER_RESPONDED'].includes(report.status)
 
 export const emptyFilters = { search: '', status: '', targetType: '', responded: '', from: '', to: '' }
 

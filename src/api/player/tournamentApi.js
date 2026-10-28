@@ -73,10 +73,45 @@ export async function getMyRegistrations() {
 export const joinTournament = (id, teamId) => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/join${teamId ? `?teamId=${encodeURIComponent(teamId)}` : ''}`)
 // POST /api/v1/tournaments/{id}/cancel: hủy đăng ký của tôi
 export const cancelTournamentRegistration = id => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/cancel`)
-// GET /api/v1/teams/my-teams: đội của tôi (để đăng ký nội dung đôi / đội)
-export async function getMyTeams() {
-  const { items } = await getList('/api/v1/teams/my-teams')
-  return items.map(raw => ({ id: String(raw.id ?? raw.teamId ?? ''), name: raw.name || raw.teamName || 'Đội' }))
+// GET /api/v1/tournaments?facilityId&categoryId&status: danh sách giải công khai
+export async function getTournaments({ facilityId, categoryId, status } = {}) {
+  const { items } = await getList(TOURNAMENTS_ENDPOINT, { facilityId, categoryId, status })
+  return items.map(toTournament)
+}
+// GET /api/v1/facilities/{facilityId}/tournaments: giải tổ chức tại một cơ sở
+export const getFacilityTournaments = async facilityId =>
+  (await getList(`/api/v1/facilities/${encodeURIComponent(facilityId)}/tournaments`)).items.map(toTournament)
+
+// GET /api/v1/tournaments/my-matches?from&to: lịch thi đấu của tôi
+// MyMatchResponse: matchId, tournamentName, parentTournamentName, roundName, status, startTime, endTime, courtName, facilityName, mySideName, opponentName, winnerName
+export const getMyMatches = async ({ from, to } = {}) => (await getList(`${TOURNAMENTS_ENDPOINT}/my-matches`, { from, to })).items
+
+// GET /api/v1/tournaments/{id}/court-schedule: các khung giờ sân đã giữ và các trận đã xếp sân
+export const getCourtSchedule = id => get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/court-schedule`)
+
+// GET /api/v1/tournaments/{id}/participants (công khai, id là bảng đấu): VĐV / đội đã đăng ký
+// TournamentParticipantResponse: participantId, fullName, avatarUrl, teamName, isCheckedIn, teamMembers[]
+export const getTournamentParticipants = async id => (await getList(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/participants`)).items
+
+// GET /api/v1/tournaments/{id}/bracket (công khai): danh sách trận { id, matchIndex, roundName, status, startTime, courtName, p1, p2, winner, scores[] }
+// Gom theo vòng đấu, giữ thứ tự BE trả về.
+export async function getTournamentBracket(id) {
+  const data = await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/bracket`)
+  const matches = Array.isArray(data) ? data : data?.items || data?.matches || []
+  const rounds = []
+  for (const m of [...matches].sort((a, b) => (a.matchIndex ?? 0) - (b.matchIndex ?? 0))) {
+    const name = m.roundName || 'Vòng đấu'
+    let round = rounds.find(r => r.name === name)
+    if (!round) rounds.push(round = { name, matches: [] })
+    round.matches.push(m)
+  }
+  return rounds
+}
+
+// GET /api/v1/matches/{matchId}: BE trả MẢNG MatchDetailResponse (lấy phần tử đầu)
+export async function getMatch(matchId) {
+  const data = await get(`/api/v1/matches/${encodeURIComponent(matchId)}`)
+  return Array.isArray(data) ? data[0] || null : data
 }
 
 export default {

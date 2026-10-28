@@ -169,7 +169,7 @@
   --z-toast: 300;
 
   /* ---------- Layout metrics ---------- */
-  --sidebar-w: 264px;
+  --sidebar-w: 260px; /* cùng độ rộng sidebar với Player & Chủ sân (app-shell.css) */
   --sidebar-w-rail: 76px;
   --header-h: 68px;
   --content-max: 1560px;

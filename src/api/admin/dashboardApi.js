@@ -50,7 +50,8 @@ export async function fetchAllPages(fetchPage, maxPages = 20) {
 export function normalizeBooking(raw) {
   const start = pick(raw, 'startTime', 'slotStartTime', 'courtSlot.startTime', 'slot.startTime')
   const end = pick(raw, 'endTime', 'slotEndTime', 'courtSlot.endTime', 'slot.endTime')
-  const date = pick(raw, 'bookingDate', 'date', 'slotDate', 'courtSlot.date', 'createdAt', 'createdDate')
+  // Ngày của đơn = ngày chơi (startTime); ngày tạo đơn chỉ là phương án cuối.
+  const date = pick(raw, 'bookingDate', 'date', 'slotDate', 'courtSlot.date', 'startTime', 'createdAt', 'createdDate')
   const user = pick(raw, 'hostName', 'host.fullName', 'customerName', 'userName', 'accountName', 'account.fullName', 'user.fullName', 'playerName') || '—'
   return {
     id: String(pick(raw, 'bookingCode', 'code', 'id', 'bookingId') ?? ''),
@@ -66,6 +67,9 @@ export function normalizeBooking(raw) {
     amount: toNumber(pick(raw, 'totalAmount', 'amount', 'totalPrice', 'price', 'finalAmount')) ?? 0,
     status: String(pick(raw, 'status', 'bookingStatus') ?? 'Pending'),
     payment: String(pick(raw, 'paymentStatus', 'payment.status') ?? ''),
+    isWalkIn: pick(raw, 'isWalkIn') === true,
+    participantCount: toNumber(pick(raw, 'participantCount')),
+    checkedInCount: toNumber(pick(raw, 'checkedInCount')),
   }
 }
 export async function getAdminBookings(params) {
@@ -79,12 +83,33 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
     totalBookings: toNumber(pick(data, 'totalBookings', 'totalBooking', 'bookingCount', 'total', 'count')),
     // activeRevenue = doanh thu đơn chưa hủy (docs 11: AdminBookingStatisticsResponse).
     totalRevenue: toNumber(pick(data, 'activeRevenue', 'grossBookingVolume', 'totalRevenue', 'revenue', 'totalAmount', 'grossRevenue', 'platformRevenue')),
+    paid: toNumber(data.paidBookingsCount),
+    checkedIn: toNumber(data.checkedInBookingsCount),
+    cancelled: toNumber(data.cancelledBookingsCount),
+    walkIn: toNumber(data.walkInBookingsCount),
+    cancellationRate: toNumber(data.cancellationRatePercent),
+    checkInRate: toNumber(data.checkInRatePercent),
+    refunded: toNumber(data.totalRefundedAmount),
+    penalty: toNumber(data.totalPenaltyRetainedAmount),
   }
 }
 
 // ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------
 const numbers = (source, keys) => Object.fromEntries(keys.map(key => [key, toNumber(source?.[key])]))
-export async function getAdminDashboard({ fromDate, toDate } = {}) {
+// Layout (badge), trang Tổng quan và biểu đồ cùng gọi API này: gộp request trùng và cache ngắn hạn.
+// Truyền { fresh: true } để bỏ qua cache (nút "Làm mới", tải lại badge sau khi chuyển trang).
+const DASHBOARD_CACHE_MS = 15000
+const dashboardCache = new Map()
+export function getAdminDashboard({ fromDate, toDate } = {}, { fresh = false } = {}) {
+  const key = `${fromDate || ''}|${toDate || ''}`
+  const hit = dashboardCache.get(key)
+  if (!fresh && hit && Date.now() - hit.at < DASHBOARD_CACHE_MS) return hit.promise
+  const promise = loadAdminDashboard({ fromDate, toDate })
+  dashboardCache.set(key, { at: Date.now(), promise })
+  promise.catch(() => { if (dashboardCache.get(key)?.promise === promise) dashboardCache.delete(key) })
+  return promise
+}
+async function loadAdminDashboard({ fromDate, toDate }) {
   const data = await get('/api/v1/admin/dashboard', { fromDate, toDate }) || {}
   return {
     from: data.from,
@@ -103,14 +128,4 @@ export async function getAdminDashboard({ fromDate, toDate } = {}) {
       bookingGrossValue: toNumber(day.bookingGrossValue) ?? 0,
     })),
   }
-}
-
-// ---------- Master data / current user ----------
-export async function getSports() {
-  return toList(await get('/api/v1/master-data/sports')).items
-    .map(sport => ({ id: pick(sport, 'id', 'sportId'), name: pick(sport, 'name', 'sportName', 'title') }))
-    .filter(sport => sport.name)
-}
-export async function getCurrentUserName() {
-  return pick(await get('/api/auth/me'), 'fullName', 'name', 'username', 'userName') || ''
 }

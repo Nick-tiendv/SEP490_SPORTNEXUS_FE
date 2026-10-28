@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -9,12 +9,8 @@ import {
   normalizeDepositStatus,
   readPendingDeposit,
 } from '../../api/player/walletApi.js'
-import DepositResultCard, {
-  PrimaryButton,
-  SecondaryButton,
-  formatVND,
-  resolveReturnTarget,
-} from './DepositResultCard.jsx'
+import DepositResultCard, { PrimaryButton, SecondaryButton } from './DepositResultCard.jsx'
+import { formatVND, resolveReturnTarget } from './depositUtils.js'
 
 /**
  * Trang returnUrl của PayOS: /wallet/deposit-success?code=00&id=...&cancel=false&status=PAID&orderCode=...
@@ -50,13 +46,14 @@ export default function DepositSuccess() {
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(MAX_POLL_MS / 1000))
   const [attempt, setAttempt] = useState(0)
   const [autoReturnIn, setAutoReturnIn] = useState(null)
-  const returnTargetRef = useRef(initial.returnTarget)
+  // Màn cần quay lại sau khi nạp: chốt 1 lần ở lần render đầu (không đổi)
+  const returnTarget = initial.returnTarget
 
   const goBackToBooking = useCallback(() => {
-    const target = returnTargetRef.current
+    const target = returnTarget
     if (target) navigate(target.path, { state: target.state })
     else navigate('/court-finder')
-  }, [navigate])
+  }, [navigate, returnTarget])
 
   // Bước 2 + 3: kiểm tra trạng thái và polling khi còn PENDING_PAYMENT
   useEffect(() => {
@@ -74,7 +71,7 @@ export default function DepositSuccess() {
       try {
         const w = await getWallet()
         if (active) setWallet(w)
-      } catch {}
+      } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       // Tránh báo trùng khi F5 trang
       const notifiedKey = `deposit_notified_${orderCode}`
       if (!sessionStorage.getItem(notifiedKey)) {
@@ -96,7 +93,7 @@ export default function DepositSuccess() {
           })
         )
       }
-      if (active && returnTargetRef.current) setAutoReturnIn(AUTO_RETURN_SECONDS)
+      if (active && returnTarget) setAutoReturnIn(AUTO_RETURN_SECONDS)
     }
 
     const tick = async () => {
@@ -137,7 +134,7 @@ export default function DepositSuccess() {
       active = false
       clearTimeout(timer)
     }
-  }, [orderCode, attempt])
+  }, [orderCode, attempt, returnTarget])
 
   // Tự quay về màn đặt sân sau khi thành công (nếu người dùng đến từ màn đặt sân)
   useEffect(() => {
@@ -163,7 +160,7 @@ export default function DepositSuccess() {
   ]
 
   const retry = () => setAttempt((n) => n + 1)
-  const savedTarget = returnTargetRef.current
+  const savedTarget = returnTarget
   const backLabel = savedTarget?.label || (savedTarget ? 'Quay lại đặt sân' : 'Tiếp tục đặt sân')
 
   if (phase === 'SUCCESS') {

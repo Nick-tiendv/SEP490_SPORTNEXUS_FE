@@ -2,12 +2,14 @@
 // Thiết kế pastel sáng, năng động, chuyên nghiệp & hỗ trợ lọc linh hoạt theo 5 môn thể thao (Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis)
 
 import { useState, useEffect, useMemo } from 'react'
+import { toast } from 'sonner'
 import { Link, useNavigate } from 'react-router-dom'
-import { useSport } from '../Context/SportContext.jsx'
+import { useSport } from '../Context/sportContext.js'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
+import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs } from '../../api/player/lfgApi.js'
 
 const actionCards = [
@@ -48,7 +50,7 @@ const actionCards = [
 // =========================================================================
 // QUY CHUẨN THÔNG SỐ SÂN THỰC TẾ THEO TIÊU CHUẨN THI ĐẤU QUỐC TẾ CHÍNH THỨC
 // =========================================================================
-export const SPORT_COURT_STANDARDS = {
+const SPORT_COURT_STANDARDS = {
   badminton: {
     sportName: 'Cầu Lông',
     federation: 'BWF (Badminton World Federation)',
@@ -814,31 +816,9 @@ function Dashboard() {
       if (savedRole === 'court_owner' || savedRole === 'admin') {
         navigate('/owner/dashboard', { replace: true })
       }
-    } catch (e) {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
   }, [navigate])
 
-  const [playerProfile, setPlayerProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {}
-    return {}
-  })
-
-  useEffect(() => {
-    const handleProfileUpdate = () => {
-      try {
-        const saved = localStorage.getItem('player_profile_data')
-        if (saved) setPlayerProfile(JSON.parse(saved))
-      } catch (e) {}
-    }
-    window.addEventListener('player-profile-updated', handleProfileUpdate)
-    window.addEventListener('storage', handleProfileUpdate)
-    return () => {
-      window.removeEventListener('player-profile-updated', handleProfileUpdate)
-      window.removeEventListener('storage', handleProfileUpdate)
-    }
-  }, [])
 
   const {
     selectedSports,
@@ -975,7 +955,7 @@ function Dashboard() {
         if (Array.isArray(all)) setApiSuggestedCourts(all)
       }
     } catch (err) {
-      console.warn('Dashboard: Lỗi tìm kiếm cơ sở:', err)
+      toast.error(err?.message || 'Không tìm được cơ sở, vui lòng thử lại.')
     } finally {
       setIsSearchingCourts(false)
     }
@@ -1007,14 +987,10 @@ function Dashboard() {
 
 
   return (
-    <div
-      className="responsive-page-container"
-      style={{
-        maxWidth: '1160px',
-        margin: '0 auto',
-        fontFamily: "'Inter', sans-serif",
-      }}
-    >
+    <div className="snx-page">
+      {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
+      <SplitInvites />
+
       {/* ===================== SECTION 1: WELCOME & QUICK SPORT BAR ===================== */}
       <section
         style={{
@@ -1043,15 +1019,7 @@ function Dashboard() {
           {/* Welcome Text */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <h1
-                style={{
-                  fontSize: '28px',
-                  fontWeight: 800,
-                  color: '#1C3524',
-                  margin: 0,
-                  letterSpacing: '-0.5px',
-                }}
-              >
+              <h1 className="snx-page-title">
                 Xin chào, {currentUser.name || 'bạn'} 👋
               </h1>
               <span

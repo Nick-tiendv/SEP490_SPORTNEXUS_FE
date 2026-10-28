@@ -1,342 +1,102 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { useSport } from '../Context/SportContext.jsx'
+import { useSport } from '../Context/sportContext.js'
 import NotificationBell from './NotificationBell.jsx'
 import { getWallet } from '../../api/player/walletApi.js'
-import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { logoutApi } from '../../api/player/profileApi.js'
+import { useAuth } from '../../context/authContext.js'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { AppTopbar, UserMenu } from '../../components/layout/AppShell.jsx'
 
-function TopBar() {
+// Tên trang hiển thị trên thanh trên (đường dẫn "Người chơi › Tên trang")
+const PAGE_TITLES = {
+  '/dashboard': 'Trang chủ',
+  '/court-finder': 'Đặt sân',
+  '/court': 'Chi tiết sân',
+  '/split-payment': 'Thanh toán đặt sân',
+  '/ai-chat': 'Trợ lý AI đặt sân',
+  '/community': 'Ghép trận LFG',
+  '/feed': 'Cộng đồng',
+  '/create-match': 'Tạo kèo mới',
+  '/flash-claim': 'Nhận suất nhanh',
+  '/qr-pass': 'Vé check-in QR',
+  '/check-in': 'Vé check-in QR',
+  '/live-qr': 'Vé check-in QR',
+  '/post-match-rating': 'Đánh giá sau trận',
+  '/tournament': 'Giải đấu & Đội',
+  '/wallet': 'Ví Escrow',
+  '/wallet/deposit-success': 'Nạp tiền thành công',
+  '/wallet/deposit-cancel': 'Đã hủy nạp tiền',
+  '/profile': 'Hồ sơ cá nhân',
+}
+// Các trang có lọc theo môn thể thao (hiện nhãn môn đang lọc cạnh tên trang)
+const SPORT_FILTER_PAGES = ['/dashboard', '/court-finder', '/community']
+
+function TopBar({ onMenu }) {
   const currentUser = useCurrentUser()
-  const location = useLocation()
-  const isCommunity = location.pathname === '/community'
-  const isCreateMatch = location.pathname === '/create-match'
-  const isQRPass = ['/qr-pass', '/checkin', '/check-in'].includes(location.pathname)
-  const isTournament = location.pathname === '/tournament'
-  const isWallet = location.pathname === '/wallet'
-  const isProfile = location.pathname === '/profile'
-  const { selectedSports, isAllActive, isSportActive, toggleSport, SPORTS_LIST = [] } = useSport()
-  const activeSportsList = SPORTS_LIST.filter(s => selectedSports?.includes(s.key))
+  const { logout } = useAuth()
+  const { pathname } = useLocation()
+  const { selectedSports, isAllActive, SPORTS_LIST = [] } = useSport()
+  const activeSportsList = SPORTS_LIST.filter((s) => selectedSports?.includes(s.key))
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 0
-  })
-
-  const [playerProfile, setPlayerProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) return JSON.parse(saved)
-    } catch (e) {}
-    return {}
   })
 
   useEffect(() => {
     // Đồng bộ số dư thực tế từ Backend API
     getWallet()
       .then((w) => {
-        if (w && typeof w.balance === 'number') {
-          setWalletBalance(w.balance)
-        }
+        if (w && typeof w.balance === 'number') setWalletBalance(w.balance)
       })
       .catch(() => {})
-
     const handleUpdate = () => {
       const saved = localStorage.getItem('escrow_balance')
       if (saved !== null) setWalletBalance(Number(saved))
     }
-    const handleProfileUpdate = () => {
-      try {
-        const saved = localStorage.getItem('player_profile_data')
-        if (saved) setPlayerProfile(JSON.parse(saved))
-      } catch (e) {}
-    }
     window.addEventListener('escrow_balance_updated', handleUpdate)
-    window.addEventListener('player-profile-updated', handleProfileUpdate)
-    window.addEventListener('storage', handleProfileUpdate)
-    return () => {
-      window.removeEventListener('escrow_balance_updated', handleUpdate)
-      window.removeEventListener('player-profile-updated', handleProfileUpdate)
-      window.removeEventListener('storage', handleProfileUpdate)
-    }
+    return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
   }, [])
 
+  const handleLogout = () => {
+    logoutApi().catch(() => {})
+    logout()
+  }
+
+  const sportLabel = isAllActive
+    ? 'Tất cả môn'
+    : activeSportsList.length === 1
+    ? `${activeSportsList[0].emoji} ${activeSportsList[0].label}`
+    : `${activeSportsList.length} môn đang lọc`
+
   return (
-    <header className="app-topbar">
-      {/* Hamburger Menu Toggle on Mobile */}
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent('toggle-sportnexus-sidebar'))}
-        className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl bg-white border border-[#2D5F3F]/20 text-[#1C3524] shadow-xs shrink-0 active:scale-95 transition-transform"
-        aria-label="Menu"
-      >
-        <span className="material-symbols-outlined text-[20px]">menu</span>
-      </button>
-
-      {/* Breadcrumb & Sport Filter Status or Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        {isWallet ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
-              bolt
+    <AppTopbar
+      onMenu={onMenu}
+      rootLabel="Người chơi"
+      rootTo="/dashboard"
+      title={PAGE_TITLES[pathname] || 'SportNexus'}
+      actions={(
+        <>
+          <Link to="/wallet" className="snx-pill" title="Ví Escrow · Nạp tiền">
+            <span className="material-symbols-outlined">account_balance_wallet</span>
+            <span>
+              <span className="snx-pill-label">Ví Escrow</span>
+              <span className="snx-pill-value">{new Intl.NumberFormat('vi-VN').format(walletBalance)} đ</span>
             </span>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#1C3524', letterSpacing: '-0.3px' }}>
-              Ví Điện Tử
-            </span>
-            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
-              Nạp Tiền Trực Tuyến
-            </span>
-          </div>
-        ) : isProfile ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
-              badge
-            </span>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#1C3524', letterSpacing: '-0.3px' }}>
-              Hồ Sơ Người Chơi
-            </span>
-            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
-              Vận Động Viên SportNexus
-            </span>
-          </div>
-        ) : isTournament ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#15803D' }}>
-              emoji_events
-            </span>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#1C3524', letterSpacing: '-0.3px' }}>
-              Giải Đấu Thể Thao 2026
-            </span>
-            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
-              Vòng Chung Kết Toàn Quốc
-            </span>
-          </div>
-        ) : isQRPass ? (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: '#DCFCE7',
-              border: '1px solid #86EFAC',
-              borderRadius: '24px',
-              padding: '5px 14px',
-              fontSize: '11px',
-              fontWeight: 800,
-              color: '#15803D',
-              letterSpacing: '0.4px',
-              boxShadow: '0 1px 4px rgba(21, 128, 61, 0.08)',
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#16A34A' }}>
-              verified_user
-            </span>
-            <span style={{ textTransform: 'uppercase' }}>
-              HỆ THỐNG BẢO VỆ GIAO DỊCH ĐỘC LẬP • CHECK-IN QR BẢO CHỨNG
-            </span>
-          </div>
-        ) : isCreateMatch ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
-              bolt
-            </span>
-            <Link
-              to="/community"
-              style={{
-                fontSize: '15px',
-                fontWeight: 800,
-                color: '#1C3524',
-                textDecoration: 'none',
-                letterSpacing: '-0.3px',
-              }}
-            >
-              Sàn Ghép Trận &amp; Tranh Slot
-            </Link>
-            <span style={{ color: '#9CA3AF', fontSize: '14px' }}>•</span>
-            <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: 600 }}>
-              Đăng Kèo Mới
-            </span>
-          </div>
-        ) : isCommunity ? (
-          <h1
-            style={{
-              fontSize: '16px',
-              fontWeight: 800,
-              color: '#1C3524',
-              margin: 0,
-              letterSpacing: '-0.3px',
-            }}
-          >
-            Sàn Ghép Trận &amp; Tranh Slot
-          </h1>
-        ) : (
-          <>
-            <h1
-              style={{
-                fontSize: '16px',
-                fontWeight: 800,
-                color: '#1C3524',
-                margin: 0,
-                letterSpacing: '-0.3px',
-              }}
-            >
-              Khu Vực Thi Đấu &amp; Đặt Sân
-            </h1>
-
-            {/* Current Active Sport Pill */}
-            <div
-              style={{
-                marginLeft: '12px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: isAllActive ? '#DCFCE7' : '#F0FDF4',
-                border: '1px solid rgba(45, 95, 63, 0.2)',
-                borderRadius: '20px',
-                padding: '4px 10px',
-                fontSize: '11.5px',
-                fontWeight: 700,
-                color: '#15803D',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
-              }}
-            >
-              <span style={{ fontSize: '12px' }}>
-                {isAllActive
-                  ? '✨'
-                  : activeSportsList.length === 1
-                  ? activeSportsList[0].emoji
-                  : activeSportsList.map((s) => s.emoji).join(' ')}
-              </span>
-              <span>
-                {isAllActive
-                  ? 'Tất cả môn thể thao'
-                  : activeSportsList.length === 1
-                  ? `Chỉ ${activeSportsList[0].label}`
-                  : `${activeSportsList.length} môn đang lọc`}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Right: Wallet + User */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        {/* Escrow Wallet */}
-        <Link
-          to="/wallet"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'linear-gradient(135deg, #EAF7EE 0%, #E0F5E6 100%)',
-            borderRadius: '20px',
-            padding: '7px 16px',
-            border: '1px solid rgba(45, 95, 63, 0.18)',
-            boxShadow: '0 2px 6px rgba(45, 95, 63, 0.05)',
-            textDecoration: 'none',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)'
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(45, 95, 63, 0.12)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'none'
-            e.currentTarget.style.boxShadow = '0 2px 6px rgba(45, 95, 63, 0.05)'
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '19px', color: '#2D5F3F' }}>
-            account_balance_wallet
-          </span>
-          <span className="hidden sm:inline" style={{ fontSize: '13px', fontWeight: 600, color: '#1C3524' }}>
-            Ví Escrow:
-          </span>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: '#15803D', whiteSpace: 'nowrap' }}>
-            {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
-          </span>
-          <span style={{ fontSize: '11px', fontWeight: 700, background: '#15803D', color: '#ffffff', borderRadius: '12px', padding: '2px 8px', marginLeft: '2px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-            + Nạp tiền
-          </span>
-        </Link>
-
-        {/* Chuông Thông Báo Tương Tác */}
-        <NotificationBell />
-
-        {/* User Avatar + Info */}
-        <Link
-          to="/profile"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            textDecoration: 'none',
-            padding: '4px 6px',
-            borderRadius: '12px',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(235, 248, 240, 0.6)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
-        >
-          {/* Avatar circle */}
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: '12px',
-              flexShrink: 0,
-              boxShadow: '0 2px 8px rgba(45, 95, 63, 0.25)',
-              overflow: 'hidden',
-            }}
-          >
-            {currentUser.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt={currentUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              initialsOf(currentUser.name)
-            )}
-          </div>
-          {/* Name + stats - hidden on very small screens */}
-          <div className="hidden sm:block" style={{ lineHeight: 1.3 }}>
-            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#1C3524', whiteSpace: 'nowrap' }}>
-              {currentUser.name || 'Người chơi'}
-            </p>
-            <p style={{ margin: 0, fontSize: '10.5px', color: '#6B7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              {currentUser.username}
-            </p>
-          </div>
-          {/* Rating badge */}
-          <div
-            className="hidden md:flex"
-            style={{
-              background: '#FFF3E0',
-              border: '1px solid #FFE0B2',
-              borderRadius: '10px',
-              padding: '3px 8px',
-              fontWeight: 800,
-              fontSize: '12px',
-              color: '#E65100',
-              alignItems: 'center',
-              gap: '3px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span>⭐</span>
-            <span title="Điểm Fair Play">{currentUser.fairPlayScore ?? '—'}</span>
-          </div>
-        </Link>
-      </div>
-    </header>
+          </Link>
+          <NotificationBell />
+          <UserMenu
+            name={currentUser.name || 'Người chơi'}
+            subtitle={currentUser.fairPlayScore != null ? `Fair Play ${currentUser.fairPlayScore}` : 'Người chơi'}
+            avatarUrl={currentUser.avatarUrl}
+            profileTo="/profile"
+            onLogout={handleLogout}
+          />
+        </>
+      )}
+    >
+      {SPORT_FILTER_PAGES.includes(pathname) && <span className="snx-crumb-chip snx-hide-sm">{sportLabel}</span>}
+    </AppTopbar>
   )
 }
 

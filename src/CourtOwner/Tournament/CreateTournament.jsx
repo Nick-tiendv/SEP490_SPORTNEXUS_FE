@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
+import { toast } from 'sonner'
 import {
   addParticipant,
   cancelTournament,
@@ -15,6 +17,8 @@ import {
   updateMatchScore,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import NoFacilityState from '../NoFacilityState.jsx'
+import TournamentManagePanel from './TournamentManagePanel.jsx'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
 const CATEGORY_TYPES = [
@@ -59,7 +63,7 @@ function useLoad(load, key, enabled = true) {
 }
 
 export default function CreateAutomatedTournament() {
-  const { facilityId, facility, wallet, refreshWallet } = useOwnerContext()
+  const { facilityId, facility, wallet, refreshWallet, loading: layoutLoading } = useOwnerContext()
   const [listToken, setListToken] = useState(0)
   const [childToken, setChildToken] = useState(0)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
@@ -84,7 +88,6 @@ export default function CreateAutomatedTournament() {
   const rounds = bracketLoad.key?.startsWith(childId) ? bracketLoad.data || [] : []
 
   const [busy, setBusy] = useState(false)
-  const [toastMessage, setToastMessage] = useState(null)
   const [newParticipant, setNewParticipant] = useState('')
   const [scoreMatch, setScoreMatch] = useState(null) // match đang nhập điểm
   const [scoreSets, setScoreSets] = useState([])
@@ -93,10 +96,7 @@ export default function CreateAutomatedTournament() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [form, setForm] = useState({ name: '', categoryId: '', children: [emptyChild()] })
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type })
-    setTimeout(() => setToastMessage(null), 4000)
-  }
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
   const runAction = async (action, successMessage, { reloadList = false, reloadChild = true, after } = {}) => {
     setBusy(true)
@@ -127,9 +127,9 @@ export default function CreateAutomatedTournament() {
       { reloadList: true, after: () => setNewParticipant('') },
     )
   }
-  const handleRemoveParticipant = (participant) => {
+  const handleRemoveParticipant = async (participant) => {
     const name = participant.teamName || participant.fullName
-    if (!window.confirm(`Xóa "${name}" khỏi bảng đấu?`)) return
+    if (!(await confirmDialog(`Xóa "${name}" khỏi bảng đấu?`))) return
     runAction(() => removeParticipant(childId, participant.participantId), `Đã xóa "${name}" khỏi bảng đấu.`, { reloadList: true })
   }
   const handleCheckIn = (participant) =>
@@ -137,8 +137,8 @@ export default function CreateAutomatedTournament() {
 
   // ---------- Bốc thăm & chốt nhánh ----------
   const handleRandomPairing = () => runAction(() => executeRandomPairing(childId), 'Bốc thăm ghép đôi hoàn tất, các cặp đấu đã được tạo.', { reloadList: true })
-  const handleGenerateBracket = () => {
-    if (!window.confirm('Chốt danh sách và sinh sơ đồ nhánh đấu? Sau bước này không thể thêm / xóa người tham gia.')) return
+  const handleGenerateBracket = async () => {
+    if (!(await confirmDialog('Chốt danh sách và sinh sơ đồ nhánh đấu? Sau bước này không thể thêm / xóa người tham gia.'))) return
     runAction(() => generateBracket(childId), 'Đã chốt danh sách và sinh sơ đồ nhánh đấu. Bảng đấu chuyển sang Đang thi đấu.', { reloadList: true })
   }
 
@@ -175,8 +175,8 @@ export default function CreateAutomatedTournament() {
       after: () => { setShowCancelModal(false); setCancelReason(''); refreshWallet().catch(() => {}) },
     })
   }
-  const handleDeleteTournament = () => {
-    if (!window.confirm(`Xóa vĩnh viễn giải "${tournament.name}"?`)) return
+  const handleDeleteTournament = async () => {
+    if (!(await confirmDialog(`Xóa vĩnh viễn giải "${tournament.name}"?`))) return
     runAction(() => deleteTournament(tournament.id), 'Đã xóa giải đấu.', {
       reloadList: true,
       reloadChild: false,
@@ -190,7 +190,7 @@ export default function CreateAutomatedTournament() {
   const openCreateModal = () => {
     // Lần tải môn trước đó lỗi (vd server khởi động chậm) thì tải lại.
     if (!sports.length) setSportsToken((value) => value + 1)
-    setForm({ name: '', categoryId: defaultSportId(), children: [emptyChild()] })
+    setForm({ name: '', categoryId: defaultSportId(), startDate: '', endDate: '', registrationDeadline: '', rules: '', children: [emptyChild()] })
     setShowCreateModal(true)
   }
   // Danh sách môn về sau khi form đã mở: chọn sẵn môn mặc định.
@@ -211,10 +211,22 @@ export default function CreateAutomatedTournament() {
       showToast('Vui lòng chọn bộ môn.', 'error')
       return
     }
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      showToast('Ngày kết thúc phải sau ngày bắt đầu.', 'error')
+      return
+    }
+    if (form.startDate && form.registrationDeadline && form.registrationDeadline > form.startDate) {
+      showToast('Hạn đăng ký phải trước ngày bắt đầu.', 'error')
+      return
+    }
     const payload = {
       facilityId,
       categoryId: selectedSportId,
       name: form.name.trim(),
+      startDate: form.startDate || null,
+      endDate: form.endDate || null,
+      registrationDeadline: form.registrationDeadline || null,
+      rules: form.rules?.trim() || null,
       children: form.children.map((item) => ({
         name: item.name.trim(),
         categoryType: Number(item.categoryType),
@@ -251,49 +263,24 @@ export default function CreateAutomatedTournament() {
   const smallButton = (bg, color, border = 'none') => ({ padding: '6px 12px', borderRadius: '8px', border, background: bg, color, fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 })
   const badge = (status) => {
     const s = statusOf(status)
-    return <span style={{ background: s.bg, color: s.color, fontSize: '11.5px', fontWeight: 800, padding: '3px 10px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{s.label}</span>
+    return <span style={{ background: s.bg, color: s.color, fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{s.label}</span>
   }
   const modalBackdrop = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
 
   return (
-    <div style={{ padding: '24px 32px', minHeight: 'calc(100vh - 60px)', background: 'transparent' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '24px',
-            right: '24px',
-            zIndex: 9999,
-            background: toastMessage.type === 'error' ? '#EF4444' : '#10B981',
-            color: '#FFFFFF',
-            padding: '14px 22px',
-            borderRadius: '12px',
-            boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.25)',
-            fontWeight: 600,
-            fontSize: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            maxWidth: '440px',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>{toastMessage.type === 'error' ? 'error' : 'check_circle'}</span>
-          {toastMessage.msg}
-        </div>
-      )}
+    <div className="snx-page">
 
       {/* HEADER */}
-      <div style={{ ...panelStyle, padding: '26px 32px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+      <div className="snx-page-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-            <span style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#fff', padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-              Tournament Manager
+            <span className="snx-page-eyebrow">
+              Kinh doanh
             </span>
             <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 700 }}>{facility?.name || ''}</span>
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>Giải Đấu & Sơ Đồ Nhánh Đấu</h1>
-          <p style={{ margin: '4px 0 0 0', color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
+          <h1 className="snx-page-title">Giải đấu</h1>
+          <p className="snx-page-subtitle">
             Tạo giải với nhiều bảng đấu, quản lý người tham gia, bốc thăm ghép đôi, chốt nhánh loại trực tiếp và nhập tỉ số từng trận.
           </p>
         </div>
@@ -301,36 +288,25 @@ export default function CreateAutomatedTournament() {
           onClick={openCreateModal}
           disabled={!facilityId || facility?.approvalStatus !== 'APPROVED'}
           title={facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
-          style={{
-            background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '14px',
-            padding: '14px 24px',
-            fontSize: '14.5px',
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: '0 6px 20px rgba(217, 119, 6, 0.3)',
-            opacity: !facilityId || facility?.approvalStatus !== 'APPROVED' ? 0.5 : 1,
-          }}
+          className="snx-btn snx-btn--primary"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>add_circle</span>
-          Tạo Giải Đấu Mới
+          Tạo giải đấu mới
         </button>
       </div>
 
+      {!layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="tổ chức giải đấu" /></div>}
+      {facility && facility.approvalStatus !== 'APPROVED' && <div className="snx-alert snx-alert--info" style={{ marginBottom: 16 }}>Cơ sở {facility.name} chưa được Admin duyệt nên chưa tạo được giải.</div>}
+
       {/* DANH SÁCH GIẢI CỦA CƠ SỞ */}
       <div style={{ ...panelStyle, marginBottom: '24px' }}>
-        <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Giải Đấu Của Cơ Sở ({tournaments.length})</h3>
+        <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Giải đấu của cơ sở ({tournaments.length})</h3>
         {tournamentsLoad.error ? (
           <div style={{ color: '#B91C1C', fontWeight: 700 }}>{tournamentsLoad.error}</div>
         ) : !tournamentsLoad.data ? (
           <div style={{ color: '#475569', fontWeight: 600 }}>Đang tải danh sách giải...</div>
         ) : tournaments.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Cơ sở chưa có giải đấu nào. Bấm "Tạo Giải Đấu Mới" để bắt đầu.</div>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Cơ sở chưa có giải đấu nào. Bấm "Tạo giải đấu mới" để bắt đầu.</div>
         ) : (
           <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '4px' }}>
             {tournaments.map((item) => {
@@ -350,10 +326,10 @@ export default function CreateAutomatedTournament() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#B45309' }}>{item.categoryName || 'Giải đấu'}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#B45309' }}>{item.categoryName || 'Giải đấu'}</span>
                     {badge(item.status)}
                   </div>
-                  <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#0F172A' }}>{item.name}</div>
+                  <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#0F172A' }}>{item.name}</div>
                   <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
                     {item.totalChildren} bảng đấu • {item.totalParticipants} người / đội tham gia
                   </div>
@@ -371,7 +347,7 @@ export default function CreateAutomatedTournament() {
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                  <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#0F172A' }}>{tournament.name}</h2>
+                  <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>{tournament.name}</h2>
                   {badge(tournament.status)}
                 </div>
                 <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
@@ -406,7 +382,7 @@ export default function CreateAutomatedTournament() {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>{item.name}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>{item.name}</span>
                       {badge(item.status)}
                     </div>
                     <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '2px' }}>
@@ -433,8 +409,8 @@ export default function CreateAutomatedTournament() {
             <div style={{ borderRadius: '20px', padding: '22px 28px', marginBottom: '24px', background: 'linear-gradient(135deg, #F59E0B 0%, #B45309 100%)', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 10px 30px rgba(180, 83, 9, 0.3)' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '48px' }}>emoji_events</span>
               <div>
-                <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', opacity: 0.9 }}>Nhà vô địch {child.name}</div>
-                <div style={{ fontSize: '24px', fontWeight: 900 }}>{champion.name}</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', opacity: 0.9 }}>Nhà vô địch {child.name}</div>
+                <div style={{ fontSize: '24px', fontWeight: 700 }}>{champion.name}</div>
               </div>
             </div>
           )}
@@ -444,8 +420,8 @@ export default function CreateAutomatedTournament() {
               {/* NGƯỜI THAM GIA */}
               <div style={panelStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                    {isTeamCategory ? 'Đội' : 'Vận Động Viên'} Tham Gia ({participants.length}/{child.maxParticipants})
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>
+                    {isTeamCategory ? 'Đội' : 'Vận động viên'} Tham Gia ({participants.length}/{child.maxParticipants})
                   </h3>
                   {childStatus === 'OPEN' && (
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -482,12 +458,12 @@ export default function CreateAutomatedTournament() {
                         {participant.avatarUrl ? (
                           <img src={participant.avatarUrl} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
                         ) : (
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#475569' }}>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, color: '#475569' }}>
                             {(participant.teamName || participant.fullName || '?').charAt(0)}
                           </div>
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>{participant.teamName || participant.fullName}</div>
+                          <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>{participant.teamName || participant.fullName}</div>
                           <div style={{ fontSize: '11.5px', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {participant.teamName
                               ? participant.teamMembers?.map((member) => member.fullName).join(', ')
@@ -497,7 +473,7 @@ export default function CreateAutomatedTournament() {
                           </div>
                         </div>
                         {participant.isCheckedIn ? (
-                          <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#15803D' }}>✓ Đã điểm danh</span>
+                          <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#15803D' }}>✓ Đã điểm danh</span>
                         ) : (
                           childStatus !== 'CANCELLED' && childStatus !== 'FINISHED' && (
                             <button onClick={() => handleCheckIn(participant)} disabled={busy} style={smallButton('#F0FDF4', '#15803D', '1px solid #BBF7D0')}>Điểm danh</button>
@@ -516,7 +492,7 @@ export default function CreateAutomatedTournament() {
 
               {/* SƠ ĐỒ NHÁNH ĐẤU */}
               <div style={{ ...panelStyle, minWidth: 0 }}>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>Sơ Đồ Nhánh Đấu</h3>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Sơ đồ nhánh đấu</h3>
                 <p style={{ margin: '0 0 14px 0', fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
                   {childStatus === 'IN_PROGRESS' ? 'Bấm vào trận đã đủ 2 đấu thủ để nhập tỉ số.' : childStatus === 'OPEN' ? 'Sơ đồ được sinh khi chốt danh sách.' : ''}
                 </p>
@@ -530,7 +506,7 @@ export default function CreateAutomatedTournament() {
                   <div style={{ display: 'flex', gap: '20px', overflowX: 'auto', paddingBottom: '6px' }}>
                     {rounds.map((round) => (
                       <div key={round.label} style={{ minWidth: '210px', display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: '14px' }}>
-                        <div style={{ fontSize: '12.5px', fontWeight: 900, color: '#0F172A', textAlign: 'center', textTransform: 'uppercase' }}>{round.label}</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', textAlign: 'center', textTransform: 'uppercase' }}>{round.label}</div>
                         {round.matches.map((match) => {
                           const ready = childStatus === 'IN_PROGRESS' && match.a.id && match.b.id
                           const setText = match.sets?.length ? match.sets.map((set) => `${set.a}-${set.b}`).join(', ') : ''
@@ -551,7 +527,7 @@ export default function CreateAutomatedTournament() {
                                     <span style={{ fontSize: '13px', fontWeight: won ? 900 : 700, color: info.name ? '#0F172A' : '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                       {info.name || 'Chờ xác định'}
                                     </span>
-                                    <span style={{ fontSize: '13px', fontWeight: 900, color: '#0F172A' }}>{score ?? ''}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{score ?? ''}</span>
                                   </div>
                                 )
                               })}
@@ -571,6 +547,13 @@ export default function CreateAutomatedTournament() {
               </div>
             </div>
           )}
+          <TournamentManagePanel
+            tournament={tournament}
+            child={child}
+            rounds={rounds}
+            facilityId={facilityId}
+            onChanged={() => { setListToken((value) => value + 1); setChildToken((value) => value + 1) }}
+          />
         </>
       )}
 
@@ -579,7 +562,7 @@ export default function CreateAutomatedTournament() {
         <div style={modalBackdrop}>
           <form onSubmit={handleSaveScore} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Nhập Tỉ Số Trận Đấu</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Nhập tỉ số trận đấu</h3>
               <button type="button" onClick={() => setScoreMatch(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -587,7 +570,7 @@ export default function CreateAutomatedTournament() {
             <p style={{ margin: '0 0 16px 0', fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
               Nhập điểm từng hiệp. Hệ thống tự kiểm tra luật điểm của môn {tournament?.categoryName} và tự xác định người thắng.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 32px', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12.5px', fontWeight: 800, color: '#0F172A' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 32px', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>
               <span />
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{scoreMatch.a.name}</span>
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{scoreMatch.b.name}</span>
@@ -603,7 +586,7 @@ export default function CreateAutomatedTournament() {
                     maxLength={3}
                     value={set[side]}
                     onChange={(event) => setScoreSets((prev) => prev.map((item, i) => (i === index ? { ...item, [side]: event.target.value.replace(/\D/g, '') } : item)))}
-                    style={{ ...inputStyle, textAlign: 'center', fontWeight: 800, fontSize: '15px' }}
+                    style={{ ...inputStyle, textAlign: 'center', fontWeight: 600, fontSize: '15px' }}
                   />
                 ))}
                 {scoreSets.length > 1 ? (
@@ -621,7 +604,7 @@ export default function CreateAutomatedTournament() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setScoreMatch(null)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
               <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {busy ? 'Đang lưu...' : 'Lưu Tỉ Số'}
+                {busy ? 'Đang lưu...' : 'Lưu tỉ số'}
               </button>
             </div>
           </form>
@@ -632,7 +615,7 @@ export default function CreateAutomatedTournament() {
       {showCancelModal && tournament && (
         <div style={modalBackdrop}>
           <form onSubmit={handleCancelTournament} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>Hủy Giải "{tournament.name}"</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Hủy giải "{tournament.name}"</h3>
             <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: '#B45309', fontWeight: 600 }}>
               Mọi bảng đấu chưa kết thúc sẽ bị hủy: hoàn lệ phí cho người tham gia, trả quỹ thưởng chưa dùng về ví và trả lại ca sân.
             </p>
@@ -648,7 +631,7 @@ export default function CreateAutomatedTournament() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setShowCancelModal(false)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Đóng</button>
               <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#DC2626', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {busy ? 'Đang hủy...' : 'Xác Nhận Hủy Giải'}
+                {busy ? 'Đang hủy...' : 'Xác nhận hủy giải'}
               </button>
             </div>
           </form>
@@ -661,7 +644,7 @@ export default function CreateAutomatedTournament() {
           <form onSubmit={handleCreateTournament} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '760px', width: '100%', padding: '26px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', margin: '20px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#0F172A' }}>Tạo Giải Đấu Mới</h3>
+                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>Tạo giải đấu mới</h3>
                 <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>Tại {facility?.name}</div>
               </div>
               <button type="button" onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
@@ -671,11 +654,11 @@ export default function CreateAutomatedTournament() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '12px', marginBottom: '18px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Tên giải đấu</label>
-                <input required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="VD: Giải Cầu lông Mùa Đông 2026" style={inputStyle} />
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Tên giải đấu</label>
+                <input required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="VD: Giải cầu lông mùa đông 2026" style={inputStyle} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Bộ môn</label>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Bộ môn</label>
                 <select
                   required
                   value={selectedSportId}
@@ -696,7 +679,21 @@ export default function CreateAutomatedTournament() {
               </div>
             </div>
 
-            <div style={{ fontSize: '14px', fontWeight: 900, color: '#0F172A', marginBottom: '10px' }}>Bảng đấu ({form.children.length})</div>
+            {/* Lịch giải (không bắt buộc): bỏ trống hạn đăng ký thì BE lấy 24h trước ngày bắt đầu */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+              {[['startDate', 'Ngày bắt đầu'], ['endDate', 'Ngày kết thúc'], ['registrationDeadline', 'Hạn đăng ký']].map(([key, label]) => (
+                <div key={key}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>{label}</label>
+                  <input type="date" value={form[key] || ''} onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))} style={inputStyle} />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Điều lệ giải (không bắt buộc)</label>
+              <textarea rows={2} maxLength={4000} value={form.rules || ''} onChange={(event) => setForm((prev) => ({ ...prev, rules: event.target.value }))} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '10px' }}>Bảng đấu ({form.children.length})</div>
             {form.children.map((item, index) => (
               <div key={index} style={{ border: '1px solid #E2E8F0', borderRadius: '14px', padding: '14px', marginBottom: '12px', background: '#F8FAFC' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 90px 1fr 32px', gap: '10px', alignItems: 'end' }}>
@@ -728,7 +725,7 @@ export default function CreateAutomatedTournament() {
                 </div>
                 <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600, margin: '6px 0 10px' }}>{CATEGORY_TYPES[item.categoryType]?.hint}</div>
 
-                <div style={{ fontSize: '12px', fontWeight: 800, color: '#334155', marginBottom: '6px' }}>Giải thưởng</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Giải thưởng</div>
                 {item.prizes.map((prize, prizeIndex) => (
                   <div key={prizeIndex} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 32px', gap: '8px', marginBottom: '6px' }}>
                     <input value={prize.position} onChange={(event) => updatePrize(index, prizeIndex, { position: event.target.value })} placeholder="Hạng (VD: Vô địch)" style={inputStyle} />
@@ -766,8 +763,8 @@ export default function CreateAutomatedTournament() {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setShowCreateModal(false)} style={{ padding: '11px 20px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
-              <button type="submit" disabled={busy || formPrizeFund > availableBalance} style={{ padding: '11px 22px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#FFFFFF', fontSize: '14px', fontWeight: 800, cursor: 'pointer', opacity: busy || formPrizeFund > availableBalance ? 0.6 : 1 }}>
-                {busy ? 'Đang tạo...' : 'Tạo Giải Đấu'}
+              <button type="submit" disabled={busy || formPrizeFund > availableBalance} style={{ padding: '11px 22px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: busy || formPrizeFund > availableBalance ? 0.6 : 1 }}>
+                {busy ? 'Đang tạo...' : 'Tạo giải đấu'}
               </button>
             </div>
           </form>

@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
-import { getCourtSlots, getFacilityAvailability } from '../../../api/player/bookingApi.js'
+import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
 function getNext7Days() {
@@ -192,6 +194,17 @@ function CourtDetails() {
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
 
+  // Giải đấu tổ chức tại cơ sở: GET /api/v1/facilities/{facilityId}/tournaments
+  const [facilityTournaments, setFacilityTournaments] = useState([])
+  useEffect(() => {
+    if (!facility?.id) return undefined
+    let cancelled = false
+    getFacilityTournaments(facility.id)
+      .then((list) => !cancelled && setFacilityTournaments(list))
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [facility?.id])
+
   // Đánh giá sân từ GET /api/v1/facilities/{facilityId}/reviews
   const [reviewsList, setReviewsList] = useState([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
@@ -381,14 +394,14 @@ function CourtDetails() {
   // Chuyển sang Bước 3 & Bước 4 tại SplitPayment
   const handleCheckout = () => {
     if (selectedSlots.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
+      toast.warning('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
       return
     }
 
     const GUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     const validSlots = selectedSlots.filter((s) => GUID_REGEX.test(s.id))
     if (validSlots.length === 0) {
-      alert('❌ Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
+      toast.error('Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
       return
     }
 
@@ -837,6 +850,25 @@ function CourtDetails() {
             </div>
           )}
 
+          {/* Giải đấu tại cơ sở này */}
+          {facilityTournaments.length > 0 && (
+            <div className="snx-card snx-stack" style={{ gap: 10 }}>
+              <h3 className="snx-card-title" style={{ fontSize: 17 }}>Giải đấu tại sân này ({facilityTournaments.length})</h3>
+              <div className="snx-list">
+                {facilityTournaments.slice(0, 5).map((t) => (
+                  <div key={t.id} className="snx-list-item">
+                    <span className="material-symbols-outlined" style={{ color: '#ca8a04' }}>emoji_events</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={{ fontSize: 14 }}>{t.name}</strong>
+                      <div className="snx-muted">{t.sport} · {t.starts ? new Date(t.starts).toLocaleDateString('vi-VN') : '—'}</div>
+                    </div>
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => navigate('/tournament')}>Xem</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Đánh giá cơ sở thể thao từ GET /api/v1/facilities/{facilityId}/reviews */}
           <div className="p-space-lg rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col gap-space-md">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -876,9 +908,9 @@ function CourtDetails() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {reviewsList.map((rev) => (
+                {reviewsList.map((rev, index) => (
                   <div
-                    key={rev.id || Math.random()}
+                    key={rev.id || `review-${index}`}
                     className="p-3.5 rounded-xl bg-surface-container/70 border border-outline-variant/10 flex flex-col gap-1.5"
                   >
                     <div className="flex items-center justify-between">

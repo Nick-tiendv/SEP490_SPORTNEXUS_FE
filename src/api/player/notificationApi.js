@@ -1,4 +1,5 @@
-import { del, get, getList, pick, put } from '../owner/request.js'
+import apiClient from '../apiClient.js'
+import { del, get, getList, pick, post, put, unwrap } from '../owner/request.js'
 
 const ENDPOINT = '/api/v1/notifications'
 
@@ -32,3 +33,8 @@ export const deleteReadNotifications = () => del(ENDPOINT)
 // GET/PUT /api/v1/notifications/settings
 export const getNotificationSettings = () => get(`${ENDPOINT}/settings`)
 export const updateNotificationSettings = settings => put(`${ENDPOINT}/settings`, settings)
+
+// ---------- Thiết bị nhận thông báo đẩy: /api/v1/notifications/devices ----------
+// RegisterDeviceRequest: token (FCM), platform (web | android | ios)
+export const registerDeviceToken = ({ token, platform = 'web' }) => post(`${ENDPOINT}/devices`, { token, platform })
+export const unregisterDeviceToken = async ({ token }) => unwrap((await apiClient.delete(`${ENDPOINT}/devices`, { data: { token } })).data)

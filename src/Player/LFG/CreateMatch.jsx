@@ -1,288 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
+import { confirmDialog } from '../../components/common/confirm.js'
+import { toast } from 'sonner'
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
+import { searchFacilities } from '../../api/player/facilityApi.js'
+import { getFacilityAvailability } from '../../api/player/bookingApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt, detectDistrictFromAddress, categoryToSportKey } from '../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
 
-// District courts database for dynamic map & closest court detection
-const DISTRICT_DATA = {
-  q7: {
-    name: 'Quận 7',
-    label: 'Quận 7 (Đang chọn)',
-    mapQuery: 'CLB The Thao Nam Sai Gon, Quan 7, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q7-1',
-        name: 'CLB Thể Thao Nam Sài Gòn',
-        address: 'Đường số 9, P. Tân Phú, Quận 7',
-        distance: '2.1 km',
-        courtCount: '4 sân thảm',
-        price: '98k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q7-2',
-        name: 'SportNexus Arena Q.7',
-        address: '35 Huỳnh Tấn Phát, Tân Thuận Đông, Quận 7',
-        distance: '0.8 km',
-        courtCount: '5 sân Yonex',
-        price: '110k/h',
-        rating: 4.95,
-      },
-      {
-        id: 'c-q7-3',
-        name: 'Sân Cầu Lông & Pickleball Tân Mỹ',
-        address: 'Đường Tân Mỹ, P. Tân Phú, Quận 7',
-        distance: '3.2 km',
-        courtCount: '6 sân thảm tiêu chuẩn',
-        price: '85k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  binhthanh: {
-    name: 'Bình Thạnh',
-    label: 'Bình Thạnh',
-    mapQuery: 'San Cau Long Tre Xanh, Dinh Bo Linh, Binh Thanh, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-bt-1',
-        name: 'Sân Cầu Lông Tre Xanh',
-        address: '128 Đinh Bộ Lĩnh, P.26, Bình Thạnh',
-        distance: '1.8 km',
-        courtCount: '6 sân thảm xịn',
-        price: '90k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-bt-2',
-        name: 'CLB YONEX Điện Biên Phủ',
-        address: '128 Điện Biên Phủ, P.25, Bình Thạnh',
-        distance: '3.5 km',
-        courtCount: '8 sân thi đấu BWF',
-        price: '105k/h',
-        rating: 4.85,
-      },
-      {
-        id: 'c-bt-3',
-        name: 'Pickleball D2 Saigon Hub',
-        address: 'Đường D2 (Nguyễn Gia Trí), Bình Thạnh',
-        distance: '2.4 km',
-        courtCount: '4 sân ngoài trời',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  phunhuan: {
-    name: 'Phú Nhuận',
-    label: 'Phú Nhuận',
-    mapQuery: 'CLB The Thao Rach Mieu, Hoa Phuong, Phu Nhuan, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-pn-1',
-        name: 'CLB Thể Thao Rạch Miễu',
-        address: 'Số 1 Hoa Phượng, P.2, Phú Nhuận',
-        distance: '1.5 km',
-        courtCount: '10 sân tiêu chuẩn',
-        price: '115k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-pn-2',
-        name: 'Sân Cầu Lông Ga Trực Thăng',
-        address: 'Hoàng Văn Thụ, P.8, Phú Nhuận',
-        distance: '2.9 km',
-        courtCount: '5 sân thảm PU',
-        price: '95k/h',
-        rating: 4.75,
-      },
-    ],
-  },
-  thuduc: {
-    name: 'TP. Thủ Đức',
-    label: 'TP. Thủ Đức',
-    mapQuery: 'D-Pickleball Hub Thao Dien, Thu Duc, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-td-1',
-        name: 'D-Pickleball & Badminton Hub',
-        address: '28 Thảo Điền, TP. Thủ Đức',
-        distance: '3.1 km',
-        courtCount: '8 sân máy lạnh',
-        price: '120k/h',
-        rating: 4.95,
-      },
-      {
-        id: 'c-td-2',
-        name: 'CLB Cầu Lông Hiệp Phú',
-        address: 'Đường Võ Văn Ngân, TP. Thủ Đức',
-        distance: '4.8 km',
-        courtCount: '6 sân thảm',
-        price: '80k/h',
-        rating: 4.7,
-      },
-    ],
-  },
-  q1: {
-    name: 'Quận 1',
-    label: 'Quận 1',
-    mapQuery: 'San Cau Long Tao Dan, Quan 1, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q1-1',
-        name: 'Sân Cầu Lông Tao Đàn Q.1',
-        address: 'Số 1 Huyền Trân Công Chúa, Bến Thành, Q.1',
-        distance: '1.2 km',
-        courtCount: '6 sân thảm cao cấp',
-        price: '130k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q1-2',
-        name: 'CLB Thể Thao Hoa Lư',
-        address: 'Số 2 Đinh Tiên Hoàng, Đa Kao, Q.1',
-        distance: '2.0 km',
-        courtCount: '8 sân đa năng',
-        price: '125k/h',
-        rating: 4.85,
-      },
-    ],
-  },
-  q2: {
-    name: 'Quận 2',
-    label: 'Quận 2 (Thảo Điền / An Phú)',
-    mapQuery: 'San Cau Long An Phu, Quan 2, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q2-1',
-        name: 'CLB Cầu Lông & Pickleball An Phú',
-        address: 'Đường Thảo Điền, An Phú, TP. Thủ Đức (Quận 2)',
-        distance: '2.7 km',
-        courtCount: '6 sân thảm BWF',
-        price: '115k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q2-2',
-        name: 'Thảo Điền Sports Hub',
-        address: '12 Quốc Hương, Thảo Điền, Quận 2',
-        distance: '3.4 km',
-        courtCount: '4 sân ngoài trời',
-        price: '100k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  q3: {
-    name: 'Quận 3',
-    label: 'Quận 3',
-    mapQuery: 'CLB The Thao Ho Xuan Huong, Quan 3, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q3-1',
-        name: 'CLB Thể Thao Hồ Xuân Hương',
-        address: 'Số 2 Hồ Xuân Hương, P.6, Quận 3',
-        distance: '2.5 km',
-        courtCount: '8 sân máy lạnh tiêu chuẩn',
-        price: '120k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-q3-2',
-        name: 'Sân Cầu Lông Ga Sài Gòn',
-        address: 'Số 1 Nguyễn Thông, P.9, Quận 3',
-        distance: '3.1 km',
-        courtCount: '4 sân thảm cao cấp',
-        price: '95k/h',
-        rating: 4.75,
-      },
-    ],
-  },
-  q4: {
-    name: 'Quận 4',
-    label: 'Quận 4',
-    mapQuery: 'CLB The Thao Khanh Hoi, Quan 4, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q4-1',
-        name: 'Trung Tâm Thể Thao Khánh Hội',
-        address: 'Đường Hoàng Diệu, P.5, Quận 4',
-        distance: '1.9 km',
-        courtCount: '6 sân thảm tiêu chuẩn',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  q10: {
-    name: 'Quận 10',
-    label: 'Quận 10',
-    mapQuery: 'CLB The Thao Ky Hoa, Quan 10, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-q10-1',
-        name: 'CLB Cầu Lông & Tennis Kỳ Hòa',
-        address: 'Sư Vạn Hạnh, P.12, Quận 10',
-        distance: '2.8 km',
-        courtCount: '10 sân tiêu chuẩn',
-        price: '110k/h',
-        rating: 4.85,
-      },
-      {
-        id: 'c-q10-2',
-        name: 'Sân Cầu Lông Bắc Hải',
-        address: 'Đường Bắc Hải, P.15, Quận 10',
-        distance: '3.6 km',
-        courtCount: '5 sân thảm PU',
-        price: '90k/h',
-        rating: 4.7,
-      },
-    ],
-  },
-  tanbinh: {
-    name: 'Tân Bình',
-    label: 'Tân Bình',
-    mapQuery: 'CLB Cau Long Hoang Hoa Tham, Tan Binh, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-tb-1',
-        name: 'CLB Cầu Lông Viettel Hoàng Hoa Thám',
-        address: '158 Hoàng Hoa Thám, P.12, Tân Bình',
-        distance: '4.2 km',
-        courtCount: '12 sân thảm cao cấp',
-        price: '105k/h',
-        rating: 4.9,
-      },
-      {
-        id: 'c-tb-2',
-        name: 'Sân Cầu Lông & Pickleball Cộng Hòa',
-        address: '19 Cộng Hòa, P.12, Tân Bình',
-        distance: '3.9 km',
-        courtCount: '6 sân thi đấu',
-        price: '95k/h',
-        rating: 4.8,
-      },
-    ],
-  },
-  govap: {
-    name: 'Gò Vấp',
-    label: 'Gò Vấp',
-    mapQuery: 'CLB Cau Long Dat Duc, Go Vap, Ho Chi Minh City',
-    courts: [
-      {
-        id: 'c-gv-1',
-        name: 'CLB Cầu Lông Đạt Đức Gò Vấp',
-        address: '5A Lương Ngọc Quyến, P.5, Gò Vấp',
-        distance: '5.1 km',
-        courtCount: '8 sân thảm',
-        price: '85k/h',
-        rating: 4.8,
-      },
-    ],
-  },
+// Môn trên giao diện -> tên môn trong danh mục BE
+const SPORT_NAMES = {
+  badminton: 'cầu lông',
+  pickleball: 'pickleball',
+  football: 'bóng đá',
+  basketball: 'bóng rổ',
+  tennis: 'tennis',
 }
 
 const calculateDurationHours = (rangeStr) => {
@@ -469,6 +203,34 @@ const FALLBACK_FACILITIES = [
   },
 ]
 
+const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const clock = (v) => new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+const vnd = (n) => new Intl.NumberFormat('vi-VN').format(Number(n) || 0)
+const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+// Gom cơ sở thật (GET /api/v1/facilities/search) theo quận để chọn khu vực
+const groupByDistrict = (facilities) => {
+  const map = {}
+  facilities.forEach((f) => {
+    const name = f.district || f.province || 'Khác'
+    const key = normalize(name).replace(/[^a-z0-9]/g, '') || 'khac'
+    if (!map[key]) map[key] = { name, label: name, courts: [] }
+    map[key].courts.push({
+      id: f.id,
+      name: f.name,
+      address: f.address || '',
+      distance: f.distanceKm != null ? `${Number(f.distanceKm).toFixed(1)} km` : name,
+      courtCount: `${f.courtCount || 0} sân`,
+      price: f.minPrice ? `${Math.round(f.minPrice / 1000)}k/h` : '—',
+      rating: f.averageRating,
+      lat: f.latitude,
+      lng: f.longitude,
+      sports: (f.sports || []).map((x) => normalize(x.name)),
+    })
+  })
+  return map
+}
+
 function CreateMatch() {
   const currentUser = useCurrentUser()
   const navigate = useNavigate()
@@ -484,28 +246,25 @@ function CreateMatch() {
         const parsed = JSON.parse(saved)
         if (parsed.location) return parsed.location
       }
-    } catch {}
+    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
     return 'Thủ Đức'
   })
 
-  const detectDistrictKey = (loc = '') => {
-    const norm = loc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    if (norm.includes('thu duc') || norm.includes('thao dien') || norm.includes('quan 2') || norm.includes('q2')) return 'thuduc'
-    if (norm.includes('binh thanh')) return 'binhthanh'
-    if (norm.includes('quan 7') || norm.includes('q7') || norm.includes('phu my hung')) return 'q7'
-    if (norm.includes('quan 1') || norm.includes('q1')) return 'q1'
-    if (norm.includes('phu nhuan')) return 'phunhuan'
-    if (norm.includes('quan 10') || norm.includes('q10')) return 'q10'
-    return 'thuduc'
-  }
-
-  // Khởi tạo quận và sân mặc định đồng bộ từ Hồ sơ cá nhân
-  const userDistrictKey = detectDistrictKey(userProfileLocation)
-  const [selectedDistrict, setSelectedDistrict] = useState(userDistrictKey)
+  // Cơ sở thật theo quận
+  const [districtData, setDistrictData] = useState({})
+  useEffect(() => {
+    searchFacilities({ pageSize: 100 })
+      .then((res) => setDistrictData(groupByDistrict(res.items || [])))
+      .catch(() => toast.error('Không tải được danh sách cơ sở.'))
+  }, [])
+  const districtKeys = Object.keys(districtData)
+  const userDistrictKey = districtKeys.find((k) => normalize(userProfileLocation).includes(k) || k.includes(normalize(userProfileLocation).replace(/[^a-z0-9]/g, ''))) || districtKeys[0]
+  const [pickedDistrict, setSelectedDistrict] = useState(null)
+  const selectedDistrict = pickedDistrict && districtData[pickedDistrict] ? pickedDistrict : userDistrictKey
   const [districtSearchQuery, setDistrictSearchQuery] = useState('')
   const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false)
-  const [selectedCourtId, setSelectedCourtId] = useState(() => {
-    return DISTRICT_DATA[userDistrictKey]?.courts[0]?.id || 'c-td-1'
+  const [pickedCourtId, setSelectedCourtId] = useState(() => {
+    return districtData[userDistrictKey]?.courts[0]?.id || null
   })
   const lfgUpcomingDays = useMemo(() => getLfgUpcomingDays(21), [])
   const firstEligibleDayStr = useMemo(() => {
@@ -545,7 +304,6 @@ function CreateMatch() {
   })
 
   // Auto court lock checkbox
-  const [autoLockCourt, setAutoLockCourt] = useState(true)
 
   // Escrow reassurance pill state
   const [showEscrowPill, setShowEscrowPill] = useState(true)
@@ -768,21 +526,14 @@ function CreateMatch() {
     return () => window.removeEventListener('escrow_balance_updated', handleUpdate)
   }, [])
 
-  // When district changes, automatically select the first closest court of that district
-  useEffect(() => {
-    const courts = DISTRICT_DATA[selectedDistrict]?.courts || []
-    if (courts.length > 0) {
-      setSelectedCourtId(courts[0].id)
-    }
-  }, [selectedDistrict])
-
-  // Current district object & active court
-  const currentDistrictData = DISTRICT_DATA[selectedDistrict] || DISTRICT_DATA.q7
+  // Khu vực & cơ sở đang chọn
+  const currentDistrictData = districtData[selectedDistrict] || { name: 'Đang tải…', courts: [] }
   const currentCourt =
-    currentDistrictData.courts.find((c) => c.id === selectedCourtId) || currentDistrictData.courts[0]
+    currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
+  const selectedCourtId = currentCourt.id
 
-  // Filtered districts based on user search query (by district name or court name/address)
-  const filteredDistricts = Object.entries(DISTRICT_DATA).filter(([key, item]) => {
+  // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở
+  const filteredDistricts = Object.entries(districtData).filter(([, item]) => {
     if (!districtSearchQuery.trim()) return true
     const q = districtSearchQuery.toLowerCase().trim()
     const matchName = item.name.toLowerCase().includes(q)
@@ -792,11 +543,44 @@ function CreateMatch() {
     return matchName || matchCourts
   })
 
-  // Select district from search dropdown
   const handleSelectDistrict = (key) => {
     setSelectedDistrict(key)
+    setSelectedCourtId(null)
     setDistrictSearchQuery('')
     setIsDistrictDropdownOpen(false)
+  }
+
+  // Ca trống thật của cơ sở đang chọn (GET /api/v1/facilities/{id}/availability)
+  const playDate = new Date()
+  if (selectedDate === 'tomorrow') playDate.setDate(playDate.getDate() + 1)
+  const playDateStr = toDateStr(playDate)
+  const [availability, setAvailability] = useState({ key: '', slots: [] })
+  const availabilityKey = selectedCourtId ? `${selectedCourtId}|${playDateStr}|${sport}` : ''
+  useEffect(() => {
+    if (isEditMode || !availabilityKey) return undefined
+    const [facilityId, date, sportKey] = availabilityKey.split('|')
+    let cancelled = false
+    getFacilityAvailability(facilityId, date)
+      .then((res) => {
+        if (cancelled) return
+        const wanted = SPORT_NAMES[sportKey]
+        const slots = (res?.courts || [])
+          .filter((c) => c.isBookable !== false && (!wanted || normalize(c.sportName || '').includes(normalize(wanted))))
+          .flatMap((c) => (c.slots || []).filter((x) => x.isBookable && !x.isPast).map((x) => ({ ...x, courtName: c.courtName })))
+          .sort((x, y) => new Date(x.startTime) - new Date(y.startTime))
+        setAvailability({ key: availabilityKey, slots })
+      })
+      .catch(() => !cancelled && setAvailability({ key: availabilityKey, slots: [] }))
+    return () => { cancelled = true }
+  }, [availabilityKey, isEditMode])
+  const availableSlots = availability.key === availabilityKey ? availability.slots : []
+  const loadingSlots = Boolean(availabilityKey) && availability.key !== availabilityKey
+  const [pickedSlot, setPickedSlot] = useState(null)
+
+  const handlePickSlot = (slot) => {
+    setPickedSlot(slot)
+    setCourtSlotId(slot.id)
+    setCourtFee(Number(slot.price) || 0)
   }
 
   // Toggle format helper
@@ -817,7 +601,7 @@ function CreateMatch() {
     setCreateError(null)
 
     if (!isEditMode && !courtSlotId) {
-      setCreateError('Chưa chọn ca sân. Vui lòng chọn sân và ca trống ở mục 03 trước khi tạo kèo.')
+      setCreateError('Chưa chọn ca sân. Vui lòng chọn cơ sở và một ca trống ở mục 03 trước khi tạo kèo.')
       setSubmitting(false)
       document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
@@ -840,7 +624,7 @@ function CreateMatch() {
 
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
-      alert(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
+      toast.error(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
       setSubmitting(false)
       return
     }
@@ -901,15 +685,15 @@ function CreateMatch() {
   }
 
   // Handle Cancel Match Creation
-  const handleCancel = () => {
-    if (window.confirm('Bạn có chắc chắn muốn huỷ bỏ đăng kèo ghép trận này không?')) {
+  const handleCancel = async () => {
+    if ((await confirmDialog('Bạn có chắc chắn muốn huỷ bỏ đăng kèo ghép trận này không?'))) {
       navigate('/community')
     }
   }
 
   return (
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
-      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <div className="snx-page">
         {/* Main Large White Card Container */}
         <div className="bg-white rounded-3xl border border-gray-200/90 p-6 sm:p-8 md:p-10 shadow-sm">
           {/* Header Section */}
@@ -1578,9 +1362,6 @@ function CreateMatch() {
                   <label className="text-[12px] font-black text-[#111827] uppercase tracking-wide">
                     04. TIÊU CHÍ GHÉP TRẬN &amp; CẤU HÌNH KÈO
                   </label>
-                  <span className="text-[11px] font-extrabold text-[#15803D]">
-                    Tối ưu ghép 99.2%
-                  </span>
                 </div>
 
                 {/* Thể thức thi đấu */}
@@ -1892,7 +1673,7 @@ function CreateMatch() {
                     <span>CỤM SÂN TRONG BÁN KÍNH</span>
                   </div>
                   <span className="text-[11px] font-extrabold text-[#15803D]">
-                    {currentDistrictData.courts.length} SÂN TRỐNG KHẢ DỤNG
+                    {currentDistrictData.courts.length} CƠ SỞ TRONG KHU VỰC
                   </span>
                 </div>
 
@@ -1902,7 +1683,7 @@ function CreateMatch() {
                     title="Bản đồ cụm sân thể thao"
                     className="w-full h-full border-0 pointer-events-auto"
                     src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      (selectedFacility?.address || selectedFacility?.name || currentCourt.name) + ', TP Ho Chi Minh'
+                      selectedFacility?.latitude && selectedFacility?.longitude ? `${selectedFacility.latitude},${selectedFacility.longitude}` : (selectedFacility?.address || selectedFacility?.name || currentCourt.name) + ', TP Ho Chi Minh'
                     )}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
                     loading="lazy"
                   />
