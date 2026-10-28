@@ -68,13 +68,26 @@ function Register() {
     for (const key of ['username', 'fullName', 'phone', 'email']) {
       if (!payload[key]) nextErrors[key] = 'Vui lòng điền thông tin này.'
     }
-    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
+    // Cùng luật với BE (AccountRules): tên đăng nhập 3-30 ký tự, họ tên tối đa 100, SĐT Việt Nam 10 số, email tối đa 254, mật khẩu 6-64
+    if (payload.username && !/^[a-zA-Z0-9._]{3,30}$/.test(payload.username)) {
+      nextErrors.username = 'Tên đăng nhập phải từ 3-30 ký tự, viết liền không dấu, chỉ gồm chữ, số, dấu chấm (.) hoặc gạch dưới (_).'
+    }
+    if (payload.fullName && (payload.fullName.length < 2 || payload.fullName.length > 100)) {
+      nextErrors.fullName = 'Họ và tên phải từ 2 đến 100 ký tự.'
+    } else if (payload.fullName && !/^[\p{L}\s.'-]+$/u.test(payload.fullName)) {
+      nextErrors.fullName = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng.'
+    }
+    if (payload.phone && !/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(payload.phone.replace(/[\s.-]/g, ''))) {
+      nextErrors.phone = 'Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).'
+    }
+    if (payload.email && (payload.email.length > 254 || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(payload.email))) {
       nextErrors.email = 'Email không hợp lệ.'
     }
     if (!payload.otpCode) {
       nextErrors.otp = otpSent ? 'Vui lòng nhập mã OTP đã gửi tới số điện thoại.' : 'Vui lòng bấm "Gửi mã OTP" để xác thực số điện thoại.'
     }
     if (!password.trim()) nextErrors.password = 'Vui lòng nhập mật khẩu.'
+    else if (password.length < 6 || password.length > 64) nextErrors.password = 'Mật khẩu phải từ 6 đến 64 ký tự.'
     if (!confirmPassword || password !== confirmPassword) {
       nextErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
     }
@@ -277,8 +290,9 @@ function Register() {
                   id="username"
                   name="username"
                   value={username}
-                  onChange={(event) => setUsername(event.target.value)}
+                  onChange={(event) => setUsername(event.target.value.replace(/\s/g, ''))}
                   autoComplete="username"
+                  maxLength={30}
                   required
                   aria-invalid={!!errors.username}
                   aria-describedby="username-error"
@@ -305,6 +319,7 @@ function Register() {
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
                     autoComplete="name"
+                    maxLength={100}
                     aria-invalid={!!errors.fullName}
                     aria-describedby="fullName-error"
                     placeholder="Ví dụ: Nguyễn Văn A"
@@ -331,8 +346,10 @@ function Register() {
                       id="phone"
                       name="phone"
                       value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
+                      onChange={(event) => setPhone(event.target.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, ''))}
                       autoComplete="tel"
+                      inputMode="numeric"
+                      maxLength={12}
                       aria-invalid={!!errors.phone}
                       aria-describedby="phone-error"
                       placeholder="0912 345 678"
@@ -370,6 +387,7 @@ function Register() {
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       autoComplete="email"
+                      maxLength={254}
                       aria-invalid={!!errors.email}
                       aria-describedby="email-error"
                       placeholder="email@example.com"
@@ -461,6 +479,7 @@ function Register() {
                       required 
                       type={passwordVisible ? 'text' : 'password'}
                       value={password}
+                      maxLength={64}
                       onChange={(e) => setPassword(e.target.value)}
                     />
                     {errors.password && <p id="password-error" role="alert" className="mt-1 text-sm text-red-600">{errors.password}</p>}
@@ -532,6 +551,7 @@ function Register() {
                       required 
                       type={confirmPasswordVisible ? 'text' : 'password'}
                       value={confirmPassword}
+                      maxLength={64}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
                     {errors.confirmPassword && <p id="confirmPassword-error" role="alert" className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}

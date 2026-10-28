@@ -478,25 +478,32 @@ function SplitPayment() {
       ? customReasonText.trim() || 'Lý do khác'
       : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
 
-    const hoursLeft = getHoursUntilMatch()
-    const isEligibleRefund = hoursLeft >= 24
-
     setIsCanceling(true)
     setCancelError(null)
     try {
       // Đơn đang dùng cho kèo LFG không hủy trực tiếp được: phải hủy kèo (POST /api/v1/lfgs/{cardId}/cancel)
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h), không tự đoán ở FE
       const isLfg = Boolean(state.isLfg || state.cardId)
+      let refundAmount = 0
       if (isLfg && state.cardId) {
-        await cancelLfg(state.cardId, { reason: finalReason })
+        const result = await cancelLfg(state.cardId, { reason: finalReason })
+        refundAmount = Number(result?.hostRefund) || 0
       } else if (isValidGuid(bookingId)) {
-        await cancelBooking(bookingId, {
+        const result = await cancelBooking(bookingId, {
           reasonCode: selectedReasonCode,
           reason: finalReason,
         })
+        refundAmount = Number(result?.refundAmount) || 0
+      } else {
+        throw new Error('Không tìm thấy đơn đặt sân để hủy.')
       }
+      const isEligibleRefund = refundAmount > 0
 
       // Xử lý hoàn tiền
-      if (isEligibleRefund) getWallet().catch(() => {})
+      if (isEligibleRefund) {
+        getWallet().catch(() => {})
+        window.dispatchEvent(new Event('escrow_balance_updated'))
+      }
 
       setBookingStatus('CANCELLED')
       setShowCancelModal(false)
@@ -512,7 +519,7 @@ function SplitPayment() {
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
             message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? `Hủy trước ca >= 24h: Đã hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow.`
+              ? `Hủy trước ca >= 24h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
               : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
             time: 'Vừa xong',
             unread: true,
@@ -525,7 +532,7 @@ function SplitPayment() {
       toast.success(
         `Đã hủy đơn đặt sân thành công!\n\n${
           isEligibleRefund
-            ? `💰 Bạn đã được hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
+            ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
             : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
         }`
       )
