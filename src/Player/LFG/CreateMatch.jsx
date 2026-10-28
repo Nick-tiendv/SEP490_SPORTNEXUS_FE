@@ -5,20 +5,11 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { searchFacilities } from '../../api/player/facilityApi.js'
-import { getFacilityAvailability } from '../../api/player/bookingApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
-import { getFacilities, transformFacilityToCourt, detectDistrictFromAddress, categoryToSportKey } from '../../api/player/facilityApi.js'
+import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
-const SPORT_NAMES = {
-  badminton: 'cầu lông',
-  pickleball: 'pickleball',
-  football: 'bóng đá',
-  basketball: 'bóng rổ',
-  tennis: 'tennis',
-}
-
 const calculateDurationHours = (rangeStr) => {
   if (!rangeStr) return 2
   const parts = rangeStr.split('-').map((s) => s.trim())
@@ -203,9 +194,6 @@ const FALLBACK_FACILITIES = [
   },
 ]
 
-const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const clock = (v) => new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-const vnd = (n) => new Intl.NumberFormat('vi-VN').format(Number(n) || 0)
 const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 // Gom cơ sở thật (GET /api/v1/facilities/search) theo quận để chọn khu vực
@@ -275,7 +263,6 @@ function CreateMatch() {
     const days = getLfgUpcomingDays(21)
     return days[0]?.dateStr || ''
   })
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState('20:00 - 22:00 (Tối muộn)')
   const [preferredTimeRange, setPreferredTimeRange] = useState('20:00 - 22:00')
 
   const preferredDurationHours = useMemo(() => {
@@ -331,16 +318,14 @@ function CreateMatch() {
 
   // Danh sách cơ sở thể thao & ca sân khả dụng
   const [facilities, setFacilities] = useState(FALLBACK_FACILITIES)
-  const [isLoadingFacilities, setIsLoadingFacilities] = useState(false)
   const [selectedFacilityId, setSelectedFacilityId] = useState(() => location.state?.facilityId || '680db3fd-becd-4ed2-8ffa-a9fecf7a9ca1')
   const [selectedSubCourtId, setSelectedSubCourtId] = useState(() => location.state?.courtId || 'f4d8b134-b950-434e-8de0-0ad9cc37f283')
-  const [courtSlots, setCourtSlots] = useState([])
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+  // Ca trống đã tải, gắn với khoá (sân con | ngày | giá); đang tải khi khoá hiện tại chưa có kết quả
+  const [slotsResult, setSlotsResult] = useState({ key: null, slots: [] })
 
   // Tải danh sách cơ sở từ API GET /api/v1/facilities
   useEffect(() => {
     let isMounted = true
-    setIsLoadingFacilities(true)
     getFacilities()
       .then((raw) => {
         if (!isMounted) return
@@ -365,9 +350,6 @@ function CreateMatch() {
         }
       })
       .catch((err) => console.warn('[CreateMatch] Không thể tải facilities từ BE:', err))
-      .finally(() => {
-        if (isMounted) setIsLoadingFacilities(false)
-      })
     return () => {
       isMounted = false
     }
@@ -408,21 +390,14 @@ function CreateMatch() {
 
   // Sân con đang chọn
   const selectedSubCourt = useMemo(() => {
-    return availableSubCourts.find((c) => c.id === selectedSubCourtId) || availableSubCourts[0] || null
+    // Sân con người dùng chọn nếu còn thuộc cơ sở này; nếu không, lấy sân đang hoạt động đầu tiên
+    return (
+      availableSubCourts.find((c) => c.id === selectedSubCourtId) ||
+      availableSubCourts.find((c) => c.status === 'ACTIVE') ||
+      availableSubCourts[0] ||
+      null
+    )
   }, [availableSubCourts, selectedSubCourtId])
-
-  // Khi cơ sở thay đổi, tự động chọn sân con hợp lệ đầu tiên
-  useEffect(() => {
-    if (availableSubCourts.length > 0) {
-      const exists = availableSubCourts.some((c) => c.id === selectedSubCourtId)
-      if (!exists) {
-        const firstActive = availableSubCourts.find((c) => c.status === 'ACTIVE') || availableSubCourts[0]
-        setSelectedSubCourtId(firstActive ? firstActive.id : null)
-      }
-    } else {
-      setSelectedSubCourtId(null)
-    }
-  }, [selectedFacilityId, availableSubCourts, selectedSubCourtId])
 
   // Tính ngày theo định dạng YYYY-MM-DD
   const currentDateStr = useMemo(() => {
@@ -449,39 +424,30 @@ function CreateMatch() {
   }, [currentDateStr, lfgUpcomingDays])
 
   // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
-  useEffect(() => {
-    let isMounted = true
-    if (!selectedSubCourt?.id) {
-      setCourtSlots([])
-      setIsLoadingSlots(false)
-      return
-    }
+  const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
+  const slotsKey = selectedSubCourt?.id ? `${selectedSubCourt.id}|${currentDateStr}|${defaultCourtPrice}` : null
+  const courtSlots = slotsKey && slotsResult.key === slotsKey ? slotsResult.slots : []
+  const isLoadingSlots = Boolean(slotsKey) && slotsResult.key !== slotsKey
 
-    setIsLoadingSlots(true)
-    getCourtSlots(selectedSubCourt.id, currentDateStr)
+  useEffect(() => {
+    if (!slotsKey) return undefined
+    let isMounted = true
+    const [subCourtId, dateStr] = slotsKey.split('|')
+    getCourtSlots(subCourtId, dateStr)
       .then((rawSlots) => {
         if (!isMounted) return
-        if (Array.isArray(rawSlots) && rawSlots.length > 0) {
-          const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
-          // Quy chuẩn: Ghép các ca 1 tiếng thành ca 2 tiếng, không cho phép setup ca 1 tiếng
-          const twoHourSlots = buildTwoHourSlots(rawSlots, defaultCourtPrice)
-          setCourtSlots(twoHourSlots)
-        } else {
-          setCourtSlots([])
-        }
+        // Quy chuẩn: Ghép các ca 1 tiếng thành ca 2 tiếng, không cho phép setup ca 1 tiếng
+        const slots = Array.isArray(rawSlots) && rawSlots.length > 0 ? buildTwoHourSlots(rawSlots, defaultCourtPrice) : []
+        setSlotsResult({ key: slotsKey, slots })
       })
       .catch((err) => {
         console.warn('[CreateMatch] Lỗi khi tải ca sân:', err)
-        if (isMounted) setCourtSlots([])
+        if (isMounted) setSlotsResult({ key: slotsKey, slots: [] })
       })
-      .finally(() => {
-        if (isMounted) setIsLoadingSlots(false)
-      })
-
     return () => {
       isMounted = false
     }
-  }, [selectedSubCourt?.id, currentDateStr, selectedSubCourt?.defaultPrice, selectedFacility?.price])
+  }, [slotsKey, defaultCourtPrice])
 
   // Chọn ca sân trống
   const handleSelectSlot = (slot) => {
@@ -530,7 +496,6 @@ function CreateMatch() {
   const currentDistrictData = districtData[selectedDistrict] || { name: 'Đang tải…', courts: [] }
   const currentCourt =
     currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
-  const selectedCourtId = currentCourt.id
 
   // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở
   const filteredDistricts = Object.entries(districtData).filter(([, item]) => {
@@ -548,39 +513,6 @@ function CreateMatch() {
     setSelectedCourtId(null)
     setDistrictSearchQuery('')
     setIsDistrictDropdownOpen(false)
-  }
-
-  // Ca trống thật của cơ sở đang chọn (GET /api/v1/facilities/{id}/availability)
-  const playDate = new Date()
-  if (selectedDate === 'tomorrow') playDate.setDate(playDate.getDate() + 1)
-  const playDateStr = toDateStr(playDate)
-  const [availability, setAvailability] = useState({ key: '', slots: [] })
-  const availabilityKey = selectedCourtId ? `${selectedCourtId}|${playDateStr}|${sport}` : ''
-  useEffect(() => {
-    if (isEditMode || !availabilityKey) return undefined
-    const [facilityId, date, sportKey] = availabilityKey.split('|')
-    let cancelled = false
-    getFacilityAvailability(facilityId, date)
-      .then((res) => {
-        if (cancelled) return
-        const wanted = SPORT_NAMES[sportKey]
-        const slots = (res?.courts || [])
-          .filter((c) => c.isBookable !== false && (!wanted || normalize(c.sportName || '').includes(normalize(wanted))))
-          .flatMap((c) => (c.slots || []).filter((x) => x.isBookable && !x.isPast).map((x) => ({ ...x, courtName: c.courtName })))
-          .sort((x, y) => new Date(x.startTime) - new Date(y.startTime))
-        setAvailability({ key: availabilityKey, slots })
-      })
-      .catch(() => !cancelled && setAvailability({ key: availabilityKey, slots: [] }))
-    return () => { cancelled = true }
-  }, [availabilityKey, isEditMode])
-  const availableSlots = availability.key === availabilityKey ? availability.slots : []
-  const loadingSlots = Boolean(availabilityKey) && availability.key !== availabilityKey
-  const [pickedSlot, setPickedSlot] = useState(null)
-
-  const handlePickSlot = (slot) => {
-    setPickedSlot(slot)
-    setCourtSlotId(slot.id)
-    setCourtFee(Number(slot.price) || 0)
   }
 
   // Toggle format helper
@@ -1197,7 +1129,7 @@ function CreateMatch() {
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {availableSubCourts.map((court) => {
-                        const isCourtSelected = court.id === selectedSubCourtId
+                        const isCourtSelected = court.id === selectedSubCourt?.id
                         const isCourtActive = court.status === 'ACTIVE'
                         return (
                           <button

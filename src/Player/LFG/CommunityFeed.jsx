@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getLfgs,
   getMyLfgCards,
@@ -109,9 +109,10 @@ function CommunityFeed() {
   const [myStatusFilter, setMyStatusFilter] = useState('all') // 'all' | 'OPEN' | 'FILLED' | 'CANCELLED'
   const [myLfgCards, setMyLfgCards] = useState([])
   const [joinedLfgCards, setJoinedLfgCards] = useState([])
-  const [isLoadingMyCards, setIsLoadingMyCards] = useState(false)
-  const [isLoadingJoined, setIsLoadingJoined] = useState(false)
-  const [isLoadingLfgs, setIsLoadingLfgs] = useState(false)
+  // Đang tải sẵn khi trang mở thẳng vào tab tương ứng (?tab=my_cards | joined)
+  const [isLoadingMyCards, setIsLoadingMyCards] = useState(() => activeMainTab === 'my_cards')
+  const [isLoadingJoined, setIsLoadingJoined] = useState(() => activeMainTab === 'joined')
+  const [isLoadingLfgs, setIsLoadingLfgs] = useState(true)
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
   const [selectedClaimSide, setSelectedClaimSide] = useState('any')
@@ -178,8 +179,6 @@ function CommunityFeed() {
 
   useEffect(() => {
     let cancelled = false
-    setIsLoadingLfgs(true)
-    setLfgListError('')
     getLfgs({ page: 1, pageSize: 50 })
       .then((res) => {
         if (cancelled) return
@@ -265,34 +264,26 @@ function CommunityFeed() {
   }, [toastMessage])
 
   // Load My Cards (Chủ kèo) - Bước 2
-  const loadMyCards = async (status = myStatusFilter) => {
+  // fetchX: chỉ gọi API và cập nhật kết quả; loadX: bật trạng thái đang tải rồi gọi fetchX
+  const fetchMyCards = (status = myStatusFilter) =>
+    getMyLfgCards(status === 'all' ? undefined : status)
+      .then((list) => setMyLfgCards(Array.isArray(list) ? list : []))
+      .catch((err) => console.warn('[CommunityFeed] Lỗi lấy kèo của tôi:', err))
+      .finally(() => setIsLoadingMyCards(false))
+  const loadMyCards = (status = myStatusFilter) => {
     setIsLoadingMyCards(true)
-    try {
-      const list = await getMyLfgCards(status === 'all' ? undefined : status)
-      const apiCards = Array.isArray(list) ? list : []
-      if (apiCards.length > 0) {
-        setMyLfgCards(apiCards)
-      } else {
-        setMyLfgCards([])
-      }
-    } catch (err) {
-      console.warn('[CommunityFeed] Lỗi lấy kèo của tôi:', err)
-    } finally {
-      setIsLoadingMyCards(false)
-    }
+    return fetchMyCards(status)
   }
 
   // Load Joined Cards (Người tham gia)
-  const loadJoinedCards = async () => {
+  const fetchJoinedCards = () =>
+    getJoinedLfgs()
+      .then((list) => setJoinedLfgCards(Array.isArray(list) ? list : []))
+      .catch((err) => console.warn('[CommunityFeed] Lỗi lấy kèo đã tham gia:', err))
+      .finally(() => setIsLoadingJoined(false))
+  const loadJoinedCards = () => {
     setIsLoadingJoined(true)
-    try {
-      const list = await getJoinedLfgs()
-      setJoinedLfgCards(Array.isArray(list) ? list : [])
-    } catch (err) {
-      console.warn('[CommunityFeed] Lỗi lấy kèo đã tham gia:', err)
-    } finally {
-      setIsLoadingJoined(false)
-    }
+    return fetchJoinedCards()
   }
 
 
@@ -617,15 +608,13 @@ function CommunityFeed() {
     }
   }
 
+  // Tải dữ liệu tab mở sẵn từ URL khi vào trang; đổi tab / bộ lọc về sau do handler tự tải
   useEffect(() => {
-    if (activeMainTab === 'my_cards') {
-      loadMyCards(myStatusFilter)
-    } else if (activeMainTab === 'joined') {
-      loadJoinedCards()
-    } else if (activeMainTab === 'community_posts') {
-      loadCommunityPosts(communitySubTab)
-    }
-  }, [activeMainTab, myStatusFilter, communitySubTab])
+    if (activeMainTab === 'my_cards') fetchMyCards('all')
+    else if (activeMainTab === 'joined') fetchJoinedCards()
+    // Chỉ chạy một lần khi mở trang
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Confirm Slot Claim Handler - 2.6 Người tham gia Bước 2
   const handleConfirmClaim = async () => {
@@ -1250,7 +1239,11 @@ function CommunityFeed() {
             {lfgListError ? (
               <div className="bg-white rounded-2xl border border-red-200 p-8 text-center">
                 <p className="font-bold text-red-700">{lfgListError}</p>
-                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" style={{ marginTop: 10 }} onClick={() => setLfgReload((value) => value + 1)}>Thử lại</button>
+                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" style={{ marginTop: 10 }} onClick={() => {
+                  setIsLoadingLfgs(true)
+                  setLfgListError('')
+                  setLfgReload((value) => value + 1)
+                }}>Thử lại</button>
               </div>
             ) : isLoadingLfgs && matches.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-sm text-gray-500">Đang tải danh sách kèo…</div>
@@ -1889,7 +1882,10 @@ function CommunityFeed() {
                   <div className="flex items-center gap-1.5 bg-black/25 p-1 rounded-xl backdrop-blur-sm">
                     <button
                       type="button"
-                      onClick={() => setCommunitySubTab('all')}
+                      onClick={() => {
+                        setCommunitySubTab('all')
+                        loadCommunityPosts('all')
+                      }}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                         communitySubTab === 'all'
                           ? 'bg-white text-[#1C3524] shadow-sm'
@@ -1900,7 +1896,10 @@ function CommunityFeed() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setCommunitySubTab('my')}
+                      onClick={() => {
+                        setCommunitySubTab('my')
+                        loadCommunityPosts('my')
+                      }}
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                         communitySubTab === 'my'
                           ? 'bg-white text-[#1C3524] shadow-sm'

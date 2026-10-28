@@ -1,5 +1,5 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { uid, nowMs } from '../../../utils/ids.js'
 import { confirmDialog } from '../../../components/common/confirm.js'
 import { toast } from 'sonner'
@@ -42,30 +42,20 @@ function findSubCourtId(state) {
   return null
 }
 
+// Giữ tham chiếu ổn định khi không có state điều hướng, để effect không chạy lại mỗi lần render
+const EMPTY_STATE = {}
+
 function SplitPayment() {
   const currentUser = useCurrentUser()
   const navigate = useNavigate()
   const location = useLocation()
-  const state = location.state || {}
+  const state = location.state || EMPTY_STATE
 
   const [slotError, setSlotError] = useState('')
   const [activeSlotData, setActiveSlotData] = useState(null)
   const [resolvedSlotId, setResolvedSlotId] = useState(null)
   const [resolvedSlotIds, setResolvedSlotIds] = useState([])
   const [resolvedNumberOfSlots, setResolvedNumberOfSlots] = useState(() => state.numberOfSlots || 1)
-
-  // Đồng bộ số dư ví thực tế từ Backend API
-  useEffect(() => {
-    let isMounted = true
-    getWallet()
-      .then((w) => {
-        if (isMounted && w && typeof w.balance === 'number') {
-          setWalletBalance(w.balance)
-        }
-      })
-      .catch(() => {})
-    return () => { isMounted = false }
-  }, [])
 
   // Kiểm tra ca người dùng đã chọn còn trống không. Không tự đổi sang ca khác.
   useEffect(() => {
@@ -142,7 +132,7 @@ function SplitPayment() {
       })
 
     return () => { isMounted = false }
-  }, [state.courtId, state.subCourtId, state.courtSlotId, state.subCourt, state.slot, state.date, state.hours, state.slotCount])
+  }, [state])
 
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'Cụm Sân SportNexus'
@@ -351,14 +341,6 @@ function SplitPayment() {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
-  useEffect(() => {
-    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return undefined
-    // Chỉ đếm ngược trong updater; việc xử lý hết hạn nằm ở effect bên dưới (updater phải thuần)
-    const timer = setInterval(() => setDeadlineSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000)
-    return () => clearInterval(timer)
-  }, [step, bookingStatus])
-
   const handleDeadlineExpired = () => {
     // Bước 5: Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả
     // Số dư thật do backend cập nhật: tải lại ví (getWallet tự đồng bộ TopBar và các trang khác).
@@ -386,11 +368,22 @@ function SplitPayment() {
     toast.error(`⏰ Đã hết hạn góp tiền!\n\nĐơn đặt sân đã tự động hủy do chưa đủ người góp tiền. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
 
-  // Hết hạn góp tiền khi đơn vẫn PENDING: cập nhật giao diện 1 lần
+  // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
+  const readDeadlineSeconds = useEffectEvent(() => deadlineSeconds)
+  const onDeadlineExpired = useEffectEvent(() => handleDeadlineExpired())
   useEffect(() => {
-    if (step === 'ticket_pass' && bookingStatus === 'PENDING' && deadlineSeconds === 0) handleDeadlineExpired()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy khi đồng hồ về 0
-  }, [deadlineSeconds, step, bookingStatus])
+    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return undefined
+    let remaining = readDeadlineSeconds()
+    const timer = setInterval(() => {
+      remaining = Math.max(0, remaining - 1)
+      setDeadlineSeconds(remaining)
+      if (remaining === 0) {
+        clearInterval(timer)
+        onDeadlineExpired()
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [step, bookingStatus])
 
   // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
   const handleSearchFriend = async (e) => {
@@ -1139,6 +1132,7 @@ function SplitPayment() {
   }
 
   // Polling tự động kiểm tra thanh toán PayOS bằng tiền thật
+  const completeBookingAfterPayment = useEffectEvent((orderCode) => handleCompleteBookingAfterPayment(orderCode))
   useEffect(() => {
     if (step !== 'bank_qr' || !payosSession?.orderCode) return undefined
     let active = true
@@ -1151,7 +1145,7 @@ function SplitPayment() {
         const status = normalizeDepositStatus(data?.status)
         if (status === DEPOSIT_STATUS.SUCCESS) {
           clearPendingDeposit()
-          await handleCompleteBookingAfterPayment(payosSession.orderCode)
+          await completeBookingAfterPayment(payosSession.orderCode)
           return
         }
         if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {

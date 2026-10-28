@@ -195,11 +195,11 @@ export default function Profile() {
   /* ---------------- API States: Bookings, Reviews, Reports, Security ---------------- */
   // 1. Đặt sân của tôi (GET /api/v1/bookings/my-bookings)
   const [myBookings, setMyBookings] = useState([])
-  const [loadingBookings, setLoadingBookings] = useState(false)
+  const [loadingBookings, setLoadingBookings] = useState(true)
 
   // 2. Đánh giá sân của tôi (GET /api/v1/facility-reviews/my-reviews)
   const [myFacilityReviews, setMyFacilityReviews] = useState([])
-  const [loadingFacilityReviews, setLoadingFacilityReviews] = useState(false)
+  const [loadingFacilityReviews, setLoadingFacilityReviews] = useState(true)
   const [reviewTab, setReviewTab] = useState('fairplay') // 'fairplay' | 'facility'
   const [selectedFacilityReviewDetail, setSelectedFacilityReviewDetail] = useState(null)
   const [editingFacilityReview, setEditingFacilityReview] = useState(null)
@@ -209,7 +209,7 @@ export default function Profile() {
   // 3. Báo cáo / khiếu nại (GET /api/v1/reports/reasons & GET /reports/my-reports)
   const [reportReasons, setReportReasons] = useState([])
   const [myReports, setMyReports] = useState([])
-  const [loadingReports, setLoadingReports] = useState(false)
+  const [loadingReports, setLoadingReports] = useState(true)
   const [supportTab, setSupportTab] = useState('info') // 'info' | 'create_report' | 'my_reports'
   const [newReportForm, setNewReportForm] = useState({ reasonId: '', description: '', bookingId: '', evidence: [] })
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
@@ -228,54 +228,44 @@ export default function Profile() {
   const avatarInputRef = useRef(null)
 
   // Tải đặt sân của tôi: GET /api/v1/bookings/my-bookings
-  const loadMyBookings = async () => {
-    setLoadingBookings(true)
-    try {
-      const data = await getMyBookings()
-      if (Array.isArray(data)) setMyBookings(data)
-    } catch (err) {
-      console.warn('[Profile] Lỗi lấy bookings:', err)
-    } finally {
-      setLoadingBookings(false)
-    }
-  }
+  // fetchX: chỉ gọi API và cập nhật state khi có kết quả; loadX: bật trạng thái đang tải rồi gọi fetchX
+  const fetchMyBookings = () =>
+    getMyBookings()
+      .then((data) => {
+        if (Array.isArray(data)) setMyBookings(data)
+      })
+      .catch((err) => console.warn('[Profile] Lỗi lấy bookings:', err))
+      .finally(() => setLoadingBookings(false))
 
   // Tải đánh giá cơ sở của tôi: GET /api/v1/facility-reviews/my-reviews
-  const loadMyFacilityReviews = async () => {
+  const fetchMyFacilityReviews = () =>
+    getMyFacilityReviews()
+      .then((res) => setMyFacilityReviews(res?.items || res?.data || (Array.isArray(res) ? res : [])))
+      .catch((err) => console.warn('[Profile] Lỗi lấy facility reviews:', err))
+      .finally(() => setLoadingFacilityReviews(false))
+  const loadMyFacilityReviews = () => {
     setLoadingFacilityReviews(true)
-    try {
-      const res = await getMyFacilityReviews()
-      const list = res?.items || res?.data || (Array.isArray(res) ? res : [])
-      setMyFacilityReviews(list)
-    } catch (err) {
-      console.warn('[Profile] Lỗi lấy facility reviews:', err)
-    } finally {
-      setLoadingFacilityReviews(false)
-    }
+    return fetchMyFacilityReviews()
   }
 
   // Tải báo cáo / khiếu nại: GET /api/v1/reports/reasons & GET /reports/my-reports
-  const loadReportData = async () => {
+  const fetchReportData = () =>
+    Promise.all([getReportReasons('BOOKING').catch(() => []), getMyReports().catch(() => [])])
+      .then(([reasons, reports]) => {
+        if (Array.isArray(reasons)) setReportReasons(reasons)
+        setMyReports(reports?.items || (Array.isArray(reports) ? reports : []))
+      })
+      .catch((err) => console.warn('[Profile] Lỗi tải dữ liệu khiếu nại:', err))
+      .finally(() => setLoadingReports(false))
+  const loadReportData = () => {
     setLoadingReports(true)
-    try {
-      const [reasons, reports] = await Promise.all([
-        getReportReasons('BOOKING').catch(() => []),
-        getMyReports().catch(() => []),
-      ])
-      if (Array.isArray(reasons)) setReportReasons(reasons)
-      const rList = reports?.items || (Array.isArray(reports) ? reports : [])
-      setMyReports(rList)
-    } catch (err) {
-      console.warn('[Profile] Lỗi tải dữ liệu khiếu nại:', err)
-    } finally {
-      setLoadingReports(false)
-    }
+    return fetchReportData()
   }
 
   useEffect(() => {
-    loadMyBookings()
-    loadMyFacilityReviews()
-    loadReportData()
+    fetchMyBookings()
+    fetchMyFacilityReviews()
+    fetchReportData()
   }, [])
 
   // Tải avatar lên: POST /api/auth/me/avatar

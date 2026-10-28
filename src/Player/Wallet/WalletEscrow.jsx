@@ -114,41 +114,46 @@ export default function WalletEscrow() {
   const [walletLoading, setWalletLoading] = useState(true)
   const [walletError, setWalletError] = useState('')
 
-  const loadWallet = useCallback(async () => {
+  const fetchWallet = useCallback(
+    () =>
+      getWallet()
+        .then((w) => {
+          setWallet(w)
+          setWalletError('')
+          return w
+        })
+        .catch((err) => {
+          setWalletError(err?.message || 'Không thể tải thông tin ví.')
+          return null
+        })
+        .finally(() => setWalletLoading(false)),
+    [],
+  )
+  const loadWallet = useCallback(() => {
     setWalletLoading(true)
-    setWalletError('')
-    try {
-      const w = await getWallet()
-      setWallet(w)
-      return w
-    } catch (err) {
-      setWalletError(err?.message || 'Không thể tải thông tin ví.')
-      return null
-    } finally {
-      setWalletLoading(false)
-    }
-  }, [])
+    return fetchWallet()
+  }, [fetchWallet])
 
   /* ------------------------- Lịch sử giao dịch ------------------------- */
   const [txFilters, setTxFilters] = useState({ type: '', from: '', to: '' })
   const [txPage, setTxPage] = useState(1)
-  const [txData, setTxData] = useState({ items: [], totalPages: 1, totalCount: 0 })
-  const [txLoading, setTxLoading] = useState(true)
-  const [txError, setTxError] = useState('')
   const [txReloadKey, setTxReloadKey] = useState(0)
+  // Kết quả gần nhất gắn với khoá truy vấn; đang tải khi khoá hiện tại chưa có kết quả
+  const txRequestKey = JSON.stringify([txFilters, txPage, txReloadKey])
+  const [txResult, setTxResult] = useState({ key: null, data: { items: [], totalPages: 1, totalCount: 0 }, error: '' })
+  const txData = txResult.data
+  const txLoading = txResult.key !== txRequestKey
+  const txError = txLoading ? '' : txResult.error
 
   useEffect(() => {
     let active = true
-    setTxLoading(true)
-    setTxError('')
     getWalletTransactions({ ...txFilters, page: txPage, pageSize: PAGE_SIZE })
-      .then((res) => active && setTxData(res))
-      .catch((err) => active && setTxError(err?.message || 'Không thể tải lịch sử giao dịch.'))
-      .finally(() => active && setTxLoading(false))
+      .then((res) => active && setTxResult({ key: txRequestKey, data: res, error: '' }))
+      .catch((err) => active && setTxResult((prev) => ({ ...prev, key: txRequestKey, error: err?.message || 'Không thể tải lịch sử giao dịch.' })))
     return () => {
       active = false
     }
-  }, [txFilters, txPage, txReloadKey])
+  }, [txFilters, txPage, txRequestKey])
 
   const reloadTransactions = () => setTxReloadKey((k) => k + 1)
   const updateFilter = (key, value) => {
@@ -157,8 +162,8 @@ export default function WalletEscrow() {
   }
 
   useEffect(() => {
-    loadWallet()
-  }, [loadWallet])
+    fetchWallet()
+  }, [fetchWallet])
 
   /* ----------------------- Lệnh nạp còn dang dở ----------------------- */
   const [pendingDeposit, setPendingDeposit] = useState(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { uid } from '../../utils/ids.js'
 import { QRCodeSVG } from 'qrcode.react'
@@ -43,8 +43,8 @@ function CheckInQR() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticketType, setTicketType] = useState(() => searchParams.get('type') || 'booking')
   const [ticketData, setTicketData] = useState(null)
-  const [isLoadingTicket, setIsLoadingTicket] = useState(true)
-  const [ticketError, setTicketError] = useState(null)
+  // Kết quả tải vé gắn với hàm tải đang dùng; đang tải khi hàm hiện tại chưa trả kết quả
+  const [ticketLoad, setTicketLoad] = useState({ fetcher: null, error: null })
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
 
@@ -117,18 +117,22 @@ function CheckInQR() {
     return null
   }, [ticketType, searchParams, currentUser.id])
 
+  const isLoadingTicket = ticketLoad.fetcher !== fetchTicket
+  const ticketError = isLoadingTicket ? null : ticketLoad.error
+
   useEffect(() => {
     let isMounted = true
-    setIsLoadingTicket(true)
-    setTicketError(null)
     fetchTicket()
-      .then((ticket) => isMounted && setTicketData(ticket))
+      .then((ticket) => {
+        if (!isMounted) return
+        setTicketData(ticket)
+        setTicketLoad({ fetcher: fetchTicket, error: null })
+      })
       .catch((err) => {
         if (!isMounted) return
         setTicketData(null)
-        setTicketError(err?.message || 'Không tải được vé check-in.')
+        setTicketLoad({ fetcher: fetchTicket, error: err?.message || 'Không tải được vé check-in.' })
       })
-      .finally(() => isMounted && setIsLoadingTicket(false))
     return () => { isMounted = false }
   }, [fetchTicket])
 
@@ -327,20 +331,19 @@ function CheckInQR() {
   // Khi người chơi chưa check-in thì nút vẫn sáng.
   // Đã check-in: theo trạng thái vé từ BE (chủ sân quét QR trên máy của họ)
   const checkInDone = String(ticketData?.status || '').toUpperCase() === 'CHECKED_IN'
-  const [checkOutDone, setCheckOutDone] = useState(false)
-
-  // Trạng thái check-out (phiên đánh giá sau trận lưu trên máy) theo mã vé đang xem
-  useEffect(() => {
-    if (!checkInDone || !ticketData?.ticketCode) {
-      setCheckOutDone(false)
-      return
-    }
-    const cleanCode = ticketData.ticketCode.replace('#', '').trim()
+  // Trạng thái check-out (ghi nhận trên máy) theo mã vé đang xem
+  const currentTicketCode = (ticketData?.ticketCode || '').replace('#', '').trim()
+  const [checkedOutCode, setCheckedOutCode] = useState(null)
+  const storedCheckOutDone = useMemo(() => {
+    if (!checkInDone || !currentTicketCode) return false
     try {
       const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || 'null')
-      setCheckOutDone(Boolean(saved?.ticketCode === cleanCode && saved?.checkOutDone))
-    } catch { /* bỏ qua: dữ liệu cũ hỏng thì coi như chưa check-out */ }
-  }, [checkInDone, ticketData?.ticketCode])
+      return Boolean(saved?.ticketCode === currentTicketCode && saved?.checkOutDone)
+    } catch {
+      return false // dữ liệu cũ hỏng thì coi như chưa check-out
+    }
+  }, [checkInDone, currentTicketCode])
+  const checkOutDone = checkInDone && Boolean(currentTicketCode) && (checkedOutCode === currentTicketCode || storedCheckOutDone)
 
   // Tự hỏi lại BE mỗi 20 giây khi vé chưa check-in (chủ sân quét trên máy của họ)
   useEffect(() => {
@@ -463,7 +466,7 @@ function CheckInQR() {
   // Xử lý xác nhận Check-out trả sân (ghi nhận trên máy, BE không có bước check-out)
   const handleConfirmCheckOut = () => {
     setShowCheckOutModal(false)
-    setCheckOutDone(true)
+    setCheckedOutCode(currentTicketCode)
     const checkOutTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     try {
       const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || '{}') || {}

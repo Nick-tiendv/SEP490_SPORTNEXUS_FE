@@ -55,9 +55,9 @@ export function getUserProfileContext() {
   let profile = {}
   let sports = []
   let user = {}
-  try { profile = JSON.parse(localStorage.getItem('player_profile_data') || '{}') } catch {}
-  try { sports = JSON.parse(localStorage.getItem('player_sports_data') || '[]') } catch {}
-  try { user = JSON.parse(localStorage.getItem('user') || '{}') } catch {}
+  try { profile = JSON.parse(localStorage.getItem('player_profile_data') || '{}') } catch { /* dữ liệu hỏng trong localStorage → dùng mặc định */ }
+  try { sports = JSON.parse(localStorage.getItem('player_sports_data') || '[]') } catch { /* dữ liệu hỏng trong localStorage → dùng mặc định */ }
+  try { user = JSON.parse(localStorage.getItem('user') || '{}') } catch { /* dữ liệu hỏng trong localStorage → dùng mặc định */ }
 
   const name = profile.name || user.fullName || user.username || ''
   const location = profile.location || ''
@@ -72,7 +72,7 @@ export function getUserProfileContext() {
       if (Array.isArray(selected) && selected.length > 0) {
         favSportsNames = selected.map((k) => k === 'badminton' ? 'Cầu lông' : k === 'pickleball' ? 'Pickleball' : k === 'football' ? 'Bóng đá' : k === 'tennis' ? 'Tennis' : k)
       }
-    } catch {}
+    } catch { /* dữ liệu hỏng trong localStorage → dùng mặc định */ }
   }
 
   let districtKey = null

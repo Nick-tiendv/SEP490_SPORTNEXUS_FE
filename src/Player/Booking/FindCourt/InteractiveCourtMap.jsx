@@ -24,14 +24,11 @@ export default function InteractiveCourtMap({
   const markersRef = useRef({})
   const userMarkerRef = useRef(null)
   const tileLayerRef = useRef(null)
-  const [isLeafletReady, setIsLeafletReady] = useState(false)
+  const [isLeafletReady, setIsLeafletReady] = useState(() => typeof window !== 'undefined' && Boolean(window.L))
 
   // Kiểm tra Leaflet có sẵn trên window (từ CDN)
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.L) {
-      setIsLeafletReady(true)
-      return
-    }
+    if (isLeafletReady) return undefined
     const interval = setInterval(() => {
       if (typeof window !== 'undefined' && window.L) {
         setIsLeafletReady(true)
@@ -39,7 +36,7 @@ export default function InteractiveCourtMap({
       }
     }, 200)
     return () => clearInterval(interval)
-  }, [])
+  }, [isLeafletReady])
 
   // Khởi tạo bản đồ Leaflet
   useEffect(() => {
@@ -103,6 +100,8 @@ export default function InteractiveCourtMap({
       markersRef.current = {}
       userMarkerRef.current = null
     }
+    // Chỉ khởi tạo bản đồ một lần; đổi loại bản đồ / vị trí đã có effect riêng xử lý
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLeafletReady])
 
   // Cập nhật Tile Layer khi đổi giữa Bản đồ thường & Vệ tinh
