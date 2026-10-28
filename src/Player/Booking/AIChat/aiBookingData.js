@@ -569,16 +569,6 @@ export function buildWelcomeMessage(userLocation, userProfile = null) {
   const addressName = loc.address || loc.name || 'TP. Thủ Đức, TP.HCM'
   const nowTime = loc.updatedAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 
-  const allCourts = getAllAvailableCourts()
-  const courtsWithDist = allCourts.map((c) => ({
-    ...c,
-    distance: calculateCourtDistance(c, loc),
-  })).sort((a, b) => a.distance - b.distance)
-
-  const topCourt = courtsWithDist[0] || COURTS[0]
-  const slots = buildSlotsForCourt(topCourt)
-  const goldenSlot = slots.find((s) => s.id === 's_a1' && s.status === 'available') || slots.find((s) => s.status === 'available') || slots[0]
-
   const greeting = profile.name ? `Xin chào **${profile.name}**!` : 'Xin chào bạn!'
   const sportsNote = profile.favoriteSportsLabel ? `• **Môn thể thao trong hồ sơ**: **${profile.favoriteSportsLabel}**.\n` : ''
 
@@ -590,20 +580,13 @@ export function buildWelcomeMessage(userLocation, userProfile = null) {
       `${greeting} Tôi là **SportNexus AI Concierge** — trợ lý đặt sân thể thao thời gian thực.\n\n` +
       `📍 **Khu vực của bạn**: **${addressName}** *(lúc ${nowTime})*.\n` +
       sportsNote +
-      `• **Sân gần nhất**: **${topCourt.name}** (cách **${topCourt.distance} km** • ${topCourt.sportName})\n` +
-      `• **Ca trống sẵn sàng**: **${goldenSlot.start} – ${goldenSlot.end}** (**${formatVnd(goldenSlot.price)}** / ca)\n\n` +
-      `💡 *Gõ hoặc bấm Micro để nói (VD: "sân gần nhất", "sân dưới 180k", "ngày mai 14h-16h").*`,
-    recommendedCourt: topCourt,
-    recommendedSlot: goldenSlot,
-    priorityBadge: `📍 GẦN BẠN NHẤT (${topCourt.distance} KM)`,
-    priorityReason: `Khoảng cách tối ưu từ vị trí ${loc.name || addressName} • Khung giờ 2 tiếng sẵn sàng`,
+      `\n💡 *Gõ hoặc bấm Micro để nói (VD: "sân cầu lông tối nay gần tôi", "sân dưới 150k chiều mai", "tìm kèo pickleball cuối tuần").* ` +
+      `Mình chỉ gợi ý sân và ca còn trống thật trên hệ thống; bấm vào ca để chuyển sang thanh toán.`,
     quickReplies: [
-      `Đặt nhanh ${topCourt.name}`,
-      '🏸 Đặt 1 sân Lucky ngày mai',
-      '💰 Sân cầu lông giá rẻ nhất',
-      '🏓 Sân Pickleball tốt nhất',
-      '⏰ Khung giờ trống chiều mai',
-      '🛡️ Cơ chế giữ chỗ 15p & Escrow',
+      'Sân trống tối nay gần tôi',
+      'Sân cầu lông giá rẻ nhất chiều mai',
+      'Tìm kèo pickleball cuối tuần',
+      'Chính sách hủy sân và hoàn tiền',
     ],
   }
 }
