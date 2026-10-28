@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { searchFacilities } from '../../api/player/facilityApi.js'
 import { getFacilityAvailability } from '../../api/player/bookingApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { getFacilities, transformFacilityToCourt, detectDistrictFromAddress, categoryToSportKey } from '../../api/player/facilityApi.js'
+import { getCourtSlots } from '../../api/player/bookingApi.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
 const SPORT_NAMES = {
@@ -16,6 +18,190 @@ const SPORT_NAMES = {
   basketball: 'bóng rổ',
   tennis: 'tennis',
 }
+
+const calculateDurationHours = (rangeStr) => {
+  if (!rangeStr) return 2
+  const parts = rangeStr.split('-').map((s) => s.trim())
+  if (parts.length < 2) return 2
+  const [startH, startM] = parts[0].split(':').map(Number)
+  const [endH, endM] = parts[1].split(':').map(Number)
+  if (isNaN(startH) || isNaN(endH)) return 2
+  const diffMinutes = (endH * 60 + (endM || 0)) - (startH * 60 + (startM || 0))
+  const diffHours = diffMinutes / 60
+  return diffHours > 0 ? diffHours : 2
+}
+
+// Định dạng ngày theo giờ địa phương YYYY-MM-DD
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Lấy danh sách các ngày khả dụng cho Ghép trận LFG:
+// Bắt đầu từ 2 ngày sau gần nhất trở đi (bỏ Hôm nay và Ngày mai), chỉ hiển thị Thứ và Ngày/Tháng/Năm (không hiển thị "ngày mốt")
+function getLfgUpcomingDays(count = 21) {
+  const days = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Bắt đầu từ 2 ngày sau gần nhất (today + 2 days)
+  for (let i = 2; i < 2 + count; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const dateStr = formatLocalDate(d)
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+    const shortDayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+    const dayOfWeek = dayNames[d.getDay()]
+    const shortDay = shortDayNames[d.getDay()]
+    const dayNum = String(d.getDate()).padStart(2, '0')
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    const dateFormatted = `${dayNum}/${monthNum}/${year}`
+
+    days.push({
+      dateStr,
+      dayNum,
+      monthNum,
+      year,
+      dayOfWeek,
+      shortDay,
+      dateFormatted,
+      fullLabel: `${dayOfWeek}, ${dateFormatted}`,
+      diffDays: i,
+      isEligible: true,
+    })
+  }
+  return days
+}
+
+// Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
+function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  // Sắp xếp ca theo thứ tự thời gian tăng dần
+  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  // Nếu ca từ backend đã có độ dài 2 tiếng (diffHours >= 1.8)
+  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
+  if (firstSlotDiffHours >= 1.8) {
+    return sorted.map((s) => {
+      const start = s.startTime?.slice(11, 16) || '00:00'
+      const end = s.endTime?.slice(11, 16) || '00:00'
+      const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
+      const price = Number(s.price) > 0 ? Number(s.price) : defaultPrice * 2
+      return {
+        id: s.id,
+        slotIds: [s.id],
+        start,
+        end,
+        timeRange: `${start} - ${end}`,
+        hours: 2,
+        price,
+        status: s.status,
+        isAvailable: isAvail,
+        isPast: Boolean(s.isPast),
+        rawSlot: s,
+        rawSlots: [s],
+      }
+    })
+  }
+
+  // Nếu ca là 1 tiếng: Ghép 2 ca 1 tiếng liên tiếp thành khung giờ chuẩn 2 tiếng
+  const twoHourSlots = []
+  for (let i = 0; i < sorted.length; i += 2) {
+    const slotA = sorted[i]
+    const slotB = sorted[i + 1]
+    // Không nhận ca lẻ 1 tiếng ở cuối vì quy chuẩn hệ thống bắt buộc 2 tiếng
+    if (!slotB) break
+
+    const start = slotA.startTime?.slice(11, 16) || '00:00'
+    const end = slotB.endTime?.slice(11, 16) || '00:00'
+    const isAvailA = slotA.status === 'Available' && !slotA.isPast && slotA.isBookable
+    const isAvailB = slotB.status === 'Available' && !slotB.isPast && slotB.isBookable
+    const isAvail = isAvailA && isAvailB
+    const isPast = Boolean(slotA.isPast || slotB.isPast)
+    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
+    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
+    const totalPrice = priceA + priceB
+
+    twoHourSlots.push({
+      id: slotA.id,
+      slotIds: [slotA.id, slotB.id],
+      start,
+      end,
+      timeRange: `${start} - ${end}`,
+      hours: 2,
+      price: totalPrice,
+      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
+      isAvailable: isAvail,
+      isPast,
+      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
+      rawSlot: slotA,
+      rawSlots: [slotA, slotB],
+    })
+  }
+
+  return twoHourSlots
+}
+
+const FALLBACK_FACILITIES = [
+  {
+    id: '680db3fd-becd-4ed2-8ffa-a9fecf7a9ca1',
+    name: 'Thủ Đức Sports Hub',
+    address: '1 Võ Văn Ngân, Linh Chiểu, TP. Thủ Đức, TP.HCM',
+    district: 'thuduc',
+    sport: 'badminton',
+    sports: ['badminton', 'tennis'],
+    price: 110000,
+    courts: [
+      { id: 'f4d8b134-b950-434e-8de0-0ad9cc37f283', name: 'Sân Cầu lông VIP', status: 'ACTIVE', defaultPrice: 110000, categoryName: 'Cầu lông' },
+      { id: 'a2ccc41b-1e09-4738-8b5a-c5e6061e63e0', name: 'Sân Tennis 1', status: 'ACTIVE', defaultPrice: 200000, categoryName: 'Tennis' },
+    ],
+  },
+  {
+    id: 'b680cc74-77fb-4cb8-ab40-e0ddb4084e19',
+    name: 'SportNexus Arena Quận 1',
+    address: '68 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
+    district: 'q1',
+    sport: 'badminton',
+    sports: ['badminton', 'pickleball'],
+    price: 90000,
+    courts: [
+      { id: '4c8b875f-7aaf-4f06-9fbd-5da2b2becdd1', name: 'Sân Cầu lông 1', status: 'ACTIVE', defaultPrice: 90000, categoryName: 'Cầu lông' },
+      { id: '80eea835-81d4-4bb0-a3c9-2311025d8830', name: 'Sân Cầu lông 2', status: 'ACTIVE', defaultPrice: 90000, categoryName: 'Cầu lông' },
+      { id: 'eb26558b-23e6-4857-bb1a-3cc8d2b976df', name: 'Sân Pickleball A', status: 'ACTIVE', defaultPrice: 120000, categoryName: 'Pickleball' },
+    ],
+  },
+  {
+    id: '7c8ce758-5c02-46c7-860c-b6b72888bffd',
+    name: 'Sân Bóng Phú Mỹ Hưng',
+    address: '15 Nguyễn Lương Bằng, Tân Phú, Quận 7, TP.HCM',
+    district: 'q7',
+    sport: 'football',
+    sports: ['football', 'basketball'],
+    price: 300000,
+    courts: [
+      { id: '55d7dbe8-b0e3-4dab-90d4-275778a8723a', name: 'Sân 5 người số 1', status: 'ACTIVE', defaultPrice: 300000, categoryName: 'Bóng đá' },
+      { id: '08e94d57-2f15-4e84-8624-30d0e6f1a821', name: 'Sân 7 người', status: 'ACTIVE', defaultPrice: 500000, categoryName: 'Bóng đá' },
+    ],
+  },
+  {
+    id: '83c47bdd-4166-48c5-9083-08f99d58084f',
+    name: 'Hà Nội Badminton Center',
+    address: '36 Trần Duy Hưng, Trung Hòa, Cầu Giấy, Hà Nội',
+    district: 'caugiay',
+    sport: 'badminton',
+    sports: ['badminton', 'pickleball'],
+    price: 100000,
+    courts: [
+      { id: '77ba51b3-a22b-4d47-8744-b2c14221f32f', name: 'Sân 1', status: 'ACTIVE', defaultPrice: 100000, categoryName: 'Cầu lông' },
+      { id: '92d4cae3-90aa-46be-9302-23f0effe8b5f', name: 'Sân 2', status: 'ACTIVE', defaultPrice: 100000, categoryName: 'Cầu lông' },
+      { id: 'a1d30c78-9214-4d6b-93e7-5d506d37cd56', name: 'Sân Pickleball', status: 'ACTIVE', defaultPrice: 130000, categoryName: 'Pickleball' },
+    ],
+  },
+]
 
 const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const clock = (v) => new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
@@ -44,7 +230,6 @@ const groupByDistrict = (facilities) => {
   })
   return map
 }
-
 
 function CreateMatch() {
   const currentUser = useCurrentUser()
@@ -78,8 +263,25 @@ function CreateMatch() {
   const selectedDistrict = pickedDistrict && districtData[pickedDistrict] ? pickedDistrict : userDistrictKey
   const [districtSearchQuery, setDistrictSearchQuery] = useState('')
   const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false)
-  const [pickedCourtId, setSelectedCourtId] = useState(null)
-  const [selectedDate, setSelectedDate] = useState('today') // 'today' | 'tomorrow'
+  const [pickedCourtId, setSelectedCourtId] = useState(() => {
+    return districtData[userDistrictKey]?.courts[0]?.id || null
+  })
+  const lfgUpcomingDays = useMemo(() => getLfgUpcomingDays(21), [])
+  const firstEligibleDayStr = useMemo(() => {
+    return lfgUpcomingDays[0]?.dateStr || ''
+  }, [lfgUpcomingDays])
+  // Khởi tạo ngày mặc định là ngày hợp lệ sớm nhất (cách 2 ngày gần nhất)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const days = getLfgUpcomingDays(21)
+    return days[0]?.dateStr || ''
+  })
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState('20:00 - 22:00 (Tối muộn)')
+  const [preferredTimeRange, setPreferredTimeRange] = useState('20:00 - 22:00')
+
+  const preferredDurationHours = useMemo(() => {
+    const hours = calculateDurationHours(preferredTimeRange)
+    return Number.isInteger(hours) ? hours : hours.toFixed(1)
+  }, [preferredTimeRange])
 
   // Formats (multi-select)
   const [selectedFormats, setSelectedFormats] = useState(['mixed']) // 'mixed', 'men', 'women', 'single'
@@ -126,6 +328,169 @@ function CreateMatch() {
   const [description, setDescription] = useState('')
   const [courtFee, setCourtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
   const [createError, setCreateError] = useState(null)
+
+  // Danh sách cơ sở thể thao & ca sân khả dụng
+  const [facilities, setFacilities] = useState(FALLBACK_FACILITIES)
+  const [isLoadingFacilities, setIsLoadingFacilities] = useState(false)
+  const [selectedFacilityId, setSelectedFacilityId] = useState(() => location.state?.facilityId || '680db3fd-becd-4ed2-8ffa-a9fecf7a9ca1')
+  const [selectedSubCourtId, setSelectedSubCourtId] = useState(() => location.state?.courtId || 'f4d8b134-b950-434e-8de0-0ad9cc37f283')
+  const [courtSlots, setCourtSlots] = useState([])
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+
+  // Tải danh sách cơ sở từ API GET /api/v1/facilities
+  useEffect(() => {
+    let isMounted = true
+    setIsLoadingFacilities(true)
+    getFacilities()
+      .then((raw) => {
+        if (!isMounted) return
+        if (Array.isArray(raw) && raw.length > 0) {
+          const transformed = raw.map(transformFacilityToCourt).filter(Boolean)
+          // Ưu tiên cơ sở có sân con
+          const validFacilities = transformed.filter((f) => Array.isArray(f.courts) && f.courts.length > 0)
+          const mergedFacilities = validFacilities.length > 0 ? validFacilities : transformed
+          setFacilities(mergedFacilities)
+
+          const stateFacId = location.state?.facilityId
+          const stateCourtId = location.state?.courtId
+          if (stateFacId && mergedFacilities.some((f) => f.id === stateFacId)) {
+            setSelectedFacilityId(stateFacId)
+            const targetFac = mergedFacilities.find((f) => f.id === stateFacId)
+            if (stateCourtId && targetFac?.courts?.some((c) => c.id === stateCourtId)) {
+              setSelectedSubCourtId(stateCourtId)
+            } else if (targetFac?.courts?.[0]?.id) {
+              setSelectedSubCourtId(targetFac.courts[0].id)
+            }
+          }
+        }
+      })
+      .catch((err) => console.warn('[CreateMatch] Không thể tải facilities từ BE:', err))
+      .finally(() => {
+        if (isMounted) setIsLoadingFacilities(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [location.state])
+
+  // Lọc cơ sở phù hợp theo môn và quận
+  const filteredFacilities = useMemo(() => {
+    if (!facilities.length) return FALLBACK_FACILITIES
+    const sportMatched = facilities.filter((f) => {
+      if (Array.isArray(f.sports) && f.sports.length > 0) {
+        return f.sports.includes(sport)
+      }
+      return f.sport === sport
+    })
+    return sportMatched.length > 0 ? sportMatched : facilities
+  }, [facilities, sport])
+
+  // Sắp xếp ưu tiên cơ sở tại quận đang chọn
+  const sortedFacilities = useMemo(() => {
+    return [...filteredFacilities].sort((a, b) => {
+      const aInDist = a.district === selectedDistrict ? 1 : 0
+      const bInDist = b.district === selectedDistrict ? 1 : 0
+      if (aInDist !== bInDist) return bInDist - aInDist
+      return 0
+    })
+  }, [filteredFacilities, selectedDistrict])
+
+  // Cơ sở đang chọn
+  const selectedFacility = useMemo(() => {
+    return facilities.find((f) => f.id === selectedFacilityId) || sortedFacilities[0] || facilities[0] || null
+  }, [facilities, selectedFacilityId, sortedFacilities])
+
+  // Danh sách sân con của cơ sở đang chọn
+  const availableSubCourts = useMemo(() => {
+    if (!selectedFacility || !Array.isArray(selectedFacility.courts)) return []
+    return selectedFacility.courts
+  }, [selectedFacility])
+
+  // Sân con đang chọn
+  const selectedSubCourt = useMemo(() => {
+    return availableSubCourts.find((c) => c.id === selectedSubCourtId) || availableSubCourts[0] || null
+  }, [availableSubCourts, selectedSubCourtId])
+
+  // Khi cơ sở thay đổi, tự động chọn sân con hợp lệ đầu tiên
+  useEffect(() => {
+    if (availableSubCourts.length > 0) {
+      const exists = availableSubCourts.some((c) => c.id === selectedSubCourtId)
+      if (!exists) {
+        const firstActive = availableSubCourts.find((c) => c.status === 'ACTIVE') || availableSubCourts[0]
+        setSelectedSubCourtId(firstActive ? firstActive.id : null)
+      }
+    } else {
+      setSelectedSubCourtId(null)
+    }
+  }, [selectedFacilityId, availableSubCourts, selectedSubCourtId])
+
+  // Tính ngày theo định dạng YYYY-MM-DD
+  const currentDateStr = useMemo(() => {
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      return selectedDate
+    }
+    return firstEligibleDayStr || ''
+  }, [selectedDate, firstEligibleDayStr])
+
+  const formattedDateLabel = useMemo(() => {
+    const found = lfgUpcomingDays.find((d) => d.dateStr === currentDateStr)
+    if (found) return found.fullLabel
+    if (currentDateStr) {
+      const parts = currentDateStr.split('-').map(Number)
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2])
+        const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+        const dayName = dayNames[d.getDay()] || ''
+        const dateFormatted = `${String(parts[2]).padStart(2, '0')}/${String(parts[1]).padStart(2, '0')}/${parts[0]}`
+        return `${dayName}, ${dateFormatted}`
+      }
+    }
+    return currentDateStr
+  }, [currentDateStr, lfgUpcomingDays])
+
+  // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
+  useEffect(() => {
+    let isMounted = true
+    if (!selectedSubCourt?.id) {
+      setCourtSlots([])
+      setIsLoadingSlots(false)
+      return
+    }
+
+    setIsLoadingSlots(true)
+    getCourtSlots(selectedSubCourt.id, currentDateStr)
+      .then((rawSlots) => {
+        if (!isMounted) return
+        if (Array.isArray(rawSlots) && rawSlots.length > 0) {
+          const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
+          // Quy chuẩn: Ghép các ca 1 tiếng thành ca 2 tiếng, không cho phép setup ca 1 tiếng
+          const twoHourSlots = buildTwoHourSlots(rawSlots, defaultCourtPrice)
+          setCourtSlots(twoHourSlots)
+        } else {
+          setCourtSlots([])
+        }
+      })
+      .catch((err) => {
+        console.warn('[CreateMatch] Lỗi khi tải ca sân:', err)
+        if (isMounted) setCourtSlots([])
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingSlots(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedSubCourt?.id, currentDateStr, selectedSubCourt?.defaultPrice, selectedFacility?.price])
+
+  // Chọn ca sân trống
+  const handleSelectSlot = (slot) => {
+    if (!slot.isAvailable) return
+    setCourtSlotId(slot.id)
+    setPreferredTimeRange(slot.timeRange)
+    setCourtFee(slot.price)
+    setCreateError(null)
+  }
 
   // Tải dữ liệu kèo cũ khi ở chế độ chỉnh sửa: GET /api/v1/lfgs/{cardId}
   useEffect(() => {
@@ -238,7 +603,23 @@ function CreateMatch() {
     if (!isEditMode && !courtSlotId) {
       setCreateError('Chưa chọn ca sân. Vui lòng chọn cơ sở và một ca trống ở mục 03 trước khi tạo kèo.')
       setSubmitting(false)
+      document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
+    }
+
+    // Kiểm tra quy định hệ thống: Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người
+    if (!isEditMode && courtSlotId) {
+      const selectedSlotObj = courtSlots.find((s) => s.id === courtSlotId)
+      const slotStartTime = selectedSlotObj?.rawSlot?.startTime || `${currentDateStr}T${selectedSlotObj?.start || '00:00'}:00`
+      const slotDate = new Date(slotStartTime)
+      const now = new Date()
+      const diffHours = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+      if (diffHours < 47.9) {
+        setCreateError('Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người.')
+        setSubmitting(false)
+        document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
     }
 
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
@@ -323,8 +704,8 @@ function CreateMatch() {
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="snx-page-title">
-                    {isEditMode ? 'Chỉnh Sửa Kèo Ghép (PUT /api/v1/lfgs)' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
+                  <h1 className="text-2xl sm:text-[28px] font-black text-[#111827] tracking-tight">
+                    {isEditMode ? 'Chỉnh Sửa Kèo Ghép' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] border border-[#C6E7BE] text-[11px] font-extrabold uppercase tracking-wide">
                     Realtime Engine
@@ -646,85 +1027,333 @@ function CreateMatch() {
                 </div>
               </div>
 
-              {/* 03. CHỌN CA TRỐNG (GET /api/v1/facilities/{id}/availability) */}
-              <div className="relative rounded-3xl bg-gradient-to-br from-[#FFFDF9] via-[#FAFBF8] to-[#F2F9F3] border-2 border-[#86EFAC] p-5 sm:p-6 shadow-[0_8px_30px_rgba(45,95,63,0.08)] overflow-hidden">
+              {/* 03. CHỌN SÂN & CA TRỐNG KHẢ DỤNG (BẮT BUỘC ĐỂ ĐĂNG KÈO) */}
+              <div
+                id="section-court-slots"
+                className="relative rounded-3xl bg-gradient-to-br from-[#FFFDF9] via-[#FAFBF8] to-[#F2F9F3] border-2 border-[#86EFAC] p-5 sm:p-6 shadow-[0_8px_30px_rgba(45,95,63,0.08)] overflow-hidden"
+              >
+                {/* Glowing neon accent line */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#F59E0B] via-[#10B981] to-[#2D5F3F]" />
 
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#F59E0B] text-[20px]">event_available</span>
-                    <label className="text-[13px] font-black text-[#111827] uppercase tracking-wide">
-                      03. CHỌN CA TRỐNG TẠI {currentCourt.name}
-                    </label>
+                {/* Section Header & Date Selector */}
+                <div className="flex flex-col gap-3 mb-5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[#F59E0B] text-[22px] animate-bounce">
+                        stadium
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="text-[13px] font-black text-[#111827] uppercase tracking-wide">
+                            03. CHỌN SÂN &amp; CA TRỐNG KHẢ DỤNG
+                          </label>
+                          <span className="px-2.5 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] text-[10px] font-black uppercase border border-[#C6E7BE]">
+                            Bắt Buộc Để Đăng Kèo
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Chọn cơ sở, sân đấu và nhấp vào khung giờ 2 tiếng còn trống bên dưới để hệ thống giữ chỗ tự động
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-[#EAF7EE] px-3 py-1 rounded-xl border border-[#C6E7BE] text-xs font-bold text-[#15803D]">
+                      <span className="material-symbols-outlined text-[16px]">schedule</span>
+                      <span>Quy chuẩn: Khung giờ 2 tiếng / ca</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-gray-200 shadow-2xs">
-                    {[['today', 0], ['tomorrow', 1]].map(([key, plus]) => {
-                      const d = new Date()
-                      d.setDate(d.getDate() + plus)
+                  {/* Bộ Chọn Ngày Thi Đấu - Calendar Strip & Picker */}
+                  <div className="bg-white/85 p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-2xs">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#2D5F3F]">calendar_month</span>
+                          Chọn ngày thi đấu:
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-[#EAF7EE] text-[#15803D] text-xs font-extrabold border border-[#C6E7BE]">
+                          {formattedDateLabel}
+                        </span>
+                      </div>
+
+                      {/* Nút Chọn ngày nhanh từ lịch tháng */}
+                      <label
+                        htmlFor="custom-date-picker"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-[#EAF7EE] border border-gray-300 hover:border-[#2D5F3F] text-gray-700 hover:text-[#15803D] text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                        title="Mở bảng lịch để chọn ngày khác thuận tiện hơn"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">edit_calendar</span>
+                        <span>Mở lịch tháng</span>
+                        <input
+                          id="custom-date-picker"
+                          type="date"
+                          min={firstEligibleDayStr}
+                          value={currentDateStr}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setSelectedDate(e.target.value)
+                              setCourtSlotId(null)
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Dải thẻ ngày trượt ngang dạng Calendar Strip */}
+                    <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+                      {lfgUpcomingDays.map((item) => {
+                        const isSelected = item.dateStr === currentDateStr
+                        return (
+                          <button
+                            key={item.dateStr}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate(item.dateStr)
+                              setCourtSlotId(null)
+                            }}
+                            className={`min-w-[82px] sm:min-w-[88px] py-2.5 px-2 rounded-2xl text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1 shrink-0 ${
+                              isSelected
+                                ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/25 ring-2 ring-[#2D5F3F]/40 scale-[1.02]'
+                                : 'bg-white border border-gray-200 hover:border-[#2D5F3F] hover:bg-[#F0FDF4] text-gray-700 shadow-2xs'
+                            }`}
+                          >
+                            {/* Thứ */}
+                            <span className={`text-[11.5px] font-bold ${isSelected ? 'text-emerald-100' : 'text-gray-500'}`}>
+                              {item.shortDay}
+                            </span>
+
+                            {/* Ngày số to rõ */}
+                            <span className={`text-[20px] font-black leading-none ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                              {item.dayNum}
+                            </span>
+
+                            {/* Tháng / Năm */}
+                            <span className={`text-[10px] font-extrabold ${isSelected ? 'text-emerald-200' : 'text-gray-500'}`}>
+                              {item.monthNum}/{item.year}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bước 1: Chọn Cơ Sở Thể Thao */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11.5px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[15px] text-[#2D5F3F]">location_on</span>
+                      1. Chọn cơ sở thể thao:
+                    </span>
+                    <span className="text-[10.5px] font-bold text-gray-500">
+                      Hiển thị {sortedFacilities.length} cơ sở trong khu vực
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {sortedFacilities.map((fac) => {
+                      const isFacSelected = fac.id === selectedFacilityId
+                      const facCourtsCount = fac.courts?.length || 0
                       return (
                         <button
-                          key={key}
+                          key={fac.id}
                           type="button"
-                          onClick={() => setSelectedDate(key)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            selectedDate === key ? 'bg-[#2D5F3F] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                          onClick={() => {
+                            setSelectedFacilityId(fac.id)
+                            const firstCourt = fac.courts?.find((c) => c.status === 'ACTIVE') || fac.courts?.[0]
+                            if (firstCourt) setSelectedSubCourtId(firstCourt.id)
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                            isFacSelected
+                              ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-sm ring-2 ring-[#2D5F3F]/20'
+                              : 'border-gray-200 bg-white hover:border-gray-300 text-gray-800'
                           }`}
                         >
-                          {plus === 0 ? 'Hôm nay' : 'Ngày mai'} ({d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})
+                          <div className="flex items-start justify-between gap-1 w-full">
+                            <h4 className="font-extrabold text-xs line-clamp-1 text-gray-900">{fac.name}</h4>
+                            {isFacSelected && (
+                              <span className="w-2 h-2 rounded-full bg-[#16A34A] shadow-[0_0_6px_#16A34A] shrink-0 mt-1" />
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-gray-500 line-clamp-1">{fac.address}</p>
+                          <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] w-full">
+                            <span className="font-semibold text-gray-500">{facCourtsCount} sân đấu</span>
+                            <span className="font-extrabold text-[#15803D]">
+                              từ {new Intl.NumberFormat('vi-VN').format(fac.price || 100000)} đ/h
+                            </span>
+                          </div>
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Ca đã chọn */}
-                <div className="p-5 rounded-2xl bg-gradient-to-r from-white to-[#F0FDF4] border-2 border-[#86EFAC] flex items-center gap-4 shadow-md shadow-[#2D5F3F]/10 mb-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] flex items-center justify-center text-white shrink-0">
-                    <span className="material-symbols-outlined text-[28px]">alarm_on</span>
+                {/* Bước 2: Chọn Sân Con trong cơ sở */}
+                {availableSubCourts.length > 0 && (
+                  <div className="mb-4">
+                    <span className="text-[11.5px] font-black uppercase tracking-wider text-gray-700 block mb-2 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[15px] text-[#2D5F3F]">sports_tennis</span>
+                      2. Chọn sân đấu cụ thể:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {availableSubCourts.map((court) => {
+                        const isCourtSelected = court.id === selectedSubCourtId
+                        const isCourtActive = court.status === 'ACTIVE'
+                        return (
+                          <button
+                            key={court.id}
+                            type="button"
+                            disabled={!isCourtActive}
+                            onClick={() => setSelectedSubCourtId(court.id)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                              isCourtSelected
+                                ? 'bg-[#2D5F3F] text-white shadow-xs'
+                                : isCourtActive
+                                ? 'bg-white border border-gray-200 text-gray-700 hover:border-[#2D5F3F]'
+                                : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-[15px]">
+                              {isCourtSelected ? 'radio_button_checked' : 'radio_button_unchecked'}
+                            </span>
+                            <span>{court.name}</span>
+                            <span
+                              className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold ${
+                                isCourtSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice) || 100000)} đ/h
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[11px] font-black uppercase tracking-wider text-[#15803D]">CA SÂN CỦA KÈO</span>
-                    {pickedSlot ? (
-                      <>
-                        <div className="text-[26px] font-black text-[#111827] tracking-tight leading-none mt-1">
-                          {clock(pickedSlot.startTime)} - {clock(pickedSlot.endTime)}
-                        </div>
-                        <p className="text-[12px] text-gray-500 mt-1">
-                          {pickedSlot.courtName} • {new Date(pickedSlot.startTime).toLocaleDateString('vi-VN')} • {vnd(pickedSlot.price)} đ
-                        </p>
-                      </>
-                    ) : (
-                      <div className="text-[15px] font-bold text-gray-500 mt-1">
-                        {courtSlotId ? 'Đã chọn ca từ màn hình đặt sân' : 'Chưa chọn ca, hãy chọn một ca trống bên dưới'}
+                )}
+
+                {/* Bước 3: Lưới Ca Trống Khả Dụng */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11.5px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[15px] text-[#2D5F3F]">calendar_month</span>
+                      3. Lưới ca sân ngày {formattedDateLabel}:
+                    </span>
+                    <span className="text-[11px] font-bold text-[#15803D]">
+                      {courtSlots.filter((s) => s.isAvailable).length} ca trống khả dụng
+                    </span>
+                  </div>
+
+                  {isLoadingSlots ? (
+                    <div className="py-8 flex flex-col items-center justify-center gap-2 bg-white/70 rounded-2xl border border-gray-200/80">
+                      <div className="w-7 h-7 border-3 border-[#2D5F3F] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-gray-500 font-medium">Đang kiểm tra ca trống thời gian thực...</p>
+                    </div>
+                  ) : courtSlots.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-4 gap-2.5">
+                      {courtSlots.map((slot) => {
+                        const isSlotSelected = slot.id === courtSlotId
+                        return (
+                          <button
+                            key={slot.id}
+                            type="button"
+                            disabled={!slot.isAvailable}
+                            onClick={() => handleSelectSlot(slot)}
+                            className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1.5 ${
+                              isSlotSelected
+                                ? 'bg-[#2D5F3F] text-white border-2 border-[#2D5F3F] shadow-md shadow-[#2D5F3F]/30 scale-[1.02]'
+                                : slot.isAvailable
+                                ? 'bg-white border-gray-200 hover:border-[#2D5F3F] hover:bg-[#F0FDF4] text-gray-800 cursor-pointer shadow-2xs'
+                                : 'bg-gray-100/80 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 w-full">
+                              <span className={`text-[13px] font-black tracking-tight ${isSlotSelected ? 'text-white' : 'text-gray-900'}`}>
+                                {slot.start} - {slot.end}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                                  isSlotSelected ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  2 TIẾNG
+                                </span>
+                                {isSlotSelected && (
+                                  <span className="material-symbols-outlined text-white text-[16px]">check_circle</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10.5px] w-full pt-1 border-t border-black/5">
+                              <span className={`font-black ${isSlotSelected ? 'text-green-100' : 'text-[#15803D]'}`}>
+                                {new Intl.NumberFormat('vi-VN').format(slot.price)} đ
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold uppercase ${
+                                  isSlotSelected
+                                    ? 'bg-white text-[#2D5F3F]'
+                                    : slot.isAvailable
+                                    ? 'bg-[#EAF7EE] text-[#15803D]'
+                                    : 'bg-gray-200 text-gray-500'
+                                }`}
+                              >
+                                {isSlotSelected ? 'ĐANG CHỌN' : slot.isAvailable ? 'TRỐNG' : slot.isPast ? 'QUA GIỜ' : 'ĐÃ KÍN'}
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-6 px-4 bg-white/70 rounded-2xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
+                      <span className="material-symbols-outlined text-[28px] text-gray-400 block mb-1">event_busy</span>
+                      Chưa có ca trống 2 tiếng cho sân này vào ngày {formattedDateLabel}.
+                      <div className="mt-2 flex items-center justify-center gap-3">
+                        <span className="text-gray-500 font-medium">Vui lòng chọn ngày khác trên thanh lịch phía trên</span>
+                        <span className="text-gray-300">|</span>
+                        <Link to="/court-finder" className="text-[#2D5F3F] font-bold hover:underline">
+                          Mở Bản đồ đặt sân ↗
+                        </Link>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  {loadingSlots && <span className="text-gray-500">Đang tải ca trống…</span>}
-                  {!loadingSlots && availableSlots.length === 0 && (
-                    <span className="text-gray-500">Cơ sở này không còn ca trống cho môn đã chọn trong ngày.</span>
-                  )}
-                  {availableSlots.slice(0, 24).map((slot) => (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      onClick={() => handlePickSlot(slot)}
-                      className={`px-3 py-2 rounded-xl font-extrabold transition-all cursor-pointer text-left ${
-                        courtSlotId === slot.id
-                          ? 'bg-[#2D5F3F] text-white shadow-sm'
-                          : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {clock(slot.startTime)} - {clock(slot.endTime)}
-                      <span className={`block text-[10px] font-semibold ${courtSlotId === slot.id ? 'text-green-100' : 'text-gray-400'}`}>
-                        {slot.courtName} • {Math.round(slot.price / 1000)}k
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {/* Banner Xác Nhận Ca Sân Đã Chọn */}
+                {courtSlotId ? (
+                  <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-[#EAF7EE] to-[#DCFCE7] border border-[#86EFAC] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#2D5F3F] text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">check</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10.5px] font-black uppercase tracking-wider text-[#15803D]">
+                            ĐÃ CHỌN CA SÂN THÀNH CÔNG
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#15803D] text-white text-[9px] font-black uppercase">
+                            Sẵn sàng đăng kèo
+                          </span>
+                        </div>
+                        <p className="font-extrabold text-sm text-[#111827] mt-0.5">
+                          {selectedFacility?.name} • {selectedSubCourt?.name || 'Sân tiêu chuẩn'}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Khung giờ: <strong>{preferredTimeRange}</strong> ({preferredDurationHours} giờ) • Giá sân: <strong className="text-[#15803D]">{new Intl.NumberFormat('vi-VN').format(courtFee)} đ</strong>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <span className="text-[11px] text-[#15803D] font-bold block">100% Tiền sân trừ từ ví Escrow</span>
+                      <span className="text-base font-black text-[#111827]">{new Intl.NumberFormat('vi-VN').format(courtFee)} đ</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-900 flex items-center gap-3 text-xs">
+                    <span className="material-symbols-outlined text-amber-600 text-[22px] shrink-0">touch_app</span>
+                    <span>
+                      <strong>Chưa chọn ca sân:</strong> Vui lòng click chọn 1 ca giờ còn trống màu xanh ở bảng trên để kích hoạt nút Đăng Kèo Ngay!
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 04. TIÊU CHÍ GHÉP TRẬN & CẤU HÌNH KÈO */}
@@ -931,17 +1560,14 @@ function CreateMatch() {
                     <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">group_add</span>
                     05. CẤU HÌNH SUẤT &amp; DUYỆT NGƯỜI THAM GIA
                   </label>
-                  <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    API /api/v1/lfgs
-                  </span>
                 </div>
 
-                {/* Số người cần tìm (slotsNeeded) & Giá mỗi người (pricePerPerson) */}
+                {/* Số người cần tìm & Giá mỗi người */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* slotsNeeded */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Số người cần tìm thêm (<code className="text-[#2D5F3F] font-mono">slotsNeeded</code>):
+                      Số người cần tìm thêm:
                     </label>
                     <div className="flex items-center gap-2">
                       <button
@@ -975,7 +1601,7 @@ function CreateMatch() {
                   {/* pricePerPerson */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Tiền mỗi người đóng (<code className="text-[#2D5F3F] font-mono">pricePerPerson</code>):
+                      Tiền mỗi người đóng:
                     </label>
                     <div className="relative">
                       <input
@@ -1001,7 +1627,7 @@ function CreateMatch() {
                     <div className="flex flex-col">
                       <span className="font-extrabold text-xs text-[#111827] flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[16px] text-amber-600">verified</span>
-                        Chế độ duyệt người tham gia (requireApproval)
+                        Chế độ duyệt người tham gia
                       </span>
                       <span className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
                         {requireApproval
@@ -1021,7 +1647,7 @@ function CreateMatch() {
                 {/* Description */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    Ghi chú mô tả trận đấu (description):
+                    Ghi chú mô tả trận đấu:
                   </label>
                   <textarea
                     rows={2}
@@ -1032,16 +1658,6 @@ function CreateMatch() {
                   />
                 </div>
 
-                {/* Court Slot UUID */}
-                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between text-[11px] text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">pin</span>
-                    Ca sân UUID (<code className="text-[#2D5F3F] font-mono">courtSlotId</code>):
-                  </span>
-                  <span className="font-mono text-gray-700 text-[10.5px] truncate max-w-[220px]" title={courtSlotId}>
-                    {courtSlotId}
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -1067,7 +1683,7 @@ function CreateMatch() {
                     title="Bản đồ cụm sân thể thao"
                     className="w-full h-full border-0 pointer-events-auto"
                     src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      currentCourt.lat ? `${currentCourt.lat},${currentCourt.lng}` : `${currentCourt.name}, ${currentDistrictData.name}`
+                      selectedFacility?.latitude && selectedFacility?.longitude ? `${selectedFacility.latitude},${selectedFacility.longitude}` : (selectedFacility?.address || selectedFacility?.name || currentCourt.name) + ', TP Ho Chi Minh'
                     )}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
                     loading="lazy"
                   />
@@ -1076,7 +1692,7 @@ function CreateMatch() {
                   <div className="absolute top-2.5 left-2.5 pointer-events-none">
                     <span className="px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-md text-[10.5px] font-extrabold text-gray-800 shadow-xs border border-gray-200 flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                      Khu Vực {currentDistrictData.name} • {radius}km
+                      {selectedFacility?.name || currentDistrictData.name} • {radius}km
                     </span>
                   </div>
 
@@ -1092,45 +1708,52 @@ function CreateMatch() {
                     <div className="min-w-0 pr-2">
                       <p className="font-extrabold text-xs text-[#111827] flex items-center gap-1 truncate">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shrink-0"></span>
-                        <span className="truncate">{currentCourt.name}</span>
+                        <span className="truncate">{selectedFacility?.name || currentCourt.name}</span>
                       </p>
                       <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                        {currentCourt.address || currentCourt.distance} • {currentCourt.courtCount}
+                        {selectedFacility?.address || currentCourt.address} • {selectedFacility?.courts?.length || currentCourt.courtCount} sân
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-md bg-[#EAF7EE] text-[#15803D] font-black text-xs shrink-0">
-                      {currentCourt.price}
+                      từ {new Intl.NumberFormat('vi-VN').format(selectedFacility?.price || 100000)} đ
                     </span>
                   </div>
                 </div>
 
-                {/* List of Nearest Courts in this District */}
+                {/* List of Nearest Facilities in this Area */}
                 <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
                   <span className="text-[10.5px] font-bold text-gray-500 uppercase tracking-wider">
-                    Sân gần nhất tại {currentDistrictData.name}:
+                    Sân khả dụng gần bạn nhất:
                   </span>
-                  {currentDistrictData.courts.map((court) => (
-                    <button
-                      key={court.id}
-                      type="button"
-                      onClick={() => { setSelectedCourtId(court.id); setPickedSlot(null) }}
-                      className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between cursor-pointer ${
-                        selectedCourtId === court.id
-                          ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] font-bold'
-                          : 'border-gray-100 bg-white hover:bg-gray-50 text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="material-symbols-outlined text-[14px]">
-                          {selectedCourtId === court.id ? 'check_circle' : 'location_on'}
+                  {sortedFacilities.slice(0, 4).map((fac) => {
+                    const isSelected = fac.id === selectedFacilityId
+                    return (
+                      <button
+                        key={fac.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFacilityId(fac.id)
+                          const firstCourt = fac.courts?.find((c) => c.status === 'ACTIVE') || fac.courts?.[0]
+                          if (firstCourt) setSelectedSubCourtId(firstCourt.id)
+                        }}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] font-bold'
+                            : 'border-gray-100 bg-white hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="material-symbols-outlined text-[14px]">
+                            {isSelected ? 'check_circle' : 'location_on'}
+                          </span>
+                          <span className="truncate">{fac.name}</span>
+                        </div>
+                        <span className="text-[10.5px] text-gray-400 shrink-0 font-semibold ml-2">
+                          {fac.courts?.length || 0} sân
                         </span>
-                        <span className="truncate">{court.name}</span>
-                      </div>
-                      <span className="text-[10.5px] text-gray-400 shrink-0 font-semibold ml-2">
-                        {court.distance}
-                      </span>
-                    </button>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -1157,35 +1780,85 @@ function CreateMatch() {
                 </div>
               </div>
 
-              {/* Card 4: FE Xử lý Hệ thống tự đặt ca sân & Trừ 100% tiền sân từ ví chủ kèo (Image 1) */}
-              <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs">
-                <div className="flex items-start gap-2.5">
-                  <span className="material-symbols-outlined text-[#15803D] text-[20px] shrink-0 mt-0.5">account_balance_wallet</span>
-                  <div>
-                    <p className="font-extrabold text-[#111827]">
-                      Trừ 100% Tiền Sân Từ Ví Chủ Kèo: {new Intl.NumberFormat('vi-VN').format(courtFee)} đ
-                    </p>
-                    <p className="text-[11px] text-[#2D5F3F] mt-1 leading-relaxed">
-                      Hệ thống tự động đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Tiền của người tham gia giữ trong ví họ, chỉ chuyển cho chủ kèo khi check-in hoặc sau giờ chơi.
-                    </p>
-                    <p className="text-[10.5px] text-[#15803D] font-bold mt-1.5 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
-                      {pricePerPerson
-                        ? `Thu người chơi: ${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ/suất`
-                        : `pricePerPerson để trống = chia đều ~${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / (slotsNeeded + 1)))} đ cho ${slotsNeeded + 1} người.`}
-                    </p>
-                  </div>
+              {/* Card 3: TỈ LỆ KHỚP KÈO DỰ BÁO */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
+                    TỈ LỆ KHỚP KÈO DỰ BÁO
+                  </span>
+                  <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
+                  <p className="text-[10.5px] text-gray-500 mt-0.5">
+                    Đang có 18 vận động viên cùng trình độ trực tuyến
+                  </p>
+                </div>
+
+                {/* Donut progress 88% */}
+                <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                    <path
+                      className="text-gray-100"
+                      strokeWidth="3.5"
+                      stroke="currentColor"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      className="text-[#2D5F3F]"
+                      strokeDasharray="88, 100"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      stroke="currentColor"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <span className="absolute text-xs font-black text-[#111827]">88%</span>
                 </div>
               </div>
 
-              {/* Card 5: Quy tắc Hủy tự động & Hoàn tiền (Image 2) */}
-              <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2.5 leading-relaxed">
-                <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">info</span>
-                <div>
-                  <strong className="block font-bold mb-0.5">Quy tắc hủy tự động &amp; Hoàn 100%:</strong>
-                  Kèo chưa đủ người khi còn <strong>2 ngày tới giờ chơi</strong> sẽ tự động bị hủy, hủy luôn đơn sân và <strong>hoàn 100% cho mọi người</strong>.
+
+
+              {/* Card 4: Thông tin ca sân đã chọn / Nhắc nhở chọn ca */}
+              {courtSlotId ? (
+                <div className="bg-[#EAF7EE] border border-[#86EFAC] rounded-2xl p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-[#15803D] uppercase text-[11px] flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px]">verified</span>
+                      Ca sân đã chọn
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-[#15803D] text-white text-[9.5px] font-black uppercase">
+                      Khả dụng
+                    </span>
+                  </div>
+                  <p className="font-black text-gray-900 mt-2 text-xs">
+                    {selectedFacility?.name}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    {selectedSubCourt?.name || 'Sân tiêu chuẩn'} • {selectedFacility?.address}
+                  </p>
+                  <div className="mt-2.5 pt-2 border-t border-green-200/80 flex items-center justify-between text-xs">
+                    <span className="text-gray-700 font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[15px] text-[#2D5F3F]">schedule</span>
+                      {preferredTimeRange} ({preferredDurationHours}h)
+                    </span>
+                    <span className="font-black text-[#15803D]">
+                      {new Intl.NumberFormat('vi-VN').format(courtFee)} đ
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 shadow-2xs flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">
+                    info
+                  </span>
+                  <div>
+                    <span className="font-black block text-xs text-amber-950">Chưa chọn ca sân &amp; giờ chơi</span>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      Vui lòng click chọn 1 ca giờ trống ở mục <strong>03</strong> bên trái trước khi nhấn Đăng Kèo.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Error banner if any */}
               {createError && (

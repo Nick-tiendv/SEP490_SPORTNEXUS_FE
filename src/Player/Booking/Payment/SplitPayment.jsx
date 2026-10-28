@@ -1,5 +1,5 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { uid, nowMs } from '../../../utils/ids.js'
 import { confirmDialog } from '../../../components/common/confirm.js'
 import { toast } from 'sonner'
@@ -28,7 +28,35 @@ import {
   clearPendingDeposit,
   DEPOSIT_STATUS,
 } from '../../../api/player/walletApi.js'
+import { COURTS } from '../AIChat/aiBookingData.js'
 import './SplitPayment.css'
+
+function findSubCourtId(state) {
+  if (!state) return null
+  const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (state.subCourtId && isGuidRegex.test(state.subCourtId)) return state.subCourtId
+
+  // Kiểm tra nếu courtSlotId hoặc courtId trùng với bất kỳ subCourt nào trong COURTS
+  if (Array.isArray(COURTS)) {
+    for (const facility of COURTS) {
+      if (Array.isArray(facility.subCourts)) {
+        for (const sub of facility.subCourts) {
+          if (state.courtSlotId === sub.id) return sub.id
+          if (state.courtId === sub.id) return sub.id
+          if (state.subCourt && sub.name && (state.subCourt.toLowerCase().includes(sub.name.toLowerCase()) || sub.name.toLowerCase().includes(state.subCourt.toLowerCase()))) {
+            return sub.id
+          }
+        }
+      }
+    }
+  }
+
+  // Nếu state.courtId là GUID hợp lệ
+  if (state.courtId && isGuidRegex.test(state.courtId)) {
+    return state.courtId
+  }
+  return null
+}
 
 function SplitPayment() {
   const currentUser = useCurrentUser()
@@ -38,29 +66,99 @@ function SplitPayment() {
 
   const [slotError, setSlotError] = useState('')
   const [activeSlotData, setActiveSlotData] = useState(null)
+  const [resolvedSlotId, setResolvedSlotId] = useState(null)
+  const [resolvedSlotIds, setResolvedSlotIds] = useState([])
+  const [resolvedNumberOfSlots, setResolvedNumberOfSlots] = useState(() => state.numberOfSlots || 1)
+
+  // Đồng bộ số dư ví thực tế từ Backend API
+  useEffect(() => {
+    let isMounted = true
+    getWallet()
+      .then((w) => {
+        if (isMounted && w && typeof w.balance === 'number') {
+          setWalletBalance(w.balance)
+        }
+      })
+      .catch(() => {})
+    return () => { isMounted = false }
+  }, [])
 
   // Kiểm tra ca người dùng đã chọn còn trống không. Không tự đổi sang ca khác.
   useEffect(() => {
     let isMounted = true
     const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const courtId = typeof state.courtId === 'string' && isGuidRegex.test(state.courtId) ? state.courtId : null
-    const slotId = typeof state.courtSlotId === 'string' && isGuidRegex.test(state.courtSlotId) ? state.courtSlotId : null
-    if (!courtId || !slotId) return undefined
 
-    getCourtSlots(courtId, (state.date || new Date().toISOString()).slice(0, 10))
+    // Tìm mã sân con (SubCourt ID) thực tế
+    const actualCourtId = findSubCourtId(state)
+    const rawSlotId = typeof state.courtSlotId === 'string' && isGuidRegex.test(state.courtSlotId) ? state.courtSlotId : null
+    const targetDate = (state.date || new Date().toISOString()).slice(0, 10)
+
+    if (!actualCourtId) {
+      return undefined
+    }
+
+    getCourtSlots(actualCourtId, targetDate)
       .then((slots) => {
-        if (!isMounted || !Array.isArray(slots)) return
-        const slot = slots.find((s) => s.id === slotId)
-        if (slot && !slot.isPast && slot.isBookable !== false && slot.status === 'Available') {
-          setActiveSlotData(slot)
+        if (!isMounted || !Array.isArray(slots) || slots.length === 0) return
+
+        // 1. Trường hợp rawSlotId là ID ca thật trong danh sách slots (không phải ID của sân con)
+        const isRawSlotACourt = rawSlotId === actualCourtId
+        const directSlot = !isRawSlotACourt && rawSlotId ? slots.find((s) => s.id === rawSlotId) : null
+
+        if (directSlot) {
+          if (!directSlot.isPast && directSlot.isBookable !== false && directSlot.status === 'Available') {
+            setActiveSlotData(directSlot)
+            setResolvedSlotId(directSlot.id)
+            setResolvedSlotIds(state.courtSlotIds || [directSlot.id])
+            setSlotError('')
+          } else {
+            setSlotError('Ca bạn chọn đã được đặt hoặc đã qua giờ. Vui lòng quay lại chọn ca khác.')
+          }
+          return
+        }
+
+        // 2. Trường hợp rawSlotId chưa có hoặc bị truyền nhầm thành mã sân con (courtId):
+        // Hệ thống tự động khớp theo khung giờ người dùng đã chọn (vd: "14:00 - 16:00")
+        const timeRangeStr = String(state.slot || '')
+        const startHourMatch = timeRangeStr.match(/(\d{1,2}):(\d{2})/)
+        const startStr = startHourMatch ? `${startHourMatch[1].padStart(2, '0')}:${startHourMatch[2]}` : null
+
+        let matchedSlot = null
+        if (startStr) {
+          matchedSlot = slots.find(
+            (s) => s.startTime?.slice(11, 16) === startStr && s.isBookable !== false && !s.isPast
+          )
+        }
+        // Nếu không khớp chính xác giờ bắt đầu, lấy ca khả dụng đầu tiên còn trống
+        if (!matchedSlot) {
+          matchedSlot = slots.find((s) => s.isBookable !== false && !s.isPast && s.status === 'Available')
+        }
+
+        if (matchedSlot) {
+          setActiveSlotData(matchedSlot)
+          setResolvedSlotId(matchedSlot.id)
           setSlotError('')
+
+          // Kiểm tra ca tiếp theo nếu là ca 2 tiếng
+          const hoursNeeded = state.hours || (state.slotCount ? state.slotCount * 1.0 : 2.0)
+          const slotIds = [matchedSlot.id]
+          if (hoursNeeded >= 1.8) {
+            const nextSlot = slots.find((s) => s.startTime === matchedSlot.endTime && s.isBookable !== false)
+            if (nextSlot) slotIds.push(nextSlot.id)
+          }
+          setResolvedSlotIds(slotIds)
+          setResolvedNumberOfSlots(slotIds.length)
+          console.log('[SplitPayment] ✅ Đã tìm và đồng bộ thành công ca sân thực tế:', matchedSlot.id, 'SlotIds:', slotIds)
         } else {
-          setSlotError('Ca bạn chọn đã được đặt hoặc đã qua giờ. Vui lòng quay lại chọn ca khác.')
+          setSlotError(`Khung giờ ${timeRangeStr || ''} ngày ${targetDate} hiện không còn ca trống. Vui lòng quay lại chọn ca khác.`)
         }
       })
-      .catch((err) => console.warn('[SplitPayment] Không thể kiểm tra ca sân:', err))
+      .catch((err) => {
+        console.warn('[SplitPayment] Không thể kiểm tra ca sân từ máy chủ:', err)
+      })
+
     return () => { isMounted = false }
-  }, [state.courtId, state.courtSlotId, state.date])
+  }, [state.courtId, state.subCourtId, state.courtSlotId, state.subCourt, state.slot, state.date, state.hours, state.slotCount])
 
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'Cụm Sân SportNexus'
@@ -81,6 +179,28 @@ function SplitPayment() {
     'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop'
   const sportLabel = state.sport === 'pickleball' ? 'PICKLEBALL CHUYÊN NGHIỆP' : 'CẦU LÔNG CHUYÊN NGHIỆP'
   const floorType = state.subCourtDesc || 'Sân đạt chuẩn thi đấu'
+
+  const bookingDateStr = (state.date || new Date().toISOString()).slice(0, 10)
+  const displayBookingDate = useMemo(() => {
+    if (state.dateLabel) return state.dateLabel
+    if (!state.date) return 'Hôm nay'
+    try {
+      const parts = bookingDateStr.split('-').map(Number)
+      const d = new Date(parts[0], parts[1] - 1, parts[2])
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      d.setHours(0, 0, 0, 0)
+      const diffDays = Math.round((d - today) / (1000 * 60 * 60 * 24))
+      const dayNames = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+      const dayName = dayNames[d.getDay()]
+      const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+      if (diffDays === 0) return `Hôm nay (${dayName}, ${dateFormatted})`
+      if (diffDays === 1) return `Ngày mai (${dayName}, ${dateFormatted})`
+      return `${dayName} (${dateFormatted}/${d.getFullYear()})`
+    } catch {
+      return state.date
+    }
+  }, [state.date, state.dateLabel, bookingDateStr])
 
   // Booking step: 'confirm' | 'bank_qr' | 'ticket_pass'
   const [step, setStep] = useState('confirm')
@@ -141,7 +261,16 @@ function SplitPayment() {
   const [lookupResult, setLookupResult] = useState(null)
   const [lookupError, setLookupError] = useState(null)
   // Bạn chơi được thêm bằng cách tra cứu số điện thoại (GET /api/accounts/lookup).
-  const [invitedFriends, setInvitedFriends] = useState([])
+  // Mặc định khởi tạo sẵn 1 bạn chơi để chia tiền hợp lý (ca thể thao tối thiểu 2 người: Chủ nhóm + 1 bạn)
+  const [invitedFriends, setInvitedFriends] = useState(() => [
+    {
+      id: DEFAULT_SAMPLE_FRIENDS[0].id,
+      fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
+      phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
+      email: DEFAULT_SAMPLE_FRIENDS[0].email,
+      status: 'WAITING',
+    },
+  ])
 
   // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
   const [bookingStatus, setBookingStatus] = useState('PAID')
@@ -228,9 +357,53 @@ function SplitPayment() {
   }
 
   // Split calculation: Tổng tiền / (1 Người tạo + N Bạn bè)
-  const totalParticipantCount = paymentMode === 'split' ? (invitedFriends.length + 1) : 1
+  // Đảm bảo chia hợp lý (ca thể thao tối thiểu 2 người)
+  const totalParticipantCount = paymentMode === 'split' ? Math.max(1, invitedFriends.length + 1) : 1
+  const displaySplitCount = invitedFriends.length > 0 ? (invitedFriends.length + 1) : 2
   const splitAmount = Math.round(totalAmount / (totalParticipantCount || 1))
+  const displaySplitAmount = Math.round(totalAmount / displaySplitCount)
   const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
+
+  // Chọn chế độ thanh toán (khi chọn split mà chưa có bạn bè thì tự gợi ý 1 bạn)
+  const handleSelectPaymentMode = (mode) => {
+    setPaymentMode(mode)
+    if (mode === 'split' && invitedFriends.length === 0) {
+      setInvitedFriends([
+        {
+          id: DEFAULT_SAMPLE_FRIENDS[0].id,
+          fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
+          phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
+          email: DEFAULT_SAMPLE_FRIENDS[0].email,
+          status: 'WAITING',
+        },
+      ])
+    }
+  }
+
+  // Chia nhanh theo số lượng người (2 người / 4 người)
+  const handlePresetSplit = (count) => {
+    if (count === 2) {
+      setInvitedFriends([
+        {
+          id: DEFAULT_SAMPLE_FRIENDS[0].id,
+          fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
+          phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
+          email: DEFAULT_SAMPLE_FRIENDS[0].email,
+          status: 'WAITING',
+        },
+      ])
+    } else if (count === 4) {
+      setInvitedFriends(
+        DEFAULT_SAMPLE_FRIENDS.slice(0, 3).map((f) => ({
+          id: f.id,
+          fullName: f.fullName,
+          phone: f.phone,
+          email: f.email,
+          status: 'WAITING',
+        }))
+      )
+    }
+  }
 
   // Handle Copy to clipboard
   const handleCopy = (text, fieldName) => {
@@ -262,7 +435,7 @@ function SplitPayment() {
           color: '#DC2626',
           bg: '#FEE2E2',
           title: 'Đơn chia tiền đã hết hạn (CANCELLED)',
-          message: `Đơn đặt sân tại ${courtName} đã tự động hủy do quá hạn góp tiền (PaymentDeadline).`,
+          message: `Đơn đặt sân tại ${courtName} đã tự động hủy do quá thời gian góp tiền của các thành viên.`,
           details: `Hệ thống đã tự động hoàn 100% tiền (${formatVnd(payableAmount)}) vào Ví Escrow.`,
           time: 'Vừa xong',
           unread: true,
@@ -271,7 +444,7 @@ function SplitPayment() {
         },
       })
     )
-    toast.error(`Đã hết hạn góp tiền (PaymentDeadline)!\n\nĐơn đặt sân đã tự động hủy. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
+    toast.error(`⏰ Đã hết hạn góp tiền!\n\nĐơn đặt sân đã tự động hủy do chưa đủ người góp tiền. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
 
   // Hết hạn góp tiền khi đơn vẫn PENDING: cập nhật giao diện 1 lần
@@ -544,23 +717,29 @@ function SplitPayment() {
 
   // Xác định ID ca sân người dùng đã chọn (GUID từ API). Trả null nếu không có, không dùng ca mặc định.
   const resolveCurrentSlotId = () => {
-    // 1. Ưu tiên cao nhất là ca thực tế đã được verify khả dụng trong hôm nay
+    // 1. Ưu tiên cao nhất là ca thực tế đã được verify/đồng bộ khả dụng từ máy chủ
+    if (resolvedSlotId && isValidGuid(resolvedSlotId)) return resolvedSlotId
     if (activeSlotData && isValidGuid(activeSlotData.id)) return activeSlotData.id
-    if (isValidGuid(state.courtSlotId)) return state.courtSlotId
+
+    const actualCourtId = findSubCourtId(state)
+    // 2. Không được trả về state.courtSlotId nếu nó trùng với actualCourtId hoặc state.courtId (vì đó là ID sân con, không phải ID ca sân)
+    if (isValidGuid(state.courtSlotId) && state.courtSlotId !== actualCourtId && state.courtSlotId !== state.courtId) {
+      return state.courtSlotId
+    }
     if (Array.isArray(state.courtSlotIds)) {
-      const found = state.courtSlotIds.find(isValidGuid)
+      const found = state.courtSlotIds.find((id) => isValidGuid(id) && id !== actualCourtId && id !== state.courtId)
       if (found) return found
     }
     if (Array.isArray(state.selectedSlots)) {
-      const found = state.selectedSlots.find((s) => isValidGuid(s?.id))
+      const found = state.selectedSlots.find((s) => isValidGuid(s?.id) && s.id !== actualCourtId)
       if (found) return found.id
     }
     try {
       const cachedId = localStorage.getItem('sportnexus_selected_slot_id')
-      if (isValidGuid(cachedId)) return cachedId
+      if (isValidGuid(cachedId) && cachedId !== actualCourtId) return cachedId
       const cachedList = JSON.parse(localStorage.getItem('sportnexus_selected_slot_ids') || '[]')
       if (Array.isArray(cachedList)) {
-        const found = cachedList.find(isValidGuid)
+        const found = cachedList.find((id) => isValidGuid(id) && id !== actualCourtId)
         if (found) return found
       }
     } catch {
@@ -570,26 +749,22 @@ function SplitPayment() {
   }
 
   const resolveCurrentSlotIds = () => {
+    if (Array.isArray(resolvedSlotIds) && resolvedSlotIds.length > 0) {
+      return resolvedSlotIds
+    }
+    const actualCourtId = findSubCourtId(state)
     if (Array.isArray(state.courtSlotIds)) {
-      const valid = state.courtSlotIds.filter(isValidGuid)
+      const valid = state.courtSlotIds.filter((id) => isValidGuid(id) && id !== actualCourtId && id !== state.courtId)
       if (valid.length > 0) return valid
     }
     if (Array.isArray(state.selectedSlots)) {
-      const valid = state.selectedSlots.map((s) => s?.id).filter(isValidGuid)
+      const valid = state.selectedSlots.map((s) => s?.id).filter((id) => isValidGuid(id) && id !== actualCourtId)
       if (valid.length > 0) return valid
     }
+    if (resolvedSlotId && isValidGuid(resolvedSlotId)) return [resolvedSlotId]
     if (activeSlotData && isValidGuid(activeSlotData.id)) return [activeSlotData.id]
-    if (isValidGuid(state.courtSlotId)) return [state.courtSlotId]
-    try {
-      const cachedList = JSON.parse(localStorage.getItem('sportnexus_selected_slot_ids') || '[]')
-      if (Array.isArray(cachedList)) {
-        const valid = cachedList.filter(isValidGuid)
-        if (valid.length > 0) return valid
-      }
-      const cachedId = localStorage.getItem('sportnexus_selected_slot_id')
-      if (isValidGuid(cachedId)) return [cachedId]
-    } catch {
-      // Bỏ qua lỗi parse
+    if (isValidGuid(state.courtSlotId) && state.courtSlotId !== actualCourtId && state.courtSlotId !== state.courtId) {
+      return [state.courtSlotId]
     }
     const single = resolveCurrentSlotId()
     return single ? [single] : []
@@ -604,7 +779,8 @@ function SplitPayment() {
       return null
     }
 
-    const isConsecutive = state.isConsecutive !== false && (validSlotIds.length <= 1 || state.isConsecutive === true)
+    const finalNumberOfSlots = Number(resolvedNumberOfSlots || state.numberOfSlots || (validSlotIds.length > 0 ? validSlotIds.length : 1)) || 1
+    const isConsecutive = state.isConsecutive !== false && (state.isConsecutive === true || validSlotIds.length <= 1 || Boolean(validSingleId))
 
     // Lấy danh sách ID người tham gia nếu chia tiền (Bước 2: participantIds: [...])
     const activeParticipantIds = paymentMode === 'split' && Array.isArray(invitedFriends)
@@ -615,7 +791,7 @@ function SplitPayment() {
       // Cách 1: courtSlotId + numberOfSlots (đặt N ca liên tiếp, tối đa 24). courtSlotIds để null
       return {
         courtSlotId: validSingleId,
-        numberOfSlots: state.numberOfSlots || (validSlotIds.length > 0 ? validSlotIds.length : 1),
+        numberOfSlots: finalNumberOfSlots,
         courtSlotIds: null,
         totalAmount: 0, // Server tự tính giá
         isSplitPayment: paymentMode === 'split',
@@ -623,10 +799,10 @@ function SplitPayment() {
       }
     }
 
-    // Cách 2: courtSlotIds (nhiều ca rời nhau). courtSlotId & numberOfSlots để null
+    // Cách 2: courtSlotIds (nhiều ca rời nhau). courtSlotId để null, numberOfSlots gửi số nguyên thay vì null (backend .NET không cho phép null System.Int32)
     return {
       courtSlotId: null,
-      numberOfSlots: null,
+      numberOfSlots: finalNumberOfSlots,
       courtSlotIds: validSlotIds.length > 0 ? validSlotIds : [validSingleId],
       totalAmount: 0,
       isSplitPayment: paymentMode === 'split',
@@ -647,9 +823,14 @@ function SplitPayment() {
         toast.error(`${slotError}`)
         return
       }
+      const actualCourtId = findSubCourtId(state)
       const bookingPayload = buildBookingPayload()
-      if (!bookingPayload) {
-        toast.error('Không tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+      if (!bookingPayload || (!bookingPayload.courtSlotId && (!bookingPayload.courtSlotIds || bookingPayload.courtSlotIds.length === 0))) {
+        toast.error('Chưa tìm thấy mã ca sân (GUID) hợp lệ từ hệ thống! Vui lòng quay lại màn hình chọn ca sân để chọn khung giờ còn trống.')
+        return
+      }
+      if (bookingPayload.courtSlotId === actualCourtId || bookingPayload.courtSlotId === state.courtId) {
+        toast.error('Hệ thống đang tải lại mã ca sân thực tế từ máy chủ. Vui lòng thử lại sau 2 giây.')
         return
       }
 
@@ -954,7 +1135,7 @@ function SplitPayment() {
               ? 'Đặt sân qua PayOS thành công (Trạng thái: PENDING)!'
               : 'Đặt sân & Thanh toán PayOS thành công (PAID)!',
             message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
-            details: `Khung giờ: ${slotTime} hôm nay • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
+            details: `Khung giờ: ${slotTime} (${displayBookingDate}) • Mã vé: #${ticketTokenValue} • Mã PayOS: #${orderCode || ''}`,
             time: 'Vừa xong',
             unread: true,
             link: '/checkin',
@@ -1183,7 +1364,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <div className="sp-stat-item">
                       <small>KHUNG GIỜ</small>
                       <strong>{slotTime}</strong>
-                      <span>Hôm nay (T6, 24/10)</span>
+                      <span>{displayBookingDate}</span>
                     </div>
                     <div className="sp-stat-item">
                       <small>TỔNG TIỀN ({hours}H)</small>
@@ -1234,7 +1415,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 {/* Option: Thanh Toán Từng Người */}
                 <div
                   className={`sp-mode-box ${paymentMode === 'split' ? 'sp-mode-active' : ''}`}
-                  onClick={() => setPaymentMode('split')}
+                  onClick={() => handleSelectPaymentMode('split')}
                   role="button"
                   tabIndex={0}
                 >
@@ -1245,11 +1426,15 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       </span>
                     </span>
                     <span className="sp-mode-title">Thanh Toán Từng Người</span>
-                    <span className="sp-badge-count">{invitedFriends.length + 1} người</span>
+                    <span className="sp-badge-count">
+                      {invitedFriends.length > 0 ? `${invitedFriends.length + 1} người` : 'Chia 2 người'}
+                    </span>
                   </div>
                   <div className="sp-mode-amount-row">
                     <small>SỐ TIỀN:</small>
-                    <strong className="sp-split-color">{formatVnd(splitAmount)} / người</strong>
+                    <strong className="sp-split-color">
+                      {formatVnd(invitedFriends.length > 0 ? splitAmount : displaySplitAmount)} / người
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -1266,6 +1451,43 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       {invitedFriends.length + 1} người trong đơn
                     </span>
                   </div>
+
+                  {/* Preset chia nhanh theo số người */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Chọn nhanh số suất chia:</span>
+                    <button
+                      type="button"
+                      className="sp-sample-pill"
+                      style={{
+                        background: invitedFriends.length === 1 ? '#DCFCE7' : '#F3F4F6',
+                        color: invitedFriends.length === 1 ? '#15803D' : '#374151',
+                        borderColor: invitedFriends.length === 1 ? '#86EFAC' : '#E5E7EB',
+                        fontWeight: 700,
+                      }}
+                      onClick={() => handlePresetSplit(2)}
+                    >
+                      👥 Chia 2 người ({formatVnd(Math.round(totalAmount / 2))} / người)
+                    </button>
+                    <button
+                      type="button"
+                      className="sp-sample-pill"
+                      style={{
+                        background: invitedFriends.length === 3 ? '#DCFCE7' : '#F3F4F6',
+                        color: invitedFriends.length === 3 ? '#15803D' : '#374151',
+                        borderColor: invitedFriends.length === 3 ? '#86EFAC' : '#E5E7EB',
+                        fontWeight: 700,
+                      }}
+                      onClick={() => handlePresetSplit(4)}
+                    >
+                      👥 Chia 4 người ({formatVnd(Math.round(totalAmount / 4))} / người)
+                    </button>
+                  </div>
+
+                  {invitedFriends.length === 0 && (
+                    <div style={{ padding: '10px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '10px', color: '#92400E', fontSize: '12.5px', marginBottom: '12px' }}>
+                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng bấm chọn bạn bè gợi ý bên dưới hoặc nhập số điện thoại để cùng chia tiền (tối thiểu 2 người).
+                    </div>
+                  )}
 
                   {/* Input tra cứu số điện thoại */}
                   <form className="sp-phone-search-row" onSubmit={handleSearchFriend}>
@@ -1368,9 +1590,6 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong>Tổng tiền: {formatVnd(totalAmount)} ÷ {invitedFriends.length + 1} người</strong>
                       <strong style={{ fontSize: 14, color: '#15803D' }}>= {formatVnd(splitAmount)} / người</strong>
-                    </div>
-                    <div style={{ fontSize: 11.5, color: '#4b5563', marginTop: 2 }}>
-                      💡 <strong>Quy trình xử lý FE:</strong> Người tạo trả phần của mình ngay. Đơn ở trạng thái <strong>PENDING</strong>, hạn góp tiền là 30 phút (xem PaymentDeadline). Khi đủ người trả thì đơn chuyển <strong>PAID</strong>.
                     </div>
                   </div>
                 </div>
@@ -1580,7 +1799,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <div className="sp-receipt-slot-highlight">
                     <span className="material-symbols-outlined">schedule</span>
                     <strong>{slotTime}</strong>
-                    <span>• Hôm nay {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
+                    <span>• {displayBookingDate} {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
                   </div>
                 </div>
                 <div className="sp-receipt-line">
@@ -1824,7 +2043,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       </span>
                     </div>
                     <div className="sp-status-desc">
-                      Người tạo đã trả phần của mình ({formatVnd(payableAmount)}). Hạn góp tiền là 30 phút (xem PaymentDeadline). Quá hạn mà chưa đủ thì hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả.
+                      Người tạo đã thanh toán phần của mình ({formatVnd(payableAmount)}). Hạn góp tiền cho bạn bè là 30 phút. Quá hạn mà chưa đủ thì hệ thống sẽ tự động hủy đơn và hoàn tiền 100% cho mọi người đã đóng.
                     </div>
 
                     {/* Danh sách người tham gia góp tiền */}
@@ -2055,14 +2274,6 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
               <div className="sp-ticket-token-id">MÃ VÉ CHECK-IN: #{qrToken}</div>
 
-              <div className="sp-ticket-escrow-pledge">
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>
-                  shield
-                </span>
-                <span>
-                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in tại cổng thành công. Sau giờ chơi, tiền giữ được chuyển cho chủ sân (trừ phí nền tảng).
-                </span>
-              </div>
             </div>
 
             {/* Khung Tải ảnh vé QR về máy, Gửi mã cho bạn chơi, và HỦY ĐƠN VÀ HOÀN TIỀN (Image 2) */}
@@ -2180,7 +2391,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-spec-item">
                   <small>KHUNG GIỜ THI ĐẤU</small>
                   <strong style={{ color: '#111827' }}>{slotTime} ({hours}H)</strong>
-                  <span style={{ fontSize: 11.5, color: '#6b7280' }}>Hôm nay (T6, 24/10/2026)</span>
+                  <span style={{ fontSize: 11.5, color: '#6b7280' }}>{displayBookingDate}</span>
                 </div>
 
                 <div className="sp-spec-item">
@@ -2209,6 +2420,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 </div>
               </div>
             </div>
+
 
             {/* Khối 3: Phản Hồi Xác Nhận Từ Máy Chủ (Server API Response) */}
             <div className="sp-info-card" style={{ border: '1.5px solid #86efac', background: '#f8fafc' }}>

@@ -109,6 +109,9 @@ function App() {
         <Route path="/verify-account" element={<Page><VerifyAccount /></Page>} />
         <Route path="/reset-password" element={<Page><ResetPassword /></Page>} />
         <Route path="/register" element={<Page><Register /></Page>} />
+        <Route path="/test-court-finder" element={<Page><MapBooking /></Page>} />
+        <Route path="/test-split-payment" element={<Page><SplitPayment /></Page>} />
+        <Route path="/test-create-match" element={<Page><CreateMatch /></Page>} />
 
         {/* Onboarding */}
 

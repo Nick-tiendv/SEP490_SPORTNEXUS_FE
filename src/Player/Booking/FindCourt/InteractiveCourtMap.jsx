@@ -139,7 +139,7 @@ export default function InteractiveCourtMap({
     markersRef.current = {}
 
     courts.forEach((court) => {
-      if (!court.lat || !court.lng) return
+      if (!court || !court.lat || !court.lng) return
       const isSelected = selectedCourt?.id === court.id
 
       // HTML Icon tùy chỉnh cho Marker kiểu Google Maps hiện đại
@@ -189,7 +189,7 @@ export default function InteractiveCourtMap({
 
   // Vẽ Marker vị trí người chơi (Blue Radar Dot)
   useEffect(() => {
-    if (!mapInstanceRef.current || !window.L || !originCoords) return
+    if (!mapInstanceRef.current || !window.L || !originCoords || !originCoords.lat || !originCoords.lng) return
     const L = window.L
     const map = mapInstanceRef.current
 

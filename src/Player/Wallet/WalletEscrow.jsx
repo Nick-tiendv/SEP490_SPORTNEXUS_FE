@@ -1070,7 +1070,7 @@ export default function WalletEscrow() {
                         key={tx.id || tx.transactionId || `${type}-${when}-${idx}`}
                         onClick={() => handleViewTxDetail(tx)}
                         className="px-6 py-4 flex items-center gap-4 hover:bg-[#F0FDF4] transition cursor-pointer group"
-                        title="Nhấn để xem chi tiết giao dịch (GET /api/v1/wallet/transactions/{id})"
+                        title="Nhấn để xem chi tiết giao dịch"
                       >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${meta.bg}`}>
                           <span className={`material-symbols-outlined text-[20px] ${meta.color}`}>{meta.icon}</span>
@@ -1243,7 +1243,7 @@ export default function WalletEscrow() {
                             type="button"
                             onClick={() => handleCancelWithdrawal(item.id)}
                             className="mt-2 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition inline-flex items-center gap-1 cursor-pointer"
-                            title="Hủy yêu cầu rút tiền này (POST /api/v1/wallet/withdrawals/{id}/cancel)"
+                            title="Hủy yêu cầu rút tiền này"
                           >
                             <span className="material-symbols-outlined text-[14px]">cancel</span>
                             Hủy yêu cầu
@@ -1661,7 +1661,7 @@ export default function WalletEscrow() {
                   onChange={(e) => setSaveBankDefault(e.target.checked)}
                   className="rounded border-gray-300 text-[#15803D] focus:ring-[#15803D] h-4 w-4"
                 />
-                <span className="font-medium">Lưu thông tin ngân hàng này làm mặc định (PUT /api/v1/wallet/bank-account)</span>
+                <span className="font-medium">Lưu thông tin ngân hàng này làm mặc định</span>
               </label>
 
               {/* Action Buttons */}
