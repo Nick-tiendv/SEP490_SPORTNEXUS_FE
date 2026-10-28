@@ -55,7 +55,6 @@ export default function DepositCancel() {
   useEffect(() => {
     if (!orderCode) return undefined
     let active = true
-    setPhase('CANCELLING')
 
     const run = async () => {
       try {
@@ -173,7 +172,11 @@ export default function DepositCancel() {
   if (phase === 'ERROR') {
     return (
       <DepositResultCard tone="error" breadcrumb="Lỗi" title="Chưa hủy được lệnh nạp" message={errorMessage} rows={rows}>
-        <PrimaryButton id="deposit-cancel-retry" icon="refresh" onClick={() => setAttempt((n) => n + 1)}>
+        <PrimaryButton id="deposit-cancel-retry" icon="refresh" onClick={() => {
+            // Trạng thái đang hủy được đặt ngay khi bấm thử lại; lần đầu đã khởi tạo sẵn
+            setPhase('CANCELLING')
+            setAttempt((n) => n + 1)
+          }}>
           Thử lại
         </PrimaryButton>
         <SecondaryButton id="deposit-cancel-back-wallet" icon="account_balance_wallet" onClick={goWallet}>

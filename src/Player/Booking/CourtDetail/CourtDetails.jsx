@@ -131,6 +131,8 @@ function CourtDetails() {
     }
     loadFacility()
     return () => { isMounted = false }
+    // Chỉ tải lại khi URL đổi; facility hiện tại chỉ dùng làm giá trị dự phòng
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   // Danh sách sân con từ facility.courts
@@ -147,16 +149,6 @@ function CourtDetails() {
     }
     return []
   }, [facility])
-
-  // Tự động chọn sân con đầu tiên (ưu tiên ACTIVE)
-  useEffect(() => {
-    if (courtsList.length > 0) {
-      if (!selectedCourtId || !courtsList.some((c) => c.id === selectedCourtId)) {
-        const firstActive = courtsList.find((c) => c.status === 'ACTIVE') || courtsList[0]
-        setSelectedCourtId(firstActive.id)
-      }
-    }
-  }, [courtsList, selectedCourtId])
 
   // Sân con hiện đang được xem (ưu tiên sân ACTIVE)
   const activeCourt = useMemo(() => {
@@ -179,7 +171,28 @@ function CourtDetails() {
         const slotsData = await getCourtSlots(activeCourt.id, selectedDateStr)
         if (isMounted) {
           const raw = Array.isArray(slotsData) ? slotsData : []
-          setCourtSlots(buildTwoHourSlots(raw, activeCourt.defaultPrice || 120000))
+          const slots = buildTwoHourSlots(raw, activeCourt.defaultPrice || 120000)
+          setCourtSlots(slots)
+          // Chọn sẵn ca trống đầu tiên nếu người dùng chưa chọn ca nào
+          const firstAvail = slots.find(
+            (slot) => String(slot.status || '').toLowerCase() === 'available' && slot.isBookable !== false && !slot.isPast,
+          )
+          if (firstAvail) {
+            setSelectedSlots((prev) =>
+              prev.length > 0
+                ? prev
+                : [
+                    {
+                      ...firstAvail,
+                      courtName: activeCourt.name,
+                      courtId: activeCourt.id,
+                      sportName: activeCourt.sportName,
+                      formattedStart: firstAvail.startTime?.slice(11, 16),
+                      formattedEnd: firstAvail.endTime?.slice(11, 16),
+                    },
+                  ],
+            )
+          }
         }
       } catch (err) {
         console.warn(`[CourtDetails] Lỗi khi tải lưới ca sân ${activeCourt.id}:`, err)
@@ -190,7 +203,7 @@ function CourtDetails() {
     }
     loadSlots()
     return () => { isMounted = false }
-  }, [activeCourt?.id, selectedDateStr, activeCourt?.defaultPrice])
+  }, [activeCourt?.id, activeCourt?.name, activeCourt?.sportName, selectedDateStr, activeCourt?.defaultPrice])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
 
@@ -265,25 +278,6 @@ function CourtDetails() {
     const norm = String(slot.status || '').toLowerCase()
     return norm === 'available' && slot.isBookable !== false && !slot.isPast
   }
-
-  // Tự động chọn sẵn ca trống đầu tiên khi lưới ca được tải về
-  useEffect(() => {
-    if (courtSlots.length > 0 && selectedSlots.length === 0 && activeCourt) {
-      const firstAvail = courtSlots.find(isSlotAvailable)
-      if (firstAvail) {
-        setSelectedSlots([
-          {
-            ...firstAvail,
-            courtName: activeCourt.name,
-            courtId: activeCourt.id,
-            sportName: activeCourt.sportName,
-            formattedStart: formatTimeSlot(firstAvail.startTime),
-            formattedEnd: formatTimeSlot(firstAvail.endTime),
-          },
-        ])
-      }
-    }
-  }, [courtSlots, activeCourt, selectedSlots.length])
 
   // Toggle chọn một ca thi đấu (Chỉ ca trạng thái Available mới đặt được)
   const handleToggleSlot = (slot, court) => {
@@ -636,7 +630,7 @@ function CourtDetails() {
             {/* Tabs danh sách sân con */}
             <div className="flex items-center gap-space-sm overflow-x-auto pb-2 scrollbar-none">
               {courtsList.map((court) => {
-                const isCurrentCourt = court.id === selectedCourtId
+                const isCurrentCourt = court.id === activeCourt?.id
                 const countSelectedInThisCourt = selectedSlots.filter((s) => s.courtId === court.id).length
                 return (
                   <button
