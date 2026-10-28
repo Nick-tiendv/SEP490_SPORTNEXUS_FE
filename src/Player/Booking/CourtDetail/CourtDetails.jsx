@@ -26,6 +26,58 @@ function getNext7Days() {
   return days
 }
 
+// Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
+function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
+  if (firstSlotDiffHours >= 1.8) {
+    return sorted.map((s) => ({
+      ...s,
+      slotIds: [s.id],
+      durationHours: 2,
+      rawSlots: [s],
+      formattedStart: s.startTime?.slice(11, 16) || '',
+      formattedEnd: s.endTime?.slice(11, 16) || '',
+    }))
+  }
+
+  const twoHourSlots = []
+  for (let i = 0; i < sorted.length; i += 2) {
+    const slotA = sorted[i]
+    const slotB = sorted[i + 1]
+    if (!slotB) break // Không nhận ca lẻ 1 tiếng vì quy chuẩn là 2 tiếng
+
+    const isAvailA = String(slotA.status || '').toLowerCase() === 'available' && slotA.isBookable !== false && !slotA.isPast
+    const isAvailB = String(slotB.status || '').toLowerCase() === 'available' && slotB.isBookable !== false && !slotB.isPast
+    const isAvail = isAvailA && isAvailB
+    const isPast = Boolean(slotA.isPast || slotB.isPast)
+    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
+    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
+
+    twoHourSlots.push({
+      id: slotA.id,
+      slotIds: [slotA.id, slotB.id],
+      courtId: slotA.courtId,
+      startTime: slotA.startTime,
+      endTime: slotB.endTime,
+      price: priceA + priceB,
+      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
+      isBookable: isAvail,
+      isPast,
+      durationHours: 2,
+      rawSlots: [slotA, slotB],
+      formattedStart: slotA.startTime?.slice(11, 16) || '',
+      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
+    })
+  }
+
+  return twoHourSlots
+}
+
 function CourtDetails() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -114,7 +166,7 @@ function CourtDetails() {
     )
   }, [courtsList, selectedCourtId])
 
-  // GỌI API GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD (Hình 2 & 3)
+  // GỌI API GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD
   useEffect(() => {
     let isMounted = true
     async function loadSlots() {
@@ -124,7 +176,8 @@ function CourtDetails() {
         setSlotsError(null)
         const slotsData = await getCourtSlots(activeCourt.id, selectedDateStr)
         if (isMounted) {
-          setCourtSlots(Array.isArray(slotsData) ? slotsData : [])
+          const raw = Array.isArray(slotsData) ? slotsData : []
+          setCourtSlots(buildTwoHourSlots(raw, activeCourt.defaultPrice || 120000))
         }
       } catch (err) {
         console.warn(`[CourtDetails] Lỗi khi tải lưới ca sân ${activeCourt.id}:`, err)
@@ -135,7 +188,7 @@ function CourtDetails() {
     }
     loadSlots()
     return () => { isMounted = false }
-  }, [activeCourt?.id, selectedDateStr])
+  }, [activeCourt?.id, selectedDateStr, activeCourt?.defaultPrice])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
 
@@ -277,13 +330,14 @@ function CourtDetails() {
       return { courtSlotId: null, numberOfSlots: 0, courtSlotIds: [], isConsecutive: false }
     }
 
-    // Sắp xếp các slot đã chọn theo thời gian bắt đầu
-    const sorted = [...selectedSlots].sort(
+    // Lấy danh sách ca gốc từ các khung giờ 2 tiếng đã chọn
+    const allRawSlots = selectedSlots.flatMap((s) => s.rawSlots || [s])
+    const sorted = [...allRawSlots].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     )
 
     // Kiểm tra xem tất cả có thuộc cùng 1 sân con và liên tiếp nhau không
-    const sameCourt = sorted.every((s) => s.courtId === sorted[0].courtId)
+    const sameCourt = selectedSlots.every((s) => s.courtId === selectedSlots[0].courtId)
     let isConsecutive = sameCourt && sorted.length <= 24
 
     if (isConsecutive && sorted.length > 1) {
@@ -302,7 +356,7 @@ function CourtDetails() {
 
     return {
       courtSlotId: firstId,
-      numberOfSlots: isConsecutive ? sorted.length : 1,
+      numberOfSlots: isConsecutive ? sorted.length : 2,
       courtSlotIds: allIds,
       isConsecutive,
     }
@@ -379,14 +433,15 @@ function CourtDetails() {
         date: selectedDateStr,
         slot: timeSummary,
         slotCount: selectedSlots.length,
-        hours: selectedSlots.length * 1.0,
+        hours: selectedSlots.length * 2.0,
         total: totalAmountVnd,
+        unitPrice: activeCourt?.defaultPrice ? activeCourt.defaultPrice * 2 : totalAmountVnd,
         // Dữ liệu Bước 3: Đảm bảo luôn có ít nhất 1 ca sân
         courtSlotId: firstId,
-        numberOfSlots: bookingPayloadConfig.numberOfSlots || allIds.length || 1,
+        numberOfSlots: bookingPayloadConfig.numberOfSlots || allIds.length || 2,
         courtSlotIds: allIds,
         isConsecutive: bookingPayloadConfig.isConsecutive,
-        selectedSlots: selectedSlots,
+        selectedSlots: selectedSlots.flatMap((s) => s.rawSlots || [s]),
       },
     })
   }
@@ -494,7 +549,7 @@ function CourtDetails() {
                   Bước 2: Chọn Ngày Để Lấy Lưới Ca Sân Con
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  Đồng bộ trực tiếp qua API: <code>GET /api/v1/courts/{'{courtId}'}/slots?date={selectedDateStr}</code>
+                  Xem và chọn ngày để kiểm tra lịch ca trống trực tiếp
                 </p>
               </div>
               <span className="font-label-sm text-label-sm px-3 py-1 rounded-full bg-primary/10 text-primary font-bold border border-primary/20">
@@ -549,7 +604,7 @@ function CourtDetails() {
                   Chọn Sân Con Trong Cụm ({courtsList.length} sân)
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Bấm vào từng sân con để gọi API <code>/api/v1/courts/{'{courtId}'}/slots</code> lấy lưới ca tương ứng
+                  Chọn sân đấu bạn muốn đặt để xem danh sách ca tương ứng
                 </p>
               </div>
 
@@ -611,12 +666,17 @@ function CourtDetails() {
           <div className="flex flex-col gap-space-md p-space-lg rounded-2xl bg-surface-container-low shadow-xl border border-outline-variant/15">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
               <div>
-                <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">schedule</span>
-                  Lưới Ca Sân: {activeCourt?.name || 'Sân con'} (Ngày {selectedDateStr})
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">schedule</span>
+                    Lưới Ca Sân: {activeCourt?.name || 'Sân con'} (Ngày {selectedDateStr})
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
+                    Quy chuẩn: 2 tiếng / ca
+                  </span>
+                </div>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> (Quyền truy cập công khai không cần đăng nhập)
+                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> • Mỗi khung giờ thi đấu kéo dài 2 tiếng chuẩn
                 </p>
               </div>
 
@@ -656,7 +716,7 @@ function CourtDetails() {
             {slotsLoading && (
               <div className="py-12 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
                 <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <span className="font-label-sm text-label-sm">Đang gọi API GET /api/v1/courts/{'{courtId}'}/slots...</span>
+                <span className="font-label-sm text-label-sm">Đang kiểm tra ca trống thời gian thực...</span>
               </div>
             )}
 
@@ -697,20 +757,25 @@ function CourtDetails() {
                           : 'bg-surface-container-lowest/40 opacity-50 border-outline-variant/10 cursor-not-allowed'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-headline-sm text-headline-sm font-bold text-on-surface">
-                          {startStr} - {endStr}
-                        </span>
-                        {isSelected ? (
-                          <span className="material-symbols-outlined text-secondary-container text-[18px]">
-                            check_circle
-                          </span>
-                        ) : isAvailable ? (
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                        ) : (
-                          <span className="material-symbols-outlined text-red-400 text-[16px]">lock</span>
-                        )}
-                      </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-headline-sm text-headline-sm text-bold text-on-surface flex items-center gap-1.5">
+                      {startStr} - {endStr}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${
+                      isSelected ? 'bg-secondary-container/30 text-secondary-container' : 'bg-primary/10 text-primary border border-primary/20'
+                    }`}>
+                      2 tiếng
+                    </span>
+                  </div>
+                  {isSelected ? (
+                    <span className="material-symbols-outlined text-secondary-container text-[18px]">
+                      check_circle
+                    </span>
+                  ) : isAvailable ? (
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                  ) : (
+                    <span className="material-symbols-outlined text-red-400 text-[16px]">lock</span>
+                  )}
 
                       <div className="mt-3 pt-2 border-t border-outline-variant/10 flex items-center justify-between">
                         <span className="font-label-sm text-xs text-on-surface-variant">

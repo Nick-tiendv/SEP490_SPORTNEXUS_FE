@@ -24,8 +24,8 @@
 
 .snx-ai-widget {
   pointer-events: auto;
-  width: 440px;
-  max-width: calc(100vw - 32px);
+  width: 460px;
+  max-width: calc(100vw - 28px);
   height: 640px;
   max-height: calc(100vh - 120px);
   background: #ffffff;
@@ -35,15 +35,20 @@
   flex-direction: column;
   overflow: hidden;
   animation: snxAiSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  transition: all 0.25s ease;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.3s ease,
+              max-height 0.3s ease,
+              box-shadow 0.25s ease;
   font-family: 'Inter', sans-serif;
   z-index: 1001;
 }
 
 .snx-ai-widget.is-expanded {
-  width: 780px;
-  height: 80vh;
-  max-height: 800px;
+  width: 840px;
+  max-width: calc(100vw - 40px);
+  height: 85vh;
+  max-height: 860px;
   box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.35);
 }
 
@@ -261,7 +266,6 @@
 .snx-ai-msg {
   display: flex;
   gap: 10px;
-  max-width: 90%;
   animation: snxAiMsgFade 0.2s ease forwards;
 }
 
@@ -273,10 +277,13 @@
 .snx-ai-msg.is-user {
   margin-left: auto;
   flex-direction: row-reverse;
+  max-width: 85%;
 }
 
 .snx-ai-msg.is-bot {
   margin-right: auto;
+  width: 100%;
+  max-width: 96%;
 }
 
 .snx-ai-msg-avatar {
@@ -296,6 +303,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .snx-ai-bubble {
@@ -303,7 +312,13 @@
   border-radius: 16px;
   font-size: 13px;
   line-height: 1.55;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+.snx-ai-bullet-row {
+  line-height: 1.5;
 }
 
 .snx-ai-msg.is-user .snx-ai-bubble {
@@ -351,16 +366,18 @@
   align-self: flex-end;
 }
 
-/* ---------- Priority Recommendation Card ---------- */
+/* ---------- Priority Recommendation Card (Linh hoạt, chống tràn & mở rộng ngang) ---------- */
 .snx-ai-recom-card {
   margin-top: 6px;
   background: #ffffff;
   border: 1.5px solid #10B981;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.18);
+  box-shadow: 0 6px 20px -4px rgba(16, 185, 129, 0.16);
   display: flex;
   flex-direction: column;
+  transition: all 0.25s ease;
+  width: 100%;
 }
 
 .snx-ai-recom-badge {
@@ -368,19 +385,32 @@
   color: #ffffff;
   font-size: 11px;
   font-weight: 800;
-  padding: 6px 12px;
+  padding: 5px 12px;
   display: flex;
   align-items: center;
   gap: 6px;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Khung chứa ảnh và nội dung: Tự động đổi dọc (nhỏ) -> ngang (lớn) */
+.snx-ai-recom-content-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .snx-ai-recom-media {
   position: relative;
   width: 100%;
-  height: 120px;
+  height: 110px;
   overflow: hidden;
+  flex-shrink: 0;
+  background: #E2E8F0;
 }
 
 .snx-ai-recom-img {
@@ -390,26 +420,28 @@
   transition: transform 0.3s ease;
 }
 .snx-ai-recom-card:hover .snx-ai-recom-img {
-  transform: scale(1.04);
+  transform: scale(1.03);
 }
 
 .snx-ai-recom-meta-float {
   position: absolute;
-  bottom: 8px;
+  bottom: 6px;
   left: 8px;
   right: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  pointer-events: none;
 }
 
 .snx-ai-tag-pill {
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(15, 23, 42, 0.72);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   color: #ffffff;
-  padding: 3px 8px;
+  padding: 2.5px 8px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -419,9 +451,9 @@
 .snx-ai-rating-pill {
   background: #ffffff;
   color: #D97706;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -430,56 +462,49 @@
 }
 
 .snx-ai-recom-body {
-  padding: 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Nhóm tiêu đề sân & khoảng cách */
+.snx-ai-recom-loc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.snx-ai-recom-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .snx-ai-recom-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #1C3524;
-  line-height: 1.35;
-}
-
-/* Nhóm hiển thị vị trí & khoảng cách: Không dồn cục vào 1 hàng */
-.snx-ai-recom-loc-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.snx-ai-recom-addr {
-  margin: 0;
-  font-size: 12px;
-  color: #4B5563;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  line-height: 1.45;
-}
-
-.snx-ai-recom-addr .snx-ai-loc-icon {
-  font-size: 16px;
-  color: #10B981;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.snx-ai-addr-text {
+  line-height: 1.3;
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .snx-ai-recom-dist-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-left: 22px;
-  font-size: 11.5px;
+  gap: 5px;
+  font-size: 11px;
   color: #6B7280;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .snx-ai-dist-badge {
@@ -489,27 +514,52 @@
   background: #F0FDF4;
   color: #166534;
   border: 1px solid #DCFCE7;
-  padding: 2px 7px;
+  padding: 1.5px 6px;
   border-radius: 6px;
-  font-weight: 600;
-  font-size: 11.5px;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .snx-ai-eta-text {
   color: #6B7280;
-  font-size: 11.5px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
-/* Thẻ khung giờ và giá tiền: Rõ ràng, thoáng đãng, chia 2 tầng logic */
+.snx-ai-recom-addr {
+  margin: 0;
+  font-size: 11.5px;
+  color: #4B5563;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.35;
+}
+
+.snx-ai-recom-addr .snx-ai-loc-icon {
+  font-size: 15px;
+  color: #10B981;
+  flex-shrink: 0;
+}
+
+.snx-ai-addr-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Thẻ khung giờ và giá tiền: Tuyệt đối không rớt dòng giờ và số tiền */
 .snx-ai-recom-slot {
   background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%);
   border: 1px solid #BBF7D0;
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 7px 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.08);
+  gap: 4px;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.06);
 }
 
 .snx-ai-slot-primary-row {
@@ -517,58 +567,94 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .snx-ai-slot-time {
-  font-size: 13.5px;
-  font-weight: 800;
+  font-size: 12.5px;
   color: #166534;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .snx-ai-slot-time .material-symbols-outlined {
-  font-size: 17px;
+  font-size: 16px;
   color: #10B981;
   flex-shrink: 0;
 }
 
+.snx-ai-slot-prefix {
+  font-weight: 600;
+  color: #047857;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.snx-ai-slot-range {
+  font-weight: 800;
+  color: #166534;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
 .snx-ai-slot-price {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   color: #047857;
-  white-space: nowrap; /* Tuyệt đối không cho chữ đ rớt xuống dòng */
+  white-space: nowrap;
+  flex-shrink: 0;
   letter-spacing: -0.2px;
 }
 
 .snx-ai-slot-secondary-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
+  gap: 5px;
+  font-size: 11px;
   color: #059669;
-  padding-left: 23px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .snx-ai-slot-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #10B981;
   flex-shrink: 0;
 }
 
-/* Thẻ lý do ưu tiên */
+.snx-ai-slot-note-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.snx-ai-slot-hours-text {
+  color: #047857;
+  opacity: 0.85;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Thẻ lý do ưu tiên: Gọn gàng tối đa 2 dòng */
 .snx-ai-recom-reason {
-  font-size: 12px;
-  color: #374151;
+  font-size: 11px;
+  color: #475569;
   background: #F8FAFC;
   border: 1px solid #E2E8F0;
-  border-radius: 10px;
-  padding: 8px 12px;
-  line-height: 1.5;
+  border-radius: 8px;
+  padding: 6px 9px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .snx-ai-recom-reason strong {
@@ -579,29 +665,31 @@
 .snx-ai-recom-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 6px;
+  margin-top: 1px;
 }
 
 .snx-ai-btn-action {
-  padding: 9px 12px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   transition: all 0.18s ease;
   border: none;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .snx-ai-btn-select {
   background: #2D5F3F;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(45, 95, 63, 0.25);
+  box-shadow: 0 2px 6px rgba(45, 95, 63, 0.2);
 }
 .snx-ai-btn-select:hover {
   background: #1C3524;
@@ -616,6 +704,72 @@
 .snx-ai-btn-book:hover {
   background: #DCFCE7;
   transform: translateY(-1px);
+}
+
+.snx-ai-btn-book.is-confirmed-action {
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+  font-weight: 800;
+}
+.snx-ai-btn-book.is-confirmed-action:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+}
+
+/* =========================================================================
+   BỐ CỤC CHỈ KHI BẤM PHÓNG TO KHUNG CHAT (.snx-ai-widget.is-expanded)
+   ========================================================================= */
+.snx-ai-widget.is-expanded .snx-ai-msg {
+  max-width: 88%;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-card {
+  max-width: 720px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-content-wrap {
+  flex-direction: row;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-media {
+  width: 220px;
+  min-width: 220px;
+  height: auto;
+  min-height: 165px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-body {
+  padding: 12px 16px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-title {
+  font-size: 15px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-addr {
+  font-size: 12px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-slot {
+  padding: 8px 12px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-recom-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.snx-ai-widget.is-expanded .snx-ai-btn-action {
+  padding: 8px 16px;
+  font-size: 12px;
+  width: auto;
 }
 
 /* ---------- Typing Indicator ---------- */

@@ -134,14 +134,15 @@ const getDistanceForCourt = (court, playerLocation, liveCoords = null) => {
   return Math.max(0.6, Math.round((base + offset) * 10) / 10)
 }
 
-// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân (sân mở cửa 06:00 - 22:00)
+// Mẫu khung giờ — quy chuẩn hệ thống là 2 tiếng / ca (sân mở cửa 06:00 - 22:00)
 const SLOT_TEMPLATE = [
-  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's4', start: '19:00', end: '20:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's5', start: '20:00', end: '21:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 1, status: 'available' },
+  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
 ]
 
 const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
@@ -265,17 +266,66 @@ const formatHours = (h) => `${String(h).replace('.', ',')} giờ`
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 const SLOT_TEMPLATE_FUTURE = [
-  { id: 's1', start: '06:00', end: '07:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's2', start: '07:00', end: '08:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's3', start: '08:00', end: '09:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's4', start: '09:00', end: '10:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's5', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's6', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's7', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'booked', note: 'Đã có khách đặt' },
-  { id: 's8', start: '19:00', end: '20:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's9', start: '20:00', end: '21:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's10', start: '21:00', end: '22:00', hours: 1, factor: 1, status: 'available' },
+  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'booked', note: 'Đã có khách đặt' },
+  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
 ]
+
+// Ghép ca thành các khung giờ 2 tiếng chuẩn toàn hệ thống (không cho phép 1 tiếng)
+function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
+  if (firstSlotDiffHours >= 1.8) {
+    return sorted.map((s) => ({
+      ...s,
+      slotIds: [s.id],
+      durationHours: 2,
+      rawSlots: [s],
+      formattedStart: s.startTime?.slice(11, 16) || '',
+      formattedEnd: s.endTime?.slice(11, 16) || '',
+    }))
+  }
+
+  const twoHourSlots = []
+  for (let i = 0; i < sorted.length; i += 2) {
+    const slotA = sorted[i]
+    const slotB = sorted[i + 1]
+    if (!slotB) break // Không nhận ca lẻ 1 tiếng
+
+    const isAvailA = String(slotA.status || '').toLowerCase() === 'available' && slotA.isBookable !== false && !slotA.isPast
+    const isAvailB = String(slotB.status || '').toLowerCase() === 'available' && slotB.isBookable !== false && !slotB.isPast
+    const isAvail = isAvailA && isAvailB
+    const isPast = Boolean(slotA.isPast || slotB.isPast)
+    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
+    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
+
+    twoHourSlots.push({
+      id: slotA.id,
+      slotIds: [slotA.id, slotB.id],
+      courtId: slotA.courtId,
+      startTime: slotA.startTime,
+      endTime: slotB.endTime,
+      price: priceA + priceB,
+      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
+      isBookable: isAvail,
+      isPast,
+      durationHours: 2,
+      rawSlots: [slotA, slotB],
+      formattedStart: slotA.startTime?.slice(11, 16) || '',
+      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
+    })
+  }
+
+  return twoHourSlots
+}
 
 function getUpcomingDays(count = 7) {
   const days = []
@@ -317,7 +367,7 @@ function buildSlots(court, isToday = true, basePrice = null) {
       ...t,
       status,
       note: status === 'booked' ? t.note || 'Đã kín lịch' : null,
-      price: roundTo10k(courtPrice * (t.hours || 1)),
+      price: roundTo10k(courtPrice * (t.hours || 2)),
     }
   })
 }
@@ -927,20 +977,22 @@ function MapBooking() {
       (!activeSubCourtId || liveCourtSlots[0]?.courtId === activeSubCourtId)
 
     if (isMatchingCurrentCourt) {
-      return liveCourtSlots.map((s) => {
-        const start = s.startTime?.slice(11, 16) || '00:00'
-        const end = s.endTime?.slice(11, 16) || '00:00'
-        const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
-        const slotPrice = Number(s.price) > 0 ? Number(s.price) : currentSubCourtPrice
+      const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
+      return grouped2h.map((s) => {
+        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
+        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
+        const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
         return {
           id: s.id,
+          slotIds: s.slotIds || [s.id],
           start,
           end,
-          hours: 1,
-          price: slotPrice,
+          hours: 2,
+          price: s.price,
           status: isAvail ? 'available' : 'booked',
-          note: s.isPast ? 'Đã qua giờ' : (s.status !== 'Available' ? 'Đã kín lịch' : null),
-          rawSlot: s,
+          note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
+          rawSlot: s.rawSlots ? s.rawSlots[0] : s,
+          allRawSlots: s.rawSlots || [s],
         }
       })
     }
@@ -1120,14 +1172,14 @@ function MapBooking() {
         date: selectedDateStr,
         dateLabel: selectedDateInfo.fullLabel,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
-        hours: selectedSlot.hours || 1,
+        hours: selectedSlot.hours || 2,
         total: totalBookingPrice,
         unitPrice: selectedSlot.price,
-        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1)),
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 2)),
         courtSlotId: slotId,
-        courtSlotIds: [slotId],
-        selectedSlots: [selectedSlot.rawSlot || selectedSlot],
-        numberOfSlots: 1,
+        courtSlotIds: selectedSlot.slotIds || [slotId],
+        selectedSlots: selectedSlot.allRawSlots || [selectedSlot.rawSlot || selectedSlot],
+        numberOfSlots: selectedSlot.slotIds?.length || 2,
       },
     })
   }
@@ -1368,10 +1420,10 @@ function MapBooking() {
                     fontSize: '11px',
                     fontWeight: 700,
                   }}
-                  title="Dữ liệu kết nối trực tiếp từ Backend API GET /api/v1/facilities"
+                  title="Dữ liệu đồng bộ trực tiếp từ hệ thống"
                 >
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-                  Live API ({apiFacilities.length} cụm sân)
+                  Trực tuyến ({apiFacilities.length} cụm sân)
                 </span>
               )}
             </div>
@@ -1543,7 +1595,12 @@ function MapBooking() {
           <section className="mb-card" aria-label="Lịch sân">
             <div className="mb-slots-head">
               <div>
-                <h2>Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}</h2>
+                <h2>
+                  Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}{' '}
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
+                    2 tiếng / ca
+                  </span>
+                </h2>
                 <p className="mb-slots-sub-desc">
                   Xem lịch trống và đặt sân theo ngày: <strong>{selectedDateInfo.fullLabel}</strong>
                 </p>
@@ -1663,7 +1720,7 @@ function MapBooking() {
                         {isSelected ? (
                           <span className="material-symbols-outlined mb-slot-check-ic">check</span>
                         ) : (
-                          <span className="mb-slot-chip-avail">Trống</span>
+                          <span className="mb-slot-chip-avail">Trống • 2h</span>
                         )}
                       </div>
                       <div className="mb-slot-compact-sub">

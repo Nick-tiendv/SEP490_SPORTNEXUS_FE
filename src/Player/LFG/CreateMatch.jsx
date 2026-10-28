@@ -297,6 +297,121 @@ const calculateDurationHours = (rangeStr) => {
   return diffHours > 0 ? diffHours : 2
 }
 
+// Định dạng ngày theo giờ địa phương YYYY-MM-DD
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Lấy danh sách các ngày khả dụng cho Ghép trận LFG:
+// Bắt đầu từ 2 ngày sau gần nhất trở đi (bỏ Hôm nay và Ngày mai), chỉ hiển thị Thứ và Ngày/Tháng/Năm (không hiển thị "ngày mốt")
+function getLfgUpcomingDays(count = 21) {
+  const days = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Bắt đầu từ 2 ngày sau gần nhất (today + 2 days)
+  for (let i = 2; i < 2 + count; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    const dateStr = formatLocalDate(d)
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+    const shortDayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+    const dayOfWeek = dayNames[d.getDay()]
+    const shortDay = shortDayNames[d.getDay()]
+    const dayNum = String(d.getDate()).padStart(2, '0')
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    const dateFormatted = `${dayNum}/${monthNum}/${year}`
+
+    days.push({
+      dateStr,
+      dayNum,
+      monthNum,
+      year,
+      dayOfWeek,
+      shortDay,
+      dateFormatted,
+      fullLabel: `${dayOfWeek}, ${dateFormatted}`,
+      diffDays: i,
+      isEligible: true,
+    })
+  }
+  return days
+}
+
+// Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
+function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  // Sắp xếp ca theo thứ tự thời gian tăng dần
+  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  // Nếu ca từ backend đã có độ dài 2 tiếng (diffHours >= 1.8)
+  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
+  if (firstSlotDiffHours >= 1.8) {
+    return sorted.map((s) => {
+      const start = s.startTime?.slice(11, 16) || '00:00'
+      const end = s.endTime?.slice(11, 16) || '00:00'
+      const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
+      const price = Number(s.price) > 0 ? Number(s.price) : defaultPrice * 2
+      return {
+        id: s.id,
+        slotIds: [s.id],
+        start,
+        end,
+        timeRange: `${start} - ${end}`,
+        hours: 2,
+        price,
+        status: s.status,
+        isAvailable: isAvail,
+        isPast: Boolean(s.isPast),
+        rawSlot: s,
+        rawSlots: [s],
+      }
+    })
+  }
+
+  // Nếu ca là 1 tiếng: Ghép 2 ca 1 tiếng liên tiếp thành khung giờ chuẩn 2 tiếng
+  const twoHourSlots = []
+  for (let i = 0; i < sorted.length; i += 2) {
+    const slotA = sorted[i]
+    const slotB = sorted[i + 1]
+    // Không nhận ca lẻ 1 tiếng ở cuối vì quy chuẩn hệ thống bắt buộc 2 tiếng
+    if (!slotB) break
+
+    const start = slotA.startTime?.slice(11, 16) || '00:00'
+    const end = slotB.endTime?.slice(11, 16) || '00:00'
+    const isAvailA = slotA.status === 'Available' && !slotA.isPast && slotA.isBookable
+    const isAvailB = slotB.status === 'Available' && !slotB.isPast && slotB.isBookable
+    const isAvail = isAvailA && isAvailB
+    const isPast = Boolean(slotA.isPast || slotB.isPast)
+    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
+    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
+    const totalPrice = priceA + priceB
+
+    twoHourSlots.push({
+      id: slotA.id,
+      slotIds: [slotA.id, slotB.id],
+      start,
+      end,
+      timeRange: `${start} - ${end}`,
+      hours: 2,
+      price: totalPrice,
+      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
+      isAvailable: isAvail,
+      isPast,
+      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
+      rawSlot: slotA,
+      rawSlots: [slotA, slotB],
+    })
+  }
+
+  return twoHourSlots
+}
+
 const FALLBACK_FACILITIES = [
   {
     id: '680db3fd-becd-4ed2-8ffa-a9fecf7a9ca1',
@@ -392,7 +507,15 @@ function CreateMatch() {
   const [selectedCourtId, setSelectedCourtId] = useState(() => {
     return DISTRICT_DATA[userDistrictKey]?.courts[0]?.id || 'c-td-1'
   })
-  const [selectedDate, setSelectedDate] = useState('today') // 'today' | 'tomorrow'
+  const lfgUpcomingDays = useMemo(() => getLfgUpcomingDays(21), [])
+  const firstEligibleDayStr = useMemo(() => {
+    return lfgUpcomingDays[0]?.dateStr || ''
+  }, [lfgUpcomingDays])
+  // Khởi tạo ngày mặc định là ngày hợp lệ sớm nhất (cách 2 ngày gần nhất)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const days = getLfgUpcomingDays(21)
+    return days[0]?.dateStr || ''
+  })
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('20:00 - 22:00 (Tối muộn)')
   const [preferredTimeRange, setPreferredTimeRange] = useState('20:00 - 22:00')
 
@@ -545,27 +668,29 @@ function CreateMatch() {
 
   // Tính ngày theo định dạng YYYY-MM-DD
   const currentDateStr = useMemo(() => {
-    const d = new Date()
-    if (selectedDate === 'tomorrow') {
-      d.setDate(d.getDate() + 1)
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      return selectedDate
     }
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }, [selectedDate])
+    return firstEligibleDayStr || ''
+  }, [selectedDate, firstEligibleDayStr])
 
   const formattedDateLabel = useMemo(() => {
-    const d = new Date()
-    if (selectedDate === 'tomorrow') {
-      d.setDate(d.getDate() + 1)
+    const found = lfgUpcomingDays.find((d) => d.dateStr === currentDateStr)
+    if (found) return found.fullLabel
+    if (currentDateStr) {
+      const parts = currentDateStr.split('-').map(Number)
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2])
+        const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+        const dayName = dayNames[d.getDay()] || ''
+        const dateFormatted = `${String(parts[2]).padStart(2, '0')}/${String(parts[1]).padStart(2, '0')}/${parts[0]}`
+        return `${dayName}, ${dateFormatted}`
+      }
     }
-    const dayName = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'][d.getDay()]
-    const dateFormatted = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-    return `${selectedDate === 'today' ? 'Hôm nay' : 'Ngày mai'} (${dayName}, ${dateFormatted})`
-  }, [selectedDate])
+    return currentDateStr
+  }, [currentDateStr, lfgUpcomingDays])
 
-  // Tải danh sách ca trống từ API getCourtSlots
+  // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
   useEffect(() => {
     let isMounted = true
     if (!selectedSubCourt?.id) {
@@ -580,24 +705,9 @@ function CreateMatch() {
         if (!isMounted) return
         if (Array.isArray(rawSlots) && rawSlots.length > 0) {
           const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
-          const parsed = rawSlots.map((s) => {
-            const start = s.startTime?.slice(11, 16) || '00:00'
-            const end = s.endTime?.slice(11, 16) || '00:00'
-            const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
-            const price = Number(s.price) > 0 ? Number(s.price) : defaultCourtPrice
-            return {
-              id: s.id,
-              start,
-              end,
-              timeRange: `${start} - ${end}`,
-              price,
-              status: s.status,
-              isAvailable: isAvail,
-              isPast: Boolean(s.isPast),
-              rawSlot: s,
-            }
-          })
-          setCourtSlots(parsed)
+          // Quy chuẩn: Ghép các ca 1 tiếng thành ca 2 tiếng, không cho phép setup ca 1 tiếng
+          const twoHourSlots = buildTwoHourSlots(rawSlots, defaultCourtPrice)
+          setCourtSlots(twoHourSlots)
         } else {
           setCourtSlots([])
         }
@@ -713,6 +823,21 @@ function CreateMatch() {
       return
     }
 
+    // Kiểm tra quy định hệ thống: Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người
+    if (!isEditMode && courtSlotId) {
+      const selectedSlotObj = courtSlots.find((s) => s.id === courtSlotId)
+      const slotStartTime = selectedSlotObj?.rawSlot?.startTime || `${currentDateStr}T${selectedSlotObj?.start || '00:00'}:00`
+      const slotDate = new Date(slotStartTime)
+      const now = new Date()
+      const diffHours = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60)
+      if (diffHours < 47.9) {
+        setCreateError('Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người.')
+        setSubmitting(false)
+        document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+    }
+
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
       alert(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
@@ -796,7 +921,7 @@ function CreateMatch() {
               <div className="flex flex-col">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h1 className="text-2xl sm:text-[28px] font-black text-[#111827] tracking-tight">
-                    {isEditMode ? 'Chỉnh Sửa Kèo Ghép (PUT /api/v1/lfgs)' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
+                    {isEditMode ? 'Chỉnh Sửa Kèo Ghép' : 'Tạo Kèo Ghép Mới (LFG Matchmaking)'}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] border border-[#C6E7BE] text-[11px] font-extrabold uppercase tracking-wide">
                     Realtime Engine
@@ -1127,52 +1252,106 @@ function CreateMatch() {
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#F59E0B] via-[#10B981] to-[#2D5F3F]" />
 
                 {/* Section Header & Date Selector */}
-                <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#F59E0B] text-[22px] animate-bounce">
-                      stadium
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <label className="text-[13px] font-black text-[#111827] uppercase tracking-wide">
-                          03. CHỌN SÂN &amp; CA TRỐNG KHẢ DỤNG
-                        </label>
-                        <span className="px-2.5 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] text-[10px] font-black uppercase border border-[#C6E7BE]">
-                          Bắt Buộc Để Đăng Kèo
-                        </span>
+                <div className="flex flex-col gap-3 mb-5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[#F59E0B] text-[22px] animate-bounce">
+                        stadium
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className="text-[13px] font-black text-[#111827] uppercase tracking-wide">
+                            03. CHỌN SÂN &amp; CA TRỐNG KHẢ DỤNG
+                          </label>
+                          <span className="px-2.5 py-0.5 rounded-full bg-[#EAF7EE] text-[#15803D] text-[10px] font-black uppercase border border-[#C6E7BE]">
+                            Bắt Buộc Để Đăng Kèo
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Chọn cơ sở, sân đấu và nhấp vào khung giờ 2 tiếng còn trống bên dưới để hệ thống giữ chỗ tự động
+                        </p>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5">
-                        Chọn cơ sở, sân đấu và nhấp vào ca giờ còn trống bên dưới để hệ thống giữ chỗ tự động
-                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-[#EAF7EE] px-3 py-1 rounded-xl border border-[#C6E7BE] text-xs font-bold text-[#15803D]">
+                      <span className="material-symbols-outlined text-[16px]">schedule</span>
+                      <span>Quy chuẩn: Khung giờ 2 tiếng / ca</span>
                     </div>
                   </div>
 
-                  {/* Switch Date Buttons */}
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-gray-200 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate('today')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        selectedDate === 'today'
-                          ? 'bg-[#2D5F3F] text-white shadow-2xs'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[15px]">today</span>
-                      <span>Hôm nay ({new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate('tomorrow')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        selectedDate === 'tomorrow'
-                          ? 'bg-[#2D5F3F] text-white shadow-2xs'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[15px]">event</span>
-                      <span>Ngày mai ({new Date(Date.now() + 86400000).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})</span>
-                    </button>
+                  {/* Bộ Chọn Ngày Thi Đấu - Calendar Strip & Picker */}
+                  <div className="bg-white/85 p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-2xs">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-wider text-gray-800 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#2D5F3F]">calendar_month</span>
+                          Chọn ngày thi đấu:
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-[#EAF7EE] text-[#15803D] text-xs font-extrabold border border-[#C6E7BE]">
+                          {formattedDateLabel}
+                        </span>
+                      </div>
+
+                      {/* Nút Chọn ngày nhanh từ lịch tháng */}
+                      <label
+                        htmlFor="custom-date-picker"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-[#EAF7EE] border border-gray-300 hover:border-[#2D5F3F] text-gray-700 hover:text-[#15803D] text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                        title="Mở bảng lịch để chọn ngày khác thuận tiện hơn"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">edit_calendar</span>
+                        <span>Mở lịch tháng</span>
+                        <input
+                          id="custom-date-picker"
+                          type="date"
+                          min={firstEligibleDayStr}
+                          value={currentDateStr}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setSelectedDate(e.target.value)
+                              setCourtSlotId(null)
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Dải thẻ ngày trượt ngang dạng Calendar Strip */}
+                    <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+                      {lfgUpcomingDays.map((item) => {
+                        const isSelected = item.dateStr === currentDateStr
+                        return (
+                          <button
+                            key={item.dateStr}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDate(item.dateStr)
+                              setCourtSlotId(null)
+                            }}
+                            className={`min-w-[82px] sm:min-w-[88px] py-2.5 px-2 rounded-2xl text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1 shrink-0 ${
+                              isSelected
+                                ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/25 ring-2 ring-[#2D5F3F]/40 scale-[1.02]'
+                                : 'bg-white border border-gray-200 hover:border-[#2D5F3F] hover:bg-[#F0FDF4] text-gray-700 shadow-2xs'
+                            }`}
+                          >
+                            {/* Thứ */}
+                            <span className={`text-[11.5px] font-bold ${isSelected ? 'text-emerald-100' : 'text-gray-500'}`}>
+                              {item.shortDay}
+                            </span>
+
+                            {/* Ngày số to rõ */}
+                            <span className={`text-[20px] font-black leading-none ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                              {item.dayNum}
+                            </span>
+
+                            {/* Tháng / Năm */}
+                            <span className={`text-[10px] font-extrabold ${isSelected ? 'text-emerald-200' : 'text-gray-500'}`}>
+                              {item.monthNum}/{item.year}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -1307,9 +1486,16 @@ function CreateMatch() {
                               <span className={`text-[13px] font-black tracking-tight ${isSlotSelected ? 'text-white' : 'text-gray-900'}`}>
                                 {slot.start} - {slot.end}
                               </span>
-                              {isSlotSelected && (
-                                <span className="material-symbols-outlined text-white text-[16px]">check_circle</span>
-                              )}
+                              <div className="flex items-center gap-1">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                                  isSlotSelected ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  2 TIẾNG
+                                </span>
+                                {isSlotSelected && (
+                                  <span className="material-symbols-outlined text-white text-[16px]">check_circle</span>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex items-center justify-between text-[10.5px] w-full pt-1 border-t border-black/5">
@@ -1335,15 +1521,9 @@ function CreateMatch() {
                   ) : (
                     <div className="py-6 px-4 bg-white/70 rounded-2xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
                       <span className="material-symbols-outlined text-[28px] text-gray-400 block mb-1">event_busy</span>
-                      Chưa có ca trống cho sân này vào ngày {selectedDate === 'today' ? 'hôm nay' : 'ngày mai'}.
+                      Chưa có ca trống 2 tiếng cho sân này vào ngày {formattedDateLabel}.
                       <div className="mt-2 flex items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDate(selectedDate === 'today' ? 'tomorrow' : 'today')}
-                          className="text-[#2D5F3F] font-bold hover:underline cursor-pointer"
-                        >
-                          Chuyển sang ngày khác
-                        </button>
+                        <span className="text-gray-500 font-medium">Vui lòng chọn ngày khác trên thanh lịch phía trên</span>
                         <span className="text-gray-300">|</span>
                         <Link to="/court-finder" className="text-[#2D5F3F] font-bold hover:underline">
                           Mở Bản đồ đặt sân ↗
@@ -1599,17 +1779,14 @@ function CreateMatch() {
                     <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">group_add</span>
                     05. CẤU HÌNH SUẤT &amp; DUYỆT NGƯỜI THAM GIA
                   </label>
-                  <span className="text-[11px] font-extrabold text-[#15803D] uppercase tracking-wider">
-                    API /api/v1/lfgs
-                  </span>
                 </div>
 
-                {/* Số người cần tìm (slotsNeeded) & Giá mỗi người (pricePerPerson) */}
+                {/* Số người cần tìm & Giá mỗi người */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* slotsNeeded */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Số người cần tìm thêm (<code className="text-[#2D5F3F] font-mono">slotsNeeded</code>):
+                      Số người cần tìm thêm:
                     </label>
                     <div className="flex items-center gap-2">
                       <button
@@ -1643,7 +1820,7 @@ function CreateMatch() {
                   {/* pricePerPerson */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Tiền mỗi người đóng (<code className="text-[#2D5F3F] font-mono">pricePerPerson</code>):
+                      Tiền mỗi người đóng:
                     </label>
                     <div className="relative">
                       <input
@@ -1669,7 +1846,7 @@ function CreateMatch() {
                     <div className="flex flex-col">
                       <span className="font-extrabold text-xs text-[#111827] flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[16px] text-amber-600">verified</span>
-                        Chế độ duyệt người tham gia (requireApproval)
+                        Chế độ duyệt người tham gia
                       </span>
                       <span className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
                         {requireApproval
@@ -1689,7 +1866,7 @@ function CreateMatch() {
                 {/* Description */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                    Ghi chú mô tả trận đấu (description):
+                    Ghi chú mô tả trận đấu:
                   </label>
                   <textarea
                     rows={2}

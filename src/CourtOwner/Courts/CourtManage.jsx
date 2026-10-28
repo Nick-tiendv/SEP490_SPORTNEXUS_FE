@@ -145,7 +145,7 @@ export default function CourtManage() {
   // Giá chỉnh tay theo khu: { [categoryId]: { basePrice, peakPrice } }
   const [zonePrices, setZonePrices] = useState({})
   const [pricingRules, setPricingRules] = useState(DEFAULT_PRICING_RULES)
-  const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00', slotDuration: 60, bufferTime: 0 })
+  const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00', slotDuration: 120, bufferTime: 0 })
 
   // Bộ mô phỏng tính giá động trực quan
   const [simZoneId, setSimZoneId] = useState('')
@@ -1616,12 +1616,17 @@ export default function CourtManage() {
 
             {/* Bước nhảy khung giờ */}
             <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-                Thời Lượng Mỗi Slot (Bước Nhảy)
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                  Thời Lượng Mỗi Slot (Bước Nhảy)
+                </label>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#047857', background: '#ECFDF5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
+                  Cố định 2 tiếng
+                </span>
+              </div>
               <select
                 value={gridConfig.slotDuration}
-                onChange={(e) => setGridConfig((prev) => ({ ...prev, slotDuration: Number(e.target.value) }))}
+                disabled
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -1630,15 +1635,14 @@ export default function CourtManage() {
                   fontSize: '15px',
                   fontWeight: 700,
                   color: '#0F172A',
+                  background: '#F1F5F9',
+                  cursor: 'not-allowed',
                 }}
               >
-                <option value={30}>30 phút / slot (Linh hoạt cao)</option>
-                <option value={60}>60 phút / slot (Khuyến nghị chuẩn)</option>
-                <option value={90}>90 phút / slot (Bóng đá trận dài)</option>
-                <option value={120}>120 phút / slot (2 tiếng)</option>
+                <option value={120}>120 phút / slot (2 tiếng - Quy chuẩn toàn hệ thống)</option>
               </select>
-              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
-                Quy định độ dài mỗi ô đặt lịch
+              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, marginTop: '6px', display: 'block' }}>
+                Theo quy chuẩn toàn hệ thống SportNexus, khung giờ chơi cố định là <strong>2 tiếng / ca</strong> (không hỗ trợ setup 1 tiếng) để đảm bảo đồng bộ lịch đặt sân và ghép trận LFG.
               </span>
             </div>
 
@@ -1674,7 +1678,7 @@ export default function CourtManage() {
           {/* Time Grid Preview */}
           <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '24px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginBottom: '14px' }}>
-              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày ({gridConfig.openingTime} - {gridConfig.closingTime})
+              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày ({gridConfig.openingTime} - {gridConfig.closingTime}) • Khung giờ 2 tiếng / ca
             </h3>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -1682,6 +1686,7 @@ export default function CourtManage() {
                 const hour = Math.floor(start / 60)
                 const isPeak = hour >= 17 && hour <= 22
                 const isOffpeak = hour >= 9 && hour <= 14
+                const end = start + gridConfig.slotDuration
                 return (
                   <div
                     key={start}
@@ -1691,11 +1696,11 @@ export default function CourtManage() {
                       border: isPeak ? '1px solid #FCA5A5' : isOffpeak ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
                       background: isPeak ? '#FEF2F2' : isOffpeak ? '#ECFDF5' : '#FFFFFF',
                       textAlign: 'center',
-                      minWidth: '85px',
+                      minWidth: '105px',
                     }}
                   >
                     <div style={{ fontSize: '13px', fontWeight: 800, color: isPeak ? '#DC2626' : '#0F172A' }}>
-                      {fromMinutes(start)}
+                      {fromMinutes(start)} - {fromMinutes(end)}
                     </div>
                     <div
                       style={{
@@ -1705,7 +1710,7 @@ export default function CourtManage() {
                         color: isPeak ? '#DC2626' : isOffpeak ? '#047857' : '#1E293B',
                       }}
                     >
-                      {isPeak ? 'Giờ Vàng 🔥' : isOffpeak ? 'Happy Hour' : 'Chuẩn'}
+                      {isPeak ? 'Giờ Vàng 🔥 (2h)' : isOffpeak ? 'Happy Hour (2h)' : 'Chuẩn (2h)'}
                     </div>
                   </div>
                 )

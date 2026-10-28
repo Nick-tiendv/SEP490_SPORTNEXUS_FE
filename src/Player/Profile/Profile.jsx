@@ -4720,7 +4720,7 @@ export default function Profile() {
                   <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
                     progress_activity
                   </span>
-                  <p style={{ margin: '8px 0 0 0' }}>Đang tải lịch đặt sân từ máy chủ (GET /api/v1/bookings/my-bookings)...</p>
+                  <p style={{ margin: '8px 0 0 0' }}>Đang tải danh sách lịch đặt sân của bạn...</p>
                 </div>
               ) : myBookings.length > 0 ? (
                 myBookings.map((b) => (
