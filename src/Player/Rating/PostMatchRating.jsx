@@ -1342,7 +1342,7 @@ function PostMatchRating() {
                 {checkingEligibility
                   ? 'Đang kiểm tra điều kiện đánh giá...'
                   : facilityEligibility?.isEligible
-                  ? 'Đủ điều kiện đánh giá (GET /api/v1/facility-reviews/eligibility)'
+                  ? 'Đủ điều kiện đánh giá'
                   : facilityEligibility?.message || 'Chưa đủ điều kiện đánh giá cơ sở này'}
               </div>
             </div>
@@ -1450,7 +1450,6 @@ function PostMatchRating() {
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
                 <span>Độ dài: {facilityComment.length} ký tự (Tối thiểu 10)</span>
-                <span>POST /api/v1/facility-reviews & POST /api/v1/reviews/facility</span>
               </div>
             </div>
 

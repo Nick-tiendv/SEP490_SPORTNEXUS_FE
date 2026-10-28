@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
-import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -134,14 +134,15 @@ const getDistanceForCourt = (court, playerLocation, liveCoords = null) => {
   return Math.max(0.6, Math.round((base + offset) * 10) / 10)
 }
 
-// Mẫu khung giờ — giá được tính theo giá/giờ của từng cụm sân (sân mở cửa 06:00 - 22:00)
+// Mẫu khung giờ — quy chuẩn hệ thống là 2 tiếng / ca (sân mở cửa 06:00 - 22:00)
 const SLOT_TEMPLATE = [
-  { id: 's1', start: '16:00', end: '17:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's2', start: '17:00', end: '18:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's3', start: '18:00', end: '19:00', hours: 1, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's4', start: '19:00', end: '20:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's5', start: '20:00', end: '21:00', hours: 1, factor: 1, status: 'available' },
-  { id: 's6', start: '21:00', end: '22:00', hours: 1, factor: 0.91, status: 'available' },
+  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
+  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
 ]
 
 const formatVnd = (n) => `${n.toLocaleString('vi-VN')} đ`
@@ -263,14 +264,109 @@ const calculateRoute = (court, origin) => {
 const formatHours = (h) => `${String(h).replace('.', ',')} giờ`
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-function buildSlots(court) {
-  return SLOT_TEMPLATE.map((t) => {
-    const status = court.overrides[t.id] || t.status
+const SLOT_TEMPLATE_FUTURE = [
+  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
+  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'booked', note: 'Đã có khách đặt' },
+  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
+]
+
+// Ghép ca thành các khung giờ 2 tiếng chuẩn toàn hệ thống (không cho phép 1 tiếng)
+function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+
+  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
+  if (firstSlotDiffHours >= 1.8) {
+    return sorted.map((s) => ({
+      ...s,
+      slotIds: [s.id],
+      durationHours: 2,
+      rawSlots: [s],
+      formattedStart: s.startTime?.slice(11, 16) || '',
+      formattedEnd: s.endTime?.slice(11, 16) || '',
+    }))
+  }
+
+  const twoHourSlots = []
+  for (let i = 0; i < sorted.length; i += 2) {
+    const slotA = sorted[i]
+    const slotB = sorted[i + 1]
+    if (!slotB) break // Không nhận ca lẻ 1 tiếng
+
+    const isAvailA = String(slotA.status || '').toLowerCase() === 'available' && slotA.isBookable !== false && !slotA.isPast
+    const isAvailB = String(slotB.status || '').toLowerCase() === 'available' && slotB.isBookable !== false && !slotB.isPast
+    const isAvail = isAvailA && isAvailB
+    const isPast = Boolean(slotA.isPast || slotB.isPast)
+    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
+    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
+
+    twoHourSlots.push({
+      id: slotA.id,
+      slotIds: [slotA.id, slotB.id],
+      courtId: slotA.courtId,
+      startTime: slotA.startTime,
+      endTime: slotB.endTime,
+      price: priceA + priceB,
+      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
+      isBookable: isAvail,
+      isPast,
+      durationHours: 2,
+      rawSlots: [slotA, slotB],
+      formattedStart: slotA.startTime?.slice(11, 16) || '',
+      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
+    })
+  }
+
+  return twoHourSlots
+}
+
+function getUpcomingDays(count = 7) {
+  const days = []
+  const now = new Date()
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now)
+    d.setDate(now.getDate() + i)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const dateStr = `${year}-${month}-${day}`
+
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+    const dayOfWeek = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : dayNames[d.getDay()]
+    const shortLabel = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : `${d.getDay() === 0 ? 'CN' : `T${d.getDay() + 1}`}, ${day}/${month}`
+    const fullLabel = i === 0 ? `Hôm nay (${day}/${month}/${year})` : i === 1 ? `Ngày mai (${day}/${month}/${year})` : `${dayOfWeek} (${day}/${month}/${year})`
+
+    days.push({
+      dateStr,
+      dayNum: d.getDate(),
+      monthNum: d.getMonth() + 1,
+      year: d.getFullYear(),
+      dayOfWeek,
+      shortLabel,
+      fullLabel,
+      isToday: i === 0,
+      isTomorrow: i === 1,
+    })
+  }
+  return days
+}
+
+function buildSlots(court, isToday = true, basePrice = null) {
+  const template = isToday ? SLOT_TEMPLATE : SLOT_TEMPLATE_FUTURE
+  const courtPrice = Number(basePrice) > 0 ? Number(basePrice) : (Number(court?.price) || 100000)
+  return template.map((t) => {
+    const status = isToday ? (court?.overrides?.[t.id] || t.status) : t.status
     return {
       ...t,
       status,
       note: status === 'booked' ? t.note || 'Đã kín lịch' : null,
-      price: roundTo10k(court.price * t.hours * t.factor),
+      price: roundTo10k(courtPrice * (t.hours || 2)),
     }
   })
 }
@@ -297,6 +393,88 @@ function MapBooking() {
 
   // Tọa độ GPS thiết bị người chơi (lấy ngầm để tính khoảng cách và định vị chính xác)
   const [gpsCoords, setGpsCoords] = useState(null)
+
+  // Tìm kiếm & Lọc
+  const [query, setQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [isAllPrices, setIsAllPrices] = useState(true)
+  const [minPriceInput, setMinPriceInput] = useState('')
+  const [maxPriceInput, setMaxPriceInput] = useState('')
+
+  // Chọn ngày đặt sân (Hôm nay, Ngày mai, và các ngày tiếp theo)
+  const upcomingDays = useMemo(() => getUpcomingDays(7), [])
+  const todayIsoDate = upcomingDays[0]?.dateStr || new Date().toISOString().slice(0, 10)
+  const [selectedDateStr, setSelectedDateStr] = useState(() => todayIsoDate)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+
+  const selectedDateInfo = useMemo(() => {
+    const found = upcomingDays.find((d) => d.dateStr === selectedDateStr)
+    if (found) return found
+    try {
+      const parts = selectedDateStr.split('-').map(Number)
+      const d = new Date(parts[0], parts[1] - 1, parts[2])
+      const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+      const dayOfWeek = dayNames[d.getDay()]
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      return {
+        dateStr: selectedDateStr,
+        dayNum: d.getDate(),
+        monthNum: d.getMonth() + 1,
+        dayOfWeek,
+        shortLabel: `${dayOfWeek}, ${day}/${month}`,
+        fullLabel: `${dayOfWeek} (${day}/${month}/${d.getFullYear()})`,
+        isToday: selectedDateStr === todayIsoDate,
+        isTomorrow: false,
+      }
+    } catch {
+      return {
+        dateStr: selectedDateStr,
+        dayNum: '',
+        monthNum: '',
+        dayOfWeek: '',
+        shortLabel: selectedDateStr,
+        fullLabel: selectedDateStr,
+        isToday: selectedDateStr === todayIsoDate,
+        isTomorrow: false,
+      }
+    }
+  }, [upcomingDays, selectedDateStr, todayIsoDate])
+
+  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
+  const [apiFacilities, setApiFacilities] = useState([])
+  const [isLoadingApi, setIsLoadingApi] = useState(true)
+  const [apiStatus, setApiStatus] = useState('connecting')
+  const [apiLocations, setApiLocations] = useState([])
+
+  // Mặc định chọn cụm sân gần nhất với vị trí xuất phát hoặc tọa độ vệ tinh
+  const [selectedCourtId, setSelectedCourtId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      const loc = saved ? JSON.parse(saved).location : 'Thủ Đức'
+      const key = detectDistrictKey(loc)
+      if (key === 'thuduc') return 'ddink-td'
+      if (key === 'binhthanh') return 'yonex-bt'
+      if (key === 'q7') return 'trexanh-q7'
+      if (key === 'q1') return 'taodan-q1'
+      if (key === 'q10') return 'lananh-q10'
+      if (key === 'phunhuan') return 'rachmieu-pn'
+      if (key === 'tanbinh') return 'viettel-tb'
+      if (key === 'quan8') return 'chanhhung-q8'
+      if (key === 'tanphu') return 'celadon-tp'
+      if (key === 'govap') return 'quangtrung-gv'
+      if (key === 'q3') return 'hoxuanhuong-q3'
+      if (key === 'q11') return 'phutho-q11'
+    } catch {}
+    return 'lananh-q10'
+  })
+
+  const [selectedSlotId, setSelectedSlotId] = useState('s5')
+  const [detailSlot, setDetailSlot] = useState(null)
+  const [holdLeft, setHoldLeft] = useState(8 * 60 + 42)
+  const [mapType, setMapType] = useState('m')
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const summaryRef = useRef(null)
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return
@@ -364,11 +542,23 @@ function MapBooking() {
     }
   }, [])
 
-  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
-  const [apiFacilities, setApiFacilities] = useState([])
-  const [apiStatus, setApiStatus] = useState('connecting')
-  // Cụm sân đang chọn: ID thật từ API (rỗng tới khi tải xong danh sách cơ sở)
-  const [selectedCourtId, setSelectedCourtId] = useState('')
+  // Lấy danh sách địa điểm / khu vực từ GET /api/v1/facilities/locations
+  useEffect(() => {
+    let isMounted = true
+    async function loadLocations() {
+      try {
+        const locs = await getFacilityLocations()
+        if (isMounted && Array.isArray(locs) && locs.length > 0) {
+          setApiLocations(locs)
+        }
+      } catch (e) {
+        console.warn('MapBooking: Không thể tải locations:', e)
+      }
+    }
+    loadLocations()
+    return () => { isMounted = false }
+  }, [])
+
 
   useEffect(() => {
     let isMounted = true
@@ -397,15 +587,10 @@ function MapBooking() {
     return () => { isMounted = false }
   }, [])
 
-  // Khai báo trước effect tìm kiếm bên dưới (effect dùng query trong mảng phụ thuộc)
-  const [query, setQuery] = useState('')
-
-  // Lọc theo ngày + khung giờ còn trống (giờ Việt Nam). BE: GET /api/v1/facilities/search?date=&fromTime=&toTime=
-  const [vnToday] = useState(() => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10))
-  const [slotDate, setSlotDate] = useState(vnToday)
+  // Lọc khung giờ còn trống theo ngày đang chọn. BE: GET /api/v1/facilities/search?date=&fromTime=&toTime=
   const [fromTime, setFromTime] = useState('')
   const [toTime, setToTime] = useState('')
-  const hasTimeFilter = Boolean(fromTime || toTime || slotDate !== vnToday)
+  const hasTimeFilter = Boolean(fromTime || toTime)
   const timeFilterError = fromTime && toTime && fromTime >= toTime ? 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.' : ''
   // Kết quả lọc giờ gần nhất; freeFacilityIds = null khi không lọc theo giờ, Set = các cơ sở còn ca trống trong khung giờ
   const [freeResult, setFreeResult] = useState({ ids: null, counts: {} })
@@ -416,7 +601,7 @@ function MapBooking() {
     let isMounted = true
     const timer = setTimeout(async () => {
       try {
-        const res = await searchFacilities({ date: slotDate, fromTime: fromTime || undefined, toTime: toTime || undefined, pageSize: 50 })
+        const res = await searchFacilities({ date: selectedDateStr, fromTime: fromTime || undefined, toTime: toTime || undefined, pageSize: 50 })
         if (!isMounted) return
         const items = res?.items || []
         const transformed = items.map(transformFacilityToCourt).filter(Boolean)
@@ -437,7 +622,7 @@ function MapBooking() {
       clearTimeout(timer)
       isMounted = false
     }
-  }, [hasTimeFilter, timeFilterError, slotDate, fromTime, toTime])
+  }, [hasTimeFilter, timeFilterError, selectedDateStr, fromTime, toTime])
 
   // Tìm kiếm cơ sở trực tiếp bằng API GET /api/v1/facilities/search khi người chơi gõ từ khóa
   useEffect(() => {
@@ -479,11 +664,8 @@ function MapBooking() {
       distance: getDistanceForCourt(c, effectiveOrigin, gpsCoords),
     }))
   }, [apiFacilities, effectiveOrigin, gpsCoords])
-
-  const [searchFocused, setSearchFocused] = useState(false)
   const [priceRange, setPriceRange] = useState([PRICE_MIN, PRICE_MAX])
   const [priceEdit, setPriceEdit] = useState(null) // { idx, text } khi đang gõ giá
-
 
   // Tự động chuyển sân ưu tiên khi vị trí thay đổi (nếu người dùng chưa tìm kiếm cụ thể)
   useEffect(() => {
@@ -503,6 +685,29 @@ function MapBooking() {
     return isSportActive(c.sport)
   }, [isSportActive])
 
+  // Lọc theo tầm giá: nhập tự do hoặc chọn "Mọi mức giá"
+  const courtMatchesPrice = (court) => {
+    if (isAllPrices) return true
+    const minVal = minPriceInput ? Number(minPriceInput.replace(/\D/g, '')) : 0
+    const maxVal = maxPriceInput ? Number(maxPriceInput.replace(/\D/g, '')) : Infinity
+
+    // Nếu không nhập cả 2 ô hoặc min = 0 và max = Infinity thì tính là xem tất cả
+    if (minVal === 0 && (maxVal === Infinity || maxVal === 0)) return true
+
+    const p = Number(court.price) || 0
+    const matchesMain = (minVal === 0 || p >= minVal) && (maxVal === Infinity || maxVal === 0 || p <= maxVal)
+    if (matchesMain) return true
+
+    // Hoặc kiểm tra xem cụm sân có sân con nào nằm trong tầm giá người chơi chọn không
+    if (Array.isArray(court.courts) && court.courts.length > 0) {
+      return court.courts.some((sub) => {
+        const subP = Number(sub.defaultPrice) || 0
+        return (minVal === 0 || subP >= minVal) && (maxVal === Infinity || maxVal === 0 || subP <= maxVal)
+      })
+    }
+    return false
+  }
+
   // Lọc cụm sân:
   // - Khi không gõ tìm kiếm: lọc theo môn và khoảng giá (sắp xếp theo khoảng cách từ người chơi)
   // - Khi người chơi gõ tìm kiếm (tên sân, tuyến đường, quận):
@@ -515,13 +720,12 @@ function MapBooking() {
         .filter(
           (c) =>
             courtMatchesSport(c) &&
-            c.price >= priceRange[0] &&
-            c.price <= priceRange[1]
+            courtMatchesPrice(c)
         )
         .sort((a, b) => a.distance - b.distance)
     }
 
-    const matched = localizedCourts.filter((c) => matchesQuery(c, trimmed))
+    const matched = localizedCourts.filter((c) => matchesQuery(c, trimmed) && courtMatchesPrice(c))
 
     if (matched.length > 0) {
       return matched.sort((a, b) => {
@@ -535,7 +739,7 @@ function MapBooking() {
 
     // Không có sân thật khớp từ khóa: không tự tạo "sân" từ chữ người dùng gõ
     return []
-  }, [localizedCourts, courtMatchesSport, query, priceRange])
+  }, [localizedCourts, courtMatchesSport, query, isAllPrices, minPriceInput, maxPriceInput])
 
   // Lọc theo tiện ích (danh mục lấy từ GET /api/v1/master-data/amenities): sân phải có đủ các tiện ích đã chọn
   const [amenityOptions, setAmenityOptions] = useState([])
@@ -555,23 +759,15 @@ function MapBooking() {
     })
   }, [baseFilteredCourts, selectedAmenities, freeFacilityIds])
 
-  // TỰ ĐỘNG ĐỒNG BỘ HIỂN THỊ TRÊN BẢN ĐỒ KHI SEARCH (quận, tên đường hoặc tên sân)
+  // TỰ ĐỘNG ĐỒNG BỘ HIỂN THỊ TRÊN BẢN ĐỒ KHI SEARCH HOẶC LỌC GIÁ
   useEffect(() => {
-    const trimmed = query.trim()
-    if (!trimmed) return
     if (filteredCourts.length > 0) {
       if (!filteredCourts.some((m) => m.id === selectedCourtId)) {
         setSelectedCourtId(filteredCourts[0].id)
       }
     }
-  }, [query, filteredCourts, selectedCourtId])
+  }, [filteredCourts, selectedCourtId])
 
-  const [selectedSlotId, setSelectedSlotId] = useState('s5')
-  const [detailSlot, setDetailSlot] = useState(null)
-  const [holdLeft, setHoldLeft] = useState(8 * 60 + 42)
-  const [mapType, setMapType] = useState('m')
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
-  const summaryRef = useRef(null)
 
   // Lắng nghe sự kiện từ Trợ lý AI SportNexus
   useEffect(() => {
@@ -625,10 +821,10 @@ function MapBooking() {
           id: child.id,
           number: String(idx + 1).padStart(2, '0'),
           name: child.name,
-          type: `${child.categoryName} • ${Number(child.defaultPrice || 100000).toLocaleString('vi-VN')} đ/h`,
+          type: `${child.categoryName} • ${Number(child.defaultPrice || selectedCourt.price || 100000).toLocaleString('vi-VN')} đ/h`,
           isBooked,
           note: isBooked ? (child.status === 'MAINTENANCE' ? 'Đang bảo trì' : 'Tạm ngưng') : 'Đang trống',
-          price: child.defaultPrice,
+          price: Number(child.defaultPrice) > 0 ? Number(child.defaultPrice) : (selectedCourt.price || 100000),
           categoryName: child.categoryName,
         }
       })
@@ -713,10 +909,12 @@ function MapBooking() {
       const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       if (!activeSubCourtId || !isGuidRegex.test(activeSubCourtId)) {
         setLiveCourtSlots([])
+        if (isMounted) setIsLoadingSlots(false)
         return
       }
       try {
-        const apiSlots = await getCourtSlots(activeSubCourtId, slotDate)
+        setIsLoadingSlots(true)
+        const apiSlots = await getCourtSlots(activeSubCourtId, selectedDateStr)
         if (isMounted && Array.isArray(apiSlots) && apiSlots.length > 0) {
           setLiveCourtSlots(apiSlots)
         } else if (isMounted) {
@@ -725,39 +923,57 @@ function MapBooking() {
       } catch (err) {
         console.warn('[MapBooking] Lỗi khi tải ca sân:', err)
         if (isMounted) setLiveCourtSlots([])
+      } finally {
+        if (isMounted) setIsLoadingSlots(false)
       }
     }
     loadSubCourtSlots()
     return () => { isMounted = false }
-  }, [activeSubCourtId, slotDate])
+  }, [activeSubCourtId, selectedDateStr])
+
+  // Đơn giá của sân con đang chọn (đồng bộ chính xác theo từng sân con hoặc cụm sân)
+  const currentSubCourtPrice = useMemo(() => {
+    const firstActive = activeSubCourts[0]
+    if (firstActive && Number(firstActive.price) > 0) return Number(firstActive.price)
+    return Number(selectedCourt?.price) || 100000
+  }, [activeSubCourts, selectedCourt])
 
   const slots = useMemo(() => {
     if (!selectedCourt) return []
-    if (Array.isArray(liveCourtSlots) && liveCourtSlots.length > 0) {
+    // Kiểm tra xem liveCourtSlots có thuộc về đúng sân con hiện tại không
+    const isMatchingCurrentCourt =
+      Array.isArray(liveCourtSlots) &&
+      liveCourtSlots.length > 0 &&
+      (!activeSubCourtId || liveCourtSlots[0]?.courtId === activeSubCourtId)
+
+    if (isMatchingCurrentCourt) {
+      const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
       // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
       const inWindow = (s) => {
-        const start = s.startTime?.slice(11, 16) || '00:00'
-        const end = s.endTime?.slice(11, 16) || '00:00'
+        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
+        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
         return (!fromTime || start >= fromTime) && (!toTime || (end === '00:00' ? '24:00' : end) <= toTime)
       }
-      return liveCourtSlots.filter(inWindow).map((s) => {
-        const start = s.startTime?.slice(11, 16) || '00:00'
-        const end = s.endTime?.slice(11, 16) || '00:00'
-        const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
+      return grouped2h.filter(inWindow).map((s) => {
+        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
+        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
+        const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
         return {
           id: s.id,
+          slotIds: s.slotIds || [s.id],
           start,
           end,
-          hours: 1,
-          price: Number(s.price) || selectedCourt.price,
+          hours: 2,
+          price: s.price,
           status: isAvail ? 'available' : 'booked',
-          note: s.isPast ? 'Đã qua giờ' : (s.status !== 'Available' ? 'Đã kín lịch' : null),
-          rawSlot: s,
+          note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
+          rawSlot: s.rawSlots ? s.rawSlots[0] : s,
+          allRawSlots: s.rawSlots || [s],
         }
       })
     }
-    return buildSlots(selectedCourt)
-  }, [selectedCourt, liveCourtSlots, fromTime, toTime])
+    return buildSlots(selectedCourt, selectedDateInfo.isToday, currentSubCourtPrice)
+  }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice, fromTime, toTime])
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
 
@@ -787,10 +1003,27 @@ function MapBooking() {
   }, [holdLeft, selectedSlotId])
 
   const handleSelectCourt = (court) => {
-    if (court.id === selectedCourt?.id) return
-    setSelectedCourtId(court.id)
-    setSelectedSlotId(null)
-    setDetailSlot(null)
+    const isSameCourt = court.id === selectedCourt?.id
+    if (!isSameCourt) {
+      setSelectedCourtId(court.id)
+      setSelectedSlotId(null)
+      setDetailSlot(null)
+      setLiveCourtSlots([]) // Reset ngay ca của sân cũ để đồng bộ ngay giá mới
+      setIsLoadingSlots(true)
+
+      // Đồng bộ ngay sân con khả dụng đầu tiên của cụm sân vừa chọn
+      const children = Array.isArray(court.courts) ? court.courts : []
+      const matchingPriceChild = children.find(
+        (c) => c.status === 'ACTIVE' && Number(c.defaultPrice) === Number(court.price)
+      )
+      const firstActiveChild =
+        matchingPriceChild || children.find((c) => c.status === 'ACTIVE') || children[0]
+      if (firstActiveChild) {
+        setSelectedSubCourtIds([firstActiveChild.id])
+      } else {
+        setSelectedSubCourtIds(['court-sub-1'])
+      }
+    }
   }
 
   const handleSelectSlot = (slot) => {
@@ -816,11 +1049,62 @@ function MapBooking() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Quản lý giá tự do & nút chọn "Mọi mức giá"
+  const handleSelectAllPrices = () => {
+    setIsAllPrices(true)
+    setMinPriceInput('')
+    setMaxPriceInput('')
+  }
+
+
+  const handleMinPriceChange = (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 8)
+    const formatted = digits ? Number(digits).toLocaleString('vi-VN') : ''
+    setMinPriceInput(formatted)
+    if (!formatted && !maxPriceInput) {
+      setIsAllPrices(true)
+    } else {
+      setIsAllPrices(false)
+    }
+  }
+
+  const handleMaxPriceChange = (val) => {
+    const digits = val.replace(/\D/g, '').slice(0, 8)
+    const formatted = digits ? Number(digits).toLocaleString('vi-VN') : ''
+    setMaxPriceInput(formatted)
+    if (!minPriceInput && !formatted) {
+      setIsAllPrices(true)
+    } else {
+      setIsAllPrices(false)
+    }
+  }
+
+  const handlePriceBlur = () => {
+    if (!minPriceInput || !maxPriceInput) return
+    const minVal = Number(minPriceInput.replace(/\D/g, ''))
+    const maxVal = Number(maxPriceInput.replace(/\D/g, ''))
+    if (minVal > maxVal && maxVal > 0) {
+      setMinPriceInput(Number(maxVal).toLocaleString('vi-VN'))
+      setMaxPriceInput(Number(minVal).toLocaleString('vi-VN'))
+    }
+  }
+
+  const displayPriceText = useMemo(() => {
+    if (isAllPrices || (!minPriceInput && !maxPriceInput)) {
+      return 'Mọi mức giá'
+    }
+    if (minPriceInput && !maxPriceInput) {
+      return `Từ ${minPriceInput} đ`
+    }
+    if (!minPriceInput && maxPriceInput) {
+      return `Đến ${maxPriceInput} đ`
+    }
+    return `${minPriceInput} đ – ${maxPriceInput} đ`
+  }, [isAllPrices, minPriceInput, maxPriceInput])
+
   const handleClearFilters = () => {
     setQuery('')
-    setPriceRange([PRICE_MIN, PRICE_MAX])
-    setPriceEdit(null)
-    setSlotDate(vnToday)
+    handleSelectAllPrices()
     setFromTime('')
     setToTime('')
     selectAllSports()
@@ -831,40 +1115,6 @@ function MapBooking() {
     setSearchFocused(false)
     handleSelectCourt(court)
   }
-
-
-
-  // Ô nhập giá: gõ tự do (tự thêm dấu chấm), chốt khi blur / Enter
-  const priceInputValue = (idx) =>
-    priceEdit?.idx === idx ? priceEdit.text : priceRange[idx].toLocaleString('vi-VN')
-
-  const handlePriceType = (idx, raw) => {
-    const digits = raw.replace(/\D/g, '').slice(0, 7)
-    setPriceEdit({ idx, text: digits ? Number(digits).toLocaleString('vi-VN') : '' })
-  }
-
-  const commitPrice = (idx) => {
-    if (priceEdit?.idx !== idx) return
-    const num = Number(priceEdit.text.replace(/\D/g, ''))
-    setPriceEdit(null)
-    if (!num) return
-    const clamped = Math.min(Math.max(Math.round(num / PRICE_STEP) * PRICE_STEP, PRICE_MIN), PRICE_MAX)
-    if (idx === 0) {
-      if (clamped >= priceRange[1]) {
-        setPriceRange([clamped, Math.min(clamped + PRICE_STEP, PRICE_MAX)])
-      } else {
-        setPriceRange(([, max]) => [clamped, max])
-      }
-    } else {
-      if (clamped <= priceRange[0]) {
-        setPriceRange([Math.max(clamped - PRICE_STEP, PRICE_MIN), clamped])
-      } else {
-        setPriceRange(([min]) => [min, clamped])
-      }
-    }
-  }
-
-  const isFullPrice = priceRange[0] === PRICE_MIN && priceRange[1] === PRICE_MAX
 
   const handleConfirm = () => {
     if (!selectedCourt || !selectedSlot || activeSubCourts.length === 0) return
@@ -883,7 +1133,8 @@ function MapBooking() {
       return
     }
 
-    navigate('/split-payment', {
+    const targetRoute = window.location.pathname.includes('test') ? '/test-split-payment' : '/split-payment'
+    navigate(targetRoute, {
       state: {
         facilityId: selectedCourt.id,
         courtId: firstRealCourtId,
@@ -896,15 +1147,17 @@ function MapBooking() {
         subCourtDesc: selectedCourt.subCourtDesc,
         image: selectedCourt.image,
         sport: selectedCourt.sport,
+        date: selectedDateStr,
+        dateLabel: selectedDateInfo.fullLabel,
         slot: `${selectedSlot.start} - ${selectedSlot.end}`,
-        hours: selectedSlot.hours || 1,
+        hours: selectedSlot.hours || 2,
         total: totalBookingPrice,
         unitPrice: selectedSlot.price,
-        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 1)),
+        hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 2)),
         courtSlotId: slotId,
-        courtSlotIds: [slotId],
-        selectedSlots: [selectedSlot.rawSlot || selectedSlot],
-        numberOfSlots: 1,
+        courtSlotIds: selectedSlot.slotIds || [slotId],
+        selectedSlots: selectedSlot.allRawSlots || [selectedSlot.rawSlot || selectedSlot],
+        numberOfSlots: selectedSlot.slotIds?.length || 2,
       },
     })
   }
@@ -912,8 +1165,6 @@ function MapBooking() {
 
 
   const sportOf = (key) => SPORTS_LIST.find((s) => s.key === key)
-  const todayStr = slotDate.split('-').reverse().join('/')
-  const dayLabel = slotDate === vnToday ? 'Hôm nay' : 'Ngày'
 
   return (
     <div className="mb-page">
@@ -1078,31 +1329,61 @@ function MapBooking() {
 
             <div className="mb-label-row">
               <span className="mb-label">Tầm giá / giờ</span>
-              <span className={`mb-price-readout ${isFullPrice ? '' : 'is-on'}`}>
-                {isFullPrice
-                  ? 'Mọi mức giá'
-                  : `${formatVnd(priceRange[0])} – ${formatVnd(priceRange[1])}`}
-              </span>
+              <button
+                id="mb-price-all-toggle"
+                type="button"
+                className={`mb-price-readout-btn ${isAllPrices ? 'is-active' : 'is-filtered'}`}
+                onClick={handleSelectAllPrices}
+                title={isAllPrices ? 'Đang hiển thị tất cả các sân ở mọi mức giá' : 'Bấm để xóa lọc giá và xem mọi mức giá'}
+              >
+                {isAllPrices ? (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13, marginRight: 2 }}>check</span>
+                    Mọi mức giá
+                  </>
+                ) : (
+                  <>
+                    <span>{displayPriceText}</span>
+                    <span className="mb-price-reset-chip">
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>close</span>
+                      Xóa lọc
+                    </span>
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Ô nhập Từ — Đến */}
+            {/* Ô nhập Từ — Đến tự do */}
             <div className="mb-price-inputs">
-              {[0, 1].map((idx) => (
-                <label key={idx} className="mb-price-field" htmlFor={`mb-price-input-${idx}`}>
-                  <small>{idx === 0 ? 'Từ' : 'Đến'}</small>
-                  <input
-                    id={`mb-price-input-${idx}`}
-                    type="text"
-                    inputMode="numeric"
-                    value={priceInputValue(idx)}
-                    onChange={(e) => handlePriceType(idx, e.target.value)}
-                    onBlur={() => commitPrice(idx)}
-                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                    aria-label={idx === 0 ? 'Giá tối thiểu' : 'Giá tối đa'}
-                  />
-                  <span>đ</span>
-                </label>
-              ))}
+              <label className="mb-price-field" htmlFor="mb-price-input-min">
+                <small>Từ</small>
+                <input
+                  id="mb-price-input-min"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={minPriceInput}
+                  onChange={(e) => handleMinPriceChange(e.target.value)}
+                  onBlur={handlePriceBlur}
+                  aria-label="Giá tối thiểu"
+                />
+                <span>đ</span>
+              </label>
+
+              <label className="mb-price-field" htmlFor="mb-price-input-max">
+                <small>Đến</small>
+                <input
+                  id="mb-price-input-max"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Không giới hạn"
+                  value={maxPriceInput}
+                  onChange={(e) => handleMaxPriceChange(e.target.value)}
+                  onBlur={handlePriceBlur}
+                  aria-label="Giá tối đa"
+                />
+                <span>đ</span>
+              </label>
             </div>
 
             <div className="mb-label-row">
@@ -1111,13 +1392,7 @@ function MapBooking() {
                 {hasTimeFilter ? `${fromTime || '00:00'} – ${toTime || '24:00'}` : 'Mọi khung giờ'}
               </span>
             </div>
-            <div className="mb-price-inputs" style={{ gridTemplateColumns: '1fr' }}>
-              <label className="mb-price-field" htmlFor="mb-slot-date">
-                <small>Ngày</small>
-                <input id="mb-slot-date" type="date" value={slotDate} min={vnToday} onChange={(e) => setSlotDate(e.target.value || vnToday)} aria-label="Ngày chơi" />
-              </label>
-            </div>
-            <div className="mb-price-inputs" style={{ marginTop: 8 }}>
+            <div className="mb-price-inputs">
               <label className="mb-price-field" htmlFor="mb-from-time">
                 <small>Từ</small>
                 <input id="mb-from-time" type="time" step="1800" value={fromTime} onChange={(e) => setFromTime(e.target.value)} aria-label="Giờ bắt đầu" />
@@ -1147,24 +1422,29 @@ function MapBooking() {
                     fontSize: '11px',
                     fontWeight: 700,
                   }}
-                  title="Dữ liệu kết nối trực tiếp từ Backend API GET /api/v1/facilities"
+                  title="Dữ liệu đồng bộ trực tiếp từ hệ thống"
                 >
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-                  Live API ({apiFacilities.length} cụm sân)
+                  Trực tuyến ({apiFacilities.length} cụm sân)
                 </span>
               )}
             </div>
             <small>{filteredCourts.length} cụm sân khả dụng</small>
           </div>
 
-          {filteredCourts.length === 0 && (
+          {isLoadingApi ? (
+            <div className="mb-card mb-empty">
+              <span className="material-symbols-outlined mb-spin" style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>sync</span>
+              Đang kết nối và tải danh sách sân thể thao...
+            </div>
+          ) : filteredCourts.length === 0 ? (
             <div className="mb-card mb-empty">
               <span className="material-symbols-outlined">search_off</span>
               {hasTimeFilter
                 ? 'Không còn sân trống trong khung giờ này. Hãy thử ngày hoặc khung giờ khác.'
                 : 'Không tìm thấy sân phù hợp. Hãy thử từ khóa khác hoặc mở rộng tầm giá.'}
             </div>
-          )}
+          ) : null}
 
           {filteredCourts.map((court, i) => {
             const active = court.id === selectedCourt?.id
@@ -1230,19 +1510,7 @@ function MapBooking() {
                   <span className="mb-price">
                     {court.price.toLocaleString('vi-VN')} đ<small>/h</small>
                   </span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      type="button"
-                      className="mb-btn mb-btn--ghost"
-                      style={{ fontSize: '11px', padding: '5px 10px' }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate('/court', { state: { facility: court.rawFacility || court, facilityId: court.id } })
-                      }}
-                      title="Xem trang chi tiết cụm sân, hình ảnh và sân con"
-                    >
-                      Chi Tiết
-                    </button>
+                  <div>
                     {active ? (
                       <button type="button" className="mb-btn mb-btn--primary">
                         Đang Chọn
@@ -1336,7 +1604,15 @@ function MapBooking() {
           <section className="mb-card" aria-label="Lịch sân">
             <div className="mb-slots-head">
               <div>
-                <h2>Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}</h2>
+                <h2>
+                  Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}{' '}
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
+                    2 tiếng / ca
+                  </span>
+                </h2>
+                <p className="mb-slots-sub-desc">
+                  Xem lịch trống và đặt sân theo ngày: <strong>{selectedDateInfo.fullLabel}</strong>
+                </p>
               </div>
               <div className="mb-legend">
                 <span>
@@ -1351,10 +1627,63 @@ function MapBooking() {
               </div>
             </div>
 
-            {!selectedCourt ? (
+            {/* Thanh chọn ngày trực quan: Hôm nay, Ngày mai, và các ngày tiếp theo */}
+            <div className="mb-date-bar">
+              <div className="mb-date-scroll">
+                {upcomingDays.map((d) => {
+                  const isSelected = d.dateStr === selectedDateStr
+                  return (
+                    <button
+                      key={d.dateStr}
+                      type="button"
+                      className={`mb-date-pill ${isSelected ? 'is-active' : ''}`}
+                      onClick={() => {
+                        setSelectedDateStr(d.dateStr)
+                        setSelectedSlotId(null)
+                        setDetailSlot(null)
+                      }}
+                    >
+                      <span className="mb-date-pill-day">{d.dayOfWeek}</span>
+                      <span className="mb-date-pill-num">{d.dayNum}</span>
+                      <span className="mb-date-pill-month">Tháng {d.monthNum}</span>
+                      {d.isTomorrow && <span className="mb-date-pill-tag">Ngày mai</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <label className="mb-date-custom-picker" title="Chọn ngày khác từ lịch">
+                <span className="material-symbols-outlined">calendar_month</span>
+                <span>Chọn lịch</span>
+                <input
+                  type="date"
+                  className="mb-date-native-input"
+                  value={selectedDateStr}
+                  min={todayIsoDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDateStr(e.target.value)
+                      setSelectedSlotId(null)
+                      setDetailSlot(null)
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
+            {isLoadingSlots ? (
+              <div className="mb-slots-loading">
+                <div className="mb-spinner" style={{ width: 22, height: 22, borderWidth: 2 }} />
+                <span>Đang kiểm tra lịch trống ngày {selectedDateInfo.fullLabel}...</span>
+              </div>
+            ) : !selectedCourt ? (
               <div className="mb-empty">
                 <span className="material-symbols-outlined">event_busy</span>
                 Chọn một cụm sân để xem lịch trống.
+              </div>
+            ) : slots.length === 0 ? (
+              <div className="mb-empty">
+                <span className="material-symbols-outlined">event_busy</span>
+                Ngày {selectedDateInfo.fullLabel} hiện chưa có ca trống nào khả dụng. Vui lòng chọn ngày khác.
               </div>
             ) : (
               <div className="mb-slots">
@@ -1400,7 +1729,7 @@ function MapBooking() {
                         {isSelected ? (
                           <span className="material-symbols-outlined mb-slot-check-ic">check</span>
                         ) : (
-                          <span className="mb-slot-chip-avail">Trống</span>
+                          <span className="mb-slot-chip-avail">Trống • 2h</span>
                         )}
                       </div>
                       <div className="mb-slot-compact-sub">
@@ -1506,7 +1835,7 @@ function MapBooking() {
                           >
                             {isBooked ? 'Đã kín' : isSelected ? 'Đang chọn' : 'Trống'}
                           </span>
-                          <span className="mb-subcourt-rate">{formatVnd(selectedSlot.price)}/sân</span>
+                          <span className="mb-subcourt-rate">{formatVnd(court.price || selectedSlot?.price || selectedCourt.price)}/sân</span>
                         </div>
                       </div>
                     )
@@ -1534,7 +1863,7 @@ function MapBooking() {
                 <p>
                   <span className="material-symbols-outlined">schedule</span>
                   {selectedSlot
-                    ? `${selectedSlot.start} - ${selectedSlot.end} (${dayLabel}, ${todayStr}) • ${formatHours(
+                    ? `${selectedSlot.start} - ${selectedSlot.end} (${selectedDateInfo.fullLabel}) • ${formatHours(
                         selectedSlot.hours
                       )} • ${selectedCourt?.name}`
                     : 'Vui lòng chọn một khung giờ còn trống trên lưới lịch'}
@@ -1629,6 +1958,12 @@ function MapBooking() {
               </div>
 
               <div className="mb-slot-modal-info-grid">
+                <div className="mb-slot-modal-info-row">
+                  <span className="material-symbols-outlined">event</span>
+                  <div>
+                    <strong>Ngày thi đấu:</strong> {selectedDateInfo.fullLabel}
+                  </div>
+                </div>
                 <div className="mb-slot-modal-info-row">
                   <span className="material-symbols-outlined">stadium</span>
                   <div>

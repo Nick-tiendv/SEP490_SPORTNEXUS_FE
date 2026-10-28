@@ -521,6 +521,48 @@
 }
 
 /* ---------- Tầm giá / giờ ---------- */
+.mb-price-readout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--mb-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f0f3ee;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mb-price-readout-btn:hover {
+  background: #e2e8df;
+  color: var(--mb-ink);
+  transform: translateY(-1px);
+}
+.mb-price-readout-btn.is-active {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+.mb-price-readout-btn.is-filtered {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.mb-price-reset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  background: rgba(4, 120, 87, 0.15);
+  border-radius: 4px;
+  margin-left: 4px;
+  color: #047857;
+}
+
 .mb-price-readout {
   font-size: 12px; font-weight: 700; color: var(--mb-muted);
   padding: 3px 9px; border-radius: 999px; background: #f0f3ee;
@@ -1260,7 +1302,168 @@
 .mb-slots-head h2 { margin: 0; font-size: 16px; font-weight: 800; color: var(--mb-ink); }
 .mb-legend { display: flex; gap: 14px; font-size: 12px; color: var(--mb-muted); font-weight: 600; }
 .mb-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.mb-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.mb-slots-sub-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--mb-muted);
+}
+.mb-slots-sub-desc strong {
+  color: #15803d;
+  font-weight: 700;
+}
+
+/* Thanh chọn ngày trực quan: Hôm nay, Ngày mai, và các ngày tới */
+.mb-date-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 8px;
+  background: #f8faf6;
+  border: 1px solid #e2e8df;
+  border-radius: 12px;
+}
+
+.mb-date-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+.mb-date-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.mb-date-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.mb-date-pill {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1.5px solid #dfe5dc;
+  background: #ffffff;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+.mb-date-pill:hover {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+  transform: translateY(-1px);
+}
+.mb-date-pill.is-active {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+  border-color: #15803d;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.28);
+}
+.mb-date-pill.is-active .mb-date-pill-day,
+.mb-date-pill.is-active .mb-date-pill-num,
+.mb-date-pill.is-active .mb-date-pill-month {
+  color: #ffffff !important;
+}
+
+.mb-date-pill-day {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+.mb-date-pill-num {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #111827;
+}
+.mb-date-pill-month {
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-top: 1px;
+}
+
+.mb-date-pill-tag {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  background: #f59e0b;
+  color: #78350f;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.2px;
+}
+.mb-date-pill.is-active .mb-date-pill-tag {
+  background: #ffffff;
+  color: #15803d;
+}
+
+.mb-date-custom-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1.5px solid #dfe5dc;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.mb-date-custom-picker:hover {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+.mb-date-custom-picker .material-symbols-outlined {
+  font-size: 18px;
+  color: #15803d;
+}
+.mb-date-native-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.mb-slots-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 20px;
+  background: #f8faf6;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #4b5563;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
 
 .mb-slots {
   display: grid;

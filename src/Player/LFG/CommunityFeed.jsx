@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getLfgs,
   getMyLfgCards,
@@ -1651,7 +1651,7 @@ function CommunityFeed() {
                                               disabled={isLoadingThis}
                                               onClick={() => handleRemoveGroupFriend(card.id, p.userId, p.name)}
                                               className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold flex items-center gap-1 border border-amber-200 cursor-pointer disabled:opacity-50"
-                                              title="Xóa bạn khỏi nhóm (DELETE /api/v1/lfgs/{cardId}/group/{friendId})"
+                                              title="Xóa bạn khỏi nhóm"
                                             >
                                               <span className="material-symbols-outlined text-[14px]">group_remove</span>
                                               <span>Xóa bạn nhóm</span>
@@ -2033,7 +2033,7 @@ function CommunityFeed() {
                                 type="button"
                                 onClick={() => setEditingPost(post)}
                                 className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                                title="Sửa bài viết (PUT /api/v1/community/posts/{postId})"
+                                title="Sửa bài viết"
                               >
                                 <span className="material-symbols-outlined text-[17px]">edit</span>
                               </button>
@@ -2041,7 +2041,7 @@ function CommunityFeed() {
                                 type="button"
                                 onClick={() => handleDeleteCommunityPost(postId)}
                                 className="p-1.5 rounded-lg text-gray-400 hover:text-red-700 hover:bg-red-50 transition-colors"
-                                title="Xóa bài viết (DELETE /api/v1/community/posts/{postId})"
+                                title="Xóa bài viết"
                               >
                                 <span className="material-symbols-outlined text-[17px]">delete</span>
                               </button>
@@ -2126,7 +2126,7 @@ function CommunityFeed() {
                                         type="button"
                                         onClick={() => handleDeleteComment(postId, cmt.id)}
                                         className="text-gray-400 hover:text-red-600 transition-colors"
-                                        title="Xóa bình luận (DELETE /api/v1/community/comments/{commentId})"
+                                        title="Xóa bình luận"
                                       >
                                         <span className="material-symbols-outlined text-[15px]">close</span>
                                       </button>
