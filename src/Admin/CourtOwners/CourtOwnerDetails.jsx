@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { X, Building2, ExternalLink, Pencil, Ban, Check, Trash2, ShieldCheck } from 'lucide-react'
+import { X, Building2, ExternalLink, Ban, Check, Trash2, ShieldCheck } from 'lucide-react'
 import { UserAvatar, AccountStatus } from '../Users/UserDetails.jsx'
 import { FacilityStatus } from '../Facilities/FacilityDetails.jsx'
 import { VerificationBadge } from './OwnerVerifications.jsx'
@@ -9,7 +9,7 @@ import { getOwnerMonthSummary } from '../../api/admin/ownerApi.js'
 
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
 
-export default function CourtOwnerDetails({ owner, verification, onKyc, isSelf, onClose, onEdit, onSuspend, onDelete }) {
+export default function CourtOwnerDetails({ owner, verification, onKyc, isSelf, onClose, onSuspend, onDelete }) {
   const [summary, setSummary] = useState({ id: '', bookings: undefined, revenue: undefined, error: '' })
   useEffect(() => {
     let cancelled = false
@@ -28,6 +28,6 @@ export default function CourtOwnerDetails({ owner, verification, onKyc, isSelf, 
       <section><h3 className="owners-section-label">Hiệu quả kinh doanh</h3><div className="owners-performance">{[["Cơ sở", owner.facilities.length], ["Tổng số sân", courts], ["Lượt đặt sân tháng này", summaryLoading ? '…' : number(summary.bookings)], ["Doanh thu tháng này", summaryLoading ? '…' : Number.isFinite(summary.revenue) ? `${number(summary.revenue)} ₫` : '—']].map(([label, value]) => <div key={label}><small>{label}</small><strong>{value}</strong></div>)}</div>{summary.error && <p className="users-form-error">Không tải được số liệu đặt sân: {summary.error}</p>}</section>
       <section><div className="owners-facilities-heading"><h3 className="owners-section-label">Cơ sở trực thuộc ({owner.facilities.length})</h3></div><div className="owners-facilities">{owner.facilities.map(facility => <article key={facility.id}><div><h4>{facility.name}</h4><FacilityStatus status={facility.status} /></div><p>{[facility.location, facility.courts ? `${facility.courts} sân` : '', facility.sports && `(${facility.sports})`].filter(Boolean).join(' • ')}</p><footer><span>{facility.rating ? `★ ${facility.rating}` : "Chưa có điểm đánh giá"}</span><Link to="/admin/facilities">Xem cơ sở <ExternalLink size={11} /></Link></footer></article>)}{!owner.facilities.length && <p className="owners-empty-facilities">Chủ sân chưa có cơ sở nào.</p>}</div></section>
     </div>
-    <footer className="owners-details-actions"><button className={`users-button ${owner.status === 'Suspended' ? '' : 'users-danger'}`} onClick={onSuspend} disabled={isSelf}>{owner.status === 'Suspended' ? <Check size={13} /> : <Ban size={13} />}{owner.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button><button className="users-button" onClick={onEdit}><Pencil size={13} />Chỉnh sửa</button><button className="users-button users-danger" onClick={onDelete} disabled={isSelf}><Trash2 size={13} />Xóa</button></footer>
+    <footer className="owners-details-actions"><button className={`users-button ${owner.status === 'Suspended' ? '' : 'users-danger'}`} onClick={onSuspend} disabled={isSelf}>{owner.status === 'Suspended' ? <Check size={13} /> : <Ban size={13} />}{owner.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button><button className="users-button users-danger" onClick={onDelete} disabled={isSelf}><Trash2 size={13} />Xóa</button></footer>
   </aside>
 }

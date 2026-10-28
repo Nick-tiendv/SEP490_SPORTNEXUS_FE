@@ -260,17 +260,8 @@ function SplitPayment() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupResult, setLookupResult] = useState(null)
   const [lookupError, setLookupError] = useState(null)
-  // Bạn chơi được thêm bằng cách tra cứu số điện thoại (GET /api/accounts/lookup).
-  // Mặc định khởi tạo sẵn 1 bạn chơi để chia tiền hợp lý (ca thể thao tối thiểu 2 người: Chủ nhóm + 1 bạn)
-  const [invitedFriends, setInvitedFriends] = useState(() => [
-    {
-      id: DEFAULT_SAMPLE_FRIENDS[0].id,
-      fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
-      phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
-      email: DEFAULT_SAMPLE_FRIENDS[0].email,
-      status: 'WAITING',
-    },
-  ])
+  // Bạn chơi chỉ được thêm bằng cách tra cứu số điện thoại thật (GET /api/accounts/lookup), không tạo sẵn người mẫu
+  const [invitedFriends, setInvitedFriends] = useState([])
 
   // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
   const [bookingStatus, setBookingStatus] = useState('PAID')
@@ -364,45 +355,9 @@ function SplitPayment() {
   const displaySplitAmount = Math.round(totalAmount / displaySplitCount)
   const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
 
-  // Chọn chế độ thanh toán (khi chọn split mà chưa có bạn bè thì tự gợi ý 1 bạn)
+  // Chọn chế độ thanh toán
   const handleSelectPaymentMode = (mode) => {
     setPaymentMode(mode)
-    if (mode === 'split' && invitedFriends.length === 0) {
-      setInvitedFriends([
-        {
-          id: DEFAULT_SAMPLE_FRIENDS[0].id,
-          fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
-          phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
-          email: DEFAULT_SAMPLE_FRIENDS[0].email,
-          status: 'WAITING',
-        },
-      ])
-    }
-  }
-
-  // Chia nhanh theo số lượng người (2 người / 4 người)
-  const handlePresetSplit = (count) => {
-    if (count === 2) {
-      setInvitedFriends([
-        {
-          id: DEFAULT_SAMPLE_FRIENDS[0].id,
-          fullName: DEFAULT_SAMPLE_FRIENDS[0].fullName,
-          phone: DEFAULT_SAMPLE_FRIENDS[0].phone,
-          email: DEFAULT_SAMPLE_FRIENDS[0].email,
-          status: 'WAITING',
-        },
-      ])
-    } else if (count === 4) {
-      setInvitedFriends(
-        DEFAULT_SAMPLE_FRIENDS.slice(0, 3).map((f) => ({
-          id: f.id,
-          fullName: f.fullName,
-          phone: f.phone,
-          email: f.email,
-          status: 'WAITING',
-        }))
-      )
-    }
   }
 
   // Handle Copy to clipboard
@@ -456,9 +411,13 @@ function SplitPayment() {
   // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
   const handleSearchFriend = async (e) => {
     if (e) e.preventDefault()
-    const cleanPhone = lookupPhone.trim()
+    const cleanPhone = lookupPhone.replace(/[\s.-]/g, '')
     if (!cleanPhone) {
       setLookupError('Vui lòng nhập số điện thoại bạn bè cần tìm.')
+      return
+    }
+    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(cleanPhone)) {
+      setLookupError('Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).')
       return
     }
     setLookupLoading(true)
@@ -467,19 +426,24 @@ function SplitPayment() {
     try {
       const data = await lookupAccountByPhone(cleanPhone)
       if (data) {
+        const id = data.id || data.userId
+        if (invitedFriends.some((f) => f.id === id)) {
+          setLookupError('Người này đã có trong danh sách chia tiền.')
+          return
+        }
         setLookupResult({
-          id: data.id || data.userId,
-          fullName: data.fullName || data.name || data.userName || `Bạn chơi (${cleanPhone})`,
-          phone: data.phone || cleanPhone,
-          email: data.email || `${cleanPhone}@sportnexus.vn`,
+          id,
+          fullName: data.fullName || data.name || data.userName || 'Bạn chơi',
+          // BE chỉ trả SĐT đã che (phoneMasked); không hiển thị lại số người dùng vừa gõ
+          phone: data.phoneMasked || data.phone || '',
+          avatarUrl: data.avatarUrl || null,
         })
       } else {
         setLookupError('Không tìm thấy tài khoản với số điện thoại này trên hệ thống.')
       }
     } catch (err) {
       console.warn('[SplitPayment] lookupAccountByPhone notice:', err)
-      const errMessage = err?.message || 'Không tìm thấy tài khoản.'
-      setLookupError(`Không tìm thấy tài khoản (${errMessage}). Bạn có thể chọn nhanh từ danh sách bạn bè gợi ý bên dưới.`)
+      setLookupError(err?.message || 'Không tìm thấy tài khoản với số điện thoại này trên hệ thống.')
     } finally {
       setLookupLoading(false)
     }
@@ -651,25 +615,32 @@ function SplitPayment() {
       ? customReasonText.trim() || 'Lý do khác'
       : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
 
-    const hoursLeft = getHoursUntilMatch()
-    const isEligibleRefund = hoursLeft >= 24
-
     setIsCanceling(true)
     setCancelError(null)
     try {
       // Đơn đang dùng cho kèo LFG không hủy trực tiếp được: phải hủy kèo (POST /api/v1/lfgs/{cardId}/cancel)
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h), không tự đoán ở FE
       const isLfg = Boolean(state.isLfg || state.cardId)
+      let refundAmount = 0
       if (isLfg && state.cardId) {
-        await cancelLfg(state.cardId, { reason: finalReason })
+        const result = await cancelLfg(state.cardId, { reason: finalReason })
+        refundAmount = Number(result?.hostRefund) || 0
       } else if (isValidGuid(bookingId)) {
-        await cancelBooking(bookingId, {
+        const result = await cancelBooking(bookingId, {
           reasonCode: selectedReasonCode,
           reason: finalReason,
         })
+        refundAmount = Number(result?.refundAmount) || 0
+      } else {
+        throw new Error('Không tìm thấy đơn đặt sân để hủy.')
       }
+      const isEligibleRefund = refundAmount > 0
 
       // Xử lý hoàn tiền
-      if (isEligibleRefund) getWallet().catch(() => {})
+      if (isEligibleRefund) {
+        getWallet().catch(() => {})
+        window.dispatchEvent(new Event('escrow_balance_updated'))
+      }
 
       setBookingStatus('CANCELLED')
       setShowCancelModal(false)
@@ -685,7 +656,7 @@ function SplitPayment() {
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
             message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? `Hủy trước ca >= 24h: Đã hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow.`
+              ? `Hủy trước ca >= 24h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
               : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
             time: 'Vừa xong',
             unread: true,
@@ -698,7 +669,7 @@ function SplitPayment() {
       toast.success(
         `Đã hủy đơn đặt sân thành công!\n\n${
           isEligibleRefund
-            ? `💰 Bạn đã được hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
+            ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
             : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
         }`
       )
@@ -1452,40 +1423,9 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     </span>
                   </div>
 
-                  {/* Preset chia nhanh theo số người */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Chọn nhanh số suất chia:</span>
-                    <button
-                      type="button"
-                      className="sp-sample-pill"
-                      style={{
-                        background: invitedFriends.length === 1 ? '#DCFCE7' : '#F3F4F6',
-                        color: invitedFriends.length === 1 ? '#15803D' : '#374151',
-                        borderColor: invitedFriends.length === 1 ? '#86EFAC' : '#E5E7EB',
-                        fontWeight: 700,
-                      }}
-                      onClick={() => handlePresetSplit(2)}
-                    >
-                      👥 Chia 2 người ({formatVnd(Math.round(totalAmount / 2))} / người)
-                    </button>
-                    <button
-                      type="button"
-                      className="sp-sample-pill"
-                      style={{
-                        background: invitedFriends.length === 3 ? '#DCFCE7' : '#F3F4F6',
-                        color: invitedFriends.length === 3 ? '#15803D' : '#374151',
-                        borderColor: invitedFriends.length === 3 ? '#86EFAC' : '#E5E7EB',
-                        fontWeight: 700,
-                      }}
-                      onClick={() => handlePresetSplit(4)}
-                    >
-                      👥 Chia 4 người ({formatVnd(Math.round(totalAmount / 4))} / người)
-                    </button>
-                  </div>
-
                   {invitedFriends.length === 0 && (
                     <div style={{ padding: '10px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '10px', color: '#92400E', fontSize: '12.5px', marginBottom: '12px' }}>
-                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng bấm chọn bạn bè gợi ý bên dưới hoặc nhập số điện thoại để cùng chia tiền (tối thiểu 2 người).
+                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng nhập số điện thoại của bạn chơi để cùng chia tiền (tối thiểu 2 người).
                     </div>
                   )}
 
@@ -1495,8 +1435,10 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       type="tel"
                       className="sp-phone-search-input"
                       placeholder="Nhập số điện thoại bạn bè (vd: 0912345678)..."
+                      inputMode="numeric"
+                      maxLength={12}
                       value={lookupPhone}
-                      onChange={(e) => setLookupPhone(e.target.value)}
+                      onChange={(e) => { setLookupPhone(e.target.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '')); setLookupError(null) }}
                     />
                     <button
                       type="submit"

@@ -268,16 +268,18 @@ function CheckInQR() {
       ? customReasonText.trim() || 'Lý do khác'
       : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
 
-    const hoursLeft = getHoursUntilMatch()
-    const isEligibleRefund = hoursLeft >= 24
-
     try {
       const bookingId = ticketData?.id
       if (!bookingId) throw new Error('Không tìm thấy đơn đặt sân để hủy.')
-      await cancelBooking(bookingId, {
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h theo giờ server), không tự đoán ở FE
+      const result = await cancelBooking(bookingId, {
         reasonCode: selectedReasonCode,
         reason: finalReason,
       })
+      const refundAmount = Number(result?.refundAmount) || 0
+      const isEligibleRefund = refundAmount > 0
+      const refundText = `${refundAmount.toLocaleString('vi-VN')} đ`
+      const facilityLabel = ticketData?.venueName && ticketData.venueName !== '—' ? ticketData.venueName : 'sân'
 
       // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
       if (isEligibleRefund) window.dispatchEvent(new Event('escrow_balance_updated'))
@@ -294,9 +296,9 @@ function CheckInQR() {
             color: '#DC2626',
             bg: '#FEE2E2',
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
-            message: `Đơn tại SportNexus Arena Q.7 đã được hủy thành công. Lý do: ${finalReason}.`,
+            message: `Đơn tại ${facilityLabel} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? 'Hủy trước ca >= 24h: Đã hoàn 100% (330.000 đ) vào Ví Escrow.'
+              ? `Hủy trước ca >= 24h: Đã hoàn ${refundText} vào Ví Escrow.`
               : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
             time: 'Vừa xong',
             unread: true,
@@ -308,7 +310,7 @@ function CheckInQR() {
 
       setToastMessage(
         isEligibleRefund
-          ? '✅ Đã hủy đơn thành công! Hoàn 100% (330.000 đ) vào ví Escrow.'
+          ? `✅ Đã hủy đơn thành công! Hoàn ${refundText} vào ví Escrow.`
           : '⚠️ Đã hủy đơn thành công. Hủy dưới 24h: Không được hoàn tiền theo quy định.'
       )
       setTimeout(() => setToastMessage(null), 5000)

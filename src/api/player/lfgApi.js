@@ -172,10 +172,13 @@ export async function getJoinedLfgs() {
 export async function claimLfgSlot(cardId, payload = {}) {
   if (!cardId) throw new Error('cardId không được để trống')
   try {
+    // BE chỉ nhận friendPayMode SELF | PAYER và side A | B (bỏ trống = để hệ thống tự xếp phe)
+    const payMode = String(payload.friendPayMode || '').toLowerCase()
+    const side = String(payload.side || '').toUpperCase()
     const bodyPayload = {
       friendIds: payload.friendIds || [],
-      friendPayMode: payload.friendPayMode || 'me',
-      side: payload.side || 'any',
+      friendPayMode: payMode === 'me' || payMode === 'payer' ? 'PAYER' : 'SELF',
+      side: side === 'A' || side === 'B' ? side : undefined,
     }
     const response = await apiClient.post(`${LFGS_ENDPOINT}/${cardId}/claim`, bodyPayload)
     const body = response.data

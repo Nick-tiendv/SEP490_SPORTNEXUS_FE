@@ -12,7 +12,13 @@ import {
   getUserProfileContext,
   syncFacilitiesWithAIChat,
 } from './aiBookingData.js'
-import { sendChatMessage } from '../../../api/player/aiApi.js'
+import {
+  getAiSessionMessages,
+  getStoredAiSessionId,
+  mapAiHistoryToMessages,
+  sendChatMessage,
+  storeAiSessionId,
+} from '../../../api/player/aiApi.js'
 import { getFacilities } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import './AIChatModal.css'
@@ -39,7 +45,6 @@ function AIChatModal({
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const [currentSessionId, setCurrentSessionId] = useState(null)
   const [toastMessage, setToastMessage] = useState(null)
   const [isListening, setIsListening] = useState(false)
 
@@ -99,13 +104,37 @@ function AIChatModal({
             updatedAt: nowStr,
           }
           setUserLocation(newLoc)
-          setMessages([buildWelcomeMessage(newLoc)])
+          // Chỉ cập nhật lời chào, không xoá cuộc trò chuyện đang có
+          setMessages((prev) =>
+            prev.length === 1 && prev[0].sender !== 'user' ? [buildWelcomeMessage(newLoc)] : prev
+          )
         },
         () => {
           // Giữ mặc định nếu không cấp quyền
         },
         { enableHighAccuracy: true, timeout: 5000 }
       )
+    }
+  }, [isOpen])
+
+  // Đồng bộ lịch sử từ server mỗi khi mở modal (phiên có thể đã thay đổi ở trang /ai-chat)
+  useEffect(() => {
+    if (!isOpen) return
+    const storedId = getStoredAiSessionId()
+    if (!storedId) return
+    let cancelled = false
+    getAiSessionMessages(storedId)
+      .then((items) => {
+        if (cancelled) return
+        const mapped = mapAiHistoryToMessages(items)
+        if (mapped.length > 0) setMessages(mapped)
+      })
+      .catch(() => {
+        // Phiên không còn tồn tại → bắt đầu phiên mới ở lần gửi tiếp theo
+        if (!cancelled) storeAiSessionId(null)
+      })
+    return () => {
+      cancelled = true
     }
   }, [isOpen])
 
@@ -224,6 +253,8 @@ function AIChatModal({
     }
 
     try {
+      // Đọc phiên dùng chung ngay lúc gửi để luôn khớp với trang /ai-chat
+      const currentSessionId = getStoredAiSessionId()
       const aiResult = await sendChatMessage({
         message: text,
         sessionId: currentSessionId || undefined,
@@ -232,7 +263,7 @@ function AIChatModal({
       })
 
       if (aiResult?.sessionId && !currentSessionId) {
-        setCurrentSessionId(aiResult.sessionId)
+        storeAiSessionId(aiResult.sessionId)
       }
 
       const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || ''
@@ -418,6 +449,8 @@ function AIChatModal({
       const welcome = buildWelcomeMessage(newLoc)
       setMessages([welcome])
       setInputValue('')
+      // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
+      storeAiSessionId(null)
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }
 

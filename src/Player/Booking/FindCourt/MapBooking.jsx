@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
-import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -587,6 +587,43 @@ function MapBooking() {
     return () => { isMounted = false }
   }, [])
 
+  // Lọc khung giờ còn trống theo ngày đang chọn. BE: GET /api/v1/facilities/search?date=&fromTime=&toTime=
+  const [fromTime, setFromTime] = useState('')
+  const [toTime, setToTime] = useState('')
+  const hasTimeFilter = Boolean(fromTime || toTime)
+  const timeFilterError = fromTime && toTime && fromTime >= toTime ? 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.' : ''
+  // Kết quả lọc giờ gần nhất; freeFacilityIds = null khi không lọc theo giờ, Set = các cơ sở còn ca trống trong khung giờ
+  const [freeResult, setFreeResult] = useState({ ids: null, counts: {} })
+  const freeFacilityIds = hasTimeFilter && !timeFilterError ? freeResult.ids : null
+  const freeSlotCounts = freeResult.counts
+  useEffect(() => {
+    if (!hasTimeFilter || timeFilterError) return
+    let isMounted = true
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchFacilities({ date: selectedDateStr, fromTime: fromTime || undefined, toTime: toTime || undefined, pageSize: 50 })
+        if (!isMounted) return
+        const items = res?.items || []
+        const transformed = items.map(transformFacilityToCourt).filter(Boolean)
+        setApiFacilities((prev) => {
+          const foundIds = new Set(transformed.map((t) => t.id))
+          return [...transformed, ...prev.filter((p) => !foundIds.has(p.id))]
+        })
+        setFreeResult({
+          ids: new Set(items.map((i) => String(i.id))),
+          counts: Object.fromEntries(items.map((i) => [String(i.id), i.availableSlotCount ?? 0])),
+        })
+      } catch (e) {
+        console.warn('MapBooking: Lọc khung giờ trống thất bại:', e)
+        if (isMounted) setFreeResult({ ids: new Set(), counts: {} })
+      }
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      isMounted = false
+    }
+  }, [hasTimeFilter, timeFilterError, selectedDateStr, fromTime, toTime])
+
   // Tìm kiếm cơ sở trực tiếp bằng API GET /api/v1/facilities/search khi người chơi gõ từ khóa
   useEffect(() => {
     if (!query || query.trim().length < 2) return
@@ -714,12 +751,13 @@ function MapBooking() {
   }, [])
   const toggleAmenity = (id) => setSelectedAmenities((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   const filteredCourts = useMemo(() => {
-    if (!selectedAmenities.length) return baseFilteredCourts
-    return baseFilteredCourts.filter((c) => {
+    const byTime = freeFacilityIds ? baseFilteredCourts.filter((c) => freeFacilityIds.has(String(c.id))) : baseFilteredCourts
+    if (!selectedAmenities.length) return byTime
+    return byTime.filter((c) => {
       const ids = (c.amenities || []).map((a) => String(a.id ?? a.amenityId ?? ''))
       return selectedAmenities.every((id) => ids.includes(id))
     })
-  }, [baseFilteredCourts, selectedAmenities])
+  }, [baseFilteredCourts, selectedAmenities, freeFacilityIds])
 
   // TỰ ĐỘNG ĐỒNG BỘ HIỂN THỊ TRÊN BẢN ĐỒ KHI SEARCH HOẶC LỌC GIÁ
   useEffect(() => {
@@ -910,7 +948,13 @@ function MapBooking() {
 
     if (isMatchingCurrentCourt) {
       const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
-      return grouped2h.map((s) => {
+      // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
+      const inWindow = (s) => {
+        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
+        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
+        return (!fromTime || start >= fromTime) && (!toTime || (end === '00:00' ? '24:00' : end) <= toTime)
+      }
+      return grouped2h.filter(inWindow).map((s) => {
         const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
         const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
         const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
@@ -929,7 +973,7 @@ function MapBooking() {
       })
     }
     return buildSlots(selectedCourt, selectedDateInfo.isToday, currentSubCourtPrice)
-  }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice])
+  }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice, fromTime, toTime])
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId && s.status !== 'booked') || null
 
@@ -1061,6 +1105,8 @@ function MapBooking() {
   const handleClearFilters = () => {
     setQuery('')
     handleSelectAllPrices()
+    setFromTime('')
+    setToTime('')
     selectAllSports()
   }
 
@@ -1119,7 +1165,6 @@ function MapBooking() {
 
 
   const sportOf = (key) => SPORTS_LIST.find((s) => s.key === key)
-  const todayStr = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   return (
     <div className="mb-page">
@@ -1341,6 +1386,23 @@ function MapBooking() {
               </label>
             </div>
 
+            <div className="mb-label-row">
+              <span className="mb-label">Khung giờ còn trống</span>
+              <span className={`mb-price-readout ${hasTimeFilter ? 'is-on' : ''}`}>
+                {hasTimeFilter ? `${fromTime || '00:00'} – ${toTime || '24:00'}` : 'Mọi khung giờ'}
+              </span>
+            </div>
+            <div className="mb-price-inputs">
+              <label className="mb-price-field" htmlFor="mb-from-time">
+                <small>Từ</small>
+                <input id="mb-from-time" type="time" step="1800" value={fromTime} onChange={(e) => setFromTime(e.target.value)} aria-label="Giờ bắt đầu" />
+              </label>
+              <label className="mb-price-field" htmlFor="mb-to-time">
+                <small>Đến</small>
+                <input id="mb-to-time" type="time" step="1800" value={toTime} onChange={(e) => setToTime(e.target.value)} aria-label="Giờ kết thúc" />
+              </label>
+            </div>
+            {timeFilterError && <p role="alert" style={{ color: '#dc2626', fontSize: 12, margin: '6px 0 0' }}>{timeFilterError}</p>}
           </section>
 
           {/* Court list */}
@@ -1378,7 +1440,9 @@ function MapBooking() {
           ) : filteredCourts.length === 0 ? (
             <div className="mb-card mb-empty">
               <span className="material-symbols-outlined">search_off</span>
-              Không tìm thấy sân phù hợp. Hãy thử từ khóa khác hoặc mở rộng tầm giá.
+              {hasTimeFilter
+                ? 'Không còn sân trống trong khung giờ này. Hãy thử ngày hoặc khung giờ khác.'
+                : 'Không tìm thấy sân phù hợp. Hãy thử từ khóa khác hoặc mở rộng tầm giá.'}
             </div>
           ) : null}
 
@@ -1425,6 +1489,11 @@ function MapBooking() {
                       <span className="mb-tag">
                         {sport?.emoji} {sport?.label}
                       </span>
+                      {freeFacilityIds && freeSlotCounts[String(court.id)] > 0 && (
+                        <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+                          {freeSlotCounts[String(court.id)]} ca trống
+                        </span>
+                      )}
                       {Array.isArray(court.amenities) && court.amenities.slice(0, 2).map((a) => (
                         <span key={a.id || a.name} className="mb-tag" style={{ background: '#f1f5f9', color: '#475569' }}>
                           {a.name}
