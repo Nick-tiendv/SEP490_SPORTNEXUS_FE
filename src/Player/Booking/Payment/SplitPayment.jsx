@@ -16,6 +16,7 @@ import {
   getCancellationReasons,
   cancelBooking,
   getBookingById,
+  saveBookingSessionWindow,
 } from '../../../api/player/bookingApi.js'
 import { cancelLfg } from '../../../api/player/lfgApi.js'
 import {
@@ -40,6 +41,104 @@ function findSubCourtId(state) {
     return state.courtId
   }
   return null
+}
+
+// Gom đầy đủ dải các ca sân đã chọn (ví dụ 2 ca 1 tiếng liên tiếp 20:00-21:00 + 21:00-22:00 => 20:00 - 22:00)
+function resolveSelectedSlotWindow(slots, anchorSlot, actualCourtId, state) {
+  if (!Array.isArray(slots) || !anchorSlot) return { ok: false }
+  const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const isBookable = (item) =>
+    Boolean(item && !item.isPast && item.isBookable !== false && String(item.status || 'available').toLowerCase() === 'available')
+  const formatHHMM = (iso) => (typeof iso === "string" && iso.length >= 16 ? iso.slice(11, 16) : "")
+  const formatSlotSpans = (list) => {
+    if (!Array.isArray(list) || list.length === 0) return ''
+    const ordered = [...list].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    const spans = []
+    let curStart = ordered[0].startTime
+    let curEnd = ordered[0].endTime
+    for (let i = 1; i < ordered.length; i += 1) {
+      const next = ordered[i]
+      const contiguous = next.startTime === curEnd || new Date(next.startTime).getTime() === new Date(curEnd).getTime()
+      if (contiguous) {
+        curEnd = next.endTime
+      } else {
+        spans.push(`${formatHHMM(curStart)} - ${formatHHMM(curEnd)}`)
+        curStart = next.startTime
+        curEnd = next.endTime
+      }
+    }
+    spans.push(`${formatHHMM(curStart)} - ${formatHHMM(curEnd)}`)
+    return spans.join(', ')
+  }
+
+  const sorted = [...slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+  const rawIds =
+    Array.isArray(state?.courtSlotIds) && state.courtSlotIds.length > 0
+      ? state.courtSlotIds
+      : Array.isArray(state?.selectedSlots)
+      ? state.selectedSlots.map((x) => x?.id)
+      : []
+  const requestedIds = rawIds.filter(
+    (id) => typeof id === 'string' && isGuidRegex.test(id) && id !== actualCourtId && id !== state?.courtId
+  )
+  const matchedRequested = requestedIds.map((id) => sorted.find((x) => x.id === id)).filter(Boolean)
+
+  const anchorMs = new Date(anchorSlot.endTime).getTime() - new Date(anchorSlot.startTime).getTime()
+  const singleSlotHours = anchorMs > 0 ? anchorMs / (1000 * 60 * 60) : 1
+
+  let parsedRangeHours = 0
+  const rangeMatch = String(state?.slot || '').match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/)
+  if (rangeMatch) {
+    const startMin = Number(rangeMatch[1]) * 60 + Number(rangeMatch[2])
+    const endMin = Number(rangeMatch[3]) * 60 + Number(rangeMatch[4])
+    if (endMin > startMin) parsedRangeHours = (endMin - startMin) / 60
+  }
+
+  const requestedHours =
+    Number(state?.hours) || parsedRangeHours || (state?.slotCount ? Number(state.slotCount) : singleSlotHours)
+  const slotsFromHours = singleSlotHours > 0 ? Math.max(1, Math.round(requestedHours / singleSlotHours)) : 1
+  const isMultiCourtSelection = requestedIds.length > matchedRequested.length && matchedRequested.length > 0
+  const desiredSlotCount = isMultiCourtSelection
+    ? matchedRequested.length
+    : Math.max(matchedRequested.length, Number(state?.numberOfSlots) || 1, slotsFromHours)
+
+  let selectedGroup = []
+  if (matchedRequested.length >= desiredSlotCount && matchedRequested.some((x) => x.id === anchorSlot.id)) {
+    selectedGroup = [...matchedRequested].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+    )
+  } else {
+    selectedGroup = [anchorSlot]
+    let cursor = anchorSlot
+    while (selectedGroup.length < desiredSlotCount) {
+      const next = sorted.find(
+        (x) =>
+          !selectedGroup.some((picked) => picked.id === x.id) &&
+          (x.startTime === cursor.endTime || new Date(x.startTime).getTime() === new Date(cursor.endTime).getTime())
+      )
+      if (!next) break
+      selectedGroup.push(next)
+      cursor = next
+    }
+  }
+
+  if (selectedGroup.length < desiredSlotCount || !selectedGroup.every(isBookable)) {
+    return { ok: false }
+  }
+
+  const finalSlotIds = isMultiCourtSelection ? requestedIds : selectedGroup.map((x) => x.id)
+  const displayRange = isMultiCourtSelection && state?.slot ? state.slot : formatSlotSpans(selectedGroup)
+  return {
+    ok: true,
+    slotData: {
+      ...selectedGroup[0],
+      endTime: selectedGroup[selectedGroup.length - 1].endTime,
+      displayRange,
+    },
+    firstSlotId: selectedGroup[0].id,
+    slotIds: finalSlotIds,
+    numberOfSlots: finalSlotIds.length,
+  }
 }
 
 // Giữ tham chiếu ổn định khi không có state điều hướng, để effect không chạy lại mỗi lần render
@@ -80,14 +179,13 @@ function SplitPayment() {
         const directSlot = !isRawSlotACourt && rawSlotId ? slots.find((s) => s.id === rawSlotId) : null
 
         if (directSlot) {
-          if (!directSlot.isPast && directSlot.isBookable !== false && directSlot.status === 'Available') {
-            setActiveSlotData(directSlot)
-            setResolvedSlotId(directSlot.id)
-            setResolvedSlotIds(state.courtSlotIds || [directSlot.id])
-            setSlotError('')
-          } else {
-            setSlotError('Ca bạn chọn đã được đặt hoặc đã qua giờ. Vui lòng quay lại chọn ca khác.')
-          }
+          const resolvedDirect = resolveSelectedSlotWindow(slots, directSlot, actualCourtId, state)
+          if (!resolvedDirect.ok) { setSlotError('Ca bạn chọn hiện đã được đặt hoặc đã qua giờ. Vui lòng quay lại chọn ca khác.'); return }
+          setActiveSlotData(resolvedDirect.slotData)
+          setResolvedSlotId(resolvedDirect.firstSlotId)
+          setResolvedSlotIds(resolvedDirect.slotIds)
+          setResolvedNumberOfSlots(resolvedDirect.numberOfSlots)
+          setSlotError('')
           return
         }
 
@@ -105,24 +203,18 @@ function SplitPayment() {
         }
         // Nếu không khớp chính xác giờ bắt đầu, lấy ca khả dụng đầu tiên còn trống
         if (!matchedSlot) {
-          matchedSlot = slots.find((s) => s.isBookable !== false && !s.isPast && s.status === 'Available')
+          matchedSlot = slots.find((s) => s.isBookable !== false && !s.isPast && String(s.status || 'available').toLowerCase() === 'available')
         }
 
         if (matchedSlot) {
-          setActiveSlotData(matchedSlot)
-          setResolvedSlotId(matchedSlot.id)
+          const resolvedMatch = resolveSelectedSlotWindow(slots, matchedSlot, actualCourtId, state)
+          if (!resolvedMatch.ok) { setSlotError(`Khung giờ ${timeRangeStr || ""} ngày ${targetDate} hiện không đủ ca trống liên tiếp. Vui lòng chọn ca khác.`); return }
+          setActiveSlotData(resolvedMatch.slotData)
+          setResolvedSlotId(resolvedMatch.firstSlotId)
+          setResolvedSlotIds(resolvedMatch.slotIds)
+          setResolvedNumberOfSlots(resolvedMatch.numberOfSlots)
           setSlotError('')
-
-          // Kiểm tra ca tiếp theo nếu là ca 2 tiếng
-          const hoursNeeded = state.hours || (state.slotCount ? state.slotCount * 1.0 : 2.0)
-          const slotIds = [matchedSlot.id]
-          if (hoursNeeded >= 1.8) {
-            const nextSlot = slots.find((s) => s.startTime === matchedSlot.endTime && s.isBookable !== false)
-            if (nextSlot) slotIds.push(nextSlot.id)
-          }
-          setResolvedSlotIds(slotIds)
-          setResolvedNumberOfSlots(slotIds.length)
-          console.log('[SplitPayment] ✅ Đã tìm và đồng bộ thành công ca sân thực tế:', matchedSlot.id, 'SlotIds:', slotIds)
+          console.log('[SplitPayment] ✅ Đã đồng bộ khung giờ ca sân:', resolvedMatch.slotData.displayRange, 'SlotIds:', resolvedMatch.slotIds)
         } else {
           setSlotError(`Khung giờ ${timeRangeStr || ''} ngày ${targetDate} hiện không còn ca trống. Vui lòng quay lại chọn ca khác.`)
         }
@@ -142,8 +234,8 @@ function SplitPayment() {
   const address = state.address || 'Hồ Chí Minh'
   const locationName = state.locationName || (address.includes(',') ? address.split(',').slice(-2).join(', ').trim() : address) || 'Hồ Chí Minh'
   const slotTime = activeSlotData
-    ? `${activeSlotData.startTime?.slice(11, 16)} - ${activeSlotData.endTime?.slice(11, 16)}`
-    : (state.slot && state.slot !== '18:00 - 19:00' ? state.slot : '20:00 - 21:00')
+    ? (activeSlotData.displayRange || `${activeSlotData.startTime?.slice(11, 16)} - ${activeSlotData.endTime?.slice(11, 16)}`)
+    : (state.slot || '20:00 - 22:00')
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
   const totalAmount = Number(state.total) || 120000
   const hourlyRate = state.hourlyRate || Math.round(totalAmount / (hours || 1))
@@ -758,8 +850,33 @@ function SplitPayment() {
     }
   }
 
+  // Trích xuất chuỗi mã vé QR an toàn từ phản hồi GET /api/v1/bookings/{id}/qr-ticket
+  const extractQrToken = (ticketRes) => {
+    if (!ticketRes) return ''
+    if (typeof ticketRes === 'string') return ticketRes.trim()
+    const candidates = [
+      ticketRes.qrCode,
+      ticketRes.qrToken,
+      ticketRes.ticketCode,
+      ticketRes.code,
+      ticketRes.token,
+      typeof ticketRes.qrTicket === 'string' ? ticketRes.qrTicket : (ticketRes.qrTicket?.qrCode || ticketRes.qrTicket?.token),
+      ticketRes.data?.qrCode,
+      ticketRes.data?.qrToken,
+      ticketRes.data?.ticketCode,
+      ticketRes.data?.code,
+      ticketRes.data?.token,
+    ]
+    const found = candidates.find((c) => typeof c === 'string' && c.trim().length > 0)
+    return found ? found.trim() : ''
+  }
+
   // Action: Click "Xác nhận thanh toán & lấy vé QR" (Thực hiện Bước 3, 4, 5)
   const handleConfirmCheckout = async () => {
+    if (paymentMode === 'split' && invitedFriends.length === 0) {
+      toast.warning('Vui lòng tra cứu số điện thoại để thêm ít nhất 1 bạn chơi cùng chia tiền, hoặc chọn Thanh Toán Toàn Bộ.')
+      return
+    }
     if (paymentChannel === 'escrow') {
       // Kiểm tra số dư ví
       if (walletBalance < payableAmount) {
@@ -825,11 +942,28 @@ function SplitPayment() {
           (typeof createdBooking === 'string' && isValidGuid(createdBooking) ? createdBooking : null) ||
           createdBooking?.id ||
           createdBooking?.bookingId ||
+          createdBooking?.[0]?.bookingId ||
+          createdBooking?.[0]?.id ||
+          createdBooking?.bookings?.[0]?.bookingId ||
+          createdBooking?.bookings?.[0]?.id ||
           createdBooking?.data?.id ||
           createdBooking?.data?.bookingId ||
           (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
         if (bookingId) {
           try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
+          saveBookingSessionWindow(createdBooking, {
+            bookingId,
+            slotLabel: slotTime,
+            date: state.date,
+            hours,
+            numberOfSlots: bookingPayload.numberOfSlots || hours,
+            totalAmount: Number(activeSlotData?.price) || totalAmount,
+            courtId: findSubCourtId(state),
+            courtName: subCourt,
+            facilityId: state.facilityId,
+            facilityName: courtName,
+            selectedSlots: state.selectedSlots,
+          })
         }
 
         let ticketTokenValue = '' // chỉ dùng mã thật từ qr-ticket; lỗi thì để trống
@@ -842,19 +976,7 @@ function SplitPayment() {
             console.log('[SplitPayment] ✅ Phản hồi vé QR từ máy chủ:', ticketRes)
             if (ticketRes) {
               setQrTicketData(ticketRes)
-              const tokenCandidate =
-                (typeof ticketRes === 'string' && ticketRes.trim() ? ticketRes.trim() : null) ||
-                ticketRes.ticketCode ||
-                ticketRes.qrToken ||
-                ticketRes.code ||
-                ticketRes.token ||
-                ticketRes.qrTicket ||
-                ticketRes.data?.ticketCode ||
-                ticketRes.data?.qrToken ||
-                ticketRes.data?.code
-              if (tokenCandidate) {
-                ticketTokenValue = tokenCandidate
-              }
+              ticketTokenValue = extractQrToken(ticketRes)
             }
           } catch (qrErr) {
             console.warn('[SplitPayment] getBookingQrTicket error:', qrErr)
@@ -1023,11 +1145,28 @@ function SplitPayment() {
         (typeof createdBooking === 'string' && isValidGuid(createdBooking) ? createdBooking : null) ||
         createdBooking?.id ||
         createdBooking?.bookingId ||
+        createdBooking?.[0]?.bookingId ||
+        createdBooking?.[0]?.id ||
+        createdBooking?.bookings?.[0]?.bookingId ||
+        createdBooking?.bookings?.[0]?.id ||
         createdBooking?.data?.id ||
         createdBooking?.data?.bookingId ||
         (typeof createdBooking?.data === 'string' && isValidGuid(createdBooking.data) ? createdBooking.data : null)
         if (bookingId) {
           try { localStorage.setItem('sportnexus_last_booking_id', bookingId) } catch { /* bỏ qua */ }
+          saveBookingSessionWindow(createdBooking, {
+            bookingId,
+            slotLabel: slotTime,
+            date: state.date,
+            hours,
+            numberOfSlots: bookingPayload.numberOfSlots || hours,
+            totalAmount: Number(activeSlotData?.price) || totalAmount,
+            courtId: findSubCourtId(state),
+            courtName: subCourt,
+            facilityId: state.facilityId,
+            facilityName: courtName,
+            selectedSlots: state.selectedSlots,
+          })
         }
 
       let ticketTokenValue = '' // chỉ dùng mã thật từ qr-ticket; lỗi thì để trống
@@ -1037,19 +1176,7 @@ function SplitPayment() {
           const ticketRes = await getBookingQrTicket(bookingId)
           if (ticketRes) {
             setQrTicketData(ticketRes)
-            const tokenCandidate =
-              (typeof ticketRes === 'string' && ticketRes.trim() ? ticketRes.trim() : null) ||
-              ticketRes.ticketCode ||
-              ticketRes.qrToken ||
-              ticketRes.code ||
-              ticketRes.token ||
-              ticketRes.qrTicket ||
-              ticketRes.data?.ticketCode ||
-              ticketRes.data?.qrToken ||
-              ticketRes.data?.code
-            if (tokenCandidate) {
-              ticketTokenValue = tokenCandidate
-            }
+            ticketTokenValue = extractQrToken(ticketRes)
           }
         } catch (qrErr) {
           console.warn('[SplitPayment] getBookingQrTicket error:', qrErr)
@@ -1672,9 +1799,9 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               </div>
 
               <div className="sp-user-row">
-                <div className="sp-user-avatar">{initialsOf(currentUser.name)}</div>
+                <div className="sp-user-avatar">{initialsOf(currentUser?.name)}</div>
                 <div className="sp-user-details">
-                  <p className="sp-user-name">{currentUser.name || 'Bạn'}</p>
+                  <p className="sp-user-name">{currentUser?.name || 'Bạn'}</p>
                   <p className="sp-user-contact">0908 ••• 888 • minhm@domain.vn</p>
                 </div>
               </div>
@@ -1736,9 +1863,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-total-labels">
                   <span className="sp-total-head">TỔNG THANH TOÁN KỲ NÀY</span>
                   <span className="sp-total-sub">
-                    {paymentMode === 'full'
-                      ? 'Ký quỹ 100% toàn bộ tiền sân'
-                      : 'Ký quỹ 1 phần (1/4) tiền sân'}
+                    {paymentMode === 'full' ? 'Ký quỹ 100% toàn bộ tiền sân' : `Ký quỹ phần của bạn (1/${totalParticipantCount}) tiền sân`}
                   </span>
                 </div>
                 <strong className="sp-total-value">{formatVnd(payableAmount)}</strong>
@@ -2255,9 +2380,9 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               </div>
 
               <div className="sp-pass-user-box">
-                <div className="sp-pass-user-avatar">{initialsOf(currentUser.name)}</div>
+                <div className="sp-pass-user-avatar">{initialsOf(currentUser?.name)}</div>
                 <div className="sp-pass-user-info">
-                  <p className="sp-pass-user-name">{currentUser.name || 'Bạn'}</p>
+                  <p className="sp-pass-user-name">{currentUser?.name || 'Bạn'}</p>
                   <p className="sp-pass-user-sub">0908 ••• 888 • minhm@domain.vn</p>
                 </div>
               </div>
@@ -2358,14 +2483,14 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Đơn Đặt Sân (Booking ID):</span>
                   <strong style={{ fontFamily: 'monospace', color: '#0f172a', background: '#e2e8f0', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {bookingResult?.id || bookingResult?.bookingId || (typeof bookingResult === 'string' ? bookingResult : '—')}
+                    {[bookingResult, bookingResult?.id, bookingResult?.bookingId, bookingResult?.data?.id, bookingResult?.data?.bookingId].find((v) => typeof v === 'string' && v.trim()) || '—'}
                   </strong>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Trạng Thái Đơn Hàng:</span>
                   <span style={{ fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {bookingResult?.status || qrTicketData?.status || 'PAID (Đã thanh toán)'}
+                    {[bookingResult?.bookingStatus, bookingResult?.status, qrTicketData?.status].find((v) => typeof v === 'string' && v.trim()) || (bookingStatus === 'PENDING' ? 'PENDING (Chờ góp tiền)' : 'PAID (Đã thanh toán)')}
                   </span>
                 </div>
 

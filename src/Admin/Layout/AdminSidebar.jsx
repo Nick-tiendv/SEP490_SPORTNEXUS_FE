@@ -18,8 +18,8 @@ export default function AdminSidebar({ open, onClose, profile, badges }) {
     <aside className={`admin-sidebar ${open ? 'is-open' : ''}`} aria-label="Điều hướng quản trị">
       <div className="admin-sidebar-top">
         <NavLink className="admin-brand" to="/admin/dashboard" onClick={onClose} title="SportNexus — Quản trị hệ thống">
-          <span className="admin-brand-mark"><span className="material-symbols-outlined" aria-hidden="true">bolt</span></span>
-          <span className="admin-brand-copy"><strong>SportNexus <i className="admin-brand-dot" aria-hidden="true" /></strong><small>Quản trị hệ thống</small></span>
+          <span className="admin-brand-mark"><img src="/logo-mark.png" alt="SportNexus" className="admin-brand-mark-img" /></span>
+          <span className="admin-brand-copy"><strong><img src="/logo-wordmark.png" alt="SportNexus" className="admin-brand-wordmark" /></strong><small>Quản trị hệ thống</small></span>
         </NavLink>
         <button className="admin-sidebar-close admin-icon-button" aria-label="Đóng điều hướng" onClick={onClose}><X size={20} /></button>
       </div>
