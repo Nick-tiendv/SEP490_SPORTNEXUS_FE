@@ -1,6 +1,5 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
-import { useEffect, useMemo, useState } from 'react'
-import { useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { uid, nowMs } from '../../../utils/ids.js'
 import { confirmDialog } from '../../../components/common/confirm.js'
 import { toast } from 'sonner'
@@ -30,28 +29,12 @@ import {
   clearPendingDeposit,
   DEPOSIT_STATUS,
 } from '../../../api/player/walletApi.js'
-import { COURTS } from '../AIChat/aiBookingData.js'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
   if (!state) return null
   const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (state.subCourtId && isGuidRegex.test(state.subCourtId)) return state.subCourtId
-
-  // Kiểm tra nếu courtSlotId hoặc courtId trùng với bất kỳ subCourt nào trong COURTS
-  if (Array.isArray(COURTS)) {
-    for (const facility of COURTS) {
-      if (Array.isArray(facility.subCourts)) {
-        for (const sub of facility.subCourts) {
-          if (state.courtSlotId === sub.id) return sub.id
-          if (state.courtId === sub.id) return sub.id
-          if (state.subCourt && sub.name && (state.subCourt.toLowerCase().includes(sub.name.toLowerCase()) || sub.name.toLowerCase().includes(state.subCourt.toLowerCase()))) {
-            return sub.id
-          }
-        }
-      }
-    }
-  }
 
   // Nếu state.courtId là GUID hợp lệ
   if (state.courtId && isGuidRegex.test(state.courtId)) {
@@ -158,11 +141,14 @@ function resolveSelectedSlotWindow(slots, anchorSlot, actualCourtId, state) {
   }
 }
 
+// Giữ tham chiếu ổn định khi không có state điều hướng, để effect không chạy lại mỗi lần render
+const EMPTY_STATE = {}
+
 function SplitPayment() {
   const currentUser = useCurrentUser()
   const navigate = useNavigate()
   const location = useLocation()
-  const state = location.state || {}
+  const state = location.state || EMPTY_STATE
 
   const [slotError, setSlotError] = useState('')
   const [activeSlotData, setActiveSlotData] = useState(null)
@@ -238,8 +224,7 @@ function SplitPayment() {
       })
 
     return () => { isMounted = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.courtId, state.subCourtId, state.courtSlotId, state.subCourt, state.slot, state.date, state.hours, state.slotCount])
+  }, [state])
 
   // Court info with exact fallbacks to reference design
   const courtName = state.court || 'Cụm Sân SportNexus'
@@ -341,9 +326,8 @@ function SplitPayment() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupResult, setLookupResult] = useState(null)
   const [lookupError, setLookupError] = useState(null)
-  // Bạn chơi được thêm bằng cách tra cứu số điện thoại thật trên hệ thống (GET /api/accounts/lookup).
-  const [invitedFriends, setInvitedFriends] = useState(() => [
-  ])
+  // Bạn chơi chỉ được thêm bằng cách tra cứu số điện thoại thật (GET /api/accounts/lookup), không tạo sẵn người mẫu
+  const [invitedFriends, setInvitedFriends] = useState([])
 
   // Trạng thái đơn: PENDING | PAID | CHECKED_IN | CANCELLED
   const [bookingStatus, setBookingStatus] = useState('PAID')
@@ -437,7 +421,7 @@ function SplitPayment() {
   const displaySplitAmount = Math.round(totalAmount / displaySplitCount)
   const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
 
-  // Chọn chế độ thanh toán (toàn bộ hoặc chia tiền với bạn chơi tra cứu qua SĐT)
+  // Chọn chế độ thanh toán
   const handleSelectPaymentMode = (mode) => {
     setPaymentMode(mode)
   }
@@ -448,14 +432,6 @@ function SplitPayment() {
     setCopiedField(fieldName)
     setTimeout(() => setCopiedField(null), 2000)
   }
-
-  // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
-  useEffect(() => {
-    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return undefined
-    // Chỉ đếm ngược trong updater; việc xử lý hết hạn nằm ở effect bên dưới (updater phải thuần)
-    const timer = setInterval(() => setDeadlineSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000)
-    return () => clearInterval(timer)
-  }, [step, bookingStatus])
 
   const handleDeadlineExpired = () => {
     // Bước 5: Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền cho mọi người đã trả
@@ -484,24 +460,33 @@ function SplitPayment() {
     toast.error(`⏰ Đã hết hạn góp tiền!\n\nĐơn đặt sân đã tự động hủy do chưa đủ người góp tiền. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
 
-  const deadlineExpiredRef = useRef(handleDeadlineExpired)
+  // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
+  const readDeadlineSeconds = useEffectEvent(() => deadlineSeconds)
+  const onDeadlineExpired = useEffectEvent(() => handleDeadlineExpired())
   useEffect(() => {
-    deadlineExpiredRef.current = handleDeadlineExpired
-  })
-
-  // Hết hạn góp tiền khi đơn vẫn PENDING: cập nhật giao diện 1 lần qua callback bất đồng bộ
-  useEffect(() => {
-    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING' || deadlineSeconds !== 0) return undefined
-    const timer = setTimeout(() => deadlineExpiredRef.current(), 0)
-    return () => clearTimeout(timer)
-  }, [deadlineSeconds, step, bookingStatus])
+    if (step !== 'ticket_pass' || bookingStatus !== 'PENDING') return undefined
+    let remaining = readDeadlineSeconds()
+    const timer = setInterval(() => {
+      remaining = Math.max(0, remaining - 1)
+      setDeadlineSeconds(remaining)
+      if (remaining === 0) {
+        clearInterval(timer)
+        onDeadlineExpired()
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [step, bookingStatus])
 
   // BƯỚC 1: Tìm kiếm bạn bè theo số điện thoại (GET /api/accounts/lookup?phone=...)
   const handleSearchFriend = async (e) => {
     if (e) e.preventDefault()
-    const cleanPhone = lookupPhone.trim()
+    const cleanPhone = lookupPhone.replace(/[\s.-]/g, '')
     if (!cleanPhone) {
       setLookupError('Vui lòng nhập số điện thoại bạn bè cần tìm.')
+      return
+    }
+    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(cleanPhone)) {
+      setLookupError('Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).')
       return
     }
     setLookupLoading(true)
@@ -510,19 +495,24 @@ function SplitPayment() {
     try {
       const data = await lookupAccountByPhone(cleanPhone)
       if (data) {
+        const id = data.id || data.userId
+        if (invitedFriends.some((f) => f.id === id)) {
+          setLookupError('Người này đã có trong danh sách chia tiền.')
+          return
+        }
         setLookupResult({
-          id: data.id || data.userId,
-          fullName: data.fullName || data.name || data.userName || `Bạn chơi (${cleanPhone})`,
-          phone: data.phone || cleanPhone,
-          email: data.email || `${cleanPhone}@sportnexus.vn`,
+          id,
+          fullName: data.fullName || data.name || data.userName || 'Bạn chơi',
+          // BE chỉ trả SĐT đã che (phoneMasked); không hiển thị lại số người dùng vừa gõ
+          phone: data.phoneMasked || data.phone || '',
+          avatarUrl: data.avatarUrl || null,
         })
       } else {
         setLookupError('Không tìm thấy tài khoản với số điện thoại này trên hệ thống.')
       }
     } catch (err) {
       console.warn('[SplitPayment] lookupAccountByPhone notice:', err)
-      const errMessage = err?.message || 'Không tìm thấy tài khoản.'
-      setLookupError(`Không tìm thấy tài khoản (${errMessage}). Vui lòng kiểm tra lại số điện thoại đã đăng ký trên hệ thống.`)
+      setLookupError(err?.message || 'Không tìm thấy tài khoản với số điện thoại này trên hệ thống.')
     } finally {
       setLookupLoading(false)
     }
@@ -694,25 +684,32 @@ function SplitPayment() {
       ? customReasonText.trim() || 'Lý do khác'
       : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
 
-    const hoursLeft = getHoursUntilMatch()
-    const isEligibleRefund = hoursLeft >= 24
-
     setIsCanceling(true)
     setCancelError(null)
     try {
       // Đơn đang dùng cho kèo LFG không hủy trực tiếp được: phải hủy kèo (POST /api/v1/lfgs/{cardId}/cancel)
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h), không tự đoán ở FE
       const isLfg = Boolean(state.isLfg || state.cardId)
+      let refundAmount = 0
       if (isLfg && state.cardId) {
-        await cancelLfg(state.cardId, { reason: finalReason })
+        const result = await cancelLfg(state.cardId, { reason: finalReason })
+        refundAmount = Number(result?.hostRefund) || 0
       } else if (isValidGuid(bookingId)) {
-        await cancelBooking(bookingId, {
+        const result = await cancelBooking(bookingId, {
           reasonCode: selectedReasonCode,
           reason: finalReason,
         })
+        refundAmount = Number(result?.refundAmount) || 0
+      } else {
+        throw new Error('Không tìm thấy đơn đặt sân để hủy.')
       }
+      const isEligibleRefund = refundAmount > 0
 
       // Xử lý hoàn tiền
-      if (isEligibleRefund) getWallet().catch(() => {})
+      if (isEligibleRefund) {
+        getWallet().catch(() => {})
+        window.dispatchEvent(new Event('escrow_balance_updated'))
+      }
 
       setBookingStatus('CANCELLED')
       setShowCancelModal(false)
@@ -728,7 +725,7 @@ function SplitPayment() {
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
             message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? `Hủy trước ca >= 24h: Đã hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow.`
+              ? `Hủy trước ca >= 24h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
               : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
             time: 'Vừa xong',
             unread: true,
@@ -741,7 +738,7 @@ function SplitPayment() {
       toast.success(
         `Đã hủy đơn đặt sân thành công!\n\n${
           isEligibleRefund
-            ? `💰 Bạn đã được hoàn 100% (${formatVnd(payableAmount)}) vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
+            ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
             : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
         }`
       )
@@ -1261,12 +1258,8 @@ function SplitPayment() {
     }
   }
 
-  const completeAfterPayRef = useRef(handleCompleteBookingAfterPayment)
-  useEffect(() => {
-    completeAfterPayRef.current = handleCompleteBookingAfterPayment
-  })
-
   // Polling tự động kiểm tra thanh toán PayOS bằng tiền thật
+  const completeBookingAfterPayment = useEffectEvent((orderCode) => handleCompleteBookingAfterPayment(orderCode))
   useEffect(() => {
     if (step !== 'bank_qr' || !payosSession?.orderCode) return undefined
     let active = true
@@ -1279,7 +1272,7 @@ function SplitPayment() {
         const status = normalizeDepositStatus(data?.status)
         if (status === DEPOSIT_STATUS.SUCCESS) {
           clearPendingDeposit()
-          await completeAfterPayRef.current(payosSession.orderCode)
+          await completeBookingAfterPayment(payosSession.orderCode)
           return
         }
         if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {
@@ -1537,7 +1530,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                   {invitedFriends.length === 0 && (
                     <div style={{ padding: '10px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '10px', color: '#92400E', fontSize: '12.5px', marginBottom: '12px' }}>
-                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng nhập số điện thoại bạn chơi bên dưới để tra cứu và thêm vào nhóm chia tiền (tối thiểu 2 người).
+                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng nhập số điện thoại của bạn chơi để cùng chia tiền (tối thiểu 2 người).
                     </div>
                   )}
 
@@ -1547,8 +1540,10 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       type="tel"
                       className="sp-phone-search-input"
                       placeholder="Nhập số điện thoại bạn bè (vd: 0912345678)..."
+                      inputMode="numeric"
+                      maxLength={12}
                       value={lookupPhone}
-                      onChange={(e) => setLookupPhone(e.target.value)}
+                      onChange={(e) => { setLookupPhone(e.target.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '')); setLookupError(null) }}
                     />
                     <button
                       type="submit"

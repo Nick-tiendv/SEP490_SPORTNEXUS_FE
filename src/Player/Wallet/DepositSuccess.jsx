@@ -61,8 +61,6 @@ export default function DepositSuccess() {
     let active = true
     let timer = null
     const startedAt = Date.now()
-    setPhase('CHECKING')
-    setSecondsLeft(Math.ceil(MAX_POLL_MS / 1000))
 
     const handleSuccess = async (data) => {
       setPhase('SUCCESS')
@@ -159,7 +157,12 @@ export default function DepositSuccess() {
       : []),
   ]
 
-  const retry = () => setAttempt((n) => n + 1)
+  // Đặt lại trạng thái kiểm tra ngay khi bấm thử lại; lần đầu đã khởi tạo sẵn
+  const retry = () => {
+    setPhase('CHECKING')
+    setSecondsLeft(Math.ceil(MAX_POLL_MS / 1000))
+    setAttempt((n) => n + 1)
+  }
   const savedTarget = returnTarget
   const backLabel = savedTarget?.label || (savedTarget ? 'Quay lại đặt sân' : 'Tiếp tục đặt sân')
 

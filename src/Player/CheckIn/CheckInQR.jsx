@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { uid } from '../../utils/ids.js'
 import { QRCodeSVG } from 'qrcode.react'
@@ -24,7 +24,7 @@ const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', 
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType }) => ({
+const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds }) => ({
   id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
@@ -43,6 +43,8 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, court
   startAt: startTime || null,
   escrowAmount: Number(amount) || 0,
   status: status || 'PENDING_CHECKIN',
+  timeRangeLabel: timeRangeLabel || null,
+  groupedBookingIds: Array.isArray(groupedBookingIds) ? groupedBookingIds : [],
 })
 
 function CheckInQR() {
@@ -54,11 +56,11 @@ function CheckInQR() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticketType, setTicketType] = useState(() => searchParams.get('type') || 'booking')
   const [ticketData, setTicketData] = useState(null)
-  const [isLoadingTicket, setIsLoadingTicket] = useState(true)
-  const [ticketError, setTicketError] = useState(null)
+  // Kết quả tải vé gắn với hàm tải đang dùng; đang tải khi hàm hiện tại chưa trả kết quả
+  const [ticketLoad, setTicketLoad] = useState({ fetcher: null, error: null })
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
-  const [activePlayWindow, setActivePlayWindow] = useState(null)
+
 
   // Bước 1: Tải vé từ API qr-ticket tương ứng (dùng lại cho nút "Kiểm tra trạng thái" và tự hỏi lại)
   const currentUser = useCurrentUser()
@@ -88,7 +90,7 @@ function CheckInQR() {
               upcomingBookings: upcomingSiblings,
               myBookings: mySiblings,
             })
-            setActivePlayWindow(playWindow)
+
             return toTicket({
               id: bookingId,
               qrCode: typeof qr === 'string' ? qr : qr?.qrCode,
@@ -105,6 +107,8 @@ function CheckInQR() {
                 startTime: playWindow.startTime ?? detail?.startTime,
                 endTime: playWindow.endTime ?? detail?.endTime,
                 amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
+                timeRangeLabel: playWindow.timeRangeLabel,
+                groupedBookingIds: playWindow.groupedBookingIds,
               },
             })
           }
@@ -113,7 +117,7 @@ function CheckInQR() {
           const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id')
           if (!cardId) throw new Error('Bạn chưa tham gia kèo LFG nào có vé check-in.')
           const res = await getLfgQrTicket(cardId)
-          setActivePlayWindow(null)
+
           {
             return toTicket({
               id: res?.lfgCardId || cardId,
@@ -131,7 +135,7 @@ function CheckInQR() {
           const tournamentId = searchParams.get('tournamentId') || localStorage.getItem('sportnexus_current_tournament_id')
           if (!tournamentId) throw new Error('Bạn chưa đăng ký giải đấu nào có vé check-in.')
           const res = await getTournamentQrTicket(tournamentId)
-          setActivePlayWindow(null)
+
           {
             return toTicket({
               id: res?.tournamentId || tournamentId,
@@ -148,18 +152,22 @@ function CheckInQR() {
     return null
   }, [ticketType, searchParams, currentUser.id])
 
+  const isLoadingTicket = ticketLoad.fetcher !== fetchTicket
+  const ticketError = isLoadingTicket ? null : ticketLoad.error
+
   useEffect(() => {
     let isMounted = true
-    setIsLoadingTicket(true)
-    setTicketError(null)
     fetchTicket()
-      .then((ticket) => isMounted && setTicketData(ticket))
+      .then((ticket) => {
+        if (!isMounted) return
+        setTicketData(ticket)
+        setTicketLoad({ fetcher: fetchTicket, error: null })
+      })
       .catch((err) => {
         if (!isMounted) return
         setTicketData(null)
-        setTicketError(err?.message || 'Không tải được vé check-in.')
+        setTicketLoad({ fetcher: fetchTicket, error: err?.message || 'Không tải được vé check-in.' })
       })
-      .finally(() => isMounted && setIsLoadingTicket(false))
     return () => { isMounted = false }
   }, [fetchTicket])
 
@@ -301,27 +309,33 @@ function CheckInQR() {
       ? customReasonText.trim() || 'Lý do khác'
       : selectedReasonObj?.label || 'Người đặt yêu cầu hủy đơn'
 
-    const hoursLeft = getHoursUntilMatch()
-    const isEligibleRefund = hoursLeft >= 24
-
     try {
       const bookingId = ticketData?.id
       if (!bookingId) throw new Error('Không tìm thấy đơn đặt sân để hủy.')
-      await cancelBooking(bookingId, {
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h theo giờ server), không tự đoán ở FE
+      const result = await cancelBooking(bookingId, {
         reasonCode: selectedReasonCode,
         reason: finalReason,
       })
-
-      // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
-      const extraSiblingIds = (activePlayWindow?.groupedBookingIds || []).filter(
+      const extraSiblingIds = (ticketData?.groupedBookingIds || []).filter(
         (gid) => gid && String(gid).toLowerCase() !== String(bookingId).toLowerCase()
       )
+      let extraRefund = 0
       if (extraSiblingIds.length > 0) {
-        await Promise.allSettled(
+        const siblingResults = await Promise.allSettled(
           extraSiblingIds.map((gid) => cancelBooking(gid, { reasonCode: selectedReasonCode, reason: finalReason }))
         )
+        extraRefund = siblingResults.reduce(
+          (sum, r) => sum + (r.status === 'fulfilled' ? Number(r.value?.refundAmount) || 0 : 0),
+          0
+        )
       }
-      const refundAmountText = `${new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} đ`
+      const refundAmount = (Number(result?.refundAmount) || 0) + extraRefund
+      const isEligibleRefund = refundAmount > 0
+      const refundText = `${refundAmount.toLocaleString('vi-VN')} đ`
+      const facilityLabel = ticketData?.venueName && ticketData.venueName !== '—' ? ticketData.venueName : 'sân'
+
+      // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
       if (isEligibleRefund) window.dispatchEvent(new Event('escrow_balance_updated'))
 
       setTicketData((prev) => (prev ? { ...prev, status: 'CANCELLED' } : prev))
@@ -336,32 +350,21 @@ function CheckInQR() {
             color: '#DC2626',
             bg: '#FEE2E2',
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
-            message: `Đơn tại SportNexus Arena Q.7 đã được hủy thành công. Lý do: ${finalReason}.`,
+            message: `Đơn tại ${facilityLabel} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? 'Hủy trước ca >= 24h: Đã hoàn 100% (330.000 đ) vào Ví Escrow.'
+              ? `Hủy trước ca >= 24h: Đã hoàn ${refundText} vào Ví Escrow.`
               : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
             time: 'Vừa xong',
             unread: true,
             link: '/wallet',
             linkText: 'Xem ví Escrow',
-            ...{
-              message: `Đơn tại ${ticketData?.venueName || 'cụm sân'} đã được hủy thành công. Lý do: ${finalReason}.`,
-              details: isEligibleRefund
-                ? `Hủy trước ca >= 24h: Đã hoàn 100% (${refundAmountText}) vào Ví Escrow.`
-                : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
-            },
           },
         })
       )
 
       setToastMessage(
         isEligibleRefund
-          ? '✅ Đã hủy đơn thành công! Hoàn 100% (330.000 đ) vào ví Escrow.'
-          : '⚠️ Đã hủy đơn thành công. Hủy dưới 24h: Không được hoàn tiền theo quy định.'
-      )
-      setToastMessage(
-        isEligibleRefund
-          ? `✅ Đã hủy đơn thành công! Hoàn 100% (${refundAmountText}) vào ví Escrow.`
+          ? `✅ Đã hủy đơn thành công! Hoàn ${refundText} vào ví Escrow.`
           : '⚠️ Đã hủy đơn thành công. Hủy dưới 24h: Không được hoàn tiền theo quy định.'
       )
       setTimeout(() => setToastMessage(null), 5000)
@@ -378,20 +381,19 @@ function CheckInQR() {
   // Khi người chơi chưa check-in thì nút vẫn sáng.
   // Đã check-in: theo trạng thái vé từ BE (chủ sân quét QR trên máy của họ)
   const checkInDone = String(ticketData?.status || '').toUpperCase() === 'CHECKED_IN'
-  const [checkOutDone, setCheckOutDone] = useState(false)
-
-  // Trạng thái check-out (phiên đánh giá sau trận lưu trên máy) theo mã vé đang xem
-  useEffect(() => {
-    if (!checkInDone || !ticketData?.ticketCode) {
-      setCheckOutDone(false)
-      return
-    }
-    const cleanCode = ticketData.ticketCode.replace('#', '').trim()
+  // Trạng thái check-out (ghi nhận trên máy) theo mã vé đang xem
+  const currentTicketCode = (ticketData?.ticketCode || '').replace('#', '').trim()
+  const [checkedOutCode, setCheckedOutCode] = useState(null)
+  const storedCheckOutDone = useMemo(() => {
+    if (!checkInDone || !currentTicketCode) return false
     try {
       const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || 'null')
-      setCheckOutDone(Boolean(saved?.ticketCode === cleanCode && saved?.checkOutDone))
-    } catch { /* bỏ qua: dữ liệu cũ hỏng thì coi như chưa check-out */ }
-  }, [checkInDone, ticketData?.ticketCode])
+      return Boolean(saved?.ticketCode === currentTicketCode && saved?.checkOutDone)
+    } catch {
+      return false // dữ liệu cũ hỏng thì coi như chưa check-out
+    }
+  }, [checkInDone, currentTicketCode])
+  const checkOutDone = checkInDone && Boolean(currentTicketCode) && (checkedOutCode === currentTicketCode || storedCheckOutDone)
 
   // Tự hỏi lại BE mỗi 20 giây khi vé chưa check-in (chủ sân quét trên máy của họ)
   useEffect(() => {
@@ -514,7 +516,7 @@ function CheckInQR() {
   // Xử lý xác nhận Check-out trả sân (ghi nhận trên máy, BE không có bước check-out)
   const handleConfirmCheckOut = () => {
     setShowCheckOutModal(false)
-    setCheckOutDone(true)
+    setCheckedOutCode(currentTicketCode)
     const checkOutTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     try {
       const saved = JSON.parse(localStorage.getItem('sportnexus_last_checkout_session') || '{}') || {}
@@ -1034,7 +1036,7 @@ function CheckInQR() {
                   <span>{ticketData?.venueName || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6B7280', fontSize: '11.5px', fontWeight: 500 }}>
-                  <span>🕒 {(ticketType === 'booking' && activePlayWindow?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}</span>
+                  <span>🕒 {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}</span>
                   <span>•</span>
                   <span>📅 {ticketData?.playDate || '—'}</span>
                 </div>
@@ -1278,7 +1280,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#64748B', fontWeight: 600 }}>🕒 Giờ chơi:</span>
                   <span style={{ color: '#0F172A', fontWeight: 700 }}>
-                    {(ticketType === 'booking' && activePlayWindow?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}
+                    {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}
                   </span>
                 </div>
 
@@ -1296,7 +1298,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#15803D', fontWeight: 600 }}>🎟️ Khung check-in mở:</span>
                   <span style={{ color: '#166534', fontWeight: 800 }}>
-                    {(ticketType === 'booking' && activePlayWindow?.timeRangeLabel) || `${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
+                    {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
                   </span>
                 </div>
               </div>

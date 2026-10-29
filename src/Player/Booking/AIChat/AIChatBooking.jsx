@@ -4,13 +4,9 @@ import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
   DISTRICT_CENTERS,
-  buildSlotsForCourt,
   buildWelcomeMessage,
   detectClosestDistrict,
-  formatVnd,
-  processAIChatQuery,
   getUserProfileContext,
-  syncFacilitiesWithAIChat,
 } from './aiBookingData.js'
 import {
   sendChatMessage,
@@ -19,8 +15,12 @@ import {
   getAiSessionMessages,
   sendSessionChatMessage,
   deleteAiSession,
+  getStoredAiSessionId,
+  mapAiHistoryToMessages,
+  storeAiSessionId,
 } from '../../../api/player/aiApi.js'
-import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import AiSuggestions from './AiSuggestions.jsx'
+import { buildPaymentState } from './aiRealBooking.js'
 import './AIChatModal.css'
 
 function AIChatBooking() {
@@ -32,6 +32,7 @@ function AIChatBooking() {
     updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
   }))
 
+  const [, setUserProfile] = useState(() => getUserProfileContext())
   const [messages, setMessages] = useState(() => [buildWelcomeMessage(DISTRICT_CENTERS.q7)])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -48,19 +49,6 @@ function AIChatBooking() {
       bodyRef.current.scrollTop = bodyRef.current.scrollHeight
     }
   }, [messages, isTyping])
-
-  // Tự động đồng bộ danh sách cơ sở & sân từ website vào AI
-  useEffect(() => {
-    let isMounted = true
-    getFacilities()
-      .then((facilities) => {
-        if (isMounted && Array.isArray(facilities)) {
-          syncFacilitiesWithAIChat(facilities)
-        }
-      })
-      .catch((err) => console.warn('[AIChatBooking] Không thể tải facilities từ API:', err))
-    return () => { isMounted = false }
-  }, [])
 
   // Lắng nghe cập nhật hồ sơ người dùng
   useEffect(() => {
@@ -98,7 +86,10 @@ function AIChatBooking() {
             updatedAt: nowStr,
           }
           setUserLocation(newLoc)
-          setMessages([buildWelcomeMessage(newLoc)])
+          // Chỉ cập nhật lời chào, không ghi đè lịch sử đã tải
+          setMessages((prev) =>
+            prev.length === 1 && prev[0].sender !== 'user' ? [buildWelcomeMessage(newLoc)] : prev
+          )
         },
         () => { },
         { enableHighAccuracy: true, timeout: 5000 }
@@ -111,12 +102,17 @@ function AIChatBooking() {
     setTimeout(() => setToastMessage(null), 3200)
   }
 
-  const [activeCourtId, setActiveCourtId] = useState('snx-q7')
   const [sessionsList, setSessionsList] = useState([])
-  const [currentSessionId, setCurrentSessionId] = useState(null)
+  const [currentSessionId, setCurrentSessionIdState] = useState(null)
   const [isLoadingSession, setIsLoadingSession] = useState(false)
 
-  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions
+  // Luôn lưu phiên hiện tại để modal chat dùng chung cùng cuộc trò chuyện
+  const setCurrentSessionId = (id) => {
+    setCurrentSessionIdState(id)
+    storeAiSessionId(id)
+  }
+
+  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions và khôi phục phiên đang dùng
   useEffect(() => {
     let isMounted = true
     async function loadSessions() {
@@ -124,6 +120,12 @@ function AIChatBooking() {
         const list = await getAiSessions()
         if (isMounted && Array.isArray(list)) {
           setSessionsList(list)
+          const storedId = getStoredAiSessionId()
+          if (storedId && list.some((s) => s.id === storedId)) {
+            handleSelectSession(storedId)
+          } else if (storedId) {
+            storeAiSessionId(null)
+          }
         }
       } catch (e) {
         console.warn('AIChatBooking: Lỗi lấy danh sách sessions:', e)
@@ -131,25 +133,18 @@ function AIChatBooking() {
     }
     loadSessions()
     return () => { isMounted = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Chuyển sang phiên hội thoại khác: GET /api/v1/ai/sessions/{id}/messages
-  const handleSelectSession = async (sessionId) => {
+  async function handleSelectSession(sessionId) {
     if (!sessionId) return
     setCurrentSessionId(sessionId)
     setIsLoadingSession(true)
     try {
       const msgs = await getAiSessionMessages(sessionId)
-      if (Array.isArray(msgs) && msgs.length > 0) {
-        const mapped = msgs.map((m, idx) => ({
-          id: m.id || `msg-${idx}`,
-          sender: m.sender === 'user' || m.role === 'user' ? 'user' : 'bot',
-          text: m.content || m.message || m.text || '',
-          time: m.createdAt ? new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong',
-          facilities: m.reply?.facilities || m.facilities,
-          lfgCards: m.reply?.lfgCards || m.lfgCards,
-          slots: m.slots,
-        }))
+      const mapped = mapAiHistoryToMessages(Array.isArray(msgs) ? msgs : [])
+      if (mapped.length > 0) {
         setMessages(mapped)
       } else {
         setMessages([buildWelcomeMessage(userLocation)])
@@ -207,23 +202,6 @@ function AIChatBooking() {
       setIsListening(false)
     }
 
-    const lowerText = text.toLowerCase()
-
-    // PHẢN ỨNG NHANH 1: Người chơi muốn đi thẳng đến thanh toán / chia tiền
-    if (
-      lowerText.includes('thanh toán ngay') ||
-      lowerText.includes('chuyển sang thanh toán') ||
-      lowerText.includes('đặt & thanh toán ngay') ||
-      lowerText.includes('đặt & chia tiền ngay')
-    ) {
-      const lastBookingMsg = [...messages].reverse().find((m) => m.recommendedCourt && m.recommendedSlot)
-      if (lastBookingMsg) {
-        showToast('🚀 Đang chuyển bạn đến trang thanh toán Split Payment...')
-        handleBookNow(lastBookingMsg.recommendedCourt, lastBookingMsg.recommendedSlot)
-        return
-      }
-    }
-
     const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     const userMsg = {
       id: uid('user'),
@@ -235,36 +213,6 @@ function AIChatBooking() {
     setMessages((prev) => [...prev, userMsg])
     setInputValue('')
     setIsTyping(true)
-
-    // PHẢN ỨNG NHANH 2: Người chơi đã chọn ca cụ thể (VD: "mình chọn ca 14h00-16h00 nhé", "chọn ca 14:00-16:00", "đặt ca 14h-16h sân lucky")
-    const isDirectSlotSelection =
-      lowerText.includes('chọn ca') ||
-      lowerText.includes('mình chọn') ||
-      lowerText.includes('tôi chọn') ||
-      lowerText.includes('đặt ca') ||
-      lowerText.includes('chốt ca') ||
-      lowerText.includes('lấy ca') ||
-      lowerText.includes('sân lucky') ||
-      lowerText.includes('lucky') ||
-      /\b\d{1,2}[h:]\d{0,2}\s*[-–đến]\s*\d{1,2}[h:]\d{0,2}\b/i.test(lowerText)
-
-    if (isDirectSlotSelection) {
-      console.info('[AIChatBooking] Người chơi xác nhận chọn ca rõ ràng -> Kích hoạt phản hồi chốt ca dứt khoát.')
-      const response = processAIChatQuery(text, activeCourtId, userLocation, getUserProfileContext())
-      if (response.recommendedCourt?.id) {
-        setActiveCourtId(response.recommendedCourt.id)
-      }
-      const botMsg = {
-        id: `bot-${Date.now()}`,
-        sender: 'bot',
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        ...response,
-      }
-      setMessages((prev) => [...prev, botMsg])
-      setIsTyping(false)
-      setTimeout(() => inputRef.current?.focus(), 30)
-      return
-    }
 
     try {
       let aiResult = null
@@ -288,53 +236,27 @@ function AIChatBooking() {
         }
       }
 
-      const botReply = aiResult?.reply?.message || aiResult?.message || aiResult?.text || 'Xin chào! Tôi có thể giúp gì cho bạn?'
-      const lowerReply = botReply.toLowerCase()
-
-      // Phát hiện backend xác nhận chọn ca nhưng văn bản bị lặp lại hoặc thiếu Action Card
-      const isBackendConfirmingSlot =
-        lowerReply.includes('bạn đã chọn ca') ||
-        lowerReply.includes('mình sẽ chuyển bạn đến trang đặt sân') ||
-        lowerReply.includes('xác nhận và thanh toán') ||
-        lowerReply.includes('đã chọn khung giờ')
-
-      if (isBackendConfirmingSlot) {
-        const response = processAIChatQuery(text, activeCourtId, userLocation, getUserProfileContext())
-        if (response.recommendedCourt?.id) {
-          setActiveCourtId(response.recommendedCourt.id)
-        }
-        const botMsg = {
-          id: uid('bot'),
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          ...response,
-        }
-        setMessages((prev) => [...prev, botMsg])
-      } else {
-        const botMsg = {
-          id: uid('bot'),
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          text: botReply,
-          facilities: aiResult?.reply?.facilities || aiResult?.facilities,
-          lfgCards: aiResult?.reply?.lfgCards || aiResult?.lfgCards,
-          slots: aiResult?.reply?.slots,
-        }
-        setMessages((prev) => [...prev, botMsg])
-      }
-    } catch (err) {
-      console.warn('[AIChatBooking] API AI không phản hồi, dùng fallback local engine:', err)
-      const response = processAIChatQuery(text, activeCourtId, userLocation, getUserProfileContext())
-      if (response.recommendedCourt?.id) {
-        setActiveCourtId(response.recommendedCourt.id)
-      }
+      const botReply = aiResult?.reply?.message || aiResult?.message || 'Mình chưa hiểu ý bạn, bạn nói rõ hơn giúp mình nhé.'
       const botMsg = {
         id: uid('bot'),
         sender: 'bot',
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        ...response,
+        text: botReply,
+        facilities: aiResult?.reply?.facilities || [],
+        lfgCards: aiResult?.reply?.lfgCards || [],
       }
       setMessages((prev) => [...prev, botMsg])
+    } catch (err) {
+      console.warn('[AIChatBooking] Trợ lý AI không phản hồi:', err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid('bot'),
+          sender: 'bot',
+          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          text: `⚠️ ${err?.message || 'Trợ lý AI tạm thời không phản hồi, vui lòng thử lại sau.'}`,
+        },
+      ])
     } finally {
       setIsTyping(false)
       setTimeout(() => inputRef.current?.focus(), 30)
@@ -350,6 +272,8 @@ function AIChatBooking() {
       setUserLocation(newLoc)
       const welcome = buildWelcomeMessage(newLoc)
       setMessages([welcome])
+      // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
+      setCurrentSessionId(null)
       setInputValue('')
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }
@@ -452,94 +376,13 @@ function AIChatBooking() {
     }
   }
 
-  const handleSelectCourtOnMap = (court, slot) => {
-    navigate('/court-finder')
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('sportnexus-select-court-slot', {
-          detail: { courtId: court.id, slotId: slot?.id, court, slot },
-        })
-      )
-    }, 200)
+  // Đặt 1 ca thật do AI gợi ý: sang trang thanh toán với đúng courtSlotId và ngày (giờ Việt Nam)
+  const handleBookSlot = (facility, slot) => {
+    navigate('/split-payment', { state: buildPaymentState(facility, slot) })
   }
 
-  const handleBookNow = async (court, slot) => {
-    if (!court) return
-    const targetSlot = slot || buildSlotsForCourt(court).find((s) => s.status === 'available') || {
-      start: '14:00',
-      end: '16:00',
-      hours: 2,
-      price: (court.price || 100000) * 2,
-    }
-
-    const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-    // Xác định subCourt thực tế
-    const targetSubCourt =
-      (targetSlot?.subCourtId && court.subCourts?.find((sc) => sc.id === targetSlot.subCourtId)) ||
-      (targetSlot?.subCourtName && court.subCourts?.find((sc) => sc.name.toLowerCase().includes(targetSlot.subCourtName.toLowerCase()))) ||
-      (court.subCourt && court.subCourts?.find((sc) => court.subCourt.toLowerCase().includes(sc.name.toLowerCase()))) ||
-      (court.subCourts && court.subCourts.find((sc) => sc.name.toLowerCase().includes('lucky'))) ||
-      court.subCourts?.[0]
-    const subCourtId = targetSubCourt?.id || targetSlot?.subCourtId || (isGuidRegex.test(court.id) ? court.id : '4e10deee-f580-43d9-96f6-8b1981e0f42c')
-    const subCourtName = targetSubCourt?.name || targetSlot?.subCourtName || (court.subCourt ? court.subCourt.split(' (')[0] : 'Sân lucky')
-    const bookingDateStr = '2026-10-28'
-    const bookingDateLabel = '28/10/2026'
-
-    let realSlotId = targetSlot.id && isGuidRegex.test(targetSlot.id) ? targetSlot.id : null
-    let realSlotIds = []
-    const hours = targetSlot.hours || 2
-    const numberOfSlotsNeeded = Math.max(1, Math.round(hours))
-
-    // Tự động truy vấn ca sân thực tế (GUID) từ Backend API
-    try {
-      const liveSlots = await getCourtSlots(subCourtId, bookingDateStr)
-      if (Array.isArray(liveSlots) && liveSlots.length > 0) {
-        const targetStart = targetSlot.start || '14:00'
-        const matched =
-          liveSlots.find((s) => s.startTime?.slice(11, 16) === targetStart && s.isBookable !== false) ||
-          liveSlots.find((s) => s.isBookable !== false && !s.isPast)
-
-        if (matched) {
-          realSlotId = matched.id
-          realSlotIds = [matched.id]
-          if (numberOfSlotsNeeded >= 2) {
-            const nextSlot = liveSlots.find((s) => s.startTime === matched.endTime && s.isBookable !== false)
-            if (nextSlot) realSlotIds.push(nextSlot.id)
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[AIChatBooking] Không thể tải ca sân từ máy chủ:', err)
-    }
-
-    const slotLabel = `${targetSlot.start || '14:00'} - ${targetSlot.end || '16:00'}`
-    const totalAmount = targetSlot.price || (court.price || 100000) * hours
-
-    navigate('/split-payment', {
-      state: {
-        facilityId: court.id,
-        courtId: subCourtId,
-        subCourtId: subCourtId,
-        court: court.name,
-        address: court.address,
-        district: court.district,
-        subCourt: subCourtName,
-        subCourtDesc: court.subCourtDesc,
-        image: court.image,
-        sport: court.sport,
-        slot: slotLabel,
-        hours: hours,
-        total: totalAmount,
-        hourlyRate: Math.round(totalAmount / hours),
-        courtSlotId: realSlotId,
-        courtSlotIds: realSlotIds.length > 0 ? realSlotIds : (realSlotId ? [realSlotId] : []),
-        numberOfSlots: realSlotIds.length > 0 ? realSlotIds.length : numberOfSlotsNeeded,
-        isConsecutive: true,
-        date: bookingDateStr,
-        dateLabel: bookingDateLabel,
-      },
-    })
+  const handleOpenLfg = () => {
+    navigate('/community')
   }
 
   const renderFormattedText = (rawText) => {
@@ -696,135 +539,7 @@ function AIChatBooking() {
             <div className="snx-ai-msg-content max-w-2xl">
               <div className="snx-ai-bubble">{renderFormattedText(msg.text)}</div>
 
-              {msg.recommendedCourt && (
-                <div className="snx-ai-recom-card mt-2">
-                  {msg.priorityBadge && (
-                    <div className="snx-ai-recom-badge" title={msg.priorityBadge}>
-                      {!/^[\p{Emoji}\u2600-\u27BF]/u.test(msg.priorityBadge) && (
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                          hotel_class
-                        </span>
-                      )}
-                      <span>{msg.priorityBadge}</span>
-                    </div>
-                  )}
-
-                  <div className="snx-ai-recom-content-wrap">
-                    <div className="snx-ai-recom-media">
-                      <img
-                        className="snx-ai-recom-img"
-                        src={msg.recommendedCourt.image}
-                        alt={msg.recommendedCourt.name}
-                        loading="lazy"
-                      />
-                      <div className="snx-ai-recom-meta-float">
-                        <span className="snx-ai-tag-pill">
-                          {msg.recommendedCourt.sport === 'badminton' ? '🏸 Cầu Lông' : '🏓 Pickleball'}
-                        </span>
-                        <span className="snx-ai-rating-pill">
-                          <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
-                            star
-                          </span>
-                          {msg.recommendedCourt.rating}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="snx-ai-recom-body">
-                      <div className="snx-ai-recom-loc-group">
-                        <div className="snx-ai-recom-header-row">
-                          <h4 className="snx-ai-recom-title" title={msg.recommendedCourt.name}>
-                            {msg.recommendedCourt.name}
-                          </h4>
-                          <div className="snx-ai-recom-dist-row">
-                            <span className="snx-ai-dist-badge">
-                              <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>
-                                near_me
-                              </span>
-                              Cách {msg.recommendedCourt.distance} km
-                            </span>
-                            {msg.recommendedCourt.route?.eta && (
-                              <span className="snx-ai-eta-text">• {msg.recommendedCourt.route.eta}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="snx-ai-recom-addr" title={msg.recommendedCourt.address}>
-                          <span className="material-symbols-outlined snx-ai-loc-icon">
-                            location_on
-                          </span>
-                          <span className="snx-ai-addr-text">{msg.recommendedCourt.address}</span>
-                        </div>
-                      </div>
-
-                      {msg.recommendedSlot && (
-                        <div className="snx-ai-recom-slot">
-                          <div className="snx-ai-slot-primary-row">
-                            <span className="snx-ai-slot-time">
-                              <span className="material-symbols-outlined">
-                                schedule
-                              </span>
-                              <span className="snx-ai-slot-prefix">Khung giờ:</span>
-                              <strong className="snx-ai-slot-range">
-                                {msg.recommendedSlot.start}&nbsp;–&nbsp;{msg.recommendedSlot.end}
-                              </strong>
-                            </span>
-                            <span className="snx-ai-slot-price">{formatVnd(msg.recommendedSlot.price)}</span>
-                          </div>
-
-                          {msg.recommendedSlot.note && (
-                            <div className="snx-ai-slot-secondary-row">
-                              <span className="snx-ai-slot-status-dot" />
-                              <span className="snx-ai-slot-note-text">{msg.recommendedSlot.note}</span>
-                              {msg.recommendedSlot.hours && (
-                                <span className="snx-ai-slot-hours-text">
-                                  • {msg.recommendedSlot.hours}h thi đấu
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {msg.priorityReason && (
-                        <div className="snx-ai-recom-reason" title={msg.priorityReason}>
-                          💡 <strong>Ưu tiên:</strong> {msg.priorityReason}
-                        </div>
-                      )}
-
-                      <div className="snx-ai-recom-actions">
-                        <button
-                          type="button"
-                          className="snx-ai-btn-action snx-ai-btn-select"
-                          onClick={() => handleSelectCourtOnMap(msg.recommendedCourt, msg.recommendedSlot)}
-                          title="Áp dụng chọn sân này ngay lập tức"
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                            check_circle
-                          </span>
-                          <span>Chọn Sân</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`snx-ai-btn-action snx-ai-btn-book ${
-                            msg.priorityBadge?.includes('XÁC NHẬN') ? 'is-confirmed-action' : ''
-                          }`}
-                          onClick={() => handleBookNow(msg.recommendedCourt, msg.recommendedSlot)}
-                          title="Xác nhận & chuyển sang thanh toán / chia tiền Split Payment ngay"
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                            {msg.priorityBadge?.includes('XÁC NHẬN') ? 'payments' : 'arrow_forward'}
-                          </span>
-                          <span>
-                            {msg.priorityBadge?.includes('XÁC NHẬN') ? 'Thanh Toán Ngay' : 'Đặt & Chia Tiền'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} />
 
               {msg.quickReplies && msg.quickReplies.length > 0 && (
                 <div className="snx-ai-chips-wrap mt-2">

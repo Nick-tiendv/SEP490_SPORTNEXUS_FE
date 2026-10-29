@@ -143,6 +143,60 @@ export async function deleteAiSession(sessionId) {
   }
 }
 
+// Phiên AI đang dùng được chia sẻ giữa modal chat và trang /ai-chat để hai nơi đồng bộ cùng một cuộc trò chuyện
+const CURRENT_SESSION_KEY = 'snx-ai-current-session'
+
+export function getStoredAiSessionId() {
+  try {
+    return localStorage.getItem(CURRENT_SESSION_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function storeAiSessionId(sessionId) {
+  try {
+    if (sessionId) localStorage.setItem(CURRENT_SESSION_KEY, sessionId)
+    else localStorage.removeItem(CURRENT_SESSION_KEY)
+  } catch {
+    // Bỏ qua nếu trình duyệt chặn storage
+  }
+}
+
+/**
+ * Chuyển lịch sử từ GET /sessions/{id}/messages sang tin nhắn hiển thị.
+ * Lịch sử là mảng phẳng AiMessageResponse (sender USER/BOT, message); dạng cặp chỉ dùng cho response gửi tin.
+ */
+export function mapAiHistoryToMessages(items = []) {
+  const toTime = (iso) =>
+    iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'
+  const result = []
+  items.forEach((m, idx) => {
+    // Dạng cặp chỉ có ở response gửi tin (AiChatResponse): userMessage và reply đều là AiMessageResponse
+    if (m?.userMessage && m?.reply) {
+      result.push(mapAiMessage(m.userMessage, `${idx}-u`, toTime))
+      result.push(mapAiMessage(m.reply, `${idx}-b`, toTime))
+      return
+    }
+    result.push(mapAiMessage(m, `msg-${idx}`, toTime))
+  })
+  return result
+}
+
+// AiMessageResponse: { id, sender: 'USER' | 'BOT', message, intent, facilities, lfgCards, createdAt }
+function mapAiMessage(m, fallbackId, toTime) {
+  const isUser = String(m?.sender || '').toUpperCase() === 'USER'
+  return {
+    id: m?.id || fallbackId,
+    sender: isUser ? 'user' : 'bot',
+    text: m?.message || '',
+    time: toTime(m?.createdAt),
+    intent: isUser ? undefined : m?.intent,
+    facilities: isUser ? undefined : m?.facilities,
+    lfgCards: isUser ? undefined : m?.lfgCards,
+  }
+}
+
 export default {
   sendChatMessage,
   createAiSession,

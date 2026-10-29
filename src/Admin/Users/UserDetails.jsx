@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, UserRound, Wallet, TriangleAlert, Pencil, Ban, Check, Trash2 } from 'lucide-react'
+import { X, UserRound, Wallet, TriangleAlert, Ban, Check, Trash2 } from 'lucide-react'
 import { roleLabel } from './usersData.js'
 
 const adminDisplayLabels = {
@@ -31,7 +31,7 @@ export function AccountStatus({ status }) {
   return <span className={`users-status ${status.toLowerCase()}`}><i />{adminDisplayLabels[status] || status}</span>
 }
 
-export default function UserDetails({ user, loading, error, isSelf, onClose, onEdit, onSuspend, onDelete }) {
+export default function UserDetails({ user, loading, error, isSelf, onClose, onSuspend, onDelete }) {
   return (
     <aside className="users-details" aria-label={`Chi tiết người dùng ${user.name}`} aria-busy={loading}>
       <header className="users-details-heading"><h2>Chi tiết người dùng <small title={user.id}>{user.id.slice(0, 8).toUpperCase()}</small></h2><button onClick={onClose} aria-label="Đóng chi tiết người dùng"><X size={18} /></button></header>
@@ -51,7 +51,6 @@ export default function UserDetails({ user, loading, error, isSelf, onClose, onE
       </div>
       <footer className="users-details-actions">
         <button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend} disabled={isSelf || loading}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button>
-        <button className="users-button" onClick={onEdit} disabled={loading}><Pencil size={15} />Chỉnh sửa</button>
         <button className="users-button users-danger" onClick={onDelete} disabled={isSelf || loading} aria-label="Xóa tài khoản"><Trash2 size={15} />Xóa</button>
       </footer>
     </aside>

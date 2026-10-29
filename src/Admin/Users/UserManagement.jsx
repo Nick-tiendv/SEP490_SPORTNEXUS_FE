@@ -121,11 +121,11 @@ export default function UserManagement() {
           <footer className="users-pagination"><div><span>Hiển thị {filtered.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, filtered.length)} trên {filtered.length} người dùng</span><label>Số dòng mỗi trang<select aria-label="Số dòng mỗi trang" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1) }}>{[10, 20, 50].map(size => <option key={size}>{size}</option>)}</select></label></div><nav aria-label="Phân trang người dùng"><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Trước</button>{pageItems(currentPage, pageCount).map(item => typeof item === 'string' ? <span key={item} className="users-page-gap" aria-hidden="true">…</span> : <button key={item} aria-current={item === currentPage ? 'page' : undefined} className={item === currentPage ? 'current' : ''} onClick={() => setPage(item)}>{item}</button>)}<button disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Sau</button></nav></footer>
         </section>
       </div>
-      {detailUser && <UserDetails user={detailUser} loading={detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} isSelf={detailUser.id === meId} onClose={() => setDetailId(null)} onEdit={() => setDialog({ type: 'edit', user: detailUser })} onSuspend={() => setDialog({ type: 'suspend', users: [detailUser], restore: detailUser.status === 'Suspended' })} onDelete={() => setDialog({ type: 'delete', user: detailUser })} />}
+      {detailUser && <UserDetails user={detailUser} loading={detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} isSelf={detailUser.id === meId} onClose={() => setDetailId(null)} onSuspend={() => setDialog({ type: 'suspend', users: [detailUser], restore: detailUser.status === 'Suspended' })} onDelete={() => setDialog({ type: 'delete', user: detailUser })} />}
       {dialog?.type === 'suspend' && <SuspensionDialog users={dialog.users} restore={dialog.restore} onClose={closeDialog} onDone={done} />}
       {dialog?.type === 'phone' && <PhoneLookupDialog onClose={closeDialog} onOpen={id => { closeDialog(); setDetailId(id) }} />}
       {dialog?.type === 'delete' && <DeleteUserDialog user={dialog.user} onClose={closeDialog} onDone={afterDelete} />}
-      {(dialog?.type === 'add' || dialog?.type === 'edit') && <UserFormDialog key={dialog.user?.id || 'add'} user={dialog.user} users={users} roles={roles} isSelf={Boolean(dialog.user) && dialog.user.id === meId} onClose={closeDialog} onDone={done} />}
+      {dialog?.type === 'add' && <UserFormDialog key="add" users={users} roles={roles} onClose={closeDialog} onDone={done} />}
     </div>
   )
 }

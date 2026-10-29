@@ -30,21 +30,13 @@ function PostMatchRating() {
   // Mở từ trang Check-in QR: ?contextId= chọn sẵn trận đó
   const [selectedContextId, setSelectedContextId] = useState(() => searchParams.get('contextId'))
 
-  const loadPendingRatings = async () => {
-    setLoadingPending(true)
-    try {
-      const data = await getPendingFairPlayRatings()
-      setPendingRatings(Array.isArray(data) ? data : [])
-    } catch (err) {
-      triggerToast(`⚠️ ${err?.message || 'Không tải được danh sách trận chờ đánh giá.'}`)
-    } finally {
-      setLoadingPending(false)
-    }
-  }
-
   useEffect(() => {
-    loadPendingRatings()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false
+    getPendingFairPlayRatings()
+      .then((data) => !cancelled && setPendingRatings(Array.isArray(data) ? data : []))
+      .catch((err) => !cancelled && triggerToast(`⚠️ ${err?.message || 'Không tải được danh sách trận chờ đánh giá.'}`))
+      .finally(() => !cancelled && setLoadingPending(false))
+    return () => { cancelled = true }
   }, [])
 
   const selectedMatch = pendingRatings.find((m) => m.contextId === selectedContextId) || pendingRatings[0] || null
@@ -88,8 +80,11 @@ function PostMatchRating() {
   const [facilityRating, setFacilityRating] = useState(5)
   const [facilityHoverRating, setFacilityHoverRating] = useState(0)
   const [facilityComment, setFacilityComment] = useState('')
-  const [facilityEligibility, setFacilityEligibility] = useState({ isEligible: false, message: '' })
-  const [checkingEligibility, setCheckingEligibility] = useState(false)
+  // Kết quả kiểm tra gắn với facilityId; đang kiểm tra khi cơ sở hiện tại chưa có kết quả
+  const [eligibilityResult, setEligibilityResult] = useState({ facilityId: null, isEligible: false, message: '' })
+  const checkingEligibility = Boolean(currentFacilityId) && eligibilityResult.facilityId !== currentFacilityId
+  const facilityEligibility = checkingEligibility ? { isEligible: false, message: '' } : eligibilityResult
+  const setFacilityEligibility = (value) => setEligibilityResult({ facilityId: currentFacilityId, ...value })
   const [submittingFacilityReview, setSubmittingFacilityReview] = useState(false)
   const [submittedFacilityReviews, setSubmittedFacilityReviews] = useState([])
 
@@ -97,16 +92,12 @@ function PostMatchRating() {
   useEffect(() => {
     if (!currentFacilityId) return
     let cancelled = false
-    setCheckingEligibility(true)
     checkFacilityReviewEligibility(currentFacilityId)
       .then((res) => {
-        if (!cancelled && res) setFacilityEligibility(res)
+        if (!cancelled) setEligibilityResult({ facilityId: currentFacilityId, isEligible: false, message: '', ...res })
       })
       .catch((err) => {
-        if (!cancelled) setFacilityEligibility({ isEligible: false, message: err?.message || '' })
-      })
-      .finally(() => {
-        if (!cancelled) setCheckingEligibility(false)
+        if (!cancelled) setEligibilityResult({ facilityId: currentFacilityId, isEligible: false, message: err?.message || '' })
       })
     return () => { cancelled = true }
   }, [currentFacilityId])
