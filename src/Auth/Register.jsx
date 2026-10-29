@@ -182,6 +182,10 @@ function Register() {
           <div className="w-full max-w-xl mx-auto">
             {/* Header */}
             <header className="mb-8">
+              <Link to="/" title="Về trang chủ" className="inline-flex items-center gap-2.5 mb-5 hover:opacity-90 transition-opacity">
+                <img src="/logo-mark.png" alt="" className="w-10 h-10 object-contain" aria-hidden="true" />
+                <img src="/logo-wordmark.png" alt="SportNexus" className="h-6 w-auto object-contain" />
+              </Link>
               <h1 className="text-3xl sm:text-4xl font-bold text-[#2D5F3F] mb-2">
                 Đăng ký tài khoản
               </h1>

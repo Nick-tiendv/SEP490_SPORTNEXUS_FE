@@ -22,6 +22,7 @@ import {
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
+import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import {
   getMyFacilityReviews,
@@ -232,7 +233,10 @@ export default function Profile() {
     setLoadingBookings(true)
     try {
       const data = await getMyBookings()
-      if (Array.isArray(data)) setMyBookings(data)
+      if (Array.isArray(data)) {
+        const enrichedBookings = await enrichPlayerBookings(data)
+        setMyBookings(enrichedBookings)
+      }
     } catch (err) {
       console.warn('[Profile] Lỗi lấy bookings:', err)
     } finally {
@@ -3511,33 +3515,36 @@ export default function Profile() {
                           style={{
                             background: b.status === 'CONFIRMED' || b.status === 'COMPLETED' ? '#DCFCE7' : '#FEF3C7',
                             color: b.status === 'CONFIRMED' || b.status === 'COMPLETED' ? '#15803D' : '#B45309',
+                            ...(['CONFIRMED', 'COMPLETED', 'PAID', 'CHECKED_IN'].includes(String(b.bookingStatus || b.status || '').toUpperCase())
+                              ? { background: '#DCFCE7', color: '#15803D' }
+                              : {}),
                             fontSize: '11px',
                             fontWeight: 800,
                             padding: '2px 8px',
                             borderRadius: '8px',
                           }}
                         >
-                          {b.status || 'CONFIRMED'}
+                          {b.bookingStatus || b.status || 'CONFIRMED'}
                         </span>
                         <strong style={{ fontSize: '14px', color: '#1F2937' }}>
                           {b.courtName || b.facilityName || 'Sân thể thao SportNexus'}
                         </strong>
                       </div>
                       <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
-                        {b.bookingDate || b.date || 'Hôm nay'} • {b.startTime || '08:00'} - {b.endTime || '09:00'}
+                        {b.playDate || b.bookingDate || b.date || 'Hôm nay'} • {b.displayTimeRange || `${b.startTime || '08:00'} - ${b.endTime || '09:00'}`}
                         {b.orderCode && <span className="font-mono"> • #{b.orderCode}</span>}
                       </div>
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
-                        {(Number(b.totalPrice) || 0).toLocaleString('vi-VN')} đ
+                        {(Number(b.totalAmount ?? b.totalPrice) || 0).toLocaleString('vi-VN')} đ
                       </div>
                       <button
                         type="button"
                         onClick={() => {
                           setShowMatchesModal(false)
-                          navigate('/check-in')
+                          navigate(`/qr-pass?type=booking&bookingId=${encodeURIComponent(b.bookingId || b.id || '')}`)
                         }}
                         style={{
                           marginTop: '4px',

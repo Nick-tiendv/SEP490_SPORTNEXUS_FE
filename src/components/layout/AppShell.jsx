@@ -17,9 +17,9 @@ export function AppSidebar({ homeTo, roleLabel, open, onClose, children }) {
       <aside className={`snx-sidebar ${open ? 'is-open' : ''}`} aria-label="Điều hướng">
         <div className="snx-sidebar-top">
           <Link to={homeTo} className="snx-brand" title="Về trang chủ">
-            <span className="snx-brand-mark"><span className="material-symbols-outlined" aria-hidden="true">bolt</span></span>
+            <span className="snx-brand-mark"><img src="/logo-mark.png" alt="" className="snx-brand-mark-img" aria-hidden="true" /></span>
             <span className="snx-brand-copy">
-              <strong>SportNexus <i className="snx-brand-dot" aria-hidden="true" /></strong>
+              <strong><img src="/logo-wordmark.png" alt="SportNexus" className="snx-brand-wordmark" /></strong>
               <small>{roleLabel}</small>
             </span>
           </Link>
@@ -113,7 +113,7 @@ export function AppFooter() {
   return (
     <footer className="snx-footer">
       <span className="snx-footer-brand">
-        <span className="material-symbols-outlined" aria-hidden="true">bolt</span>
+        <img src="/logo-mark.png" alt="" className="snx-footer-logo" aria-hidden="true" />
         © {new Date().getFullYear()} SportNexus · Nền tảng đặt sân &amp; kết nối người chơi thể thao
       </span>
       <span className="snx-footer-links">
