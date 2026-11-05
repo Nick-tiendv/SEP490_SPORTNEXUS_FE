@@ -31,7 +31,7 @@ function OnBoarding() {
     { label: 'Mới tập chơi', sub: 'Căn bản, làm quen môn thể thao' },
     { label: 'Mới chơi - Đang tiến bộ', sub: 'Nắm chắc luật, giao lưu vui vẻ' },
     { label: 'Trung bình', sub: 'Đánh đều tay phong trào' },
-    { label: 'Trung bình - Khá', sub: 'Điều cầu/bóng tốt, phối hợp ăn ý' },
+    { label: 'Trung bình - Khá', sub: selectedSports.length === 1 && selectedSports[0] === 'badminton' ? 'Đỡ cầu chuẩn, phối hợp nhịp nhàng' : (!selectedSports.includes('badminton') ? 'Đỡ bóng chuẩn, phối hợp nhịp nhàng' : 'Điều cầu/bóng tốt, phối hợp ăn ý') },
     { label: 'Khá - Đánh chắc tay', sub: 'Chiến thuật tốt, phản xạ nhanh' },
     { label: 'Bán chuyên / Nâng cao', sub: 'Tập luyện thường xuyên, kỹ thuật chuẩn' },
     { label: 'Chuyên nghiệp / Thi đấu giải', sub: 'Vận động viên thi đấu giải' },

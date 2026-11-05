@@ -5,7 +5,14 @@ import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
-import { getSportCategories } from '../../api/player/profileApi.js'
+import { getSportCategories, getMySports } from '../../api/player/profileApi.js'
+import {
+  normalizeSportKey,
+  loadProfileRegisteredSports,
+  loadLearnedSearchDesires,
+  recordNewPlayerDesire,
+  buildPersonalizedLfgSuggestions,
+} from '../LFG/lfgSuggestionEngine.js'
 import {
   createCommunityPost,
   createPostComment,
@@ -302,6 +309,24 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
   const sports = useApi(getSportCategories, [], { initialData: [] })
+  const [profileSports, setProfileSports] = useState(() => loadProfileRegisteredSports())
+  const [learnedDesires, setLearnedDesires] = useState(() => loadLearnedSearchDesires())
+  const [userProfileLocation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.location) return parsed.location
+      }
+    } catch { /* ignore */ }
+    return 'Thủ Đức'
+  })
+
+  useEffect(() => {
+    getMySports()
+      .then((serverSports) => setProfileSports(loadProfileRegisteredSports(serverSports)))
+      .catch(() => setProfileSports(loadProfileRegisteredSports()))
+  }, [])
 
   // Tải trang bài viết theo tab / bộ lọc: GET /community/posts | /my-posts | /users/{id}/posts
   const fetchPage = useCallback(async (pageNo) => {
@@ -341,6 +366,23 @@ export default function CommunityPage() {
   }
 
   const refresh = () => setReload((n) => n + 1)
+  const selectedSportObj = (sports.data || []).find((s) => String(s.id) === String(sportId))
+  const selectedSportKey = selectedSportObj ? normalizeSportKey(selectedSportObj.name) : null
+  const { suggestedPosts } = buildPersonalizedLfgSuggestions({
+    userProfileLocation,
+    profileSports,
+    habits: { sports: [], timeSlots: [], venues: [] },
+    learnedDesires,
+    facilities: [],
+    matches: [],
+    communityPosts: posts,
+    activeFilters: {
+      sport: selectedSportKey || 'profile_matched',
+      keyword: search,
+    },
+    includeLearnedDesires: true,
+  })
+  const displayedPosts = tab === 'feed' && !author ? suggestedPosts : posts
 
   return (
     <div className="snx-page">
@@ -381,10 +423,10 @@ export default function CommunityPage() {
           {tab === 'feed' && !author && <Composer sports={sports.data || []} onPosted={refresh} />}
           {tab === 'mine' && !author && <Composer sports={sports.data || []} onPosted={refresh} />}
 
-          {posts.map((post) => (
+          {displayedPosts.map((post) => (
             <PostCard key={post.id} post={post} onAuthor={setAuthor} onChanged={refresh} onRemoved={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))} />
           ))}
-          {!loading && posts.length === 0 && (
+          {!loading && displayedPosts.length === 0 && (
             <div className="snx-empty"><span className="material-symbols-outlined">forum</span>{tab === 'mine' ? 'Bạn chưa có bài viết nào.' : 'Chưa có bài viết nào phù hợp.'}</div>
           )}
           {loading && <p className="snx-muted">Đang tải…</p>}
@@ -394,14 +436,14 @@ export default function CommunityPage() {
         <aside className="snx-stack snx-feed-side">
           <section className="snx-card snx-stack" style={{ gap: 10 }}>
             <h2 className="snx-card-title" style={{ fontSize: 16 }}>Tìm & lọc</h2>
-            <form className="snx-stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); setAuthor(null); setTab('feed'); setSearch(keyword.trim()) }}>
+            <form className="snx-stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); setAuthor(null); setTab('feed'); const kw = keyword.trim(); setSearch(kw); if (kw) setLearnedDesires(recordNewPlayerDesire({ keyword: kw, source: 'Tìm kiếm Bảng tin cộng đồng' })) }}>
               <label className="snx-search"><span className="material-symbols-outlined">search</span><input className="snx-input" placeholder="Nội dung hoặc tên người đăng" value={keyword} onChange={(e) => setKeyword(e.target.value)} /></label>
               <button type="submit" className="snx-btn snx-btn--secondary">Tìm kiếm</button>
             </form>
             <div className="snx-row" style={{ gap: 6 }}>
               <button type="button" className={`snx-btn snx-btn--sm ${!sportId ? 'snx-btn--primary' : 'snx-btn--secondary'}`} onClick={() => setSportId('')}>Tất cả môn</button>
               {(sports.data || []).map((s) => (
-                <button key={s.id} type="button" className={`snx-btn snx-btn--sm ${sportId === s.id ? 'snx-btn--primary' : 'snx-btn--secondary'}`} onClick={() => { setAuthor(null); setTab('feed'); setSportId(s.id) }}>{s.name}</button>
+                <button key={s.id} type="button" className={`snx-btn snx-btn--sm ${sportId === s.id ? 'snx-btn--primary' : 'snx-btn--secondary'}`} onClick={() => { setAuthor(null); setTab('feed'); setSportId(s.id); const sk = normalizeSportKey(s.name); if (sk) setLearnedDesires(recordNewPlayerDesire({ sportKey: sk, source: 'Lọc môn trên Bảng tin cộng đồng' })) }}>{s.name}</button>
               ))}
             </div>
           </section>

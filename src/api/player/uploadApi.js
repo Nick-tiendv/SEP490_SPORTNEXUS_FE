@@ -5,6 +5,8 @@ import { post } from '../owner/request.js'
 export async function uploadImage(file, purpose = 'general') {
   const form = new FormData()
   form.append('file', file)
-  const data = await post(`/api/v1/uploads/images?purpose=${encodeURIComponent(purpose)}`, form)
+  const data = await post(`/api/v1/uploads/images?purpose=${encodeURIComponent(purpose)}`, form, {
+    headers: { 'Content-Type': undefined },
+  })
   return data?.url || ''
 }

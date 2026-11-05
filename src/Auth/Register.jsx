@@ -44,6 +44,7 @@ function Register() {
   const [sportOptions, setSportOptions] = useState([])
   const [sportsLoading, setSportsLoading] = useState(true)
   const [selectedSports, setSelectedSports] = useState({}) // { [sportCategoryId]: skillLevel }
+  const [registeredAddress, setRegisteredAddress] = useState('TP. Thủ Đức')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
@@ -105,6 +106,32 @@ function Register() {
       try {
         localStorage.setItem('sportnexus_user_role', role)
         localStorage.setItem('sportnexus_registered_role', role)
+        if (role === 'player') {
+          const prevProfile = JSON.parse(localStorage.getItem('player_profile_data') || '{}')
+          localStorage.setItem(
+            'player_profile_data',
+            JSON.stringify({
+              ...prevProfile,
+              location: registeredAddress.trim() || prevProfile.location || 'TP. Thủ Đức',
+            })
+          )
+          const savedSportsList = Object.entries(selectedSports).map(([sportCategoryId, skillLevel]) => {
+            const opt = sportOptions.find((s) => String(s.id) === String(sportCategoryId))
+            const levelLabel = SKILL_LEVELS.find((lv) => lv.value === skillLevel)?.label || 'Trung bình - Khá'
+            return {
+              id: sportCategoryId,
+              sportCategoryId,
+              name: opt?.name || sportCategoryId,
+              icon: sportEmoji(opt?.name || ''),
+              skillLevel,
+              level: levelLabel,
+            }
+          })
+          if (savedSportsList.length > 0) {
+            localStorage.setItem('player_registered_sports', JSON.stringify(savedSportsList))
+            localStorage.setItem('player_sports_data', JSON.stringify(savedSportsList))
+          }
+        }
       } catch { /* bỏ qua khi localStorage bị chặn */ }
       toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.')
       navigate('/login', { replace: true })
@@ -402,6 +429,27 @@ function Register() {
                   </div>
                 </div>
               </div>
+
+              {/* Địa chỉ đăng ký người chơi (dùng để gợi ý Sàn ghép trận & Kèo ghép từ gần đến xa) */}
+              {role === 'player' && (
+                <div>
+                  <label className="block text-sm font-medium text-[#2D5F3F] mb-2" htmlFor="registered-address">
+                    Địa chỉ / Khu vực đăng ký hoạt động
+                  </label>
+                  <input
+                    id="registered-address"
+                    name="registeredAddress"
+                    type="text"
+                    value={registeredAddress}
+                    onChange={(e) => setRegisteredAddress(e.target.value)}
+                    placeholder="Ví dụ: Võ Văn Ngân, TP. Thủ Đức hoặc Quận 7, Bình Thạnh..."
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Hệ thống sẽ tự động gợi ý Sàn ghép trận, Kèo ghép &amp; Bảng tin cộng đồng từ nơi gần địa chỉ này nhất đến xa nhất.
+                  </p>
+                </div>
+              )}
 
               {/* Môn thể thao quan tâm (không bắt buộc) */}
               <div>

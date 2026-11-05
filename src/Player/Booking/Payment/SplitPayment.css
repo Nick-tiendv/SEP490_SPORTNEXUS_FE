@@ -1456,6 +1456,15 @@
 }
 
 .sp-ticket-token-id {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+  text-align: center;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  border: 1px solid #e5e7eb;
   margin-top: 12px;
   background: #f3f4f6;
   border-radius: 6px;

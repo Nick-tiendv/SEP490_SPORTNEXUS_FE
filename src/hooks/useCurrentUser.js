@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getMyProfile } from '../api/player/profileApi.js'
+import { getMyProfile, readLocalAvatar } from '../api/player/profileApi.js'
 
 // Thông tin người dùng đang đăng nhập (GET /api/auth/me), dùng chung cho TopBar, trang chủ, thanh toán...
 // Gọi API một lần cho cả app; tải lại khi hồ sơ được sửa (sự kiện 'player-profile-updated').
@@ -12,7 +12,7 @@ let pending = null
 const fromLogin = () => {
   try {
     const saved = JSON.parse(localStorage.getItem('sportnexus_current_user') || '{}')
-    return { name: saved.fullName || '', username: saved.username ? `@${saved.username}` : '', phone: '', email: '', avatarUrl: null, fairPlayScore: null }
+    return { name: saved.fullName || '', username: saved.username ? `@${saved.username}` : '', phone: '', email: '', avatarUrl: saved.avatarUrl || readLocalAvatar() || null, fairPlayScore: null }
   } catch {
     return { name: '', username: '', phone: '', email: '', avatarUrl: null, fairPlayScore: null }
   }
@@ -23,7 +23,7 @@ const toUser = me => ({
   username: me.username ? `@${me.username}` : '',
   phone: me.phone || '',
   email: me.email || '',
-  avatarUrl: me.avatarUrl || null,
+  avatarUrl: me.avatarUrl || readLocalAvatar() || null,
   fairPlayScore: me.fairPlayScore ?? null,
 })
 const load = (force = false) => {

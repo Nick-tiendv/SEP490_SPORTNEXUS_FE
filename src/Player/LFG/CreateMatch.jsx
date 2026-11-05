@@ -8,6 +8,12 @@ import { searchFacilities } from '../../api/player/facilityApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
+import { getMySports } from '../../api/player/profileApi.js'
+import {
+  loadProfileRegisteredSports,
+  recordNewPlayerDesire,
+  calculateDistanceFromRegisteredAddress,
+} from './lfgSuggestionEngine.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
 const calculateDurationHours = (rangeStr) => {
@@ -140,7 +146,7 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
 const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 // Gom cơ sở thật (GET /api/v1/facilities/search) theo quận để chọn khu vực
-const groupByDistrict = (facilities) => {
+const groupByDistrict = (facilities, userLoc = 'Thủ Đức') => {
   const map = {}
   facilities.forEach((f) => {
     const name = f.district || f.province || 'Khác'
@@ -150,7 +156,14 @@ const groupByDistrict = (facilities) => {
       id: f.id,
       name: f.name,
       address: f.address || '',
-      distance: f.distanceKm != null ? `${Number(f.distanceKm).toFixed(1)} km` : name,
+      distance:
+        f.distanceKm != null
+          ? `${Number(f.distanceKm).toFixed(1)} km`
+          : `${calculateDistanceFromRegisteredAddress(f.address || f.name || name, userLoc, f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null)} km`,
+      distanceKm:
+        f.distanceKm != null
+          ? Number(f.distanceKm)
+          : calculateDistanceFromRegisteredAddress(f.address || f.name || name, userLoc, f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null),
       courtCount: `${f.courtCount || 0} sân`,
       price: f.minPrice ? `${Math.round(f.minPrice / 1000)}k/h` : '—',
       rating: f.averageRating,
@@ -158,6 +171,9 @@ const groupByDistrict = (facilities) => {
       lng: f.longitude,
       sports: (f.sports || []).map((x) => normalize(x.name)),
     })
+  })
+  Object.values(map).forEach((d) => {
+    d.courts.sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99))
   })
   return map
 }
@@ -167,7 +183,7 @@ function CreateMatch() {
   const navigate = useNavigate()
 
   // State management
-  const [sport, setSport] = useState('badminton') // 'badminton' | 'pickleball'
+  const [sport, setSport] = useState(() => loadProfileRegisteredSports()[0]?.sportKey || 'badminton') // Khởi tạo theo môn trong Profile
   const [radius, setRadius] = useState(8.5)
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
   const [userProfileLocation] = useState(() => {
@@ -185,8 +201,9 @@ function CreateMatch() {
   const [districtData, setDistrictData] = useState({})
   useEffect(() => {
     searchFacilities({ pageSize: 100 })
-      .then((res) => setDistrictData(groupByDistrict(res.items || [])))
+      .then((res) => setDistrictData(groupByDistrict(res.items || [], userProfileLocation)))
       .catch(() => toast.error('Không tải được danh sách cơ sở.'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const districtKeys = Object.keys(districtData)
   const userDistrictKey = districtKeys.find((k) => normalize(userProfileLocation).includes(k) || k.includes(normalize(userProfileLocation).replace(/[^a-z0-9]/g, ''))) || districtKeys[0]
@@ -306,6 +323,19 @@ function CreateMatch() {
   }, [location.state, facilitiesReload])
 
   // Lọc cơ sở phù hợp theo môn và quận
+  // Đồng bộ môn thể thao từ Hồ sơ người chơi (GET /api/auth/me/sports) và ghi nhận khi người chơi đổi môn
+  useEffect(() => {
+    getMySports()
+      .then((serverSports) => {
+        const loaded = loadProfileRegisteredSports(serverSports)
+        if (loaded[0]?.sportKey) setSport(loaded[0].sportKey)
+      })
+      .catch(() => {})
+  }, [])
+  useEffect(() => {
+    if (sport) recordNewPlayerDesire({ sportKey: sport, source: 'Chọn môn khi tạo kèo ghép trận' })
+  }, [sport])
+
   const filteredFacilities = useMemo(() => {
     if (!facilities.length) return []
     const sportMatched = facilities.filter((f) => {
@@ -314,7 +344,7 @@ function CreateMatch() {
       }
       return f.sport === sport
     })
-    return sportMatched.length > 0 ? sportMatched : facilities
+    return sportMatched
   }, [facilities, sport])
 
   // Sắp xếp ưu tiên cơ sở tại quận đang chọn
@@ -323,9 +353,12 @@ function CreateMatch() {
       const aInDist = a.district === selectedDistrict ? 1 : 0
       const bInDist = b.district === selectedDistrict ? 1 : 0
       if (aInDist !== bInDist) return bInDist - aInDist
+      const aDistKm = calculateDistanceFromRegisteredAddress(a.location || a.address || a.name, userProfileLocation, a.coords)
+      const bDistKm = calculateDistanceFromRegisteredAddress(b.location || b.address || b.name, userProfileLocation, b.coords)
+      if (aDistKm !== bDistKm) return aDistKm - bDistKm
       return 0
     })
-  }, [filteredFacilities, selectedDistrict])
+  }, [filteredFacilities, selectedDistrict, userProfileLocation])
 
   // Cơ sở đang chọn
   const selectedFacility = useMemo(() => {
@@ -448,7 +481,14 @@ function CreateMatch() {
     currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
 
   // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở
-  const filteredDistricts = Object.entries(districtData).filter(([, item]) => {
+  // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở & sắp xếp từ gần địa chỉ đăng ký nhất đến xa nhất
+  const filteredDistricts = Object.entries(districtData)
+    .sort(([, a], [, b]) => {
+      const distA = a.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(a.name, userProfileLocation)
+      const distB = b.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(b.name, userProfileLocation)
+      return distA - distB
+    })
+    .filter(([, item]) => {
     if (!districtSearchQuery.trim()) return true
     const q = districtSearchQuery.toLowerCase().trim()
     const matchName = item.name.toLowerCase().includes(q)
@@ -459,6 +499,9 @@ function CreateMatch() {
   })
 
   const handleSelectDistrict = (key) => {
+    if (districtData[key]?.name) {
+      recordNewPlayerDesire({ keyword: districtData[key].name, source: 'Chọn khu vực sân ghép trận' })
+    }
     setSelectedDistrict(key)
     setSelectedCourtId(null)
     setDistrictSearchQuery('')
