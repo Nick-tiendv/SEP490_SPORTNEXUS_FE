@@ -6,6 +6,7 @@ const exploreItems = [
   { label: 'Trang chủ', path: '/dashboard', icon: 'home' },
   { label: 'Đặt sân', path: '/court-finder', icon: 'calendar_month', match: ['/court', '/split-payment', '/ai-chat'] },
   { label: 'Ghép trận LFG', path: '/community', icon: 'group', match: ['/create-match', '/flash-claim'] },
+  { label: 'Kèo phù hợp với bạn', path: '/recommended-lfg', icon: 'auto_awesome' },
   { label: 'Cộng đồng', path: '/feed', icon: 'forum' },
   { label: 'Giải đấu & Đội', path: '/tournament', icon: 'emoji_events' },
 ]
@@ -13,6 +14,7 @@ const exploreItems = [
 const myItems = [
   { label: 'Vé check-in QR', path: '/qr-pass', icon: 'qr_code_scanner', match: ['/check-in', '/live-qr'] },
   { label: 'Đánh giá sau trận', path: '/post-match-rating', icon: 'star' },
+  { label: 'Đơn mua tại sân', path: '/shop-orders', icon: 'shopping_bag' },
   { label: 'Ví Escrow', path: '/wallet', icon: 'account_balance_wallet', match: ['/wallet/deposit-success', '/wallet/deposit-cancel'] },
   { label: 'Elo & khảo sát trình độ', path: '/assessment', icon: 'military_tech' },
   { label: 'Hồ sơ cá nhân', path: '/profile', icon: 'badge' },

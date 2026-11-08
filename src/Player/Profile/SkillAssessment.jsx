@@ -7,6 +7,7 @@ import {
   EVIDENCE_STATUS, getAssessmentForm, getMyAssessments, getMyRatings, isTechniqueCode, submitAssessment,
 } from '../../api/player/ratingApi.js'
 import { useApi } from '../../hooks/useApi.js'
+import EloLeaderboard from '../../components/common/EloLeaderboard.jsx'
 
 // Khảo sát toàn diện theo môn → Elo khởi đầu. Câu hỏi / mã giá trị lấy từ BE, không hard-code.
 // Chưa có Elo môn nào thì không tạo / vào đội, không đăng ký giải môn đó.
@@ -224,6 +225,7 @@ export default function SkillAssessment() {
           )}
         </>
       )}
+      <EloLeaderboard key={sportId || 'all'} initialSportId={sportId} />
     </div>
   )
 }

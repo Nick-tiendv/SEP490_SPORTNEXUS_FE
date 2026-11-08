@@ -22,6 +22,8 @@ const CourtDetails = lazy(() => import('./Player/Booking/CourtDetail/CourtDetail
 const CreateMatch = lazy(() => import('./Player/LFG/CreateMatch.jsx'))
 const Dashboard = lazy(() => import('./Player/Home/Dashboard.jsx'))
 const FlashClaim = lazy(() => import('./Player/LFG/FlashClaim.jsx'))
+const RecommendedLfg = lazy(() => import('./Player/LFG/RecommendedLfg.jsx'))
+const MyShopOrders = lazy(() => import('./Player/Shop/MyShopOrders.jsx'))
 const CheckInQR = lazy(() => import('./Player/CheckIn/CheckInQR.jsx'))
 const MapBooking = lazy(() => import('./Player/Booking/FindCourt/MapBooking.jsx'))
 const OnBoarding = lazy(() => import('./Player/Profile/OnBoarding.jsx'))
@@ -45,6 +47,7 @@ const BookingManagement = lazy(() => import('./Admin/Bookings/BookingManagement.
 const LFGManagement = lazy(() => import('./Admin/LFG/LFGManagement.jsx'))
 const TournamentManagement = lazy(() => import('./Admin/Tournaments/TournamentManagement.jsx'))
 const TeamManagement = lazy(() => import('./Admin/Teams/TeamManagement.jsx'))
+const RatingManagement = lazy(() => import('./Admin/Ratings/RatingManagement.jsx'))
 const PromotionManagement = lazy(() => import('./Admin/Promotions/PromotionManagement.jsx'))
 const PaymentManagement = lazy(() => import('./Admin/Payments/PaymentManagement.jsx'))
 const ReviewsReportsPage = lazy(() => import('./Admin/Reviews/ReviewsReportsPage.jsx'))
@@ -67,6 +70,7 @@ const OwnerBookings = lazy(() => import('./CourtOwner/Bookings/OwnerBookings.jsx
 const OwnerReviews = lazy(() => import('./CourtOwner/Reviews/OwnerReviews.jsx'))
 const OwnerReports = lazy(() => import('./CourtOwner/Reports/OwnerReports.jsx'))
 const OwnerPromotions = lazy(() => import('./CourtOwner/Promotions/OwnerPromotions.jsx'))
+const OwnerShop = lazy(() => import('./CourtOwner/Shop/OwnerShop.jsx'))
 
 // Mỗi trang tải riêng (React.lazy) và có ErrorBoundary riêng: 1 trang lỗi không làm trắng cả app,
 // layout (sidebar, topbar) vẫn giữ nguyên trong lúc tải trang.
@@ -137,6 +141,8 @@ function App() {
             {/* Trang vé cũ (dữ liệu mẫu) đã gộp vào /qr-pass */}
             <Route path="/live-qr" element={<RedirectWithQuery to="/qr-pass" />} />
             <Route path="/flash-claim" element={<Page><FlashClaim /></Page>} />
+            <Route path="/recommended-lfg" element={<Page><RecommendedLfg /></Page>} />
+            <Route path="/shop-orders" element={<Page><MyShopOrders /></Page>} />
             <Route path="/create-match" element={<Page><CreateMatch /></Page>} />
             <Route path="/split-payment" element={<Page><SplitPayment /></Page>} />
             <Route path="/post-match-rating" element={<Page><PostMatchRating /></Page>} />
@@ -155,6 +161,7 @@ function App() {
             <Route path="users" element={<Page><UserManagement /></Page>} />
             <Route path="court-owners" element={<Page><CourtOwnerManagement /></Page>} />
             <Route path="teams" element={<Page><TeamManagement /></Page>} />
+            <Route path="ratings" element={<Page><RatingManagement /></Page>} />
             <Route path="promotions" element={<Page><PromotionManagement /></Page>} />
             <Route path="facilities" element={<Page><FacilityManagement /></Page>} />
             <Route path="bookings" element={<Page><BookingManagement /></Page>} />
@@ -183,6 +190,7 @@ function App() {
             <Route path="reviews" element={<Page><OwnerReviews /></Page>} />
             <Route path="reports" element={<Page><OwnerReports /></Page>} />
             <Route path="promotions" element={<Page><OwnerPromotions /></Page>} />
+            <Route path="shop" element={<Page><OwnerShop /></Page>} />
             <Route path="courts" element={<Page><CourtManage /></Page>} />
             <Route path="court-manage" element={<Page><CourtManage /></Page>} />
             <Route path="check-qr" element={<Page><CheckQR /></Page>} />

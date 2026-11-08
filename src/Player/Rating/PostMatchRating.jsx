@@ -3,6 +3,7 @@ import { uid } from '../../utils/ids.js'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
 import { SKILL_VERDICTS, submitSkillFeedback } from '../../api/player/ratingApi.js'
+import ReportModal from '../../components/common/ReportModal.jsx'
 import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
@@ -66,6 +67,8 @@ function PostMatchRating() {
   const [rating, setRating] = useState(5)
   // Đánh giá trình độ thật so với Elo (không bắt buộc): LOWER | ACCURATE | HIGHER
   const [skillVerdict, setSkillVerdict] = useState('')
+  // Báo cáo người chơi (bùng kèo, phi thể thao, khai gian trình độ…)
+  const [reportingPlayer, setReportingPlayer] = useState(null)
   const [hoverRating, setHoverRating] = useState(0)
 
   // Đánh giá: Hình thức viết nhận xét (bắt buộc)
@@ -1100,6 +1103,12 @@ function PostMatchRating() {
                       </button>
                     ))}
                   </div>
+                  {selectedPlayer.userId && (
+                    <button type="button" onClick={() => setReportingPlayer(selectedPlayer)}
+                      style={{ marginTop: '10px', background: 'none', border: 'none', padding: 0, color: '#B91C1C', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>
+                      Báo cáo người chơi này (bùng kèo, phi thể thao, khai gian trình độ…)
+                    </button>
+                  )}
                 </div>
 
                 {/* Gợi ý mẫu câu nhanh */}
@@ -1550,6 +1559,9 @@ function PostMatchRating() {
             </div>
           )}
         </div>
+      )}
+      {reportingPlayer && (
+        <ReportModal targetType="USER" targetUserId={reportingPlayer.userId} subject={reportingPlayer.name} onClose={() => setReportingPlayer(null)} />
       )}
     </div>
   )

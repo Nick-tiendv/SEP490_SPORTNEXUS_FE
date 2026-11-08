@@ -16,6 +16,7 @@ import {
   removeParticipant,
   updateMatchScore,
 } from '../../api/owner'
+import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TournamentManagePanel from './TournamentManagePanel.jsx'
@@ -93,8 +94,20 @@ function useLoad(load, key, enabled = true) {
   return { data: state?.data ?? null, error: state?.key === key ? state.error : '', loading: state?.key !== key, key: state?.key }
 }
 
+// Trang của chủ sân (/owner/tournament): giải của cơ sở đang chọn
 export default function CreateAutomatedTournament() {
-  const { facilityId, facility, refreshWallet, loading: layoutLoading } = useOwnerContext()
+  const { facilityId, facility, refreshWallet, loading } = useOwnerContext()
+  return <TournamentWorkspace mode="owner" facilityId={facilityId} facility={facility} refreshWallet={refreshWallet} layoutLoading={loading} />
+}
+
+// Màn tổ chức giải dùng chung cho chủ sân và người chơi.
+// mode = "player": người chơi làm Ban tổ chức — xem mọi giải mình tạo, chọn cơ sở khi tạo, giải chờ Admin duyệt,
+// không giữ sân (court-blocks chỉ dành cho chủ sân / Admin).
+export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityId, facility: ownerFacility, refreshWallet: refreshOwnerWallet, layoutLoading = false, embedded = false }) {
+  const isPlayer = mode === 'player'
+  const refreshWallet = refreshOwnerWallet || (async () => {})
+  const facilityId = isPlayer ? '' : ownerFacilityId
+  const facility = isPlayer ? null : ownerFacility
   const [listToken, setListToken] = useState(0)
   const [childToken, setChildToken] = useState(0)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
@@ -106,7 +119,10 @@ export default function CreateAutomatedTournament() {
   const sports = sportsLoad.data || []
 
   // Giải của cơ sở đang chọn, mới nhất lên trước
-  const tournaments = (tournamentsLoad.data || []).filter((item) => String(item.facilityId) === String(facilityId))
+  const tournaments = (tournamentsLoad.data || []).filter((item) => isPlayer || String(item.facilityId) === String(facilityId))
+  // Người chơi chọn cơ sở tổ chức khi tạo giải
+  const facilitiesLoad = useLoad(() => getPublicFacilities(), 'facilities', isPlayer)
+  const publicFacilities = (facilitiesLoad.data || []).filter((f) => !f.approvalStatus || String(f.approvalStatus).toUpperCase() === 'APPROVED')
   const tournament = tournaments.find((item) => item.id === selectedTournamentId) || tournaments[0] || null
   const children = tournament?.children || []
   const child = children.find((item) => item.id === selectedChildId) || children[0] || null
@@ -250,7 +266,7 @@ export default function CreateAutomatedTournament() {
   const openCreateModal = () => {
     // Lần tải môn trước đó lỗi (vd server khởi động chậm) thì tải lại.
     if (!sports.length) setSportsToken((value) => value + 1)
-    setForm({ name: '', categoryId: defaultSportId(), startDate: '', endDate: '', registrationDeadline: '', rules: '', tier: 'AMATEUR', purpose: 'EXCHANGE', minRating: '', maxRating: '', minRatedMatches: '', children: [emptyChild()] })
+    setForm({ name: '', facilityId: '', categoryId: defaultSportId(), startDate: '', endDate: '', registrationDeadline: '', rules: '', tier: 'AMATEUR', purpose: 'EXCHANGE', minRating: '', maxRating: '', minRatedMatches: '', children: [emptyChild()] })
     setShowCreateModal(true)
   }
   // Danh sách môn về sau khi form đã mở: chọn sẵn môn mặc định.
@@ -267,6 +283,10 @@ export default function CreateAutomatedTournament() {
     }
     if (!selectedSportId) {
       showToast('Vui lòng chọn bộ môn.', 'error')
+      return
+    }
+    if (isPlayer && !form.facilityId) {
+      showToast('Vui lòng chọn cơ sở tổ chức giải.', 'error')
       return
     }
     if (form.purpose === 'DEVELOPMENT' && (form.tier || 'AMATEUR') === 'AMATEUR') {
@@ -286,7 +306,7 @@ export default function CreateAutomatedTournament() {
       return
     }
     const payload = {
-      facilityId,
+      facilityId: isPlayer ? form.facilityId : facilityId,
       categoryId: selectedSportId,
       name: form.name.trim(),
       startDate: form.startDate || null,
@@ -311,7 +331,7 @@ export default function CreateAutomatedTournament() {
     }
     runAction(
       () => createTournament(payload),
-      'Tạo giải thành công.',
+      isPlayer ? 'Đã gửi giải, chờ Admin duyệt trước khi công khai và nhận đăng ký.' : 'Tạo giải thành công.',
       { reloadList: true, reloadChild: false, after: () => { setShowCreateModal(false); setSelectedTournamentId(null); setSelectedChildId(null) } },
     )
   }
@@ -340,10 +360,16 @@ export default function CreateAutomatedTournament() {
   const modalBackdrop = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }
 
   return (
-    <div className="snx-page">
+    <div className={embedded ? '' : 'snx-page'}>
 
       {/* HEADER */}
       <div className="snx-page-header">
+        {isPlayer ? (
+          <div>
+            <h2 className="snx-page-title" style={{ fontSize: 22 }}>Giải tôi tổ chức</h2>
+            <p className="snx-page-subtitle">Bạn làm Ban tổ chức: tạo giải tại một cơ sở, chờ Admin duyệt, rồi quản lý người tham gia, nhánh đấu, tỉ số và trọng tài. Lệ phí về ví của bạn khi bảng đấu kết thúc.</p>
+          </div>
+        ) : (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <span className="snx-page-eyebrow">
@@ -356,9 +382,10 @@ export default function CreateAutomatedTournament() {
             Tạo giải với nhiều bảng đấu, quản lý người tham gia, bốc thăm ghép đôi, chốt nhánh loại trực tiếp và nhập tỉ số từng trận.
           </p>
         </div>
+        )}
         <button
           onClick={openCreateModal}
-          disabled={!facilityId || facility?.approvalStatus !== 'APPROVED'}
+          disabled={!isPlayer && (!facilityId || facility?.approvalStatus !== 'APPROVED')}
           title={facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
           className="snx-btn snx-btn--primary"
         >
@@ -367,18 +394,18 @@ export default function CreateAutomatedTournament() {
         </button>
       </div>
 
-      {!layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="tổ chức giải đấu" /></div>}
+      {!isPlayer && !layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="tổ chức giải đấu" /></div>}
       {facility && facility.approvalStatus !== 'APPROVED' && <div className="snx-alert snx-alert--info" style={{ marginBottom: 16 }}>Cơ sở {facility.name} chưa được Admin duyệt nên chưa tạo được giải.</div>}
 
       {/* DANH SÁCH GIẢI CỦA CƠ SỞ */}
       <div style={{ ...panelStyle, marginBottom: '24px' }}>
-        <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>Giải đấu của cơ sở ({tournaments.length})</h3>
+        <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>{isPlayer ? 'Giải tôi tạo' : 'Giải đấu của cơ sở'} ({tournaments.length})</h3>
         {tournamentsLoad.error ? (
           <div style={{ color: '#B91C1C', fontWeight: 700 }}>{tournamentsLoad.error}</div>
         ) : !tournamentsLoad.data ? (
           <div style={{ color: '#475569', fontWeight: 600 }}>Đang tải danh sách giải...</div>
         ) : tournaments.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Cơ sở chưa có giải đấu nào. Bấm "Tạo giải đấu mới" để bắt đầu.</div>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{isPlayer ? 'Bạn chưa tạo giải nào' : 'Cơ sở chưa có giải đấu nào'}. Bấm "Tạo giải đấu mới" để bắt đầu.</div>
         ) : (
           <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '4px' }}>
             {tournaments.map((item) => {
@@ -642,7 +669,8 @@ export default function CreateAutomatedTournament() {
             tournament={tournament}
             child={child}
             rounds={rounds}
-            facilityId={facilityId}
+            facilityId={isPlayer ? tournament.facilityId : facilityId}
+            mode={mode}
             onChanged={() => { setListToken((value) => value + 1); setChildToken((value) => value + 1) }}
           />
         </>
@@ -765,7 +793,14 @@ export default function CreateAutomatedTournament() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>Tạo giải đấu mới</h3>
-                <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>Tại {facility?.name}</div>
+                {isPlayer ? (
+                  <select value={form.facilityId || ''} onChange={(event) => setForm((prev) => ({ ...prev, facilityId: event.target.value }))} style={{ ...inputStyle, marginTop: '6px', minWidth: '260px' }} aria-label="Cơ sở tổ chức">
+                    <option value="">{facilitiesLoad.loading ? 'Đang tải cơ sở…' : '— Chọn cơ sở tổ chức —'}</option>
+                    {publicFacilities.map((f) => <option key={f.id} value={f.id}>{f.name}{f.address ? ` — ${f.address}` : ''}</option>)}
+                  </select>
+                ) : (
+                  <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>Tại {facility?.name}</div>
+                )}
               </div>
               <button type="button" onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
                 <span className="material-symbols-outlined">close</span>

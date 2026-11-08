@@ -388,8 +388,8 @@ function AIChatBooking() {
     navigate('/community')
   }
 
-  const handleOpenTournament = () => {
-    navigate('/tournament')
+  const handleOpenTournament = (t) => {
+    navigate(t?.tournamentId ? `/tournament?tournamentId=${encodeURIComponent(t.tournamentId)}` : '/tournament')
   }
 
   // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi

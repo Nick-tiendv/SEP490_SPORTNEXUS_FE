@@ -361,10 +361,12 @@ function RegistrationDecision({ tournamentId, onDone }) {
 }
 
 // Quản lý thêm cho giải đang chọn: sửa thông tin, giữ / trả sân, xếp sân, nhân sự, trọng tài, bảng xếp hạng.
-export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged }) {
+export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged, mode = 'owner' }) {
+  // Người chơi làm BTC không giữ / trả sân được (court-blocks chỉ dành cho chủ sân / Admin)
+  const canBlockCourts = mode !== 'player'
   const [editing, setEditing] = useState(false)
   const [assigning, setAssigning] = useState(null)
-  const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId, initialData: [] })
+  const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId && canBlockCourts, initialData: [] })
   const schedule = useApi(() => getCourtSchedule(tournament.id), [tournament.id])
   const staff = useApi(() => getTournamentStaff(tournament.id), [tournament.id], { initialData: [] })
   const referees = (staff.data || []).filter((m) => String(m.role).toUpperCase() === 'REFEREE')
@@ -411,7 +413,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
 
       {child && childStatus === 'OPEN' && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
 
-      {!closed && (
+      {!closed && canBlockCourts && (
         <>
           <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Giữ khung giờ sân cho giải</h3>
           <CourtBlockForm tournamentId={tournament.id} courts={courts.data || []} onDone={schedule.refresh} />

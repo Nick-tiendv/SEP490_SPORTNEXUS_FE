@@ -18,6 +18,8 @@ import {
 } from '../../api/player/tournamentApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
+import ReportModal from '../../components/common/ReportModal.jsx'
+import { TournamentWorkspace } from '../../CourtOwner/Tournament/CreateTournament.jsx'
 
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
@@ -49,6 +51,7 @@ const TABS = [
   { key: 'mine', label: 'Giải của tôi', icon: 'how_to_reg' },
   { key: 'matches', label: 'Lịch thi đấu', icon: 'sports_score' },
   { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
+  { key: 'organize', label: 'Giải tôi tổ chức', icon: 'campaign' },
 ]
 
 function TournamentCard({ tournament, actions, onOpen }) {
@@ -150,6 +153,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
   const schedule = useApi(() => getCourtSchedule(id), [id], { initialData: null })
   const [matchId, setMatchId] = useState(null)
   const [insightId, setInsightId] = useState(null)
+  const [complainMatch, setComplainMatch] = useState(null)
   const match = useApi(() => getMatch(matchId), [matchId], { enabled: Boolean(matchId) })
   const t = detail.data
 
@@ -222,9 +226,19 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
                   ? <p style={{ margin: '6px 0 0', fontSize: 14 }}><strong>Hòa</strong></p>
                   : match.data.winnerName && <p style={{ margin: '6px 0 0', fontSize: 14 }}>Thắng: <strong>{match.data.winnerName}</strong>{match.data.resultType === 'WALKOVER' ? ' (xử thắng)' : match.data.resultType === 'RETIRED' ? ' (đối thủ bỏ cuộc)' : ''}</p>}
                 <p className="snx-muted" style={{ margin: '6px 0 0' }}>{match.data.courtName || 'Chưa xếp sân'} · {dateTime(match.data.startTime)}</p>
+                {(match.data.winnerName || isDraw(match.data)) && (
+                  <div className="snx-row" style={{ marginTop: 8 }}>
+                    <span className="snx-muted">Kết quả sai? Khiếu nại trong 15 phút sau khi có kết quả.</span>
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setComplainMatch(match.data)}>Khiếu nại kết quả</button>
+                  </div>
+                )}
               </section>
             )}
           </div>
+        )}
+        {complainMatch && (
+          <ReportModal targetType="MATCH" targetObjectId={complainMatch.matchId || complainMatch.id || matchId}
+            subject={`${complainMatch.participant1Name || '—'} vs ${complainMatch.participant2Name || '—'}`} onClose={() => setComplainMatch(null)} />
         )}
         <div className="snx-modal-foot">
           <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Đóng</button>
@@ -325,7 +339,8 @@ function TournamentList() {
   const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  const [detailId, setDetailId] = useState(null)
+  // ?tournamentId= (từ gợi ý trang chủ / trợ lý AI) mở sẵn chi tiết giải
+  const [detailId, setDetailId] = useState(() => params.get('tournamentId'))
   const [registerTarget, setRegisterTarget] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
@@ -393,6 +408,7 @@ function TournamentList() {
       </div>
 
       {tab === 'teams' && <TeamsPanel />}
+      {tab === 'organize' && <TournamentWorkspace mode="player" embedded />}
       {tab === 'matches' && <MyMatches onBrowse={() => setTab('open')} />}
 
       {(tab === 'open' || tab === 'mine') && (

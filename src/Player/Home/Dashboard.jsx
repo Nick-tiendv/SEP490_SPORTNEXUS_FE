@@ -11,6 +11,7 @@ import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs, lfgSkillLabel } from '../../api/player/lfgApi.js'
+import HomeRecommendations from './HomeRecommendations.jsx'
 
 const actionCards = [
   {
@@ -990,6 +991,9 @@ function Dashboard() {
     <div className="snx-page">
       {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
       <SplitInvites />
+
+      {/* Gợi ý theo khảo sát người chơi: kèo phù hợp, sân trống trong giờ rảnh, giải hợp Elo */}
+      <HomeRecommendations />
 
       {/* ===================== SECTION 1: WELCOME & QUICK SPORT BAR ===================== */}
       <section

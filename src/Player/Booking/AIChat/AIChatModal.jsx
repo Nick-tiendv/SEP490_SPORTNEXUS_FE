@@ -235,9 +235,9 @@ function AIChatModal({
     navigate('/community')
   }
 
-  const handleOpenTournament = () => {
+  const handleOpenTournament = (t) => {
     onClose()
-    navigate('/tournament')
+    navigate(t?.tournamentId ? `/tournament?tournamentId=${encodeURIComponent(t.tournamentId)}` : '/tournament')
   }
 
   // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi
