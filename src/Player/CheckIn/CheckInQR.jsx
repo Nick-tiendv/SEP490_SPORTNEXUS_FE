@@ -8,12 +8,23 @@ import { getLfgQrTicket } from '../../api/player/lfgApi.js'
 import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
 import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
+import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
+
+const formatBookingStatusLabel = (rawStatus) => {
+  const upper = String(rawStatus || '').toUpperCase()
+  if (upper === 'PAID' || upper === 'CONFIRMED') return 'ĐÃ THANH TOÁN'
+  if (upper === 'CHECKED_IN') return 'ĐÃ CHECK-IN'
+  if (upper === 'PENDING') return 'CHỜ GÓP TIỀN'
+  if (upper === 'CANCELLED') return 'ĐÃ HỦY'
+  if (upper === 'COMPLETED') return 'HOÀN THÀNH'
+  return upper || 'ĐÃ XÁC NHẬN'
+}
 
 const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType }) => ({
+const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds }) => ({
   id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
@@ -32,6 +43,8 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, court
   startAt: startTime || null,
   escrowAmount: Number(amount) || 0,
   status: status || 'PENDING_CHECKIN',
+  timeRangeLabel: timeRangeLabel || null,
+  groupedBookingIds: Array.isArray(groupedBookingIds) ? groupedBookingIds : [],
 })
 
 function CheckInQR() {
@@ -48,6 +61,7 @@ function CheckInQR() {
   const [scanError, setScanError] = useState(null)
   const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
 
+
   // Bước 1: Tải vé từ API qr-ticket tương ứng (dùng lại cho nút "Kiểm tra trạng thái" và tự hỏi lại)
   const currentUser = useCurrentUser()
   const fetchTicket = useCallback(async () => {
@@ -57,7 +71,8 @@ function CheckInQR() {
           if (!bookingId) {
             // Không có mã đơn trên URL: lấy đơn sắp tới gần nhất của người dùng
             const upcoming = await getUpcomingBookings()
-            bookingId = upcoming[0]?.id || upcoming[0]?.bookingId || null
+            const enrichedUpcoming = await enrichPlayerBookings(upcoming)
+            bookingId = enrichedUpcoming[0]?.id || enrichedUpcoming[0]?.bookingId || upcoming[0]?.id || upcoming[0]?.bookingId || null
           }
           if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
           // qr-ticket trả về chuỗi mã QR; chi tiết đơn lấy từ GET /api/v1/bookings/{bookingId}
@@ -65,6 +80,17 @@ function CheckInQR() {
           {
             const participants = detail?.participants || []
             const me = participants.find((p) => String(p.userId) === String(currentUser.id)) || participants.find((p) => p.isHost) || {}
+            const [upcomingSiblings, mySiblings] = await Promise.all([
+              getUpcomingBookings().catch(() => []),
+              getMyBookings().catch(() => []),
+            ])
+            const playWindow = await resolveBookingPlayWindow(detail, {
+              bookingId,
+              qr,
+              upcomingBookings: upcomingSiblings,
+              myBookings: mySiblings,
+            })
+
             return toTicket({
               id: bookingId,
               qrCode: typeof qr === 'string' ? qr : qr?.qrCode,
@@ -77,6 +103,13 @@ function CheckInQR() {
               endTime: detail?.endTime,
               status: me.isCheckedIn || String(detail?.bookingStatus).toUpperCase() === 'CHECKED_IN' ? 'CHECKED_IN' : detail?.bookingStatus,
               amount: detail?.paidAmount ?? detail?.totalAmount,
+              ...{
+                startTime: playWindow.startTime ?? detail?.startTime,
+                endTime: playWindow.endTime ?? detail?.endTime,
+                amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
+                timeRangeLabel: playWindow.timeRangeLabel,
+                groupedBookingIds: playWindow.groupedBookingIds,
+              },
             })
           }
         } else if (ticketType === 'lfg') {
@@ -84,6 +117,7 @@ function CheckInQR() {
           const cardId = searchParams.get('cardId') || searchParams.get('lfgId') || localStorage.getItem('sportnexus_current_lfg_id')
           if (!cardId) throw new Error('Bạn chưa tham gia kèo LFG nào có vé check-in.')
           const res = await getLfgQrTicket(cardId)
+
           {
             return toTicket({
               id: res?.lfgCardId || cardId,
@@ -101,6 +135,7 @@ function CheckInQR() {
           const tournamentId = searchParams.get('tournamentId') || localStorage.getItem('sportnexus_current_tournament_id')
           if (!tournamentId) throw new Error('Bạn chưa đăng ký giải đấu nào có vé check-in.')
           const res = await getTournamentQrTicket(tournamentId)
+
           {
             return toTicket({
               id: res?.tournamentId || tournamentId,
@@ -154,10 +189,12 @@ function CheckInQR() {
         ])
         if (isMounted) {
           if (myRes.status === 'fulfilled' && Array.isArray(myRes.value)) {
-            setMyBookingsList(myRes.value)
+            const enrichedMy = await enrichPlayerBookings(myRes.value)
+            if (isMounted) setMyBookingsList(enrichedMy)
           }
           if (upcomingRes.status === 'fulfilled' && Array.isArray(upcomingRes.value)) {
-            setUpcomingBookingsList(upcomingRes.value)
+            const enrichedUp = await enrichPlayerBookings(upcomingRes.value)
+            if (isMounted) setUpcomingBookingsList(enrichedUp)
           }
         }
       } catch (err) {
@@ -280,7 +317,20 @@ function CheckInQR() {
         reasonCode: selectedReasonCode,
         reason: finalReason,
       })
-      const refundAmount = Number(result?.refundAmount) || 0
+      const extraSiblingIds = (ticketData?.groupedBookingIds || []).filter(
+        (gid) => gid && String(gid).toLowerCase() !== String(bookingId).toLowerCase()
+      )
+      let extraRefund = 0
+      if (extraSiblingIds.length > 0) {
+        const siblingResults = await Promise.allSettled(
+          extraSiblingIds.map((gid) => cancelBooking(gid, { reasonCode: selectedReasonCode, reason: finalReason }))
+        )
+        extraRefund = siblingResults.reduce(
+          (sum, r) => sum + (r.status === 'fulfilled' ? Number(r.value?.refundAmount) || 0 : 0),
+          0
+        )
+      }
+      const refundAmount = (Number(result?.refundAmount) || 0) + extraRefund
       const isEligibleRefund = refundAmount > 0
       const refundText = `${refundAmount.toLocaleString('vi-VN')} đ`
       const facilityLabel = ticketData?.venueName && ticketData.venueName !== '—' ? ticketData.venueName : 'sân'
@@ -986,7 +1036,7 @@ function CheckInQR() {
                   <span>{ticketData?.venueName || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6B7280', fontSize: '11.5px', fontWeight: 500 }}>
-                  <span>🕒 {ticketData?.startTime || '—'} - {ticketData?.endTime || '—'}</span>
+                  <span>🕒 {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}</span>
                   <span>•</span>
                   <span>📅 {ticketData?.playDate || '—'}</span>
                 </div>
@@ -1230,7 +1280,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#64748B', fontWeight: 600 }}>🕒 Giờ chơi:</span>
                   <span style={{ color: '#0F172A', fontWeight: 700 }}>
-                    {ticketData?.startTime || '—'} - {ticketData?.endTime || '—'}
+                    {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}
                   </span>
                 </div>
 
@@ -1248,7 +1298,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#15803D', fontWeight: 600 }}>🎟️ Khung check-in mở:</span>
                   <span style={{ color: '#166534', fontWeight: 800 }}>
-                    {ticketData?.allowedCheckInStart || '—'} - {ticketData?.allowedCheckInEnd || '—'}
+                    {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
                   </span>
                 </div>
               </div>
@@ -2932,7 +2982,7 @@ function CheckInQR() {
                 {getHoursUntilMatch() >= 24 ? (
                   <>
                     Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 24h).
-                    Bạn sẽ nhận lại <strong>100% tiền (330.000 đ)</strong> vào Ví Escrow ngay sau khi hủy.
+                    Bạn sẽ nhận lại <strong>100% tiền ({new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} đ)</strong> vào Ví Escrow ngay sau khi hủy.
                   </>
                 ) : (
                   <>
@@ -3213,6 +3263,14 @@ function CheckInQR() {
                     const time = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.timeSlot || '19:30 - 21:00')
                     const amount = item.totalAmount || item.totalPrice || item.price || 0
                     const status = item.status || 'CONFIRMED'
+                    const rawStatusUpper = String(item.bookingStatus || status || 'CONFIRMED').toUpperCase()
+                    const isGreenStatus = rawStatusUpper === 'CONFIRMED' || rawStatusUpper === 'PAID' || rawStatusUpper === 'CHECKED_IN' || rawStatusUpper === 'COMPLETED'
+                    const badgeStyleOverride = {
+                      background: isGreenStatus ? '#DCFCE7' : rawStatusUpper === 'CANCELLED' ? '#FEE2E2' : '#EFF6FF',
+                      color: isGreenStatus ? '#15803D' : rawStatusUpper === 'CANCELLED' ? '#B91C1C' : '#1D4ED8',
+                    }
+                    const formattedDate = item.playDate || (item.startTime ? dateVN(item.startTime) : '') || date
+                    const formattedTime = item.displayTimeRange || (item.startTime && item.endTime ? `${clockVN(item.startTime)} - ${clockVN(item.endTime)}` : time)
 
                     return (
                       <div
@@ -3239,12 +3297,13 @@ function CheckInQR() {
                                 borderRadius: '6px',
                                 background: status === 'CONFIRMED' ? '#DCFCE7' : status === 'CANCELLED' ? '#FEE2E2' : '#EFF6FF',
                                 color: status === 'CONFIRMED' ? '#15803D' : status === 'CANCELLED' ? '#B91C1C' : '#1D4ED8',
+                                ...badgeStyleOverride,
                               }}
                             >
-                              {status === 'CONFIRMED' ? 'ĐÃ XÁC NHẬN' : status === 'CANCELLED' ? 'ĐÃ HỦY' : status}
+                              {formatBookingStatusLabel(rawStatusUpper)}
                             </span>
                             <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
-                              📅 {date} • ⏰ {time}
+                              📅 {formattedDate} • ⏰ {formattedTime}
                             </span>
                           </div>
                           <div style={{ fontSize: '15px', fontWeight: 800, color: '#111827' }}>

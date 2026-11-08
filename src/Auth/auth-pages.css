@@ -41,7 +41,7 @@ html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{m
     }
   
 html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}::-webkit-scrollbar{display:none;}
-img[alt^="SportNexus logo mark"]{display:none!important}
+
 
 /* Standalone Login/Register layout; other pages keep their existing styles. */
 .auth-standalone {
@@ -98,7 +98,9 @@ img[alt^="SportNexus logo mark"]{display:none!important}
   background: #e5f1e8;
   color: #2d5f3f;
 }
-.auth-login .auth-login-logo path { fill: currentColor; }
+.auth-login .auth-login-logo { width: auto; height: auto; border-radius: 0; background: transparent; }
+.auth-login .auth-login-logo-img { height: 108px; width: auto; object-fit: contain; display: block; }
+@media (max-width: 767px) { .auth-login .auth-login-logo-img { height: 92px; } }
 .auth-login .auth-login-card h1 { font-size: 28px; font-weight: 800; line-height: 1.25; }
 .auth-login .auth-login-card h1 + p { font-size: 14px; line-height: 1.6; }
 .auth-login form label { font-size: 13px; font-weight: 600; }

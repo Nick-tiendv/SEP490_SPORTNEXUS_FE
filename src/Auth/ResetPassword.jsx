@@ -98,13 +98,9 @@ function ResetPassword() {
         <div className="w-full flex items-center justify-between">
           {/* Logo - Bấm vào tự động về trang chủ */}
           <Link to="/" className="flex items-center gap-2 cursor-pointer group hover:opacity-90 transition-opacity">
-            <div className="w-10 h-10 bg-[#4A7C3E] rounded-lg flex items-center justify-center ring-2 ring-white ring-opacity-20 shadow-sm group-hover:scale-105 transition-transform">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
-              </svg>
-            </div>
+            <img src="/logo-mark.png" alt="" className="w-10 h-10 mr-0.5 object-contain group-hover:scale-105 transition-transform" aria-hidden="true" />
             <div className="flex flex-col leading-tight">
-              <span className="text-lg font-bold text-gray-900">SportNexus</span>
+              <img src="/logo-wordmark.png" alt="SportNexus" className="h-5 w-auto object-contain object-left mb-0.5" />
               <span className="text-[10px] text-gray-600 uppercase tracking-wide">Tournament Engine</span>
             </div>
           </Link>
@@ -130,13 +126,8 @@ function ResetPassword() {
           {/* Logo - SportNexus branding */}
           <div className="flex justify-center mb-6 mt-8">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-[#4A7C3E] rounded-lg flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" fill="white"/>
-                  <circle cx="12" cy="12" r="3" fill="#4A7C3E"/>
-                </svg>
-              </div>
-              <span className="text-lg font-bold text-gray-900">SportNexus</span>
+              <img src="/logo-mark.png" alt="" className="w-8 h-8 object-contain" aria-hidden="true" />
+              <img src="/logo-wordmark.png" alt="SportNexus" className="h-5 w-auto object-contain" />
             </div>
           </div>
 

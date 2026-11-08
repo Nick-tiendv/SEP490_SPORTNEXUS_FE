@@ -161,6 +161,11 @@ export default function OnBoarding() {
     <div className="snx-calm-bg" style={{ minHeight: '100vh', padding: '32px 16px' }}>
       <div className="snx-stack" style={{ maxWidth: 860, margin: '0 auto', gap: 16 }}>
         <header>
+          {/* Logo SportNexus (trang khảo sát nằm ngoài layout nên không có thanh trên) */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.95)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: 12 }}>
+            <img src="/logo-mark.png" alt="" aria-hidden="true" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            <img src="/logo-wordmark.png" alt="SportNexus" style={{ height: 16, width: 'auto', objectFit: 'contain' }} />
+          </span>
           <p className="snx-page-eyebrow">Khảo sát người chơi</p>
           <h1 className="snx-page-title">{completed ? 'Cập nhật thông tin chơi thể thao' : 'Chào mừng đến SportNexus!'}</h1>
           <p className="snx-page-subtitle">
