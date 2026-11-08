@@ -1,4 +1,5 @@
 import { roleDestination } from './roleRoutes.js'
+import { setNeedsOnboarding } from '../utils/surveyGate.js'
 
 // Bước chung sau khi BE trả LoginResponse (đăng nhập mật khẩu / Google / Facebook):
 // lưu phiên vào AuthContext, ghi vài thông tin hiển thị cũ, trả đường dẫn trang chủ theo vai trò.
@@ -17,5 +18,8 @@ export function finishLogin(data, { contextLogin, identifier = '' }) {
       userId, fullName, username: data.username || identifier, role: profileRole, rawRole: role,
     }))
   } catch { /* AuthProvider vẫn giữ phiên khi localStorage bị chặn */ }
-  return targetRoute
+  // Người chơi chưa làm khảo sát (kể cả tài khoản cũ) → làm khảo sát trước khi vào app
+  const mustOnboard = profileRole === 'player' && data.needsOnboarding === true
+  setNeedsOnboarding(mustOnboard)
+  return mustOnboard ? '/onboarding' : targetRoute
 }

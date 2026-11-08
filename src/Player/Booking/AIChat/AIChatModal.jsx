@@ -201,6 +201,9 @@ function AIChatModal({
         text: botReply,
         facilities: aiResult?.reply?.facilities || [],
         lfgCards: aiResult?.reply?.lfgCards || [],
+        tournaments: aiResult?.reply?.tournaments || [],
+        intent: aiResult?.reply?.intent,
+        messageId: aiResult?.reply?.id,
       }
       setMessages((prev) => [...prev, botMsg])
     } catch (err) {
@@ -230,6 +233,17 @@ function AIChatModal({
   const handleOpenLfg = () => {
     onClose()
     navigate('/community')
+  }
+
+  const handleOpenTournament = () => {
+    onClose()
+    navigate('/tournament')
+  }
+
+  // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi
+  const handleAiDone = (kind) => {
+    onClose()
+    navigate(kind === 'booking' ? '/qr-pass' : '/community')
   }
 
   // Làm mới đoạn chat & Cập nhật vị trí mới của người chơi ở thời điểm hiện tại
@@ -497,7 +511,7 @@ function AIChatModal({
                 <div className="snx-ai-bubble">{renderFormattedText(msg.text)}</div>
 
                 {/* THẺ ĐỀ XUẤT ĐẶT SÂN NHANH (Actionable Court Card) */}
-                <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} />
+                <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} />
 
                 {msg.quickReplies && msg.quickReplies.length > 0 && (
                   <div className="snx-ai-chips-wrap" style={{ marginTop: '8px' }}>

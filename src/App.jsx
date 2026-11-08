@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import ErrorBoundary from './components/common/ErrorBoundary.jsx'
+import SurveyGateListener from './components/common/SurveyGateListener.jsx'
 
 import ProtectedRoute from './Auth/ProtectedRoute.jsx'
 import { useAuth } from './context/authContext.js'
@@ -24,6 +25,7 @@ const FlashClaim = lazy(() => import('./Player/LFG/FlashClaim.jsx'))
 const CheckInQR = lazy(() => import('./Player/CheckIn/CheckInQR.jsx'))
 const MapBooking = lazy(() => import('./Player/Booking/FindCourt/MapBooking.jsx'))
 const OnBoarding = lazy(() => import('./Player/Profile/OnBoarding.jsx'))
+const SkillAssessment = lazy(() => import('./Player/Profile/SkillAssessment.jsx'))
 import PlayerLayout from './Player/Layout/PlayerLayout.jsx'
 const PostMatchRating = lazy(() => import('./Player/Rating/PostMatchRating.jsx'))
 const Profile = lazy(() => import('./Player/Profile/Profile.jsx'))
@@ -101,6 +103,7 @@ function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
+      <SurveyGateListener />
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<HomeRedirect />} />
@@ -112,8 +115,6 @@ function App() {
         <Route path="/test-court-finder" element={<Page><MapBooking /></Page>} />
         <Route path="/test-split-payment" element={<Page><SplitPayment /></Page>} />
         <Route path="/test-create-match" element={<Page><CreateMatch /></Page>} />
-
-        {/* Onboarding */}
 
         {/* Protected Player application */}
         <Route element={<ProtectedRoute destination="/dashboard" requiredRole="Player" />}>
@@ -139,6 +140,7 @@ function App() {
             <Route path="/create-match" element={<Page><CreateMatch /></Page>} />
             <Route path="/split-payment" element={<Page><SplitPayment /></Page>} />
             <Route path="/post-match-rating" element={<Page><PostMatchRating /></Page>} />
+            <Route path="/assessment" element={<Page><SkillAssessment /></Page>} />
           </Route>
         </Route>
 

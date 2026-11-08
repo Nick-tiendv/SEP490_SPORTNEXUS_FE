@@ -2,6 +2,28 @@ import apiClient, { normalizeApiError } from '../apiClient.js'
 
 export const LFGS_ENDPOINT = '/api/v1/lfgs'
 
+// skillLevelTag của kèo chỉ nhận BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL (khác → 400)
+export const LFG_SKILL_TAGS = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'PROFESSIONAL']
+const LFG_SKILL_TEXT = { BEGINNER: 'Mới chơi', INTERMEDIATE: 'Trung bình', ADVANCED: 'Khá / Nâng cao', PROFESSIONAL: 'Chuyên nghiệp' }
+export const lfgSkillLabel = tag => LFG_SKILL_TEXT[String(tag || '').toUpperCase()] || tag || ''
+function toSkillTag(value) {
+  const tag = String(value || '').trim().toUpperCase()
+  return LFG_SKILL_TAGS.includes(tag) ? tag : null
+}
+
+/**
+ * Kèo phù hợp với bạn: GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
+ */
+export async function getRecommendedLfgs() {
+  try {
+    const body = (await apiClient.get(`${LFGS_ENDPOINT}/recommended`)).data
+    const data = body?.data ?? body
+    return Array.isArray(data) ? data : data?.items || []
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
 /**
  * ============================================================================
  * 2.6. GHÉP KÈO (LFG) - API SERVICE
@@ -99,7 +121,7 @@ export async function createLfg(payload) {
       courtSlotId: payload.courtSlotId,
       slotsNeeded: typeof payload.slotsNeeded === 'number' ? payload.slotsNeeded : 2,
       pricePerPerson: payload.pricePerPerson != null && payload.pricePerPerson !== '' ? Number(payload.pricePerPerson) : null,
-      skillLevelTag: payload.skillLevelTag ? String(payload.skillLevelTag).trim() : null,
+      skillLevelTag: toSkillTag(payload.skillLevelTag),
       description: payload.description ? String(payload.description).trim() : null,
       requireApproval: Boolean(payload.requireApproval),
       sideSize: payload.sideSize ? Number(payload.sideSize) : null,
@@ -348,7 +370,8 @@ export async function getLfgCancelReasons() {
 export async function updateLfg(cardId, payload = {}) {
   if (!cardId) throw new Error('cardId không được để trống')
   try {
-    const response = await apiClient.put(`${LFGS_ENDPOINT}/${cardId}`, payload)
+    const request = 'skillLevelTag' in payload ? { ...payload, skillLevelTag: toSkillTag(payload.skillLevelTag) } : payload
+    const response = await apiClient.put(`${LFGS_ENDPOINT}/${cardId}`, request)
     const body = response.data
     return body?.data || body?.result || body
   } catch (error) {

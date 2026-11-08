@@ -69,8 +69,10 @@ export async function getMyRegistrations() {
     qrCode: raw.qrCode || '',
   }))
 }
-// POST /api/v1/tournaments/{id}/join?teamId= (teamId chỉ cần với nội dung thi đấu theo đội)
-export const joinTournament = (id, teamId) => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/join${teamId ? `?teamId=${encodeURIComponent(teamId)}` : ''}`)
+// POST /api/v1/tournaments/{id}/join?teamId= (teamId chỉ cần với nội dung thi đấu theo đội).
+// sportId chỉ dùng phía FE: bị 403 do chưa có Elo môn này thì mở đúng khảo sát môn đó.
+export const joinTournament = (id, teamId, sportId) =>
+  post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/join${teamId ? `?teamId=${encodeURIComponent(teamId)}` : ''}`, undefined, sportId ? { gateSportId: sportId } : undefined)
 // POST /api/v1/tournaments/{id}/cancel: hủy đăng ký của tôi
 export const cancelTournamentRegistration = id => post(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/cancel`)
 // GET /api/v1/tournaments?facilityId&categoryId&status: danh sách giải công khai

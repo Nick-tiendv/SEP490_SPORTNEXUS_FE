@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { uid } from '../../utils/ids.js'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
+import { SKILL_VERDICTS, submitSkillFeedback } from '../../api/player/ratingApi.js'
 import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
@@ -63,6 +64,8 @@ function PostMatchRating() {
 
   // Đánh giá: Chấm điểm sao (1 đến 5 sao)
   const [rating, setRating] = useState(5)
+  // Đánh giá trình độ thật so với Elo (không bắt buộc): LOWER | ACCURATE | HIGHER
+  const [skillVerdict, setSkillVerdict] = useState('')
   const [hoverRating, setHoverRating] = useState(0)
 
   // Đánh giá: Hình thức viết nhận xét (bắt buộc)
@@ -207,7 +210,18 @@ function PostMatchRating() {
       setIsSubmittingRating(false)
       return
     }
+    // POST /api/v1/ratings/feedback (trong 72 giờ sau trận). Lỗi ở bước này không làm hỏng đánh giá Fair Play đã gửi.
+    let skillNote = ''
+    if (skillVerdict) {
+      try {
+        await submitSkillFeedback({ revieweeId: selectedPlayer.userId, contextId: selectedMatch.contextId, verdict: skillVerdict })
+        skillNote = ' và đánh giá trình độ'
+      } catch (skillErr) {
+        triggerToast(`ℹ️ Đánh giá trình độ chưa được ghi nhận: ${skillErr?.message || 'lỗi không xác định'}`)
+      }
+    }
     setIsSubmittingRating(false)
+    setSkillVerdict('')
 
     setSubmittedReviews((prev) => [
       {
@@ -230,7 +244,7 @@ function PostMatchRating() {
     setReviewedPlayers((prev) => [...prev, `${selectedMatch.contextId}:${selectedPlayer.id}`])
     setWrittenReview('')
     setRating(5)
-    triggerToast(`🎉 Đã chấm Fair Play ${rating} sao cho ${selectedPlayer.name}!`)
+    triggerToast(`🎉 Đã chấm Fair Play ${rating} sao${skillNote} cho ${selectedPlayer.name}!`)
   }
 
   // Diễn giải ý nghĩa số sao
@@ -1072,6 +1086,21 @@ function PostMatchRating() {
                     e.target.style.background = '#FAFAFA'
                   }}
                 />
+
+                {/* Trình độ thật so với Elo (POST /api/v1/ratings/feedback) */}
+                <div style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>
+                    Trình độ thật của {selectedPlayer.name || 'người này'} so với Elo hiện tại? <span style={{ fontWeight: 500, color: '#64748B' }}>(không bắt buộc)</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {SKILL_VERDICTS.map(([value, label]) => (
+                      <button key={value} type="button" aria-pressed={skillVerdict === value} onClick={() => setSkillVerdict(skillVerdict === value ? '' : value)}
+                        style={{ padding: '6px 12px', borderRadius: '999px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', border: skillVerdict === value ? '2px solid #15803D' : '1px solid #CBD5E1', background: skillVerdict === value ? '#DCFCE7' : '#FFFFFF', color: '#0F172A' }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Gợi ý mẫu câu nhanh */}
                 <div style={{ marginTop: '10px' }}>

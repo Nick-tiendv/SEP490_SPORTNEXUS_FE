@@ -183,7 +183,7 @@ export function mapAiHistoryToMessages(items = []) {
   return result
 }
 
-// AiMessageResponse: { id, sender: 'USER' | 'BOT', message, intent, facilities, lfgCards, createdAt }
+// AiMessageResponse: { id, sender: 'USER' | 'BOT', message, intent { intent, slotsNeeded, ... }, facilities, lfgCards, tournaments, createdAt }
 function mapAiMessage(m, fallbackId, toTime) {
   const isUser = String(m?.sender || '').toUpperCase() === 'USER'
   return {
@@ -194,6 +194,30 @@ function mapAiMessage(m, fallbackId, toTime) {
     intent: isUser ? undefined : m?.intent,
     facilities: isUser ? undefined : m?.facilities,
     lfgCards: isUser ? undefined : m?.lfgCards,
+    tournaments: isUser ? undefined : m?.tournaments,
+    messageId: isUser ? undefined : m?.id,
+  }
+}
+
+// POST /api/v1/ai/messages/{messageId}/book { courtSlotId }: đặt 1 ca AI vừa gợi ý (luồng đặt sân chuẩn: trừ ví, gửi vé QR)
+export async function confirmAiBooking(messageId, courtSlotId) {
+  try {
+    const body = (await apiClient.post(`/api/v1/ai/messages/${encodeURIComponent(messageId)}/book`, { courtSlotId })).data
+    if (body && typeof body === 'object' && 'statusCode' in body && (body.statusCode < 200 || body.statusCode >= 300)) throw normalizeApiError({ response: { status: body.statusCode, data: body } })
+    return body?.data ?? body
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
+// POST /api/v1/ai/messages/{messageId}/lfg { courtSlotId, slotsNeeded, skillLevelTag?, description? } (ý định CREATE_LFG)
+export async function confirmAiLfg(messageId, { courtSlotId, slotsNeeded, skillLevelTag, description }) {
+  try {
+    const body = (await apiClient.post(`/api/v1/ai/messages/${encodeURIComponent(messageId)}/lfg`, { courtSlotId, slotsNeeded, skillLevelTag: skillLevelTag || null, description: description || null })).data
+    if (body && typeof body === 'object' && 'statusCode' in body && (body.statusCode < 200 || body.statusCode >= 300)) throw normalizeApiError({ response: { status: body.statusCode, data: body } })
+    return body?.data ?? body
+  } catch (error) {
+    throw normalizeApiError(error)
   }
 }
 

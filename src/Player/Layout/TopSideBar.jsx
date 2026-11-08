@@ -14,6 +14,7 @@ const myItems = [
   { label: 'Vé check-in QR', path: '/qr-pass', icon: 'qr_code_scanner', match: ['/check-in', '/live-qr'] },
   { label: 'Đánh giá sau trận', path: '/post-match-rating', icon: 'star' },
   { label: 'Ví Escrow', path: '/wallet', icon: 'account_balance_wallet', match: ['/wallet/deposit-success', '/wallet/deposit-cancel'] },
+  { label: 'Elo & khảo sát trình độ', path: '/assessment', icon: 'military_tech' },
   { label: 'Hồ sơ cá nhân', path: '/profile', icon: 'badge' },
 ]
 

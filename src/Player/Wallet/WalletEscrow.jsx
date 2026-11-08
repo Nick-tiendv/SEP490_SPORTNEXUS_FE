@@ -29,6 +29,10 @@ import {
 } from '../../api/player/withdrawApi.js'
 import { createWithdrawal, getBankAccount, getMyWithdrawals, updateBankAccount } from '../../api/owner/walletApi.js'
 
+// Rút tiền / tài khoản ngân hàng chỉ dành cho chủ sân (WithdrawalController = Owner): ẩn với người chơi.
+// Giữ code để bật lại nếu BE mở lại cho Player.
+const PLAYER_CAN_WITHDRAW = false
+
 // Yêu cầu rút tiền từ GET /api/v1/wallet/withdrawals -> dạng hiển thị trong lịch sử
 const toWithdrawalItem = (raw) => {
   const status = String(raw.status || 'PENDING').toUpperCase()
@@ -200,7 +204,7 @@ export default function WalletEscrow() {
   }, [])
 
   useEffect(() => {
-    if (!isAuthenticated || isMockSession) return
+    if (!PLAYER_CAN_WITHDRAW || !isAuthenticated || isMockSession) return
     loadWithdrawals()
     getBankAccount()
       .then((bank) => {
@@ -658,7 +662,8 @@ export default function WalletEscrow() {
               </p>
             </div>
 
-            {/* Right: Nút Yêu Cầu Rút Tiền */}
+            {/* Right: Nút Yêu Cầu Rút Tiền (chỉ chủ sân được rút) */}
+            {PLAYER_CAN_WITHDRAW && (
             <div className="relative z-10 shrink-0 flex flex-col items-stretch sm:items-end gap-1.5 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/20">
               <button
                 id="player-request-withdraw-btn"
@@ -674,6 +679,7 @@ export default function WalletEscrow() {
                 <span>Yêu cầu số dư tối thiểu 50.000đ</span>
               </div>
             </div>
+            )}
           </div>
 
           {walletError && (
@@ -951,7 +957,7 @@ export default function WalletEscrow() {
                 <span>Lịch sử giao dịch ví ({txData.totalCount})</span>
               </button>
 
-              <button
+              {PLAYER_CAN_WITHDRAW && <button
                 type="button"
                 onClick={() => setHistoryTab('withdrawals')}
                 className={`px-4 py-2 rounded-lg text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
@@ -967,7 +973,7 @@ export default function WalletEscrow() {
                     {myWithdrawals.filter((w) => w.status === WITHDRAW_STATUS.PENDING).length} chờ
                   </span>
                 )}
-              </button>
+              </button>}
             </div>
 
             {historyTab === 'transactions' ? (

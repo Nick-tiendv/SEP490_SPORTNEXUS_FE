@@ -22,6 +22,7 @@ import {
   updateTeam,
   uploadTeamLogo,
 } from '../../api/player/teamApi.js'
+import { getSportCategories, skillLabel } from '../../api/player/profileApi.js'
 
 const initials = (name) => (name || '?').trim().split(/\s+/).map((p) => p[0]).slice(-2).join('').toUpperCase()
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
@@ -50,15 +51,18 @@ async function run(action, success) {
 }
 
 function CreateTeamModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({ name: '', description: '', phones: '' })
+  const [form, setForm] = useState({ name: '', description: '', phones: '', sportCategoryId: '' })
   const [saving, setSaving] = useState(false)
+  const sports = useApi(getSportCategories, [], { initialData: [] })
   const submit = async (event) => {
     event.preventDefault()
     if (!form.name.trim()) { toast.error('Vui lòng nhập tên đội.'); return }
+    if (!form.sportCategoryId) { toast.error('Vui lòng chọn môn của đội.'); return }
     setSaving(true)
     const memberPhones = form.phones.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean)
-    // POST /api/v1/teams: thành viên nhập số điện thoại sẽ nhận lời mời
-    const ok = await run(() => createTeam({ name: form.name.trim(), description: form.description.trim(), memberPhones }), 'Đã tạo đội. Lời mời đã được gửi tới các thành viên.')
+    // POST /api/v1/teams: sportCategoryId bắt buộc; thành viên nhập số điện thoại sẽ nhận lời mời.
+    // Chưa có Elo môn này → BE trả 403, app tự mở khảo sát toàn diện của môn.
+    const ok = await run(() => createTeam({ name: form.name.trim(), description: form.description.trim(), sportCategoryId: form.sportCategoryId, memberPhones }), 'Đã tạo đội. Lời mời đã được gửi tới các thành viên.')
     setSaving(false)
     if (ok) onCreated()
   }
@@ -68,12 +72,19 @@ function CreateTeamModal({ onClose, onCreated }) {
         <div className="snx-modal-head">
           <div>
             <h2 id="create-team-title" className="snx-card-title">Tạo đội mới</h2>
-            <p className="snx-card-subtitle">Bạn là đội trưởng. Thành viên cần chấp nhận lời mời mới vào đội.</p>
+            <p className="snx-card-subtitle">Bạn là đội trưởng. Thành viên cần chấp nhận lời mời mới vào đội. Trình độ đội = trung bình Elo cá nhân các thành viên.</p>
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
         <div className="snx-stack">
           <label className="snx-field">Tên đội<input className="snx-input" maxLength={100} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+          <label className="snx-field">Môn của đội
+            <select className="snx-select" value={form.sportCategoryId} onChange={(e) => setForm({ ...form, sportCategoryId: e.target.value })}>
+              <option value="">— Chọn môn —</option>
+              {sports.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <span className="snx-muted">Đội chỉ đăng ký được giải của môn này. Bạn và thành viên cần có Elo môn này (khảo sát toàn diện).</span>
+          </label>
           <label className="snx-field">Giới thiệu<textarea className="snx-textarea" maxLength={500} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label className="snx-field">Mời thành viên (số điện thoại, cách nhau bởi dấu phẩy)<input className="snx-input" placeholder="0901234567, 0912345678" value={form.phones} onChange={(e) => setForm({ ...form, phones: e.target.value })} /></label>
         </div>
@@ -109,7 +120,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
             <Avatar name={t?.name} url={t?.logoUrl} large />
             <div>
               <h2 id="team-detail-title" className="snx-card-title">{t?.name || 'Đang tải…'}</h2>
-              <p className="snx-card-subtitle">Đội trưởng: {t?.captainName || '—'} · {t?.totalMembers ?? 0} thành viên · Tạo ngày {dateVN(t?.createdAt)}</p>
+              <p className="snx-card-subtitle">{t?.sportName ? `${t.sportName} · ` : ''}{t?.skillLevel ? `Trình độ ${skillLabel(t.skillLevel)} · ` : ''}Đội trưởng: {t?.captainName || '—'} · {t?.totalMembers ?? 0} thành viên · Tạo ngày {dateVN(t?.createdAt)}</p>
             </div>
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
@@ -117,6 +128,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
 
         {team.error && <div className="snx-alert snx-alert--error">{team.error}</div>}
         {t?.isLocked && <div className="snx-alert snx-alert--error">Đội đang bị khóa{t.lockedReason ? `: ${t.lockedReason}` : ''}.</div>}
+        {t && <p className="snx-muted" style={{ margin: 0 }}>Khi đội đang có giải chưa kết thúc: không nhận thêm, không rời / xóa thành viên.</p>}
 
         {t && (
           <div className="snx-stack">
@@ -263,7 +275,7 @@ export default function TeamsPanel() {
       <div className="snx-card snx-row" style={{ padding: '14px 20px' }}>
         <div>
           <h3 className="snx-card-title" style={{ fontSize: 17 }}>Đội của tôi</h3>
-          <p className="snx-card-subtitle">Tạo đội để đăng ký các nội dung đôi / đồng đội. Thành viên nhận lời mời qua thông báo.</p>
+          <p className="snx-card-subtitle">Mỗi đội thuộc 1 môn. Đôi môn vợt = đội đúng 2 người; bóng đá / bóng rổ chỉ đấu theo đội; đánh đơn đăng ký cá nhân.</p>
         </div>
         <span className="snx-spacer" />
         <button type="button" className="snx-btn snx-btn--primary" onClick={() => setCreating(true)}><span className="material-symbols-outlined">group_add</span>Tạo đội</button>
@@ -280,7 +292,7 @@ export default function TeamsPanel() {
               <Avatar name={team.name} url={team.logoUrl} large />
               <div style={{ minWidth: 0 }}>
                 <strong style={{ display: 'block', fontSize: 15 }}>{team.name}</strong>
-                <span className="snx-muted">{team.totalMembers} thành viên</span>
+                <span className="snx-muted">{[team.sportName, team.skillLevel && skillLabel(team.skillLevel), `${team.totalMembers} thành viên`].filter(Boolean).join(' · ')}</span>
               </div>
             </div>
             <div className="snx-row" style={{ marginTop: 12 }}>
@@ -304,7 +316,7 @@ export default function TeamsPanel() {
             {found.data.items.map((team) => (
               <button key={team.id} type="button" className="snx-list-item" style={{ border: 0, borderBottom: '1px solid #eef2f1', background: 'transparent', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpenTeamId(team.id)}>
                 <Avatar name={team.name} url={team.logoUrl} />
-                <div style={{ flex: 1 }}><strong style={{ fontSize: 14 }}>{team.name}</strong><div className="snx-muted">Đội trưởng {team.captainName} · {team.totalMembers} thành viên</div></div>
+                <div style={{ flex: 1 }}><strong style={{ fontSize: 14 }}>{team.name}</strong><div className="snx-muted">{team.sportName ? `${team.sportName} · ` : ''}Đội trưởng {team.captainName} · {team.totalMembers} thành viên</div></div>
                 <span className="material-symbols-outlined" style={{ color: '#9aa8a3' }}>chevron_right</span>
               </button>
             ))}

@@ -29,6 +29,8 @@ const toBooking = (raw) => ({
   checkedInCount: Number(raw.checkedInCount) || 0,
 })
 
+const TICKET_TYPE_LABEL = { BOOKING: 'Vé đặt sân', LFG: 'Vé kèo ghép', TOURNAMENT: 'Vé giải đấu' }
+
 export default function CheckQR() {
   const { facilityId, facility, wallet, refreshWallet } = useOwnerContext()
 
@@ -203,12 +205,18 @@ export default function CheckQR() {
   // Thông tin hiển thị từ data trả về khi quét (BE chưa mô tả schema, thử vài tên field).
   const resultDetails = result?.ok && result.data && typeof result.data === 'object'
     ? [
+        ['Loại vé', TICKET_TYPE_LABEL[String(pick(result.data, 'ticketType') || '').toUpperCase()] || pick(result.data, 'ticketType')],
         ['Khách hàng', pick(result.data, 'customerName', 'hostName', 'fullName', 'playerName', 'userName')],
         ['Sân', pick(result.data, 'courtName')],
         ['Giờ chơi', pick(result.data, 'startTime') ? `${toClockVN(pick(result.data, 'startTime'))} - ${toClockVN(pick(result.data, 'endTime'))}` : null],
         ['Số tiền', pick(result.data, 'totalAmount', 'amountPaid', 'amount') != null ? formatVND(Number(pick(result.data, 'totalAmount', 'amountPaid', 'amount'))) : null],
       ].filter(([, value]) => value)
     : []
+
+  // Ảnh + tên người sở hữu vé (BE trả userId, fullName, avatarUrl) để đối chiếu đúng người
+  const scannedPerson = result?.ok && result.data && typeof result.data === 'object' && (result.data.fullName || result.data.avatarUrl)
+    ? { name: result.data.fullName || '', avatarUrl: result.data.avatarUrl || '' }
+    : null
 
   return (
     <div className="snx-page">
@@ -446,6 +454,15 @@ export default function CheckQR() {
                 {result.ok ? 'Check-in thành công' : 'Check-in thất bại'}
               </h3>
               <p style={{ fontSize: '14px', color: '#1E293B', fontWeight: 600, margin: '0 0 16px 0' }}>{result.message}</p>
+              {scannedPerson && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  {scannedPerson.avatarUrl
+                    ? <img src={scannedPerson.avatarUrl} alt={scannedPerson.name || 'Người check-in'} style={{ width: '96px', height: '96px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #10B981' }} />
+                    : <span style={{ width: '96px', height: '96px', borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#DCFCE7', color: '#047857', fontSize: '32px', fontWeight: 700 }}>{(scannedPerson.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(-2).join('').toUpperCase()}</span>}
+                  <strong style={{ fontSize: '17px', color: '#0F172A' }}>{scannedPerson.name}</strong>
+                  <span style={{ fontSize: '12px', color: '#B45309', fontWeight: 600 }}>Đối chiếu ảnh với người cầm vé</span>
+                </div>
+              )}
               {resultDetails.length > 0 && (
                 <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '14px 16px', border: '1px solid #CBD5E1', marginBottom: '16px', textAlign: 'left' }}>
                   {resultDetails.map(([label, value]) => (

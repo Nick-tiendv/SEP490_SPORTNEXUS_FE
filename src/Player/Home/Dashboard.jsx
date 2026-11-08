@@ -10,7 +10,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
-import { getLfgs } from '../../api/player/lfgApi.js'
+import { getLfgs, lfgSkillLabel } from '../../api/player/lfgApi.js'
 
 const actionCards = [
   {
@@ -801,7 +801,7 @@ const toLfgRow = (c) => {
     price: `${vnd(c.pricePerPerson ?? c.price)} / người`,
     host: c.hostName ? `Host ${c.hostName}` : '',
     img: meta.img,
-    badge: c.skillLevelTag || '',
+    badge: lfgSkillLabel(c.skillLevelTag),
   }
 }
 
