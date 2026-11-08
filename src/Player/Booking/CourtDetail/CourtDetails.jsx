@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
@@ -844,6 +845,9 @@ function CourtDetails() {
             </div>
           )}
 
+          {/* Shop tại sân: GET /api/v1/shop/facilities/{facilityId}/products (trả tiền tại quầy) */}
+          <FacilityShop facilityId={facility?.id} />
+
           {/* Giải đấu tại cơ sở này */}
           {facilityTournaments.length > 0 && (
             <div className="snx-card snx-stack" style={{ gap: 10 }}>
@@ -856,7 +860,7 @@ function CourtDetails() {
                       <strong style={{ fontSize: 14 }}>{t.name}</strong>
                       <div className="snx-muted">{t.sport} · {t.starts ? new Date(t.starts).toLocaleDateString('vi-VN') : '—'}</div>
                     </div>
-                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => navigate('/tournament')}>Xem</button>
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => navigate(`/tournament?tournamentId=${encodeURIComponent(t.id)}`)}>Xem</button>
                   </div>
                 ))}
               </div>

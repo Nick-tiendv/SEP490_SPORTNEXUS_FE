@@ -1899,7 +1899,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <span className="material-symbols-outlined">verified_user</span>
                 <p className="sp-escrow-text">
                   <strong>Bảo chứng Escrow 100%:</strong> Tiền giữ tại Hợp đồng Ký quỹ thông minh SportNexus.
-                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in vào sân thành công.
+                  Chủ sân chỉ nhận tiền sau khi hết ca 24 giờ (thời hạn khiếu nại). Vé điện tử được gửi kèm qua email.
                 </p>
               </div>
             </section>

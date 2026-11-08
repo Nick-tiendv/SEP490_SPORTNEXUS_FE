@@ -21,6 +21,7 @@ import {
   createLfgCancelRequest,
   getLatestLfgCancelRequest,
   voteLfgCancelRequest,
+  lfgSkillLabel,
 } from '../../api/player/lfgApi.js'
 import * as communityApi from '../../api/player/communityApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
@@ -79,7 +80,8 @@ const toFeedMatch = (card) => {
     sport,
     sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
     subBadge: [card.format, card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
-    levelTag: card.skillLevelTag || card.skillLevel || 'Mọi trình độ',
+    levelTag: lfgSkillLabel(card.skillLevelTag || card.skillLevel) || 'Mọi trình độ',
+    skillTag: String(card.skillLevelTag || '').toUpperCase(),
     slotTag: `Cần ${Number(card.remainingSlots) || 0} người`,
     time: start ? start.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—',
     timeSlot: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening',
@@ -950,6 +952,7 @@ function CommunityFeed() {
       if (activeSportFilter !== 'all' && m.sport !== activeSportFilter) return false
       if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
       if (filterFlashOnly && !m.isFlashClaim) return false
+      if (levelFilter !== 'all' && m.skillTag && m.skillTag !== levelFilter) return false
       return true
     })
     .sort((a, b) => {
@@ -1179,9 +1182,10 @@ function CommunityFeed() {
               className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
               <option value="all">Trình độ: Tất Cả Trình Độ</option>
-              <option value="beginner">Mới chơi / Nhập môn</option>
-              <option value="intermediate">Trung bình - Khá</option>
-              <option value="advanced">Khá - Nâng cao</option>
+              <option value="BEGINNER">Mới chơi</option>
+              <option value="INTERMEDIATE">Trung bình</option>
+              <option value="ADVANCED">Khá / Nâng cao</option>
+              <option value="PROFESSIONAL">Chuyên nghiệp</option>
             </select>
             <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-[16px]">
               expand_more

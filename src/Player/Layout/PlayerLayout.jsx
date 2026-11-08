@@ -1,4 +1,5 @@
-import { Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
+import { needsOnboarding } from '../../utils/surveyGate.js'
 import { useState, useEffect, useCallback } from 'react'
 import TopBar from './TopBar.jsx'
 import TopSideBar from './TopSideBar.jsx'
@@ -17,6 +18,9 @@ function PlayerLayout() {
     window.addEventListener('open-sportnexus-ai-chat', handleOpenAi)
     return () => window.removeEventListener('open-sportnexus-ai-chat', handleOpenAi)
   }, [])
+
+  // Chưa làm khảo sát người chơi (LoginResponse.needsOnboarding) → làm khảo sát trước khi vào app
+  if (needsOnboarding()) return <Navigate to="/onboarding" replace />
 
   return (
     <SportProvider>

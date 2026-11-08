@@ -41,6 +41,7 @@ const facilityItems = [
 const businessItems = [
   { label: 'Giải đấu', path: '/owner/tournament', icon: 'emoji_events', description: 'Tạo giải, bốc thăm, xếp sân' },
   { label: 'Quảng bá', path: '/owner/promotions', icon: 'campaign', description: 'Gói đẩy tin' },
+  { label: 'Shop tại sân', path: '/owner/shop', icon: 'storefront', description: 'Sản phẩm & đơn đặt trước' },
   { label: 'Đánh giá', path: '/owner/reviews', icon: 'reviews', description: 'Phản hồi đánh giá của khách' },
   { label: 'Khiếu nại', path: '/owner/reports', icon: 'report', description: 'Giải trình, hoàn tiền' },
   { label: 'Doanh thu & rút tiền', path: '/owner/settlement', icon: 'account_balance_wallet', description: 'Doanh thu & quyết toán' },

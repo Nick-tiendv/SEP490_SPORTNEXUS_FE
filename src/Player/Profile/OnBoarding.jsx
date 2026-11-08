@@ -1,211 +1,276 @@
-import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getMySports, getSportCategories, updateMySports } from '../../api/player/profileApi.js'
+import { getPublicSports as getSportCategories } from '../../api/auth/authApi.js'
+import {
+  DAYS, FREQUENCIES, GENDERS, GOALS, SKILL_LEVELS,
+  formatOptionsFor, getOnboarding, saveOnboarding,
+} from '../../api/player/ratingApi.js'
+import { setNeedsOnboarding } from '../../utils/surveyGate.js'
 
-function OnBoarding() {
+// Khảo sát người chơi (PUT /api/auth/me/onboarding, thay toàn bộ).
+// Bắt buộc ít nhất 1 môn (tối đa 10) và 1 khung giờ rảnh (tối đa 28). Làm ở lần đăng nhập đầu, sửa lại được.
+const MAX_SPORTS = 10
+const MAX_SLOTS = 28
+const QUICK_SLOTS = [
+  ['Tối ngày thường', [1, 2, 3, 4, 5], '18:00', '21:00'],
+  ['Sáng cuối tuần', [6, 0], '06:00', '10:00'],
+  ['Chiều cuối tuần', [6, 0], '15:00', '18:00'],
+]
+const hhmm = value => String(value || '').slice(0, 5)
+
+function ChoiceRow({ options, value, onChange, allowEmpty = false }) {
+  return (
+    <div className="snx-row" style={{ gap: 8 }}>
+      {options.map(([key, label]) => (
+        <button key={key} type="button" className="snx-chip" aria-pressed={value === key}
+          onClick={() => onChange(allowEmpty && value === key ? null : key)}>{label}</button>
+      ))}
+    </div>
+  )
+}
+
+function Section({ step, title, hint, children }) {
+  return (
+    <section className="snx-card" style={{ padding: 20 }}>
+      <h2 className="snx-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="snx-badge snx-badge--green">{step}</span>{title}
+      </h2>
+      {hint && <p className="snx-card-subtitle">{hint}</p>}
+      <div className="snx-stack" style={{ marginTop: 12 }}>{children}</div>
+    </section>
+  )
+}
+
+export default function OnBoarding() {
   const navigate = useNavigate()
-  const [selectedSports, setSelectedSports] = useState(['badminton'])
+  const { state } = useLocation()
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [completed, setCompleted] = useState(false)
 
-  // Tải danh sách môn thể thao đã lưu từ máy chủ: GET /api/auth/me/sports
+  const [gender, setGender] = useState(null)
+  const [sports, setSports] = useState([]) // [{ sportCategoryId, skillLevel, preferredFormats[] }]
+  const [slots, setSlots] = useState([]) // [{ dayOfWeek, startTime, endTime }]
+  const [slotDraft, setSlotDraft] = useState({ dayOfWeek: 6, startTime: '07:00', endTime: '09:00' })
+  const [location, setLocation] = useState(null) // { latitude, longitude }
+  const [radiusKm, setRadiusKm] = useState(5)
+  const [maxPrice, setMaxPrice] = useState('')
+  const [goal, setGoal] = useState(null)
+  const [frequency, setFrequency] = useState(null)
+
+  // Tải danh mục môn và khảo sát đã lưu (nếu có)
   useEffect(() => {
-    const normalize = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
-    const keyOf = (name) => {
-      const n = normalize(name)
-      if (n.includes('cau long')) return 'badminton'
-      if (n.includes('pickleball')) return 'pickleball'
-      if (n.includes('bong da')) return 'football'
-      if (n.includes('bong ro')) return 'basketball'
-      if (n.includes('tennis')) return 'tennis'
-      return null
-    }
-    getMySports()
-      .then((serverSports) => {
-        const keys = [...new Set(serverSports.map((s) => keyOf(s.name)).filter(Boolean))]
-        if (keys.length > 0) setSelectedSports(keys)
+    let cancelled = false
+    Promise.all([getSportCategories(), getOnboarding().catch(() => null)])
+      .then(([cats, saved]) => {
+        if (cancelled) return
+        setCategories(cats)
+        if (!saved) return
+        setCompleted(saved.isCompleted === true)
+        setGender(saved.gender || null)
+        setSports((saved.sports || []).map(s => ({
+          sportCategoryId: String(s.sportCategoryId),
+          skillLevel: s.skillLevel || 'BEGINNER',
+          preferredFormats: s.preferredFormats || [],
+        })))
+        setSlots((saved.availability || []).map(a => ({ dayOfWeek: Number(a.dayOfWeek), startTime: hhmm(a.startTime), endTime: hhmm(a.endTime) })))
+        if (saved.latitude != null && saved.longitude != null) setLocation({ latitude: saved.latitude, longitude: saved.longitude })
+        if (saved.radiusKm) setRadiusKm(saved.radiusKm)
+        if (saved.maxPricePerHour != null) setMaxPrice(String(saved.maxPricePerHour))
+        setGoal(saved.goal || null)
+        setFrequency(saved.frequency || null)
       })
-      .catch((err) => console.warn('[OnBoarding] Không thể tải môn thể thao:', err))
+      .catch(error => toast.error(error?.message || 'Không tải được danh mục môn thể thao.'))
+      .finally(() => !cancelled && setLoading(false))
+    return () => { cancelled = true }
   }, [])
 
-  const SKILL_TIERS = [
-    { label: 'Mới tập chơi', sub: 'Căn bản, làm quen môn thể thao' },
-    { label: 'Mới chơi - Đang tiến bộ', sub: 'Nắm chắc luật, giao lưu vui vẻ' },
-    { label: 'Trung bình', sub: 'Đánh đều tay phong trào' },
-    { label: 'Trung bình - Khá', sub: 'Điều cầu/bóng tốt, phối hợp ăn ý' },
-    { label: 'Khá - Đánh chắc tay', sub: 'Chiến thuật tốt, phản xạ nhanh' },
-    { label: 'Bán chuyên / Nâng cao', sub: 'Tập luyện thường xuyên, kỹ thuật chuẩn' },
-    { label: 'Chuyên nghiệp / Thi đấu giải', sub: 'Vận động viên thi đấu giải' },
-  ]
-  const [skillIndex, setSkillIndex] = useState(2)
+  const nameOf = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories])
+  const sportEntry = id => sports.find(s => s.sportCategoryId === id)
 
-  const toggleSport = (sport) => {
-    if (selectedSports.includes(sport)) {
-      if (selectedSports.length > 1) {
-        setSelectedSports(selectedSports.filter(s => s !== sport))
-      }
-    } else {
-      setSelectedSports([...selectedSports, sport])
-    }
+  const toggleSport = id => {
+    if (sportEntry(id)) setSports(sports.filter(s => s.sportCategoryId !== id))
+    else if (sports.length >= MAX_SPORTS) toast.error(`Tối đa ${MAX_SPORTS} môn.`)
+    else setSports([...sports, { sportCategoryId: id, skillLevel: 'BEGINNER', preferredFormats: [] }])
+  }
+  const patchSport = (id, patch) => setSports(sports.map(s => (s.sportCategoryId === id ? { ...s, ...patch } : s)))
+  const toggleFormat = (id, format) => {
+    const current = sportEntry(id)?.preferredFormats || []
+    patchSport(id, { preferredFormats: current.includes(format) ? current.filter(f => f !== format) : [...current, format] })
   }
 
-  const [saving, setSaving] = useState(false)
-
-  const handleCompleteSetup = async () => {
-    if (saving) return
-    // Lưu các môn đã chọn kèm trình độ ban đầu vào localStorage
-    const sportMetadata = {
-      badminton: { name: 'Cầu Lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
-      pickleball: { name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
-      football: { name: 'Bóng Đá', icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' },
-      basketball: { name: 'Bóng Rổ', icon: '🏀', color: '#EA580C', bgColor: '#FFF7ED' },
-      tennis: { name: 'Tennis', icon: '🎾', color: '#65A30D', bgColor: '#F7FEE7' },
+  const slotKey = s => `${s.dayOfWeek}-${s.startTime}-${s.endTime}`
+  const addSlots = list => {
+    const existing = new Set(slots.map(slotKey))
+    const fresh = list.filter(s => !existing.has(slotKey(s)))
+    if (slots.length + fresh.length > MAX_SLOTS) { toast.error(`Tối đa ${MAX_SLOTS} khung giờ.`); return }
+    setSlots([...slots, ...fresh].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime)))
+  }
+  const addDraftSlot = () => {
+    if (!slotDraft.startTime || !slotDraft.endTime || slotDraft.endTime <= slotDraft.startTime) {
+      toast.error('Giờ kết thúc phải sau giờ bắt đầu.')
+      return
     }
-    const currentTier = SKILL_TIERS[skillIndex].label
-    const newSportsData = selectedSports.map((key) => {
-      const meta = sportMetadata[key] || { name: key, icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' }
-      return {
-        id: key,
-        name: meta.name,
-        icon: meta.icon,
-        level: currentTier,
-        field: 'Trình độ',
-        ranked: true,
-        matches: 0,
-        winRate: '100%',
-        color: meta.color,
-        bgColor: meta.bgColor,
-      }
-    })
-    // Lưu môn & trình độ lên backend: PUT /api/auth/me/sports (cần đối chiếu tên môn với danh mục hệ thống)
+    addSlots([{ ...slotDraft }])
+  }
+
+  const locate = () => {
+    if (!navigator.geolocation) { toast.error('Trình duyệt không hỗ trợ định vị.'); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => setLocation({ latitude: Number(pos.coords.latitude.toFixed(6)), longitude: Number(pos.coords.longitude.toFixed(6)) }),
+      () => toast.error('Không lấy được vị trí. Vui lòng cho phép truy cập vị trí.'),
+      { enableHighAccuracy: true, timeout: 10000 },
+    )
+  }
+
+  const submit = async () => {
+    if (saving) return
+    if (sports.length === 0) { toast.error('Vui lòng chọn ít nhất 1 môn hay chơi.'); return }
+    if (slots.length === 0) { toast.error('Vui lòng thêm ít nhất 1 khung giờ rảnh.'); return }
+    const price = maxPrice === '' ? null : Number(maxPrice)
+    if (price != null && (!Number.isFinite(price) || price < 0)) { toast.error('Mức giá sân không hợp lệ.'); return }
     setSaving(true)
     try {
-      const categories = await getSportCategories()
-      const normalize = (text) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
-      const sports = newSportsData
-        .map((sport) => {
-          const category = categories.find((c) => normalize(c.name).includes(normalize(sport.name)) || normalize(sport.name).includes(normalize(c.name)))
-          return category ? { ...sport, id: category.id, sportCategoryId: category.id } : null
-        })
-        .filter(Boolean)
-      if (sports.length > 0) await updateMySports(sports.map((s) => ({ sportCategoryId: s.sportCategoryId, skillLevel: s.level })))
-      localStorage.setItem('player_sports_data', JSON.stringify(sports.length > 0 ? sports : newSportsData))
-      localStorage.setItem('sportnexus_selected_sports', JSON.stringify(selectedSports))
-      navigate('/dashboard')
+      await saveOnboarding({
+        gender: gender || null,
+        sports: sports.map(s => ({ ...s, preferredFormats: s.preferredFormats.length ? s.preferredFormats : null })),
+        availability: slots,
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
+        radiusKm: location ? Number(radiusKm) : null,
+        maxPricePerHour: price,
+        goal: goal || null,
+        frequency: frequency || null,
+      })
+      setNeedsOnboarding(false)
+      try {
+        localStorage.setItem('player_sports_data', JSON.stringify(sports.map(s => ({ ...s, id: s.sportCategoryId, name: nameOf[s.sportCategoryId] || '', sportName: nameOf[s.sportCategoryId] || '', level: s.skillLevel }))))
+      } catch { /* bỏ qua */ }
+      toast.success('Đã lưu khảo sát người chơi. Hãy làm khảo sát toàn diện từng môn để nhận Elo khởi đầu.')
+      navigate(state?.from && state.from !== '/onboarding' ? state.from : '/assessment', { replace: true })
     } catch (error) {
-      toast.error(error?.message || 'Không lưu được môn thể thao. Vui lòng thử lại.')
+      toast.error(error?.message || 'Không lưu được khảo sát. Vui lòng thử lại.')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="sport-animated-bg flex flex-col w-full h-screen overflow-y-auto pt-space-xl px-margin">
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary-container/10 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary-fixed/10 rounded-full blur-[140px]"></div>
-      </div>
-      
-      <div className="relative z-10 w-full max-w-4xl mx-auto pb-space-xl">
-        <div className="relative rounded-2xl bg-surface-container-low/75 backdrop-blur-xl shadow-2xl p-space-md sm:p-space-lg">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-container via-secondary-fixed to-primary-fixed-dim"></div>
-          
-          {/* Header */}
-          <div className="flex flex-col gap-3 mb-8">
-            <header className="flex items-center justify-between gap-3 flex-wrap">
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 shadow-md">
-                <img src="/logo-mark.png" alt="" className="w-7 h-7 object-contain" aria-hidden="true" />
-                <img src="/logo-wordmark.png" alt="SportNexus" className="h-4 w-auto object-contain" />
-              </span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high">
-                <span className="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse" />
-                <span className="font-label-sm uppercase tracking-wider text-secondary-fixed">Calibration Protocol</span>
-              </span>
-            </header>
-            <h1 className="font-headline-lg text-on-surface">
-              Welcome to SportNexus. Let's calibrate.
-            </h1>
-            <p className="font-body-md text-on-surface-variant max-w-2xl">
-              Personalize your athletic passport to unlock algorithmic matchmaking and smart venue dispatching.
-            </p>
-          </div>
+    <div className="snx-calm-bg" style={{ minHeight: '100vh', padding: '32px 16px' }}>
+      <div className="snx-stack" style={{ maxWidth: 860, margin: '0 auto', gap: 16 }}>
+        <header>
+          {/* Logo SportNexus (trang khảo sát nằm ngoài layout nên không có thanh trên) */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.95)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: 12 }}>
+            <img src="/logo-mark.png" alt="" aria-hidden="true" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            <img src="/logo-wordmark.png" alt="SportNexus" style={{ height: 16, width: 'auto', objectFit: 'contain' }} />
+          </span>
+          <p className="snx-page-eyebrow">Khảo sát người chơi</p>
+          <h1 className="snx-page-title">{completed ? 'Cập nhật thông tin chơi thể thao' : 'Chào mừng đến SportNexus!'}</h1>
+          <p className="snx-page-subtitle">
+            Cho chúng tôi biết bạn chơi môn gì, trình độ và lúc nào rảnh để gợi ý kèo, sân và giải phù hợp.
+            {!completed && ' Bạn cần hoàn thành khảo sát này trước khi mở / nhận kèo hoặc đăng ký giải.'}
+          </p>
+        </header>
 
-          {/* Step 1 */}
-          <div className="mb-10">
-            <h2 className="font-headline-sm text-on-surface mb-4 flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-bold text-sm">1</span>
-              Select Your Disciplines
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {[
-                { key: 'badminton', label: 'Cầu lông', icon: 'sports_tennis' },
-                { key: 'pickleball', label: 'Pickleball', icon: 'sports_baseball' },
-                { key: 'football', label: 'Bóng đá', icon: 'sports_soccer' },
-                { key: 'basketball', label: 'Bóng rổ', icon: 'sports_basketball' },
-                { key: 'tennis', label: 'Tennis', icon: 'sports_tennis' },
-              ].map(({ key: sport, label, icon }) => {
-                const isSelected = selectedSports.includes(sport)
-                return (
-                  <button key={sport} onClick={() => toggleSport(sport)} className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-all border ${isSelected ? 'bg-surface-container-high/80 border-primary-container text-primary-container shadow-[0_0_15px_rgba(0,229,255,0.2)]' : 'bg-surface-container border-transparent text-on-surface-variant hover:bg-surface-container-high'}`}>
-                    <span className="material-symbols-outlined text-[32px]">{icon}</span>
-                    <span className="font-headline-sm capitalize text-sm">{label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="mb-10 bg-surface-container/40 p-6 rounded-xl border border-outline-variant/10">
-            <h2 className="font-headline-sm text-on-surface mb-6 flex items-center gap-2">
-              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-bold text-sm">2</span>
-              Tự Đánh Giá Trình Độ Ban Đầu
-            </h2>
-            <div className="flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-headline-sm text-primary-container font-bold text-lg">
-                    {SKILL_TIERS[skillIndex].label}
-                  </span>
-                  <p className="text-xs text-on-surface-variant m-0 mt-0.5">
-                    {SKILL_TIERS[skillIndex].sub}
-                  </p>
+        {loading ? <p className="snx-muted">Đang tải…</p> : (
+          <>
+            <Section step="1" title="Môn hay chơi và trình độ" hint={`Chọn 1 – ${MAX_SPORTS} môn. Trình độ tự đánh giá; Elo chính thức có sau khảo sát toàn diện từng môn.`}>
+              <div className="snx-row" style={{ gap: 8 }}>
+                {categories.map(c => (
+                  <button key={c.id} type="button" className="snx-chip" aria-pressed={Boolean(sportEntry(c.id))} onClick={() => toggleSport(c.id)}>{c.name}</button>
+                ))}
+              </div>
+              {sports.map(s => (
+                <div key={s.sportCategoryId} className="snx-list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                  <strong>{nameOf[s.sportCategoryId] || 'Môn thể thao'}</strong>
+                  <div className="snx-muted">Trình độ</div>
+                  <ChoiceRow options={SKILL_LEVELS} value={s.skillLevel} onChange={v => patchSport(s.sportCategoryId, { skillLevel: v })} />
+                  <div className="snx-muted">Nội dung hay chơi (không bắt buộc)</div>
+                  <div className="snx-row" style={{ gap: 8 }}>
+                    {formatOptionsFor(nameOf[s.sportCategoryId]).map(([value, label]) => (
+                      <button key={value} type="button" className="snx-chip" aria-pressed={s.preferredFormats.includes(value)} onClick={() => toggleFormat(s.sportCategoryId, value)}>{label}</button>
+                    ))}
+                  </div>
                 </div>
-                <span className="font-bold text-primary-container bg-primary-container/10 px-3 py-1 rounded-full text-xs">
-                  Cấp {skillIndex + 1}/{SKILL_TIERS.length}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={SKILL_TIERS.length - 1}
-                step="1"
-                value={skillIndex}
-                onChange={(e) => setSkillIndex(Number(e.target.value))}
-                className="w-full accent-primary-container cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-on-surface-variant font-medium">
-                <span>Mới tập chơi</span>
-                <span>Chuyên nghiệp / Thi đấu giải</span>
-              </div>
-            </div>
-          </div>
+              ))}
+            </Section>
 
-          {/* Submit */}
-          <div className="flex justify-end pt-4 border-t border-outline-variant/20">
-            <button
-              className="py-3 px-8 rounded-xl bg-gradient-to-r from-primary-container to-secondary-fixed text-on-primary-container font-headline-sm font-bold flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:brightness-110 transition-all cursor-pointer"
-              onClick={handleCompleteSetup}
-              disabled={saving}
-            >
-              <span>Hoàn tất &amp; Vào trang chủ</span>
-              <span className="material-symbols-outlined">arrow_forward</span>
-            </button>
-          </div>
-          
-        </div>
+            <Section step="2" title="Khung giờ rảnh trong tuần" hint={`Thêm 1 – ${MAX_SLOTS} khung giờ (giờ Việt Nam).`}>
+              <div className="snx-row" style={{ gap: 8 }}>
+                {QUICK_SLOTS.map(([label, days, startTime, endTime]) => (
+                  <button key={label} type="button" className="snx-btn snx-btn--secondary snx-btn--sm"
+                    onClick={() => addSlots(days.map(dayOfWeek => ({ dayOfWeek, startTime, endTime })))}>
+                    <span className="material-symbols-outlined">add</span>{label}
+                  </button>
+                ))}
+              </div>
+              <div className="snx-row" style={{ gap: 8, alignItems: 'flex-end' }}>
+                <label className="snx-field">Thứ
+                  <select className="snx-select" value={slotDraft.dayOfWeek} onChange={e => setSlotDraft({ ...slotDraft, dayOfWeek: Number(e.target.value) })}>
+                    {[1, 2, 3, 4, 5, 6, 0].map(d => <option key={d} value={d}>{DAYS[d]}</option>)}
+                  </select>
+                </label>
+                <label className="snx-field">Từ<input type="time" className="snx-input" value={slotDraft.startTime} onChange={e => setSlotDraft({ ...slotDraft, startTime: e.target.value })} /></label>
+                <label className="snx-field">Đến<input type="time" className="snx-input" value={slotDraft.endTime} onChange={e => setSlotDraft({ ...slotDraft, endTime: e.target.value })} /></label>
+                <button type="button" className="snx-btn snx-btn--primary" onClick={addDraftSlot}>Thêm</button>
+              </div>
+              {slots.length > 0 ? (
+                <div className="snx-row" style={{ gap: 8 }}>
+                  {slots.map(s => (
+                    <span key={slotKey(s)} className="snx-chip" aria-pressed="true">
+                      {DAYS[s.dayOfWeek]} {s.startTime}–{s.endTime}
+                      <button type="button" aria-label="Xóa khung giờ" onClick={() => setSlots(slots.filter(x => slotKey(x) !== slotKey(s)))}
+                        style={{ border: 0, background: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="snx-muted">Chưa có khung giờ nào.</p>}
+            </Section>
+
+            <Section step="3" title="Khu vực và mức giá" hint="Không bắt buộc. Dùng để gợi ý sân và kèo gần bạn.">
+              <div className="snx-row" style={{ gap: 8 }}>
+                <button type="button" className="snx-btn snx-btn--secondary" onClick={locate}>
+                  <span className="material-symbols-outlined">my_location</span>{location ? 'Lấy lại vị trí hiện tại' : 'Dùng vị trí hiện tại'}
+                </button>
+                {location && (
+                  <>
+                    <span className="snx-muted">{location.latitude}, {location.longitude}</span>
+                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setLocation(null)}>Bỏ vị trí</button>
+                  </>
+                )}
+              </div>
+              {location && (
+                <label className="snx-field">Sẵn sàng đi tối đa: {radiusKm} km
+                  <input type="range" min="1" max="50" value={radiusKm} onChange={e => setRadiusKm(Number(e.target.value))} />
+                </label>
+              )}
+              <label className="snx-field">Giá sân chấp nhận được (đ / giờ)
+                <input type="number" min="0" step="10000" className="snx-input" placeholder="VD: 150000" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} />
+              </label>
+            </Section>
+
+            <Section step="4" title="Bạn chơi để làm gì?" hint="Không bắt buộc.">
+              <div className="snx-muted">Giới tính</div>
+              <ChoiceRow options={GENDERS} value={gender} onChange={setGender} allowEmpty />
+              <div className="snx-muted">Mục tiêu</div>
+              <ChoiceRow options={GOALS} value={goal} onChange={setGoal} allowEmpty />
+              <div className="snx-muted">Tần suất chơi</div>
+              <ChoiceRow options={FREQUENCIES} value={frequency} onChange={setFrequency} allowEmpty />
+            </Section>
+
+            <div className="snx-row" style={{ justifyContent: 'flex-end' }}>
+              {completed && <button type="button" className="snx-btn snx-btn--secondary" onClick={() => navigate(-1)}>Hủy</button>}
+              <button type="button" className="snx-btn snx-btn--primary" onClick={submit} disabled={saving}>
+                {saving ? 'Đang lưu…' : 'Lưu khảo sát'}<span className="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
-
-export default OnBoarding

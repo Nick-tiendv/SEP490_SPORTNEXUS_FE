@@ -134,7 +134,7 @@ function ListView({ facilityId, onOpen }) {
                     <td>{formatDateTime(b.startTime)}<div className="snx-muted">đến {formatTime(b.endTime)}</div></td>
                     <td>{formatVND(b.totalAmount)}</td>
                     <td>{b.checkedInCount ?? 0}/{b.participantCount ?? 0} đã vào</td>
-                    <td><Badge status={b.bookingStatus} /></td>
+                    <td><Badge status={b.bookingStatus} />{b.isNoShow && <div><span className="snx-badge snx-badge--red" style={{ marginTop: 4 }}>Không đến (no-show)</span></div>}</td>
                     <td><button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => onOpen(b.bookingId)}>Chi tiết</button></td>
                   </tr>
                 ))}

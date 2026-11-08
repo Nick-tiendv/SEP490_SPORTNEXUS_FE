@@ -40,8 +40,18 @@ export function toTournament(raw) {
     sport: pick(raw, 'categoryName', 'sportName', 'category.name', 'sport.name') || '',
     facility: pick(raw, 'facilityName', 'facility.name') || '',
     facilityId: String(pick(raw, 'facilityId', 'facility.id') ?? ''),
-    organizer: pick(raw, 'ownerName', 'organizerName', 'createdByName', 'owner.fullName', 'hostName') || '',
+    organizer: pick(raw, 'organizerName', 'ownerName', 'createdByName', 'owner.fullName', 'hostName') || '',
+    organizerId: String(pick(raw, 'organizerId', 'ownerId', 'owner.id') ?? ''),
     ownerId: String(pick(raw, 'ownerId', 'owner.id') ?? ''),
+    sportId: String(pick(raw, 'categoryId', 'sportCategoryId') ?? ''),
+    // Giải do người chơi tạo cần Admin duyệt: APPROVED | PENDING | REJECTED
+    approvalStatus: String(pick(raw, 'approvalStatus') ?? '').toUpperCase(),
+    approvalNote: pick(raw, 'approvalNote') || '',
+    tier: String(pick(raw, 'tier') ?? '').toUpperCase(),
+    purpose: String(pick(raw, 'purpose') ?? '').toUpperCase(),
+    minRating: num(pick(raw, 'minRating')),
+    maxRating: num(pick(raw, 'maxRating')),
+    minRatedMatches: num(pick(raw, 'minRatedMatches')),
     categoryType: pick(raw, 'categoryType') ?? '',
     subTournamentCount: num(pick(raw, 'subTournamentCount')) ?? (children.length || null),
     // null khi response không có isLocked (API giải đấu công khai) để không ghi đè giá trị từ API admin.
@@ -100,7 +110,15 @@ export function toMatch(raw) {
     scoreA: num(pick(raw, 'scoreP1', 'score1', 'player1Score', 'homeScore')),
     scoreB: num(pick(raw, 'scoreP2', 'score2', 'player2Score', 'awayScore')),
     sets,
+    // winnerId null khi trận hòa (resultType = DRAW, chỉ vòng bảng / vòng tròn bóng đá)
     winnerId: String(pick(raw, 'winnerId', 'winner.id') ?? ''),
+    winnerName: pick(raw, 'winnerName', 'winner.name') || '',
+    resultType: String(pick(raw, 'resultType') ?? '').toUpperCase(),
+    isDraw: String(pick(raw, 'resultType') ?? '').toUpperCase() === 'DRAW',
+    stage: String(pick(raw, 'stage') ?? '').toUpperCase(),
+    groupName: pick(raw, 'groupName') || '',
+    tiebreakA: num(pick(raw, 'tiebreakP1')),
+    tiebreakB: num(pick(raw, 'tiebreakP2')),
     status: String(pick(raw, 'status', 'matchStatus') ?? ''),
     court: pick(raw, 'courtName', 'court.name') || '',
     time: pick(raw, 'scheduledTime', 'startTime', 'courtSlot.startTime') || '',
@@ -112,13 +130,20 @@ export function toBracket(data) {
   const matches = rounds.length
     ? rounds.flatMap((round, index) => asArray(pick(round, 'matches')).map(match => ({ ...toMatch(match), round: num(pick(round, 'roundNumber', 'round')) ?? index + 1, roundName: pick(round, 'name', 'roundName') || toMatch(match).roundName })))
     : toList(data).items.length ? toList(data).items.map(toMatch) : asArray(pick(data, 'matches')).map(toMatch)
+  // Vòng bảng (stage = GROUP) gom theo bảng; vòng loại trực tiếp gom theo vòng.
+  const keyOf = match => (match.stage === 'GROUP' ? `0|${match.groupName}|${String(match.round).padStart(3, '0')}` : `1||${String(match.round).padStart(3, '0')}`)
   const byRound = new Map()
-  for (const match of matches) byRound.set(match.round, [...(byRound.get(match.round) || []), match])
-  const total = byRound.size
-  return [...byRound.entries()].sort((a, b) => a[0] - b[0]).map(([round, items], index) => {
-    const remaining = total - index
-    const label = items[0]?.roundName || (remaining === 1 && items.length === 1 ? 'Chung kết' : remaining === 2 && items.length === 2 ? 'Bán kết' : remaining === 3 && items.length === 4 ? 'Tứ kết' : `Vòng ${round}`)
-    return { label, matches: items.sort((x, y) => x.order - y.order) }
+  for (const match of matches) byRound.set(keyOf(match), [...(byRound.get(keyOf(match)) || []), match])
+  const knockoutKeys = [...byRound.keys()].filter(key => key.startsWith('1|')).sort()
+  return [...byRound.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([key, items]) => {
+    const first = items[0] || {}
+    let label
+    if (first.stage === 'GROUP') label = [first.groupName ? `Bảng ${first.groupName}` : 'Vòng bảng', first.roundName].filter(Boolean).join(' · ')
+    else {
+      const remaining = knockoutKeys.length - knockoutKeys.indexOf(key)
+      label = first.roundName || (remaining === 1 && items.length === 1 ? 'Chung kết' : remaining === 2 && items.length === 2 ? 'Bán kết' : remaining === 3 && items.length === 4 ? 'Tứ kết' : `Vòng ${first.round}`)
+    }
+    return { label, stage: first.stage, groupName: first.groupName, matches: items.sort((x, y) => x.order - y.order) }
   })
 }
 
@@ -148,9 +173,13 @@ export async function getParticipants(id) {
 export async function getBracket(id) {
   return toBracket(unwrap((await apiClient.get(`/api/v1/tournaments/${path(id)}/bracket`)).data))
 }
-export async function generateBracket(id) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/generate-bracket`)).data)
+// format: KNOCKOUT | ROUND_ROBIN | GROUP_KNOCKOUT (trống = BE tự chọn)
+export async function generateBracket(id, format) {
+  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/generate-bracket`, null, { params: format ? { format } : undefined })).data)
 }
+// Admin duyệt giải do người chơi tạo (giải PENDING không hiện công khai, không nhận đăng ký)
+export const approveTournament = async id => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/approve`)).data)
+export const rejectTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/reject`, { reason })).data)
 export async function randomPairing(id) {
   return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/execute-random-pairing`)).data)
 }
@@ -164,7 +193,10 @@ export async function removeParticipant(id, participantId) {
 export async function checkInParticipant(id, participantId) {
   return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/check-in`, { participantId, qrCode: null })).data)
 }
-// UpdateMatchScoreRequest: { sets?, scoreP1, scoreP2, winnerId }.
-export async function updateMatchScore(matchId, { scoreP1, scoreP2, winnerId, sets }) {
-  return unwrap((await apiClient.put(`/api/v1/matches/${path(matchId)}/score`, { scoreP1, scoreP2, winnerId: winnerId || null, sets: sets?.length ? sets : null })).data)
+// UpdateMatchScoreRequest: { sets?, scoreP1, scoreP2, winnerId, tiebreakP1, tiebreakP2, resultType: NORMAL | WALKOVER | RETIRED }.
+export async function updateMatchScore(matchId, { scoreP1, scoreP2, winnerId, sets, tiebreakP1, tiebreakP2, resultType }) {
+  return unwrap((await apiClient.put(`/api/v1/matches/${path(matchId)}/score`, {
+    scoreP1, scoreP2, winnerId: winnerId || null, sets: sets?.length ? sets : null,
+    tiebreakP1: tiebreakP1 ?? null, tiebreakP2: tiebreakP2 ?? null, resultType: resultType || 'NORMAL',
+  })).data)
 }

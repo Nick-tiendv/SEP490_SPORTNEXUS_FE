@@ -275,7 +275,7 @@ export default function Settlement() {
           <div style={{ ...labelStyle, color: '#B45309' }}>Tiền đặt sân chờ chuyển</div>
           <div style={{ fontSize: '26px', fontWeight: 700, margin: '8px 0', color: '#B45309' }}>{value(e?.pendingBookingAmount)}</div>
           <div style={{ fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
-            {e ? `${e.pendingBookings} đơn • chuyển vào ví sau giờ chơi + ${e.settlementHoldHours} giờ` : 'Tiền nền tảng đang giữ cho bạn'}
+            {e ? `${e.pendingBookings} đơn • chuyển vào ví ${e.settlementHoldHours ?? 24} giờ sau khi hết ca (hạn khiếu nại)` : 'Tiền đơn sân về ví 24 giờ sau khi hết ca (hạn khiếu nại)'}
           </div>
         </div>
 

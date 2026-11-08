@@ -244,6 +244,9 @@ function AIChatBooking() {
         text: botReply,
         facilities: aiResult?.reply?.facilities || [],
         lfgCards: aiResult?.reply?.lfgCards || [],
+        tournaments: aiResult?.reply?.tournaments || [],
+        intent: aiResult?.reply?.intent,
+        messageId: aiResult?.reply?.id,
       }
       setMessages((prev) => [...prev, botMsg])
     } catch (err) {
@@ -383,6 +386,15 @@ function AIChatBooking() {
 
   const handleOpenLfg = () => {
     navigate('/community')
+  }
+
+  const handleOpenTournament = (t) => {
+    navigate(t?.tournamentId ? `/tournament?tournamentId=${encodeURIComponent(t.tournamentId)}` : '/tournament')
+  }
+
+  // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi
+  const handleAiDone = (kind) => {
+    navigate(kind === 'booking' ? '/qr-pass' : '/community')
   }
 
   const renderFormattedText = (rawText) => {
@@ -539,7 +551,7 @@ function AIChatBooking() {
             <div className="snx-ai-msg-content max-w-2xl">
               <div className="snx-ai-bubble">{renderFormattedText(msg.text)}</div>
 
-              <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} />
+              <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} />
 
               {msg.quickReplies && msg.quickReplies.length > 0 && (
                 <div className="snx-ai-chips-wrap mt-2">
