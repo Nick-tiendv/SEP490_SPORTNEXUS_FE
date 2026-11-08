@@ -111,10 +111,16 @@ function OnBoarding() {
           
           {/* Header */}
           <div className="flex flex-col gap-3 mb-8">
-            <div className="inline-flex items-center self-start gap-2 px-3 py-1 rounded-full bg-surface-container-high">
-              <span className="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse"></span>
-              <span className="font-label-sm uppercase tracking-wider text-secondary-fixed">Calibration Protocol</span>
-            </div>
+            <header className="flex items-center justify-between gap-3 flex-wrap">
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/95 shadow-md">
+                <img src="/logo-mark.png" alt="" className="w-7 h-7 object-contain" aria-hidden="true" />
+                <img src="/logo-wordmark.png" alt="SportNexus" className="h-4 w-auto object-contain" />
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high">
+                <span className="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse" />
+                <span className="font-label-sm uppercase tracking-wider text-secondary-fixed">Calibration Protocol</span>
+              </span>
+            </header>
             <h1 className="font-headline-lg text-on-surface">
               Welcome to SportNexus. Let's calibrate.
             </h1>

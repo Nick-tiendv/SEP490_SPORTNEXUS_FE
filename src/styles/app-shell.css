@@ -62,7 +62,7 @@
   padding: 0 14px 0 16px;
   border-bottom: 1px solid var(--snx-border-green);
 }
-.snx-brand { display: flex; align-items: center; gap: 12px; min-width: 0; text-decoration: none; }
+.snx-brand { display: flex; align-items: center; gap: 10px; min-width: 0; text-decoration: none; }
 .snx-brand-mark {
   display: grid;
   place-items: center;
@@ -74,8 +74,10 @@
   box-shadow: 0 4px 14px rgba(45, 95, 63, .28);
   transition: transform .2s ease;
 }
-.snx-brand:hover .snx-brand-mark { transform: rotate(-6deg) scale(1.04); }
-.snx-brand-mark .material-symbols-outlined { font-size: 22px; color: #fff; }
+.snx-brand:hover .snx-brand-mark { transform: scale(1.06); }
+.snx-brand-mark { width: 40px; height: 40px; border-radius: 0; background: transparent; box-shadow: none; }
+.snx-brand-mark-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.snx-brand-wordmark { height: 19px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; display: block; }
 .snx-brand-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .snx-brand-copy strong {
   display: flex;
@@ -297,6 +299,7 @@
   border-top: 1px solid var(--snx-border);
 }
 .snx-footer-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--snx-text-secondary); }
+.snx-footer-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; display: block; }
 .snx-footer-brand .material-symbols-outlined { font-size: 18px; color: var(--snx-green-600); }
 .snx-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
 .snx-footer-links span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

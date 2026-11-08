@@ -96,8 +96,9 @@
   box-shadow: var(--shadow-brand);
   transition: transform var(--dur-base) var(--ease-out);
 }
-.sn-admin .admin-brand:hover .admin-brand-mark { transform: rotate(-6deg) scale(1.04); }
-.sn-admin .admin-brand-mark .material-symbols-outlined { font-size: 22px; color: #fff; }
+.sn-admin .admin-brand:hover .admin-brand-mark { transform: scale(1.06); }
+.sn-admin .admin-brand-mark-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.sn-admin .admin-brand-wordmark { height: 19px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; display: block; }
 .sn-admin .admin-brand-copy { min-width: 0; }
 .sn-admin .admin-brand-copy strong {
   display: flex;
@@ -730,8 +731,8 @@
   box-shadow: 0 4px 20px rgba(15, 23, 42, .05);
 }
 .sn-admin .admin-sidebar-top { height: 60px; padding: 0 14px 0 16px; border-bottom: 1px solid rgba(45, 95, 63, .12); }
-.sn-admin .admin-brand { padding: 0; gap: 12px; }
-.sn-admin .admin-brand-mark { width: 38px; height: 38px; border-radius: 12px; }
+.sn-admin .admin-brand { padding: 0; gap: 10px; }
+.sn-admin .admin-brand-mark { width: 40px; height: 40px; border-radius: 0; background: transparent; box-shadow: none; }
 .sn-admin .admin-brand-copy strong { font-size: 17px; }
 .sn-admin .admin-brand-copy small { font-size: 10.5px; font-weight: 700; }
 .sn-admin .admin-navigation { padding-top: 12px; }

@@ -58,9 +58,7 @@ function Login() {
             {/* Logo Icon */}
             <div className="flex justify-center mb-5 sm:mb-6">
               <Link to="/" title="Về trang chủ" className="auth-login-logo flex items-center justify-center hover:scale-105 transition-transform">
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" fill="white"/>
-                </svg>
+                <img src="/logo.png" alt="SportNexus" className="auth-login-logo-img" />
               </Link>
             </div>
 

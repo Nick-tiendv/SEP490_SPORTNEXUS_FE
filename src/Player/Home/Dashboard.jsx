@@ -9,6 +9,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
+import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs } from '../../api/player/lfgApi.js'
 
@@ -845,6 +846,7 @@ function Dashboard() {
   useEffect(() => {
     let cancelled = false
     getUpcomingBookings()
+      .then((list) => enrichPlayerBookings(list))
       .then((list) => !cancelled && setUpcomingMatchesData(list.map(toUpcomingCard)))
       .catch((err) => console.warn('Dashboard: Không tải được lịch sắp tới:', err))
     getLfgs({ page: 1, pageSize: 6 })
