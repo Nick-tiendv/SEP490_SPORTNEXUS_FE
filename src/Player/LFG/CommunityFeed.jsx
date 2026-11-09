@@ -25,6 +25,7 @@ import {
 } from '../../api/player/lfgApi.js'
 import * as communityApi from '../../api/player/communityApi.js'
 import { RecommendedLfgSection } from './RecommendedLfg.jsx'
+import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
@@ -48,7 +49,7 @@ const sanitizeMatch = (m) => {
   return {
     ...m,
     title: clean(m.title) || m.title,
-    levelTag: cleanedLevel || 'Trung bình - Khá',
+    levelTag: cleanedLevel || 'Mọi trình độ',
     subBadge: clean(m.subBadge) || m.subBadge,
     groupDesc: clean(m.groupDesc) || m.groupDesc,
   }
@@ -110,6 +111,8 @@ function CommunityFeed() {
   // 3-Tab Main Navigation: 'all' (Sàn ghép trận) | 'my_cards' (Kèo đã tạo - Chủ kèo) | 'joined' (Kèo đã tham gia)
   const [activeMainTab, setActiveMainTab] = useState(() => (searchParams.get('tab') === 'community_posts' ? 'all' : searchParams.get('tab') || 'all'))
   const [myStatusFilter, setMyStatusFilter] = useState('all') // 'all' | 'OPEN' | 'FILLED' | 'CANCELLED'
+  // Elo & Fair Play thật cho thẻ hồ sơ ghép trận
+  const standing = usePlayerStanding()
   const [myLfgCards, setMyLfgCards] = useState([])
   const [joinedLfgCards, setJoinedLfgCards] = useState([])
   // Đang tải sẵn khi trang mở thẳng vào tab tương ứng (?tab=my_cards | joined)
@@ -193,7 +196,7 @@ function CommunityFeed() {
     return () => { cancelled = true }
   }, [lfgReload])
 
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
+  // Vị trí người chơi lấy từ Hồ sơ cá nhân (chưa khai thì hiện 'Chưa đặt khu vực')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
     try {
       const saved = localStorage.getItem('player_profile_data')
@@ -202,7 +205,7 @@ function CommunityFeed() {
         if (parsed.location) return parsed.location
       }
     } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'Thủ Đức'
+    return 'Chưa đặt khu vực'
   })
 
   // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
@@ -977,24 +980,15 @@ function CommunityFeed() {
 
       {/* Main Container */}
       <div className="snx-page">
-        {/* Realtime WebSocket SignalR Bar */}
+        {/* Thanh trạng thái: vị trí ghép (từ hồ sơ) và số kèo đang mở thật */}
         <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF7EE] text-[#15803D] font-bold text-[11px] tracking-wider uppercase border border-[#DCFCE7]">
-            <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse shadow-[0_0_8px_#16A34A]"></span>
-            REALTIME WEBSOCKET SIGNALR
-          </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] font-bold text-[11px] border border-[#FDE68A] shadow-2xs">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] font-bold text-[11px] border border-[#FDE68A]">
             <span className="material-symbols-outlined text-[13px] text-[#D97706]">location_on</span>
-            <span>Vị trí ghép: {userProfileLocation} (Đồng bộ hồ sơ)</span>
+            <span>Vị trí ghép: {userProfileLocation}</span>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E0F2FE] text-[#0369A1] font-semibold text-[11px]">
-            <span className="material-symbols-outlined text-[13px]">bolt</span>
-            Độ trễ: 18ms
-          </div>
-          <span className="text-gray-300 hidden sm:inline">|</span>
-          <span className="text-gray-500 font-medium text-[12px]">
-            142 Vận Động Viên Đang Tìm Đội
-          </span>
+          {!isLoadingLfgs && !lfgListError && (
+            <span className="text-gray-500 font-medium text-[12px]">{matches.length} kèo đang mở</span>
+          )}
         </div>
 
         {/* Title & Actions */}
@@ -1235,11 +1229,6 @@ function CommunityFeed() {
                     Slot giải phóng tức thì khi có thành viên xin rút hoặc trễ giờ check-in 15p.
                   </p>
                 </div>
-              </div>
-
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-gray-200 text-xs font-semibold text-gray-700 shadow-xs shrink-0">
-                <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                <span>Auto-Sync 5s</span>
               </div>
             </div>
 
@@ -2192,8 +2181,8 @@ function CommunityFeed() {
                   </span>
                 </div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#DCFCE7] to-[#BBF7D0] text-[#15803D] border border-[#86EFAC] text-[11px] font-black shadow-xs tracking-wide whitespace-nowrap shrink-0">
-                  <span className="material-symbols-outlined text-[14px] text-[#15803D] animate-spin" style={{ animationDuration: '6s' }}>diamond</span>
-                  Hạng Kim Cương
+                  <span className="material-symbols-outlined text-[14px] text-[#15803D]">military_tech</span>
+                  {standing.best?.rank ? `Hạng ${standing.best.rank}` : 'Chưa xếp hạng'}
                 </span>
               </div>
 
@@ -2214,23 +2203,28 @@ function CommunityFeed() {
                       {currentUser.name || 'Bạn'}
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
-                      Trình: Trung bình - Khá
+                      {eloText(standing.best)}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 mt-1 whitespace-nowrap">
-                    Thành viên từ T10/2025 • Niên khoá 2026
-                  </p>
 
                   <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold whitespace-nowrap">
                     <span className="material-symbols-outlined text-[15px] text-[#15803D] shrink-0">location_on</span>
                     <span>Vị trí thi đấu: <strong className="text-[#15803D]">{userProfileLocation}</strong></span>
-                    <span className="text-[9.5px] text-[#15803D] bg-[#DCFCE7] px-1.5 py-0.5 rounded font-extrabold border border-[#86EFAC]/70 shrink-0">Đã đồng bộ</span>
                   </div>
 
-                  <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-[#EAF7EE] border border-[#86EFAC] text-[#15803D] text-[11px] font-bold self-start shadow-2xs whitespace-nowrap">
-                    <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-ping shrink-0"></span>
-                    <span>Đang Online Sẵn Sàng</span>
-                  </div>
+                  {standing.fairPlay && (
+                    standing.fairPlay.isLfgBlocked ? (
+                      <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold self-start whitespace-nowrap">
+                        <span className="material-symbols-outlined text-[13px]">block</span>
+                        <span>Đang bị chặn nhận kèo</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-[#EAF7EE] border border-[#86EFAC] text-[#15803D] text-[11px] font-bold self-start shadow-2xs whitespace-nowrap">
+                        <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                        <span>Đủ điều kiện nhận kèo</span>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -2242,10 +2236,9 @@ function CommunityFeed() {
                       flag
                     </span>
                     <span>Chỉ Số Fair Play</span>
-                    <span className="px-1.5 py-0.2 rounded bg-[#DCFCE7] text-[#15803D] text-[9.5px] font-extrabold">Top 1%</span>
                   </div>
                   <div className="text-right flex items-baseline gap-1 whitespace-nowrap shrink-0">
-                    <span className="text-[22px] font-black text-[#15803D] tracking-tight">99.4</span>
+                    <span className="text-[22px] font-black text-[#15803D] tracking-tight">{fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
                     <span className="text-xs text-gray-400 font-bold">/100</span>
                   </div>
                 </div>
@@ -2254,16 +2247,16 @@ function CommunityFeed() {
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden p-0.5">
                   <div
                     className="h-full bg-gradient-to-r from-[#10B981] via-[#22C55E] to-[#15803D] rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)] transition-all duration-1000"
-                    style={{ width: '99.4%' }}
+                    style={{ width: `${Math.max(0, Math.min(100, fairPlayScoreOf(standing.fairPlay) ?? 0))}%` }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium whitespace-nowrap">
                   <span className="flex items-center gap-1 text-[#15803D] shrink-0">
                     <span className="material-symbols-outlined text-[13px]">verified</span>
-                    100% Hoàn thành trận
+                    Tối thiểu để nhận kèo: {standing.fairPlay?.minClaimScore ?? '—'}
                   </span>
-                  <span className="text-gray-400 shrink-0">0 Lần huỷ kèo trễ</span>
+                  {standing.fairPlay?.claimBanReason && <span className="text-red-600 truncate" title={standing.fairPlay.claimBanReason}>{standing.fairPlay.claimBanReason}</span>}
                 </div>
               </div>
 
@@ -2271,16 +2264,16 @@ function CommunityFeed() {
               <div className="grid grid-cols-2 gap-3 relative z-10">
                 <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
                   <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
-                    Trận đã ghép:
+                    Trận giải tính Elo:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
-                    <span>14 Trận</span>
+                    <span>{standing.ratedMatches} Trận</span>
                     <span className="material-symbols-outlined text-[16px] text-[#15803D]">
                       verified_user
                     </span>
                   </div>
                   <span className="text-[11px] text-[#15803D] font-extrabold block mt-1 whitespace-nowrap">
-                    100% không bùng kèo
+                    {standing.personal.length ? `Elo ${standing.personal.length} môn` : 'Chưa có Elo môn nào'}
                   </span>
                 </div>
 
@@ -2289,24 +2282,24 @@ function CommunityFeed() {
                     Đánh giá cộng đồng:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
-                    <span>4.95 / 5.0</span>
+                    <span>{standing.fairPlay?.ratingCount ? `${Number(standing.fairPlay.averageRating || 0).toFixed(2)} / 5.0` : '—'}</span>
                     <span className="material-symbols-outlined text-[16px] text-amber-500">
                       star
                     </span>
                   </div>
                   <span className="text-[10.5px] text-gray-500 font-semibold block mt-1 whitespace-nowrap">
-                    28 lượt vote uy tín
+                    {standing.fairPlay?.ratingCount ? `${standing.fairPlay.ratingCount} lượt đánh giá` : 'Chưa có đánh giá'}
                   </span>
                 </div>
               </div>
 
               {/* Quick Profile Footer Action */}
               <div className="mt-3.5 pt-3 border-t border-[#DCEBDC] flex items-center justify-between text-[11px] font-bold relative z-10">
-                <span className="text-gray-500">Tự động nhận lời mời:</span>
-                <span className="inline-flex items-center gap-1 text-[#15803D] bg-[#EAF7EE] px-2 py-0.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
-                  Bật Sẵn Sàng
-                </span>
+                <span className="text-gray-500">Elo & khảo sát trình độ:</span>
+                <button type="button" onClick={() => navigate('/assessment')} className="inline-flex items-center gap-1 text-[#15803D] bg-[#EAF7EE] px-2 py-0.5 rounded-full cursor-pointer">
+                  Xem chi tiết
+                  <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                </button>
               </div>
             </div>
 
@@ -2335,44 +2328,6 @@ function CommunityFeed() {
                     arrow_forward
                   </span>
                 </button>
-              </div>
-            </div>
-
-            {/* Card 3: HOẠT ĐỘNG THỜI GIAN THỰC */}
-            <div className="bg-white rounded-2xl border border-gray-200/90 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-3.5">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                  Hoạt Động Thời Gian Thực
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] animate-ping"></span>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {/* Activity 1 */}
-                <div className="flex items-center justify-between text-xs py-1.5 border-b border-gray-50 gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="material-symbols-outlined text-[15px] text-[#3B6817] shrink-0">
-                      bolt
-                    </span>
-                    <span className="text-gray-700 font-medium truncate">
-                      <strong className="text-gray-900">Tuấn Kiệt</strong> vừa chốt slot Pickleball
-                    </span>
-                  </div>
-                  <span className="text-gray-400 text-[11px] whitespace-nowrap shrink-0">12s trước</span>
-                </div>
-
-                {/* Activity 2 */}
-                <div className="flex items-center justify-between text-xs py-1.5 gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="material-symbols-outlined text-[15px] text-green-600 shrink-0">
-                      verified_user
-                    </span>
-                    <span className="text-gray-700 font-medium truncate">
-                      <strong className="text-gray-900">Bình An</strong> vừa check-in sân Tre Xanh
-                    </span>
-                  </div>
-                  <span className="text-gray-400 text-[11px] whitespace-nowrap shrink-0">22m trước</span>
-                </div>
               </div>
             </div>
           </div>

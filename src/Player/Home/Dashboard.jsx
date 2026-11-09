@@ -13,6 +13,7 @@ import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs, lfgSkillLabel } from '../../api/player/lfgApi.js'
 import HomeRecommendations from './HomeRecommendations.jsx'
+import { eloText, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 
 const actionCards = [
   {
@@ -809,6 +810,7 @@ const toLfgRow = (c) => {
 
 function Dashboard() {
   const currentUser = useCurrentUser()
+  const standing = usePlayerStanding()
   const navigate = useNavigate()
 
   // Tự động chuyển hướng sang trang Quản trị nếu tài khoản có vai trò là Court Owner hoặc Admin
@@ -1039,7 +1041,7 @@ function Dashboard() {
                   border: '1px solid #86EFAC',
                 }}
               >
-                Trình: Trung bình - Khá
+                {eloText(standing.best)}
               </span>
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
