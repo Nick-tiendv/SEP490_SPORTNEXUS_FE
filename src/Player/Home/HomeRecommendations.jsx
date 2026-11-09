@@ -36,7 +36,7 @@ export default function HomeRecommendations() {
   return (
     <>
       {lfgItems.length > 0 && (
-        <Block title="Kèo phù hợp với bạn" icon="auto_awesome" link="/recommended-lfg" linkLabel="Xem tất cả">
+        <Block title="Kèo phù hợp với bạn" icon="auto_awesome" link="/community" linkLabel="Xem trên sàn ghép trận">
           <div className="snx-grid snx-grid--3">{lfgItems.map((item) => <RecommendedLfgCard key={item.card?.id} item={item} compact />)}</div>
         </Block>
       )}

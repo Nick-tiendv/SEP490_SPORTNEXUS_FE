@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
-import { getFacilityBookings, getOwnerBooking, getOwnerBookingsPage } from '../../api/owner'
+import { endOwnerBookingSession, getFacilityBookings, getOwnerBooking, getOwnerBookingsPage } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { addDays, formatDateTime, formatTime, formatVND, statusBadge, toDateKey } from '../shared.js'
@@ -25,6 +27,22 @@ function Badge({ status }) {
 function BookingDetailModal({ bookingId, onClose }) {
   const detail = useApi(() => getOwnerBooking(bookingId), [bookingId])
   const b = detail.data
+  const [ending, setEnding] = useState(false)
+  // Kết thúc ca sớm: chỉ khi đơn đã có người check-in và ca chưa hết giờ
+  const canEndEarly = b && String(b.bookingStatus).toUpperCase() === 'CHECKED_IN' && b.endTime && new Date(b.endTime) > new Date()
+  const endEarly = async () => {
+    if (!(await confirmDialog('Kết thúc ca sớm? Mọi người chơi đang trong sân sẽ được check-out. Không hoàn tiền cho phần thời gian còn lại.', { title: 'Kết thúc ca sớm', confirmLabel: 'Kết thúc ca' }))) return
+    setEnding(true)
+    try {
+      await endOwnerBookingSession(bookingId)
+      toast.success('Đã kết thúc ca, check-out mọi người chơi.')
+      detail.refresh()
+    } catch (error) {
+      toast.error(error?.message || 'Không kết thúc được ca.')
+    } finally {
+      setEnding(false)
+    }
+  }
   return (
     <div className="snx-modal-backdrop" role="presentation">
       <div className="snx-modal snx-modal--wide" role="dialog" aria-modal="true" aria-labelledby="booking-title">
@@ -38,7 +56,7 @@ function BookingDetailModal({ bookingId, onClose }) {
         {detail.error && <div className="snx-alert snx-alert--error">{detail.error}</div>}
         {b && (
           <div className="snx-stack">
-            <div className="snx-row"><Badge status={b.bookingStatus} />{b.isWalkIn && <span className="snx-badge snx-badge--gray">Khách vãng lai</span>}{b.lfg && <span className="snx-badge snx-badge--blue">Kèo ghép LFG</span>}</div>
+            <div className="snx-row"><Badge status={b.bookingStatus} />{b.isWalkIn && <span className="snx-badge snx-badge--gray">Khách vãng lai</span>}{b.lfg && <span className="snx-badge snx-badge--blue">Kèo ghép LFG</span>}{b.isNoShow && <span className="snx-badge snx-badge--red">Không đến (no-show)</span>}</div>
             <div className="snx-form-grid">
               <div><div className="snx-muted">Người đặt</div><strong>{b.hostName || '—'}</strong><div className="snx-muted">{b.hostPhone}</div></div>
               <div><div className="snx-muted">Tổng tiền</div><strong>{formatVND(b.totalAmount)}</strong></div>
@@ -75,6 +93,7 @@ function BookingDetailModal({ bookingId, onClose }) {
         )}
         <div className="snx-modal-foot">
           <Link to="/owner/schedule" className="snx-btn snx-btn--secondary">Mở lịch đặt sân</Link>
+          {canEndEarly && <button type="button" className="snx-btn snx-btn--danger" disabled={ending} onClick={endEarly}>{ending ? 'Đang kết thúc…' : 'Kết thúc ca sớm'}</button>}
           <button type="button" className="snx-btn snx-btn--primary" onClick={onClose}>Đóng</button>
         </div>
       </div>
