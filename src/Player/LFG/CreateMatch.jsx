@@ -7,6 +7,7 @@ import { getWallet } from '../../api/player/walletApi.js'
 import { searchFacilities } from '../../api/player/facilityApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
+import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
@@ -239,6 +240,9 @@ function CreateMatch() {
   const [showEscrowPill, setShowEscrowPill] = useState(true)
 
   // Wallet balance synchronized with localStorage
+  // Elo & Fair Play thật của chủ kèo (thẻ xem trước kèo)
+  const standing = usePlayerStanding()
+
   const [walletBalance, setWalletBalance] = useState(() => {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 0
@@ -1674,7 +1678,7 @@ function CreateMatch() {
                       {currentUser.name || 'Bạn'} (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      Trình: Trung bình - Khá • <span className="text-[#15803D] font-bold">Fairplay 99.4</span>
+                      {eloText(standing.best)} • <span className="text-[#15803D] font-bold">Fair Play {fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
                     </p>
                   </div>
                 </div>
