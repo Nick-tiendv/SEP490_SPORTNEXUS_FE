@@ -19,6 +19,7 @@ import {
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
 import ReportModal from '../../components/common/ReportModal.jsx'
+import { notifyWalletChanged } from '../../api/player/walletApi.js'
 import { TournamentWorkspace } from '../../CourtOwner/Tournament/CreateTournament.jsx'
 
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
@@ -264,7 +265,7 @@ function RegisterModal({ target, teams, onClose, onDone }) {
       // Cần khảo sát người chơi + Elo môn này (cả đội) + đủ điều kiện Elo của cấp giải.
       await joinTournament(categoryId, teamId || undefined, target.sportId)
       toast.success('Đăng ký giải thành công! Lệ phí được giữ trong ví đến khi giải diễn ra.')
-      window.dispatchEvent(new Event('escrow_balance_updated'))
+      notifyWalletChanged()
       onDone()
     } catch (error) {
       toast.error(error?.message || 'Không đăng ký được giải.')
@@ -368,7 +369,7 @@ function TournamentList() {
       toast.success('Đã hủy đăng ký. Lệ phí sẽ được hoàn theo quy định của giải.')
       mine.refresh()
       openList.refresh()
-      window.dispatchEvent(new Event('escrow_balance_updated'))
+      notifyWalletChanged()
     } catch (error) {
       toast.error(error?.message || 'Không hủy được đăng ký.')
     } finally {

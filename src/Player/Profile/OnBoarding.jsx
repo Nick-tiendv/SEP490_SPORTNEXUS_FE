@@ -7,6 +7,7 @@ import {
   formatOptionsFor, getOnboarding, saveOnboarding,
 } from '../../api/player/ratingApi.js'
 import { setNeedsOnboarding } from '../../utils/surveyGate.js'
+import { applyPlayerLocation, locationLabelOf } from '../../utils/playerLocation.js'
 
 // Khảo sát người chơi (PUT /api/auth/me/onboarding, thay toàn bộ).
 // Bắt buộc ít nhất 1 môn (tối đa 10) và 1 khung giờ rảnh (tối đa 28). Làm ở lần đăng nhập đầu, sửa lại được.
@@ -145,6 +146,7 @@ export default function OnBoarding() {
         frequency: frequency || null,
       })
       setNeedsOnboarding(false)
+      if (location) applyPlayerLocation(locationLabelOf(location.latitude, location.longitude))
       try {
         localStorage.setItem('player_sports_data', JSON.stringify(sports.map(s => ({ ...s, id: s.sportCategoryId, name: nameOf[s.sportCategoryId] || '', sportName: nameOf[s.sportCategoryId] || '', level: s.skillLevel }))))
       } catch { /* bỏ qua */ }

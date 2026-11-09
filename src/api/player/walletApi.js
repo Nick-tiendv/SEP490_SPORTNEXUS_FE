@@ -91,6 +91,15 @@ const unwrap = (body) => {
  * ============================================================ */
 
 /**
+ * Báo số dư đã thay đổi sau một giao dịch (đặt sân, hủy, đăng ký giải, mở kèo…).
+ * Tải lại ví từ BE; getWallet() ghi số mới rồi mới phát 'escrow_balance_updated',
+ * nên TopBar và các trang đang nghe sự kiện luôn đọc được số dư mới, không bị số cũ.
+ */
+export function notifyWalletChanged() {
+  return getWallet().catch(() => null)
+}
+
+/**
  * Xem ví
  * GET /api/v1/wallet
  * @returns {Promise<{balance:number, frozenBalance:number, availableBalance:number}>}

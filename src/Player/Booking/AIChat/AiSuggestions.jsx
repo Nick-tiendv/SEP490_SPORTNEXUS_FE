@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { formatVnd } from './aiBookingData.js'
 import { vnClock, vnDayLabel } from './aiRealBooking.js'
 import { LFG_SKILL_TAGS, lfgSkillLabel } from '../../../api/player/lfgApi.js'
+import { notifyWalletChanged } from '../../../api/player/walletApi.js'
 import { confirmAiBooking, confirmAiLfg } from '../../../api/player/aiApi.js'
 
 const cardStyle = { marginTop: 8, padding: '10px 12px', border: '1px solid #E5E7EB', borderRadius: 12, background: '#fff' }
@@ -31,7 +32,7 @@ function SlotAction({ facility, slot, messageId, intent, onBookSlot, onDone }) {
     try {
       await confirmAiBooking(messageId, slot.courtSlotId)
       toast.success('Đặt sân thành công! Vé QR đã được gửi (kiểm tra email).')
-      window.dispatchEvent(new Event('escrow_balance_updated'))
+      notifyWalletChanged()
       onDone?.('booking')
     } catch (error) {
       toast.error(error?.message || 'Không đặt được ca này.')
@@ -46,7 +47,7 @@ function SlotAction({ facility, slot, messageId, intent, onBookSlot, onDone }) {
     try {
       await confirmAiLfg(messageId, { courtSlotId: slot.courtSlotId, slotsNeeded: needed, skillLevelTag: skill || null, description: description.trim() || null })
       toast.success('Đã mở kèo! Hệ thống báo cho những người chơi phù hợp.')
-      window.dispatchEvent(new Event('escrow_balance_updated'))
+      notifyWalletChanged()
       onDone?.('lfg')
     } catch (error) {
       toast.error(error?.message || 'Không mở được kèo ở ca này.')

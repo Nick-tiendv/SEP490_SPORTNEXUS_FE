@@ -27,7 +27,8 @@ const CheckInQR = lazy(() => import('./Player/CheckIn/CheckInQR.jsx'))
 const MapBooking = lazy(() => import('./Player/Booking/FindCourt/MapBooking.jsx'))
 const OnBoarding = lazy(() => import('./Player/Profile/OnBoarding.jsx'))
 const SkillAssessment = lazy(() => import('./Player/Profile/SkillAssessment.jsx'))
-import PlayerLayout from './Player/Layout/PlayerLayout.jsx'
+// Layout từng vai trò tải riêng: người dùng chỉ tải phần của vai trò mình
+const PlayerLayout = lazy(() => import('./Player/Layout/PlayerLayout.jsx'))
 const PostMatchRating = lazy(() => import('./Player/Rating/PostMatchRating.jsx'))
 const Profile = lazy(() => import('./Player/Profile/Profile.jsx'))
 const SplitPayment = lazy(() => import('./Player/Booking/Payment/SplitPayment.jsx'))
@@ -37,7 +38,7 @@ const DepositSuccess = lazy(() => import('./Player/Wallet/DepositSuccess.jsx'))
 const DepositCancel = lazy(() => import('./Player/Wallet/DepositCancel.jsx'))
 
 // Admin pages
-import AdminLayout from './Admin/Layout/AdminLayout.jsx'
+const AdminLayout = lazy(() => import('./Admin/Layout/AdminLayout.jsx'))
 const AdminDashboard = lazy(() => import('./Admin/Dashboard/AdminDashboard.jsx'))
 const UserManagement = lazy(() => import('./Admin/Users/UserManagement.jsx'))
 const CourtOwnerManagement = lazy(() => import('./Admin/CourtOwners/CourtOwnerManagement.jsx'))
@@ -55,7 +56,7 @@ const MasterDataManagement = lazy(() => import('./Admin/MasterData/MasterDataMan
 const SystemSettings = lazy(() => import('./Admin/Settings/SystemSettings.jsx'))
 
 // Court Owner pages
-import CourtOwnerLayout from './CourtOwner/Layout/CourtOwnerLayout.jsx'
+const CourtOwnerLayout = lazy(() => import('./CourtOwner/Layout/CourtOwnerLayout.jsx'))
 const CourtOwnerDashboard = lazy(() => import('./CourtOwner/Dashboard/Dashboard.jsx'))
 const CourtOwnerProfile = lazy(() => import('./CourtOwner/Profile/Profile.jsx'))
 const CourtManage = lazy(() => import('./CourtOwner/Courts/CourtManage.jsx'))
@@ -119,7 +120,7 @@ function App() {
         {/* Protected Player application */}
         <Route element={<ProtectedRoute destination="/dashboard" requiredRole="Player" />}>
           <Route path="/onboarding" element={<Page><OnBoarding /></Page>} />
-          <Route element={<PlayerLayout />}>
+          <Route element={<Suspense fallback={<PageLoader />}><PlayerLayout /></Suspense>}>
             <Route path="/dashboard" element={<Page><Dashboard /></Page>} />
             <Route path="/profile" element={<Page><Profile /></Page>} />
             <Route path="/wallet" element={<Page><WalletEscrow /></Page>} />
@@ -149,7 +150,7 @@ function App() {
 
         {/* Protected Admin application */}
         <Route element={<ProtectedRoute destination="/admin/dashboard" requiredRole="Admin" />}>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminLayout /></Suspense>}>
             <Route
               index
               element={<Navigate replace to="/admin/dashboard" />}
@@ -174,7 +175,7 @@ function App() {
 
         {/* Protected Court Owner application */}
         <Route element={<ProtectedRoute destination="/owner/dashboard" />}>
-          <Route path="/owner" element={<CourtOwnerLayout />}>
+          <Route path="/owner" element={<Suspense fallback={<PageLoader />}><CourtOwnerLayout /></Suspense>}>
             <Route
               index
               element={<Navigate replace to="/owner/dashboard" />}

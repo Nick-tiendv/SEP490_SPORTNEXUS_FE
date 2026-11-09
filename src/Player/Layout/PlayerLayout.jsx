@@ -1,14 +1,18 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { needsOnboarding } from '../../utils/surveyGate.js'
-import { useState, useEffect, useCallback } from 'react'
+import { syncPlayerLocation } from '../../utils/playerLocation.js'
+import { Suspense, lazy, useState, useEffect, useCallback } from 'react'
 import TopBar from './TopBar.jsx'
 import TopSideBar from './TopSideBar.jsx'
 import { AppFooter } from '../../components/layout/AppShell.jsx'
 import { SportProvider } from '../Context/SportContext.jsx'
-import AIChatModal from '../Booking/AIChat/AIChatModal.jsx'
+// Trợ lý AI chỉ tải khi mở lần đầu (giữ lại sau đó để không mất đoạn chat)
+const AIChatModal = lazy(() => import('../Booking/AIChat/AIChatModal.jsx'))
 
 function PlayerLayout() {
   const [aiOpen, setAiOpen] = useState(false)
+  const [aiLoaded, setAiLoaded] = useState(false)
+  if (aiOpen && !aiLoaded) setAiLoaded(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
@@ -17,6 +21,11 @@ function PlayerLayout() {
     const handleOpenAi = () => setAiOpen(true)
     window.addEventListener('open-sportnexus-ai-chat', handleOpenAi)
     return () => window.removeEventListener('open-sportnexus-ai-chat', handleOpenAi)
+  }, [])
+
+  // Khu vực chơi lấy từ khảo sát người chơi (lưu ở BE), dùng chung cho LFG, tìm sân, trợ lý AI, Hồ sơ
+  useEffect(() => {
+    if (!needsOnboarding()) syncPlayerLocation()
   }, [])
 
   // Chưa làm khảo sát người chơi (LoginResponse.needsOnboarding) → làm khảo sát trước khi vào app
@@ -36,10 +45,14 @@ function PlayerLayout() {
       </div>
 
       {/* Full-featured SportNexus AI Concierge Modal */}
-      <AIChatModal
-        isOpen={aiOpen}
-        onClose={() => setAiOpen(false)}
-      />
+      {aiLoaded && (
+        <Suspense fallback={null}>
+          <AIChatModal
+            isOpen={aiOpen}
+            onClose={() => setAiOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* FAB button */}
       <button

@@ -8,6 +8,7 @@ import { getLfgQrTicket } from '../../api/player/lfgApi.js'
 import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
 import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
+import { notifyWalletChanged } from '../../api/player/walletApi.js'
 import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
 
 const formatBookingStatusLabel = (rawStatus) => {
@@ -336,7 +337,7 @@ function CheckInQR() {
       const facilityLabel = ticketData?.venueName && ticketData.venueName !== '—' ? ticketData.venueName : 'sân'
 
       // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
-      if (isEligibleRefund) window.dispatchEvent(new Event('escrow_balance_updated'))
+      if (isEligibleRefund) notifyWalletChanged()
 
       setTicketData((prev) => (prev ? { ...prev, status: 'CANCELLED' } : prev))
       setShowCancelModal(false)

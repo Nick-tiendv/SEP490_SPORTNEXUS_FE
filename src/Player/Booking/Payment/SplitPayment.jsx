@@ -711,7 +711,6 @@ function SplitPayment() {
       // Xử lý hoàn tiền
       if (isEligibleRefund) {
         getWallet().catch(() => {})
-        window.dispatchEvent(new Event('escrow_balance_updated'))
       }
 
       setBookingStatus('CANCELLED')
@@ -937,7 +936,6 @@ function SplitPayment() {
         getWallet()
           .then((w) => { if (w && typeof w.balance === 'number') setWalletBalance(w.balance) })
           .catch(() => {})
-        window.dispatchEvent(new Event('escrow_balance_updated'))
         setBookingResult(createdBooking)
         console.log('[SplitPayment] ✅ Đặt sân thành công! Dữ liệu phản hồi từ máy chủ (Response):', createdBooking)
 

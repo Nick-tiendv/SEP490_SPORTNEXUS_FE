@@ -143,7 +143,8 @@ export default function Profile() {
   const navigate = useNavigate()
 
   // Thông tin người chơi: tên, SĐT, ảnh lấy từ GET /api/auth/me.
-  // Khu vực và giới thiệu chưa có trên backend nên chỉ lưu trên máy (localStorage).
+  // Khu vực lấy từ khảo sát người chơi (toạ độ lưu ở BE, xem utils/playerLocation.js); sửa qua /onboarding.
+  // Giới thiệu (bio) chưa có trường trên backend nên vẫn chỉ lưu trên máy.
   const [profile, setProfile] = useState(() => {
     let local = {}
     try { local = JSON.parse(localStorage.getItem('player_profile_data') || '{}') } catch { /* bỏ qua */ }
@@ -167,6 +168,13 @@ export default function Profile() {
   // Môn thể thao & trình độ: GET/PUT /api/auth/me/sports
   const [sportsData, setSportsData] = useState([])
   const [sportCategories, setSportCategories] = useState([])
+
+  // Khu vực đồng bộ từ khảo sát người chơi (utils/playerLocation.js) → cập nhật hồ sơ đang hiển thị
+  useEffect(() => {
+    const onLocation = (e) => { if (e.detail?.location) setProfile((prev) => ({ ...prev, location: e.detail.location })) }
+    window.addEventListener('player-profile-updated', onLocation)
+    return () => window.removeEventListener('player-profile-updated', onLocation)
+  }, [])
 
   // Lưu profile khi thay đổi
   useEffect(() => {
@@ -672,14 +680,14 @@ export default function Profile() {
       return
     }
     try {
-      // Họ tên lưu lên backend (PUT /api/auth/me); khu vực & giới thiệu chỉ lưu trên máy.
+      // Họ tên lưu lên backend (PUT /api/auth/me); khu vực sửa qua khảo sát người chơi; giới thiệu chỉ lưu trên máy.
       await updateMyProfile({ fullName: editForm.name.trim(), avatarUrl: profile.avatarUrl ?? null })
     } catch (error) {
       triggerToast(`⚠️ ${error?.message || 'Không cập nhật được hồ sơ.'}`)
       return
     }
-    setProfile({ ...editForm, name: editForm.name.trim() })
-    localStorage.setItem('player_profile_data', JSON.stringify({ location: editForm.location, bio: editForm.bio }))
+    setProfile({ ...editForm, location: profile.location, name: editForm.name.trim() })
+    localStorage.setItem('player_profile_data', JSON.stringify({ location: profile.location, bio: editForm.bio }))
     window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
     setShowEditModal(false)
     triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
@@ -2087,19 +2095,13 @@ export default function Profile() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
                   Khu vực thi đấu ưa thích
                 </label>
-                <input
-                  type="text"
-                  value={editForm.location}
-                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid #D1D5DB',
-                    fontSize: '14px',
-                    outline: 'none',
-                  }}
-                />
+                {/* Lấy từ toạ độ trong khảo sát người chơi (lưu ở BE); đổi tại /onboarding */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '12px', border: '1px solid #D1D5DB', background: '#F9FAFB', fontSize: '14px' }}>
+                  <span style={{ flex: 1 }}>{profile.location || 'Chưa đặt khu vực'}</span>
+                  <button type="button" onClick={() => navigate('/onboarding')} style={{ border: 'none', background: 'none', color: '#15803D', fontWeight: 700, cursor: 'pointer', fontSize: '13px' }}>
+                    Đổi trong khảo sát
+                  </button>
+                </div>
               </div>
 
               <div>
