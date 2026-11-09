@@ -22,7 +22,6 @@ const CourtDetails = lazy(() => import('./Player/Booking/CourtDetail/CourtDetail
 const CreateMatch = lazy(() => import('./Player/LFG/CreateMatch.jsx'))
 const Dashboard = lazy(() => import('./Player/Home/Dashboard.jsx'))
 const FlashClaim = lazy(() => import('./Player/LFG/FlashClaim.jsx'))
-const RecommendedLfg = lazy(() => import('./Player/LFG/RecommendedLfg.jsx'))
 const MyShopOrders = lazy(() => import('./Player/Shop/MyShopOrders.jsx'))
 const CheckInQR = lazy(() => import('./Player/CheckIn/CheckInQR.jsx'))
 const MapBooking = lazy(() => import('./Player/Booking/FindCourt/MapBooking.jsx'))
@@ -141,7 +140,8 @@ function App() {
             {/* Trang vé cũ (dữ liệu mẫu) đã gộp vào /qr-pass */}
             <Route path="/live-qr" element={<RedirectWithQuery to="/qr-pass" />} />
             <Route path="/flash-claim" element={<Page><FlashClaim /></Page>} />
-            <Route path="/recommended-lfg" element={<Page><RecommendedLfg /></Page>} />
+            {/* Gợi ý kèo nằm ngay trong trang Ghép trận LFG; giữ link cũ */}
+            <Route path="/recommended-lfg" element={<Navigate replace to="/community" />} />
             <Route path="/shop-orders" element={<Page><MyShopOrders /></Page>} />
             <Route path="/create-match" element={<Page><CreateMatch /></Page>} />
             <Route path="/split-payment" element={<Page><SplitPayment /></Page>} />

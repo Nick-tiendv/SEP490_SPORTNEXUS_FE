@@ -114,3 +114,14 @@ export async function listWithdrawals(params) {
 }
 export const completeWithdrawal = async (id, bankTransactionRef) => unwrap((await apiClient.patch(`/api/v1/admin/withdrawals/${path(id)}/complete`, { bankTransactionRef: bankTransactionRef || null })).data)
 export const rejectWithdrawal = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/withdrawals/${path(id)}/reject`, { reason: reason || null })).data)
+
+// ---------- Đối soát ví (chỉ đọc): GET /api/v1/admin/wallets/reconciliation?userId&includeAll ----------
+// Balance so với tổng giao dịch, FrozenBalance so với tiền đang giữ thật, ví âm. Mặc định chỉ trả ví có vấn đề.
+// Response: checkedAt, totalWallets, mismatchedWallets, warningWallets, totalBalanceDifference, totalFrozenDifference,
+// wallets[{ walletId, userId, fullName, email, roleName, balance, ledgerBalance, balanceDifference, frozenBalance,
+//   expectedFrozenBalance, frozenDifference, holdings{ bookingHeld, lfgHeld, tournamentFeesHeld, prizeFundHeld, pendingWithdrawals },
+//   transactionCount, issues[{ code, severity (ERROR | WARNING), message, expected, actual, difference }] }]
+export async function getWalletReconciliation({ userId, includeAll } = {}) {
+  const data = unwrap((await apiClient.get('/api/v1/admin/wallets/reconciliation', { params: clean({ userId, includeAll }) })).data) || {}
+  return { ...data, wallets: asArray(data.wallets) }
+}

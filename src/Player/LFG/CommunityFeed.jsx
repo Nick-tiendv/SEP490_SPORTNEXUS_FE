@@ -24,6 +24,7 @@ import {
   lfgSkillLabel,
 } from '../../api/player/lfgApi.js'
 import * as communityApi from '../../api/player/communityApi.js'
+import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 
@@ -1217,6 +1218,9 @@ function CommunityFeed() {
           <div className="lg:col-span-8 flex flex-col gap-6">
             {activeMainTab === 'all' && (
               <>
+            {/* Kèo phù hợp với bạn: GET /api/v1/lfgs/recommended (theo khảo sát người chơi) */}
+            <RecommendedLfgSection />
+
             {/* Flash Queue Banner */}
             <div className="bg-[#EAF7E8] border border-[#C6E7BE] rounded-2xl p-4 flex items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-3.5">

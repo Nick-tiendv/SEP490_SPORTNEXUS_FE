@@ -1,11 +1,12 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi.js'
-import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { getRecommendedLfgs } from '../../api/player/recommendationApi.js'
 import { lfgSkillLabel } from '../../api/player/lfgApi.js'
 
-// Trang "Kèo phù hợp với bạn": GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
+// "Kèo phù hợp với bạn": GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
 // Điểm phù hợp tính theo khảo sát người chơi (môn, trình độ, lịch rảnh, khu vực, nội dung hay chơi) và hành vi.
+// Nhúng trong trang Ghép trận LFG (/community), Bảng tin cộng đồng (/feed) và trang chủ — không có trang riêng.
 const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
 const when = (start, end) => {
   if (!start) return '—'
@@ -47,31 +48,63 @@ export function RecommendedLfgCard({ item, compact = false }) {
   )
 }
 
-export default function RecommendedLfg() {
+// Khối gợi ý ở đầu tab "Sàn Ghép Trận" (/community): 3 kèo hợp nhất, bấm "Xem thêm" để hiện hết.
+// Ẩn hẳn khi lỗi hoặc không có kèo phù hợp để không chiếm chỗ của danh sách kèo.
+export function RecommendedLfgSection() {
   const list = useApi(getRecommendedLfgs, [], { initialData: [] })
-  const items = list.data || []
+  const [expanded, setExpanded] = useState(false)
+  const items = list.error ? [] : list.data || []
+  if (list.loading || !items.length) return null
+  const shown = expanded ? items : items.slice(0, 3)
   return (
-    <div className="snx-page">
-      <PageHeader
-        eyebrow="Ghép trận LFG"
-        eyebrowIcon="auto_awesome"
-        title="Kèo phù hợp với bạn"
-        subtitle="Xếp theo mức độ phù hợp với môn, trình độ, lịch rảnh và khu vực bạn đã khai trong khảo sát người chơi."
-      />
-      <div className="snx-row" style={{ marginBottom: 12 }}>
-        <Link className="snx-btn snx-btn--secondary snx-btn--sm" to="/onboarding">Cập nhật khảo sát người chơi</Link>
-        <Link className="snx-btn snx-btn--ghost snx-btn--sm" to="/community">Xem tất cả kèo</Link>
-        <span className="snx-spacer" />
-        <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={list.refresh}>Làm mới</button>
+    <section className="snx-card snx-stack" style={{ gap: 12, padding: 18, border: '1px solid #C6E7BE', background: '#F6FBF4' }} aria-labelledby="recommended-lfg-title">
+      <div className="snx-row">
+        <div>
+          <h2 id="recommended-lfg-title" className="snx-card-title" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 16 }}>
+            <span className="material-symbols-outlined" style={{ color: '#15803d' }}>auto_awesome</span>Kèo phù hợp với bạn
+          </h2>
+          <p className="snx-card-subtitle">Theo môn, trình độ, lịch rảnh và khu vực trong khảo sát của bạn. <Link to="/onboarding">Cập nhật khảo sát</Link></p>
+        </div>
       </div>
-      {list.loading && <p className="snx-muted">Đang tìm kèo phù hợp…</p>}
-      {list.error && <div className="snx-alert snx-alert--error">{list.error}</div>}
-      {!list.loading && !list.error && items.length === 0 && (
-        <div className="snx-empty"><span className="material-symbols-outlined">search_off</span>Chưa có kèo đang mở phù hợp với bạn. Thử mở kèo mới hoặc mở rộng khu vực / khung giờ trong khảo sát.</div>
+      <div className="snx-grid snx-grid--3">
+        {shown.map((item) => <RecommendedLfgCard key={item.card?.id} item={item} compact />)}
+      </div>
+      {items.length > 3 && (
+        <div className="snx-row" style={{ justifyContent: 'center' }}>
+          <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setExpanded(!expanded)}>
+            {expanded ? 'Thu gọn' : `Xem thêm ${items.length - 3} kèo phù hợp`}
+          </button>
+        </div>
       )}
-      <div className="snx-grid snx-grid--2">
-        {items.map((item) => <RecommendedLfgCard key={item.card?.id} item={item} />)}
+    </section>
+  )
+}
+
+// Khung nhỏ ở cột bên của Bảng tin cộng đồng (/feed): 3 kèo hợp nhất, dạng danh sách gọn.
+export function RecommendedLfgWidget() {
+  const navigate = useNavigate()
+  const list = useApi(getRecommendedLfgs, [], { initialData: [] })
+  const items = (list.error ? [] : list.data || []).slice(0, 3)
+  if (list.loading || !items.length) return null
+  return (
+    <section className="snx-card snx-stack" style={{ gap: 10 }}>
+      <h2 className="snx-card-title" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 16 }}>
+        <span className="material-symbols-outlined" style={{ color: '#15803d' }}>auto_awesome</span>Kèo phù hợp với bạn
+      </h2>
+      <div className="snx-list">
+        {items.map(({ card: c = {}, score, reasons }) => (
+          <button key={c.id} type="button" className="snx-list-item" style={{ border: 0, borderBottom: '1px solid #eef2f1', background: 'transparent', cursor: 'pointer', textAlign: 'left', alignItems: 'flex-start' }}
+            onClick={() => navigate(`/flash-claim?cardId=${encodeURIComponent(c.id)}`)}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong style={{ fontSize: 13.5 }}>{c.sportName} · {c.facilityName}</strong>
+              <div className="snx-muted">{when(c.startTime, c.endTime)} · còn {c.remainingSlots} suất</div>
+              {reasons?.[0] && <div style={{ fontSize: 12, color: '#15803d' }}>{reasons[0]}</div>}
+            </div>
+            <span className={`snx-badge snx-badge--${scoreTone(Math.round(Number(score) || 0))}`}>{Math.round(Number(score) || 0)}%</span>
+          </button>
+        ))}
       </div>
-    </div>
+      <Link className="snx-btn snx-btn--secondary snx-btn--sm" to="/community">Xem trên sàn ghép trận</Link>
+    </section>
   )
 }

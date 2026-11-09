@@ -6,12 +6,13 @@ import TransactionBreakdown from './TransactionBreakdown.jsx'
 import TransactionsTab from './TransactionsTab.jsx'
 import WalletsTab from './WalletsTab.jsx'
 import WithdrawalsTab from './WithdrawalsTab.jsx'
+import ReconciliationTab from './ReconciliationTab.jsx'
 import { getWalletStatistics } from '../../api/admin/walletApi.js'
 import { CHART_RANGES, lastDays, money, number } from './paymentData.js'
 import '../Users/users.css'
 import './payment.css'
 
-const tabs = { transactions: 'Giao dịch', wallets: 'Ví người dùng', withdrawals: 'Yêu cầu rút tiền' }
+const tabs = { transactions: 'Giao dịch', wallets: 'Ví người dùng', withdrawals: 'Yêu cầu rút tiền', reconciliation: 'Đối soát ví' }
 const icons = { volume: Banknote, successful: CheckCircle2, pending: Clock3, refunded: RotateCcw }
 
 export default function PaymentManagement() {
@@ -61,5 +62,6 @@ export default function PaymentManagement() {
     {tab === 'transactions' && <TransactionsTab key={transactionUser?.id || 'all'} user={transactionUser} onClearUser={() => setTransactionUser(null)} onOpenWallet={openWallet} {...tabProps} />}
     {tab === 'wallets' && <WalletsTab key={walletFocus.key} initialUserId={walletFocus.userId} initialNegative={walletFocus.negative} onTransactions={openTransactions} {...tabProps} />}
     {tab === 'withdrawals' && <WithdrawalsTab {...tabProps} />}
+    {tab === 'reconciliation' && <ReconciliationTab onTransactions={openTransactions} {...tabProps} />}
   </div>
 }
