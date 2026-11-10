@@ -12,9 +12,17 @@ let pending = null
 const fromLogin = () => {
   try {
     const saved = JSON.parse(localStorage.getItem('sportnexus_current_user') || '{}')
-    return { name: saved.fullName || '', username: saved.username ? `@${saved.username}` : '', phone: '', email: '', avatarUrl: saved.avatarUrl || readLocalAvatar() || null, fairPlayScore: null }
+    return {
+      id: saved.id || saved.userId || null,
+      name: saved.fullName || saved.name || '',
+      username: saved.username ? `@${saved.username}` : '',
+      phone: saved.phone || '',
+      email: saved.email || '',
+      avatarUrl: saved.avatarUrl || readLocalAvatar() || null,
+      fairPlayScore: saved.fairPlayScore ?? null,
+    }
   } catch {
-    return { name: '', username: '', phone: '', email: '', avatarUrl: null, fairPlayScore: null }
+    return { id: null, name: '', username: '', phone: '', email: '', avatarUrl: readLocalAvatar() || null, fairPlayScore: null }
   }
 }
 const toUser = me => ({

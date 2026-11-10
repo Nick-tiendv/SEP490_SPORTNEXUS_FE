@@ -332,13 +332,28 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 // Tính khoảng cách (km) từ địa chỉ đăng ký của người chơi đến một địa điểm (Sàn / Kèo / Bài viết)
-export function calculateDistanceFromRegisteredAddress({
-  registeredAddress = 'TP. Thủ Đức',
-  targetAddress = '',
-  targetLat = null,
-  targetLng = null,
-  itemSeed = '',
-}) {
+export function calculateDistanceFromRegisteredAddress(arg1 = {}, arg2 = 'TP. Thủ Đức', arg3 = null) {
+  let registeredAddress
+  let targetAddress
+  let targetLat = null
+  let targetLng = null
+  let itemSeed
+
+  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {
+    registeredAddress = arg1.registeredAddress || 'TP. Thủ Đức'
+    targetAddress = arg1.targetAddress || ''
+    targetLat = arg1.targetLat ?? null
+    targetLng = arg1.targetLng ?? null
+    itemSeed = arg1.itemSeed || ''
+  } else {
+    targetAddress = String(arg1 || '')
+    registeredAddress = String(arg2 || 'TP. Thủ Đức')
+    if (arg3 && typeof arg3 === 'object') {
+      targetLat = arg3.lat ?? arg3.targetLat ?? null
+      targetLng = arg3.lng ?? arg3.targetLng ?? null
+    }
+    itemSeed = targetAddress
+  }
   const userDistrictKey = detectDistrictKey(registeredAddress) || 'thuduc'
   const userDistrict = DISTRICT_INFO[userDistrictKey] || DISTRICT_INFO.thuduc
   const targetDistrictKey = detectDistrictKey(targetAddress)
@@ -390,6 +405,7 @@ export function calculateDistanceFromRegisteredAddress({
 // Phân tầng Range khoảng cách từ trên xuống dưới (Gần nhất -> Xa nhất)
 export const DISTANCE_RANGES = [
   {
+    id: 'range_1',
     key: 'range_1',
     tier: 1,
     minKm: 0,
@@ -401,6 +417,7 @@ export const DISTANCE_RANGES = [
     headerClass: 'from-emerald-600 to-green-700',
   },
   {
+    id: 'range_2',
     key: 'range_2',
     tier: 2,
     minKm: 3.0,
@@ -412,6 +429,7 @@ export const DISTANCE_RANGES = [
     headerClass: 'from-teal-600 to-emerald-700',
   },
   {
+    id: 'range_3',
     key: 'range_3',
     tier: 3,
     minKm: 6.5,
@@ -423,6 +441,7 @@ export const DISTANCE_RANGES = [
     headerClass: 'from-sky-600 to-cyan-700',
   },
   {
+    id: 'range_4',
     key: 'range_4',
     tier: 4,
     minKm: 10.5,
@@ -1195,9 +1214,20 @@ export function buildPersonalizedLfgSuggestions({
       items: items.filter((item) => item.rangeInfo?.key === range.key),
     })).filter((group) => group.items.length > 0)
 
+  const allowedSportKeysArr = Array.from(allAllowedSportSet)
+  Object.defineProperty(allowedSportKeysArr, 'has', {
+    value: (key) => allAllowedSportSet.has(key),
+    enumerable: false,
+  })
+  const activeSportKeysArr = Array.from(activeSportSet)
+  Object.defineProperty(activeSportKeysArr, 'has', {
+    value: (key) => activeSportSet.has(key),
+    enumerable: false,
+  })
+
   return {
-    allowedSportKeys: Array.from(allAllowedSportSet),
-    activeSportKeys: Array.from(activeSportSet),
+    allowedSportKeys: allowedSportKeysArr,
+    activeSportKeys: activeSportKeysArr,
     profileSportKeys,
     learnedSportKeys,
     suggestedVenues,

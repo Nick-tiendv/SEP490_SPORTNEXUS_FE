@@ -332,6 +332,37 @@ function SplitPayment() {
   const [deadlineSeconds, setDeadlineSeconds] = useState(30 * 60) // 30 phút theo Bước 2
   const [isPayingRemaining, setIsPayingRemaining] = useState(false)
 
+  // Kiểm tra vé QR có đã check-in hoặc quá giờ chưa check-in hay không
+  const [ticketNowMs, setTicketNowMs] = useState(() => nowMs())
+  useEffect(() => {
+    if (step !== 'ticket_pass') return undefined
+    const timer = setInterval(() => setTicketNowMs(nowMs()), 15000)
+    return () => clearInterval(timer)
+  }, [step])
+  const slotEndIso =
+    activeSlotData?.endTime ||
+    bookingResult?.endTime ||
+    bookingResult?.data?.endTime ||
+    qrTicketData?.endTime ||
+    null
+  const isTicketCheckedIn =
+    bookingStatus === 'CHECKED_IN' ||
+    bookingStatus === 'COMPLETED' ||
+    Boolean(bookingResult?.isCheckedIn) ||
+    Number(bookingResult?.checkedInCount) > 0 ||
+    (Array.isArray(bookingResult?.participants) &&
+      bookingResult.participants.some((p) => Boolean(p?.isCheckedIn)))
+  const isTicketExpiredNoCheckIn =
+    !isTicketCheckedIn &&
+    bookingStatus !== 'CANCELLED' &&
+    (bookingStatus === 'NO_SHOW' ||
+      bookingStatus === 'EXPIRED' ||
+      (slotEndIso &&
+        Number.isFinite(new Date(slotEndIso).getTime()) &&
+        ticketNowMs > new Date(slotEndIso).getTime()))
+  const isTicketQrDisabled =
+    isTicketCheckedIn || isTicketExpiredNoCheckIn || bookingStatus === 'CANCELLED'
+
   // =========================================================================
   // HỦY ĐƠN VÀ HOÀN TIỀN (Image 2)
   // =========================================================================
@@ -1309,6 +1340,10 @@ function SplitPayment() {
 
   // Gửi mã check-in cho bạn chơi: dùng chia sẻ của thiết bị, không có thì sao chép vào clipboard.
   const handleSendCodeToFriends = async () => {
+    if (isTicketQrDisabled) {
+      toast.error('Mã vé QR đã bị vô hiệu hóa, không thể chia sẻ để check-in nữa.')
+      return
+    }
     const text = `Vé check-in SportNexus tại ${courtName}
 Mã vé: #${qrToken}
 Xem vé QR: ${window.location.origin}/qr-pass`
@@ -1326,6 +1361,10 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
   // Tải ảnh vé QR: lưu mã QR đang hiển thị thành file SVG.
   const handleDownloadTicketQr = () => {
+    if (isTicketQrDisabled) {
+      toast.error('Mã vé QR đã bị vô hiệu hóa, không thể tải xuống để check-in.')
+      return
+    }
     const svg = document.querySelector('.sp-ticket-qr-box svg')
     if (!svg) {
       toast.error('Chưa có mã QR để tải.')
@@ -2233,10 +2272,16 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               </p>
 
               {/* Khung mã QR cố định với hiệu ứng laser */}
-              <div className="sp-ticket-qr-box" style={{ opacity: bookingStatus === 'CANCELLED' ? 0.35 : 1 }}>
-                {bookingStatus === 'PAID' && <div className="sp-ticket-laser-line" />}
+              <div
+                className="sp-ticket-qr-box"
+                style={{
+                  opacity: bookingStatus === 'CANCELLED' ? 0.55 : 1,
+                  cursor: isTicketQrDisabled ? 'not-allowed' : 'default',
+                }}
+              >
+                {bookingStatus === 'PAID' && !isTicketQrDisabled && <div className="sp-ticket-laser-line" />}
 
-                {bookingStatus === 'PENDING' && (
+                {bookingStatus === 'PENDING' && !isTicketQrDisabled && (
                   <div
                     style={{
                       position: 'absolute',
@@ -2257,6 +2302,56 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <strong style={{ fontSize: 13, color: '#92400E' }}>Mã QR Tạm Khóa</strong>
                     <span style={{ fontSize: 11, color: '#78350F' }}>
                       Đang chờ bạn bè góp đủ tiền để kích hoạt mã vé QR check-in cổng sân.
+                    </span>
+                  </div>
+                )}
+
+                {isTicketCheckedIn && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(240, 253, 244, 0.78)',
+                      backdropFilter: 'blur(2px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      padding: 16,
+                      textAlign: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#15803D' }}>verified</span>
+                    <strong style={{ fontSize: 13.5, color: '#14532D' }}>ĐÃ CHECK-IN • VÔ HIỆU HÓA MÃ QR</strong>
+                    <span style={{ fontSize: 11.5, color: '#166534' }}>
+                      Sân đã được check-in, mã QR đã bị vô hiệu hóa và không thể check-in được nữa
+                    </span>
+                  </div>
+                )}
+
+                {isTicketExpiredNoCheckIn && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(255, 251, 235, 0.84)',
+                      backdropFilter: 'blur(2px)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      padding: 16,
+                      textAlign: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#D97706' }}>timer_off</span>
+                    <strong style={{ fontSize: 13.5, color: '#92400E' }}>QUÁ GIỜ CHƯA CHECK-IN • VÔ HIỆU HÓA</strong>
+                    <span style={{ fontSize: 11.5, color: '#78350F' }}>
+                      Sân đã vượt quá khung giờ mà không có người chơi nào check-in
                     </span>
                   </div>
                 )}
@@ -2283,10 +2378,26 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   </div>
                 )}
 
-                <div className="sp-qr-svg-wrap" key={qrVersion}>
+                <div
+                  className="sp-qr-svg-wrap"
+                  key={qrVersion}
+                  style={{
+                    filter: isTicketQrDisabled ? 'blur(5px) grayscale(100%)' : 'none',
+                    opacity: isTicketQrDisabled ? 0.28 : 1,
+                    pointerEvents: isTicketQrDisabled ? 'none' : 'auto',
+                    userSelect: isTicketQrDisabled ? 'none' : 'auto',
+                    transition: 'filter 0.25s ease, opacity 0.25s ease',
+                  }}
+                >
                   {/* Mã QR thật từ qrToken của vé (GET /bookings/{id}/qr-ticket); chủ sân quét mã này để check-in */}
-                  {qrToken ? (
-                    <QRCodeSVG value={qrToken} size={200} level="M" fgColor="#14532d" style={{ width: '100%', height: '100%' }} />
+                  {qrToken || isTicketQrDisabled ? (
+                    <QRCodeSVG
+                      value={isTicketQrDisabled ? 'DISABLED-QR-TICKET' : qrToken}
+                      size={200}
+                      level="M"
+                      fgColor={isTicketQrDisabled ? '#64748B' : '#14532d'}
+                      style={{ width: '100%', height: '100%' }}
+                    />
                   ) : (
                     <div style={{ display: 'grid', placeItems: 'center', height: '100%', textAlign: 'center', color: '#6b7280', fontSize: 12 }}>Chưa lấy được mã vé. Mở trang Vé check-in QR để xem lại.</div>
                   )}
@@ -2340,17 +2451,22 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   flexDirection: 'column',
                   gap: '6px',
                   textAlign: 'left',
+                  opacity: isTicketQrDisabled ? 0.65 : 1,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', letterSpacing: '0.5px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#15803D' }}>confirmation_number</span>
-                    MÃ VÉ CHECK-IN
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px', color: isTicketQrDisabled ? '#64748B' : '#15803D' }}>
+                      {isTicketQrDisabled ? 'block' : 'confirmation_number'}
+                    </span>
+                    {isTicketQrDisabled ? 'MÃ VÉ CHECK-IN (ĐÃ VÔ HIỆU HÓA)' : 'MÃ VÉ CHECK-IN'}
                   </span>
                   {qrToken && (
                     <button
                       type="button"
+                      disabled={isTicketQrDisabled}
                       onClick={() => {
+                        if (isTicketQrDisabled) return
                         navigator.clipboard?.writeText(qrToken)
                         toast.success('Đã sao chép mã vé check-in!')
                       }}
@@ -2361,15 +2477,17 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                         padding: '3px 8px',
                         borderRadius: '6px',
                         border: '1px solid #CBD5E1',
-                        background: '#FFFFFF',
-                        color: '#15803D',
+                        background: isTicketQrDisabled ? '#F1F5F9' : '#FFFFFF',
+                        color: isTicketQrDisabled ? '#94A3B8' : '#15803D',
                         fontSize: '11px',
                         fontWeight: 700,
-                        cursor: 'pointer',
+                        cursor: isTicketQrDisabled ? 'not-allowed' : 'pointer',
                       }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>content_copy</span>
-                      <span>Sao chép</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
+                        {isTicketQrDisabled ? 'block' : 'content_copy'}
+                      </span>
+                      <span>{isTicketQrDisabled ? 'Đã khóa' : 'Sao chép'}</span>
                     </button>
                   )}
                 </div>
@@ -2378,7 +2496,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     fontFamily: 'monospace',
                     fontSize: '12px',
                     fontWeight: 700,
-                    color: '#0F172A',
+                    color: isTicketQrDisabled ? '#94A3B8' : '#0F172A',
                     background: '#FFFFFF',
                     border: '1px dashed #CBD5E1',
                     borderRadius: '8px',
@@ -2386,6 +2504,8 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     lineHeight: 1.5,
                     wordBreak: 'break-all',
                     overflowWrap: 'anywhere',
+                    filter: isTicketQrDisabled ? 'blur(4px)' : 'none',
+                    userSelect: isTicketQrDisabled ? 'none' : 'text',
                   }}
                 >
                   #{qrToken || '—'}
@@ -2401,7 +2521,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   type="button"
                   className="sp-btn-action-primary"
                   style={{ flex: 1 }}
-                  disabled={bookingStatus === 'CANCELLED'}
+                  disabled={isTicketQrDisabled}
                   onClick={handleDownloadTicketQr}
                 >
                   <span className="material-symbols-outlined">download</span>
@@ -2412,7 +2532,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   type="button"
                   className="sp-btn-action-secondary"
                   style={{ flex: 1, borderColor: '#16a34a', color: '#16a34a', background: '#f0fdf4' }}
-                  disabled={bookingStatus === 'CANCELLED'}
+                  disabled={isTicketQrDisabled}
                   onClick={handleSendCodeToFriends}
                 >
                   <span className="material-symbols-outlined">share</span>
@@ -2425,16 +2545,18 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 type="button"
                 className="sp-btn-cancel-booking"
                 style={{ width: '100%' }}
-                disabled={bookingStatus === 'CHECKED_IN' || bookingStatus === 'CANCELLED'}
+                disabled={isTicketQrDisabled}
                 onClick={handleOpenCancelModal}
               >
                 <span className="material-symbols-outlined">event_busy</span>
                 <span>
                   {bookingStatus === 'CANCELLED'
                     ? 'Đơn đã được hủy'
-                    : bookingStatus === 'CHECKED_IN'
-                    ? 'Đơn đã check-in (Không thể hủy)'
-                    : 'Hủy đơn đặt sân & Hoàn tiền'}
+                    : isTicketCheckedIn
+                      ? 'Đơn đã check-in (Không thể hủy)'
+                      : isTicketExpiredNoCheckIn
+                        ? 'Đã quá giờ thi đấu (Không thể hủy)'
+                        : 'Hủy đơn đặt sân & Hoàn tiền'}
                 </span>
               </button>
             </div>
