@@ -55,6 +55,80 @@ const PRESET_SPORTS_CATALOG = [
   { key: 'other', name: 'Môn thể thao khác (Tùy chỉnh)', icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' },
 ]
 
+// Lấy danh sách tiêu chí đánh giá trình độ phù hợp theo đặc thù từng môn thể thao (ví dụ: Cầu lông dùng "cầu" thay vì "bóng")
+const getSkillLevelOptions = (sportKeyOrId, sportName = '') => {
+  const key = String(sportKeyOrId || '').toLowerCase()
+  const name = String(sportName || '').toLowerCase()
+  const isShuttlecockSport =
+    key === 'badminton' ||
+    name.includes('cầu lông') ||
+    name.includes('badminton') ||
+    name.includes('cầu mây') ||
+    name.includes('đá cầu') ||
+    /\bcầu\b/i.test(name)
+
+  const isRacketOrNetBallSport =
+    ['pickleball', 'tennis', 'table_tennis', 'volleyball'].includes(key) ||
+    name.includes('pickleball') ||
+    name.includes('tennis') ||
+    name.includes('quần vợt') ||
+    name.includes('bóng bàn') ||
+    name.includes('bóng chuyền')
+
+  const isTeamBallSport =
+    ['football', 'basketball'].includes(key) ||
+    name.includes('bóng đá') ||
+    name.includes('bóng rổ') ||
+    name.includes('futsal') ||
+    name.includes('bóng')
+
+  if (isShuttlecockSport) {
+    return [
+      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
+      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, phát cầu tốt)' },
+      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
+      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ cầu chuẩn, phối hợp nhịp nhàng)' },
+      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, điều cầu khó)' },
+      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
+      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
+    ]
+  }
+
+  if (isRacketOrNetBallSport) {
+    return [
+      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
+      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, phát bóng tốt)' },
+      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
+      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)' },
+      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, điều bóng khó)' },
+      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
+      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
+    ]
+  }
+
+  if (isTeamBallSport) {
+    return [
+      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
+      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, kiểm soát bóng tốt)' },
+      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
+      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)' },
+      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, xử lý bóng khó)' },
+      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
+      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
+    ]
+  }
+
+  return [
+    { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
+    { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, kỹ thuật cơ bản tốt)' },
+    { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
+    { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Kỹ thuật chuẩn, phối hợp nhịp nhàng)' },
+    { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, xử lý tình huống khó)' },
+    { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
+    { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
+  ]
+}
+
 // Chuyển một môn từ backend sang dạng thẻ hiển thị (icon/màu lấy theo danh mục có sẵn).
 const toUiSport = (sport) => {
   const lower = (sport.name || '').toLowerCase()
@@ -155,7 +229,7 @@ export default function Profile() {
       joinDate: '',
       phone: '',
       email: '',
-      avatarUrl: null,
+      avatarUrl: local.avatarUrl || localStorage.getItem('sportnexus_local_avatar') || null,
       reputationScore: 0,
       totalReviews: 0,
       matchesPlayed: 0,
@@ -176,6 +250,7 @@ export default function Profile() {
   // Giữ bản sao môn đã chọn cho các trang khác đang đọc (SportContext, Onboarding)
   useEffect(() => {
     localStorage.setItem('player_sports_data', JSON.stringify(sportsData))
+    window.dispatchEvent(new CustomEvent('player-sports-updated', { detail: sportsData }))
   }, [sportsData])
 
   // Trạng thái các Modal
@@ -273,13 +348,24 @@ export default function Profile() {
   // Tải avatar lên: POST /api/auth/me/avatar
   const handleAvatarFileSelected = async (e) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (file.type && !allowedTypes.includes(file.type.toLowerCase())) {
+      triggerToast('⚠️ Chỉ hỗ trợ ảnh đại diện định dạng JPG, PNG hoặc WEBP!')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast('⚠️ Dung lượng ảnh đại diện không được vượt quá 5MB!')
+      return
+    }
     setAvatarUploading(true)
     try {
       const res = await uploadAvatar(file)
-      const newUrl = res?.avatarUrl || res?.url || URL.createObjectURL(file)
+      const newUrl = (typeof res === 'string' ? res : (res?.avatarUrl || res?.url || res?.data?.avatarUrl || res?.data?.url)) || URL.createObjectURL(file)
       setProfile((prev) => ({ ...prev, avatarUrl: newUrl }))
       setEditForm((prev) => ({ ...prev, avatarUrl: newUrl }))
+      window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: { ...profile, avatarUrl: newUrl } }))
       triggerToast('🎉 Tải ảnh đại diện thành công!')
     } catch (err) {
       triggerToast(`⚠️ ${err?.message || 'Không thể tải ảnh đại diện'}`)
@@ -679,7 +765,7 @@ export default function Profile() {
       return
     }
     setProfile({ ...editForm, name: editForm.name.trim() })
-    localStorage.setItem('player_profile_data', JSON.stringify({ location: editForm.location, bio: editForm.bio }))
+    localStorage.setItem('player_profile_data', JSON.stringify({ ...editForm, name: editForm.name.trim(), location: editForm.location, bio: editForm.bio, avatarUrl: editForm.avatarUrl || profile.avatarUrl || null }))
     window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
     setShowEditModal(false)
     triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
@@ -2336,13 +2422,17 @@ export default function Profile() {
                     background: '#FFFFFF',
                   }}
                 >
-                  <option value="Mới tập chơi">Mới tập chơi (Căn bản)</option>
-                  <option value="Mới chơi - Đang tiến bộ">Mới chơi - Đang tiến bộ</option>
-                  <option value="Trung bình">Trung bình (Giao lưu phong trào)</option>
-                  <option value="Trung bình - Khá">Trung bình - Khá</option>
-                  <option value="Khá - Đánh chắc tay">Khá - Đánh chắc tay</option>
-                  <option value="Bán chuyên / Nâng cao">Bán chuyên / Nâng cao</option>
-                  <option value="Chuyên nghiệp / Thi đấu giải">Chuyên nghiệp / Thi đấu giải</option>
+                  {getSkillLevelOptions(selectedSportToEdit?.id, selectedSportToEdit?.name).map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+
+
+
+
+
+
                 </select>
                 <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
                   Thiết lập trình độ thực tế giúp hệ thống tự động ghép kèo cân bằng, đúng thực lực.
@@ -2707,13 +2797,22 @@ export default function Profile() {
                     fontWeight: 600,
                   }}
                 >
-                  <option value="Mới tập chơi">Mới tập chơi (Căn bản, làm quen môn thể thao)</option>
-                  <option value="Mới chơi - Đang tiến bộ">Mới chơi - Đang tiến bộ (Nắm luật, phát bóng tốt)</option>
-                  <option value="Trung bình">Trung bình (Giao lưu phong trào ổn định)</option>
-                  <option value="Trung bình - Khá">Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)</option>
-                  <option value="Khá - Đánh chắc tay">Khá - Đánh chắc tay (Chiến thuật tốt, điều bóng khó)</option>
-                  <option value="Bán chuyên / Nâng cao">Bán chuyên / Nâng cao (Tập luyện chuyên sâu)</option>
-                  <option value="Chuyên nghiệp / Thi đấu giải">Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)</option>
+                  {getSkillLevelOptions(
+                    newSportForm.sportKey,
+                    newSportForm.sportKey === 'other'
+                      ? newSportForm.customName
+                      : (PRESET_SPORTS_CATALOG.find((p) => p.key === newSportForm.sportKey)?.name || '')
+                  ).map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+
+
+
+
+
+
                 </select>
                 <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280', lineHeight: 1.4 }}>
                   💡 Trình độ tự đánh giá ban đầu này sẽ hiển thị trên thẻ hồ sơ của bạn và làm mốc ghép kèo. Bạn có thể tự cập nhật lại bất kỳ khi nào trình độ được nâng cao.
@@ -4185,7 +4284,8 @@ export default function Profile() {
                           disabled={uploadingEvidence}
                           onChange={async (e) => {
                             const file = e.target.files?.[0]
-                            e.target.value = ''
+    e.target.value = ''
+
                             if (!file) return
                             setUploadingEvidence(true)
                             try {

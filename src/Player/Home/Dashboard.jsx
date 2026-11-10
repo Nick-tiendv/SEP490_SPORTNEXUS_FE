@@ -21,7 +21,7 @@ const actionCards = [
     iconColor: '#15803D',
     iconBg: '#EAF7EE',
     title: 'Đặt Sân',
-    desc: 'Tìm sân trống gần nhất, chia bill cọc tự động 1-chạm.',
+    desc: 'Tìm sân trống gần nhất, chia bill tự động.',
     link: '/court-finder',
   },
   {
@@ -29,7 +29,7 @@ const actionCards = [
     iconColor: '#0284C7',
     iconBg: '#E0F2FE',
     title: 'Ghép Trận LFG',
-    desc: 'Ghép đội đúng trình độ, cam kết không bùng hẹn.',
+    desc: 'Ghép đội đúng trình độ, cam kết uy tín.',
     link: '/community',
   },
   {
@@ -37,7 +37,7 @@ const actionCards = [
     iconColor: '#7C3AED',
     iconBg: '#F3E8FF',
     title: 'Check-in QR',
-    desc: 'Mở cổng sân tự động và bảo đảm quỹ Escrow minh bạch.',
+    desc: 'Mở cổng sân tự động, bảo đảm quỹ Escrow.',
     link: '/qr-pass',
   },
   {
@@ -45,7 +45,7 @@ const actionCards = [
     iconColor: '#EA580C',
     iconBg: '#FFEDD5',
     title: 'Giải Đấu Mở',
-    desc: 'Xem lịch thi đấu phân nhánh và bảng vàng thành tích.',
+    desc: 'Xem lịch thi đấu và bảng vàng thành tích.',
     link: '/tournament',
   },
 ]
@@ -1234,8 +1234,8 @@ function Dashboard() {
             >
               <div
                 style={{
-                  width: '42px',
-                  height: '42px',
+                  width: '54px',
+                  height: '54px',
                   borderRadius: '12px',
                   background: card.iconBg,
                   display: 'flex',
@@ -1246,14 +1246,14 @@ function Dashboard() {
               >
                 <span
                   className="material-symbols-outlined"
-                  style={{ fontSize: '22px', color: card.iconColor }}
+                  style={{ fontSize: '28px', color: card.iconColor }}
                 >
                   {card.icon}
                 </span>
               </div>
               <span
                 className="material-symbols-outlined"
-                style={{ fontSize: '18px', color: '#9CA3AF', transition: 'transform 0.2s' }}
+                style={{ display: 'none' }}
               >
                 arrow_forward
               </span>
@@ -1268,7 +1268,7 @@ function Dashboard() {
             >
               {card.title}
             </p>
-            <p style={{ margin: 0, fontSize: '12px', color: '#6B7280', lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: '12.5px', color: '#6B7280', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {card.desc}
             </p>
           </Link>
@@ -1365,8 +1365,8 @@ function Dashboard() {
                       src={m.img}
                       alt={m.title}
                       style={{
-                        width: '76px',
-                        height: '76px',
+                        width: '104px',
+                        height: '84px',
                         borderRadius: '12px',
                         objectFit: 'cover',
                         display: 'block',
@@ -1400,7 +1400,7 @@ function Dashboard() {
                       background: '#F9FAFB',
                       border: '1px solid #E5E7EB',
                       borderRadius: '8px',
-                      padding: '4px 6px',
+                      padding: 0, maxWidth: 0, maxHeight: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none', position: 'absolute',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease-in-out',
@@ -1914,8 +1914,8 @@ function Dashboard() {
                         src={c.img}
                         alt={c.name}
                         style={{
-                          width: '56px',
-                          height: '56px',
+                          width: '108px',
+                          height: '84px',
                           borderRadius: '10px',
                           objectFit: 'cover',
                           display: 'block',
@@ -1948,7 +1948,7 @@ function Dashboard() {
                         background: '#F9FAFB',
                         border: '1px solid #E5E7EB',
                         borderRadius: '6px',
-                        padding: '3px 4px',
+                        padding: 0, maxWidth: 0, maxHeight: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none', position: 'absolute',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease-in-out',
                       }}
@@ -1999,7 +1999,7 @@ function Dashboard() {
                     </p>
                     {c.surface && (
                       <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#047857', fontWeight: 600 }}>
-                        🏟️ {c.surface}
+                        🏟️ {String(c.surface).replace(/\s*\[TEST\]\s*/gi, '').trim()}
                       </p>
                     )}
                     <p style={{ margin: 0, fontSize: '11.5px', color: '#6B7280' }}>

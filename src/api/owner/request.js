@@ -21,5 +21,5 @@ export const getList = async (url, params) => toList(await get(url, params))
 export function upload(url, field, files) {
   const form = new FormData()
   for (const file of [].concat(files)) form.append(field, file)
-  return post(url, form)
+  return post(url, form, { headers: { 'Content-Type': undefined } })
 }

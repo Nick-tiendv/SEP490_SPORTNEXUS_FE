@@ -25,6 +25,8 @@ export function normalizeApiError(error) {
     403: 'Bạn không có quyền thực hiện thao tác này.',
     404: 'Không tìm thấy API yêu cầu.',
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
+    413: 'Tệp tải lên vượt quá dung lượng cho phép (tối đa 5MB).',
+    415: 'Định dạng dữ liệu hoặc tệp tải lên không được hỗ trợ.',
   }
 
   let message = null
@@ -79,8 +81,16 @@ apiClient.interceptors.request.use(config => {
   }
   if (!config.baseURL) throw Object.assign(new Error('Chưa cấu hình địa chỉ API.'), { isNormalized: true })
   const token = config.skipAuth ? null : tokenReader()
+
+
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
   else config.headers.delete('Authorization')
+
+  // Khi gửi FormData (multipart/form-data), phải xóa Content-Type 'application/json' mặc định
+  // để Axios không serialize FormData thành chuỗi JSON {"file":{}} gây lỗi 415 từ backend.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
 
   if (LOG_API) console.log(`%c[API Request] ${config.method?.toUpperCase()} ${config.url}`, 'color: #0284C7; font-weight: bold;', safeBody(config.url, config.data || config.params || ''))
   return config

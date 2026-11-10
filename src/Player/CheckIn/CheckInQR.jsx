@@ -1236,7 +1236,7 @@ function CheckInQR() {
                 >
                   verified
                 </span>
-                <span>Mã QR Check-in: #{ticketData?.ticketCode || '—'}</span>
+                <span style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>Mã QR Check-in: #{ticketData?.ticketCode || '—'}</span>
               </div>
 
               {/* Tên cơ sở & địa chỉ sân */}

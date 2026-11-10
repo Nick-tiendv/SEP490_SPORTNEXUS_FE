@@ -28,6 +28,20 @@ import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
+import { getMySports } from '../../api/player/profileApi.js'
+import {
+  SPORT_CATALOG,
+  normalizeSportKey,
+  normalizeSkillKey,
+  loadProfileRegisteredSports,
+  extractPlayerHabits,
+  loadLearnedSearchDesires,
+  recordNewPlayerDesire,
+  buildPersonalizedLfgSuggestions,
+  calculateDistanceFromRegisteredAddress,
+  getDistanceRangeInfo,
+} from './lfgSuggestionEngine.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
 const sanitizeMatch = (m) => {
@@ -59,13 +73,18 @@ const sanitizeMatch = (m) => {
 const FEED_IMAGES = {
   badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
   pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
+  football: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&h=600&fit=crop',
+  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
+  tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop',
+  volleyball: 'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&h=600&fit=crop',
+  table_tennis: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?w=800&h=600&fit=crop',
 }
 const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
 
 // Chuyển một thẻ LFG từ backend sang dạng thẻ hiển thị trên bảng tin.
 const toFeedMatch = (card) => {
   const sportName = card.sportName || card.sportCategoryName || card.sport || ''
-  const sport = /pickle/i.test(sportName) ? 'pickleball' : 'badminton'
+  const sport = normalizeSportKey(sportName) || (/pickle/i.test(sportName) ? 'pickleball' : 'badminton')
   const start = card.startTime ? new Date(card.startTime) : null
   const hour = start ? start.getHours() : 18
   const totalSlots = Number(card.totalSlots) || 0
@@ -79,6 +98,13 @@ const toFeedMatch = (card) => {
   })
   return {
     id: card.id || card.cardId,
+    facilityId: card.facilityId || card.venueId || null,
+    facilityName: card.facilityName || '',
+    facilityAddress: card.facilityAddress || '',
+    lat: card.latitude ?? card.lat ?? null,
+    lng: card.longitude ?? card.lng ?? null,
+    startTime: card.startTime || null,
+    sportName: sportName || SPORT_CATALOG[sport]?.name || 'Cầu Lông',
     sport,
     sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
     subBadge: [card.format, card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
@@ -99,7 +125,7 @@ const toFeedMatch = (card) => {
     priceDisplay: formatVnd(price),
     buttonText: 'Chốt Slot Ngay',
     isFlashClaim: false,
-    image: card.imageUrl || card.facilityImageUrl || FEED_IMAGES[sport],
+    image: card.imageUrl || card.facilityImageUrl || FEED_IMAGES[sport] || FEED_IMAGES.badminton,
   }
 }
 
@@ -151,7 +177,14 @@ function CommunityFeed() {
 
 
   // Sports filter state: 'all' | 'pickleball' | 'badminton'
-  const [activeSportFilter, setActiveSportFilter] = useState('badminton')
+  const [activeSportFilter, setActiveSportFilter] = useState('all')
+  const [profileSports, setProfileSports] = useState(() => loadProfileRegisteredSports())
+  const [facilitiesList, setFacilitiesList] = useState([])
+  const [learnedDesires, setLearnedDesires] = useState(() => loadLearnedSearchDesires())
+  const [includeLearnedDesires] = useState(true)
+  const [desireSearchKeyword] = useState('')
+  const [activeRangeId] = useState('all')
+  const [selectedVenueFilter, setSelectedVenueFilter] = useState(null)
   const [levelFilter, setLevelFilter] = useState('all')
   const [distanceFilter, setDistanceFilter] = useState('all')
 
@@ -224,6 +257,9 @@ function CommunityFeed() {
       }
     }
     const handleStorage = (e) => {
+      if ((e.key === 'player_sports_data' || e.key === 'player_registered_sports') && e.newValue) {
+        setProfileSports(loadProfileRegisteredSports())
+      }
       if (e.key === 'player_profile_data' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue)
@@ -231,10 +267,13 @@ function CommunityFeed() {
         } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
       }
     }
+    const handleSportsUpdate = () => setProfileSports(loadProfileRegisteredSports())
     window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('player-sports-updated', handleSportsUpdate)
     window.addEventListener('storage', handleStorage)
     return () => {
       window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('player-sports-updated', handleSportsUpdate)
       window.removeEventListener('storage', handleStorage)
     }
   }, [])
@@ -618,6 +657,22 @@ function CommunityFeed() {
   useEffect(() => {
     if (activeMainTab === 'my_cards') fetchMyCards('all')
     else if (activeMainTab === 'joined') fetchJoinedCards()
+    else {
+      fetchMyCards('all')
+      fetchJoinedCards()
+    }
+    loadCommunityPosts('all')
+    getMySports()
+      .then((serverSports) => setProfileSports(loadProfileRegisteredSports(serverSports)))
+      .catch(() => setProfileSports(loadProfileRegisteredSports()))
+    getFacilities()
+      .then((rawList) => {
+        const transformed = (Array.isArray(rawList) ? rawList : [])
+          .map(transformFacilityToCourt)
+          .filter(Boolean)
+        setFacilitiesList(transformed)
+      })
+      .catch((err) => console.warn('[CommunityFeed] Không tải được danh sách sân:', err))
     // Chỉ chạy một lần khi mở trang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -884,9 +939,14 @@ function CommunityFeed() {
     const sportImageMap = {
       badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
       pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
-      football: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&h=600&fit=crop',
-      basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
-      tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop',
+  football: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&h=600&fit=crop',
+  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
+  tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop',
+  volleyball: 'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&h=600&fit=crop',
+  table_tennis: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?w=800&h=600&fit=crop',
+
+
+
     }
 
     const created = {
@@ -951,7 +1011,98 @@ function CommunityFeed() {
   }
 
   // Filtered matches (ưu tiên hiển thị các kèo gần vị trí hồ sơ người chơi lên đầu)
+  // Trích xuất thói quen ghép trận & tính toán bộ đề xuất cá nhân hóa (3 hạng mục: Sàn ghép trận, Kèo ghép, Bảng tin cộng đồng)
+  const playerHabits = extractPlayerHabits({ myLfgCards, joinedLfgCards })
+  const effectiveSkillFilter = levelFilter !== 'all' ? levelFilter : selectedSkillLevel
+  const suggestionData = buildPersonalizedLfgSuggestions({
+    userProfileLocation,
+    profileSports,
+    habits: playerHabits,
+    learnedDesires,
+    facilities: facilitiesList,
+    matches,
+    communityPosts,
+    activeFilters: {
+      sport: activeSportFilter === 'all' ? 'profile_matched' : activeSportFilter,
+      timeSlots: selectedTimeSlots,
+      skillLevel: effectiveSkillFilter,
+      keyword: desireSearchKeyword,
+      rangeId: activeRangeId,
+    },
+    includeLearnedDesires,
+  })
+
+  // Chọn bộ lọc môn thể thao kèm cơ chế tự học nhu cầu mới của người chơi
+  const handleSelectSportFilterWithLearning = (sportKey) => {
+    setActiveSportFilter(sportKey)
+    if (sportKey && sportKey !== 'all' && sportKey !== 'profile_matched') {
+      const updated = recordNewPlayerDesire({
+        sportKey,
+        source: 'Chọn bộ lọc môn thể thao mong muốn trên Sàn Ghép Trận',
+      })
+      setLearnedDesires(updated)
+    }
+  }
+
+  // Chọn bộ lọc trình độ kèm cơ chế tự học nhu cầu mới
+  const handleLevelFilterWithLearning = (newLevel) => {
+    setLevelFilter(newLevel)
+    if (newLevel && newLevel !== 'all') {
+      const updated = recordNewPlayerDesire({
+        skillLevel: newLevel,
+        source: 'Chọn bộ lọc trình độ mong muốn',
+      })
+      setLearnedDesires(updated)
+    }
+  }
+
+  // Danh sách kèo hiển thị (lọc theo sở thích Profile + Thói quen + Mong muốn & sắp xếp theo khoảng cách từ gần đến xa)
   const filteredMatches = matches
+    .map((m) => {
+      const distanceKm = calculateDistanceFromRegisteredAddress(
+        m.location || m.facilityAddress || m.title,
+        userProfileLocation,
+        m.lat != null && m.lng != null ? { lat: m.lat, lng: m.lng } : null
+      )
+      const rangeInfo = getDistanceRangeInfo(distanceKm)
+      return {
+        ...m,
+        distanceKm,
+        rangeInfo,
+      }
+    })
+    .filter((m) => {
+      if (activeSportFilter === 'all' || activeSportFilter === 'profile_matched') {
+        if (!suggestionData.allowedSportKeys.has(m.sport)) return false
+      } else if (m.sport !== activeSportFilter) {
+        return false
+      }
+      if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
+      if (effectiveSkillFilter && effectiveSkillFilter !== 'all') {
+        const matchSkill = normalizeSkillKey(m.levelTag)
+        const targetSkill = normalizeSkillKey(effectiveSkillFilter)
+        if (matchSkill && targetSkill && matchSkill !== targetSkill) return false
+      }
+      if (activeRangeId && activeRangeId !== 'all' && m.rangeInfo.id !== activeRangeId) return false
+      if ((distanceFilter === '5km' || selectedDistance === '5km') && m.distanceKm > 5) return false
+      if ((distanceFilter === '10km' || selectedDistance === '10km') && m.distanceKm > 10) return false
+      if ((distanceFilter === 'district' || selectedDistance === '3km') && m.distanceKm > 3.5) return false
+      if (selectedVenueFilter) {
+        const sameId = m.facilityId && String(m.facilityId) === String(selectedVenueFilter.id)
+        const sameName = (m.location || '').toLowerCase().includes((selectedVenueFilter.name || '').toLowerCase())
+        if (!sameId && !sameName) return false
+      }
+      if (desireSearchKeyword.trim()) {
+        const kw = desireSearchKeyword.trim().toLowerCase()
+        const hay = [m.title, m.location, m.groupDesc, m.sportBadge, m.levelTag].filter(Boolean).join(' ').toLowerCase()
+        if (!hay.includes(kw)) return false
+      }
+      if (filterFlashOnly && !m.isFlashClaim) return false
+      return true
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+
+  void matches
     .filter((m) => {
       if (activeSportFilter !== 'all' && m.sport !== activeSportFilter) return false
       if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
@@ -1070,7 +1221,7 @@ function CommunityFeed() {
 
           {/* Bảng tin cộng đồng đã tách thành trang riêng /feed (mục "Cộng đồng" trên sidebar) */}
           <button
-            onClick={() => navigate('/feed')}
+            onClick={() => handleTabChange('community_posts')}
             className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
               activeMainTab === 'community_posts'
                 ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
@@ -1091,6 +1242,18 @@ function CommunityFeed() {
         {/* Filter Bar Chips (Hiển thị khi ở Tab Sàn Ghép Trận) */}
         {activeMainTab === 'all' && (
         <div className="flex items-center gap-2.5 p-2 rounded-2xl bg-white border border-gray-200/80 shadow-sm mb-7 overflow-x-auto scrollbar-none flex-wrap">
+          {selectedVenueFilter && (
+            <button
+              type="button"
+              onClick={() => setSelectedVenueFilter(null)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] shrink-0 cursor-pointer hover:bg-[#FDE68A]"
+            >
+              <span className="material-symbols-outlined text-[15px]">stadium</span>
+              <span>Sân: {selectedVenueFilter.name}</span>
+              <span className="ml-1 font-black">✕</span>
+            </button>
+          )}
+
           {/* Tất Cả Thể Thao */}
           <button
             onClick={() => setActiveSportFilter('all')}
@@ -1106,7 +1269,7 @@ function CommunityFeed() {
 
           {/* Pickleball */}
           <button
-            onClick={() => setActiveSportFilter('pickleball')}
+            onClick={() => handleSelectSportFilterWithLearning('pickleball')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'pickleball'
                 ? 'bg-[#3B6817] text-white shadow-sm'
@@ -1119,7 +1282,7 @@ function CommunityFeed() {
 
           {/* Cầu Lông */}
           <button
-            onClick={() => setActiveSportFilter('badminton')}
+            onClick={() => handleSelectSportFilterWithLearning('badminton')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'badminton'
                 ? 'bg-[#3B6817] text-white shadow-sm'
@@ -1132,7 +1295,7 @@ function CommunityFeed() {
 
           {/* Bóng Đá */}
           <button
-            onClick={() => setActiveSportFilter('football')}
+            onClick={() => handleSelectSportFilterWithLearning('football')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'football'
                 ? 'bg-[#3B6817] text-white shadow-sm'
@@ -1145,7 +1308,7 @@ function CommunityFeed() {
 
           {/* Bóng Rổ */}
           <button
-            onClick={() => setActiveSportFilter('basketball')}
+            onClick={() => handleSelectSportFilterWithLearning('basketball')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'basketball'
                 ? 'bg-[#3B6817] text-white shadow-sm'
@@ -1158,7 +1321,7 @@ function CommunityFeed() {
 
           {/* Tennis */}
           <button
-            onClick={() => setActiveSportFilter('tennis')}
+            onClick={() => handleSelectSportFilterWithLearning('tennis')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeSportFilter === 'tennis'
                 ? 'bg-[#3B6817] text-white shadow-sm'
@@ -1173,7 +1336,7 @@ function CommunityFeed() {
           <div className="relative shrink-0">
             <select
               value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
+              onChange={(e) => handleLevelFilterWithLearning(e.target.value)}
               className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
               <option value="all">Trình độ: Tất Cả Trình Độ</option>
@@ -1989,7 +2152,7 @@ function CommunityFeed() {
                     </p>
                   </div>
                 ) : (
-                  communityPosts.map((post) => {
+                  (communitySubTab === 'all' && suggestionData.suggestedPosts.length > 0 ? suggestionData.suggestedPosts : communityPosts).map((post) => {
                     const postId = post.id || post.postId
                     const isCommentsOpen = openCommentsPostId === postId
                     const comments = commentsByPostId[postId] || []
@@ -3348,6 +3511,19 @@ function CommunityFeed() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (
+                      (activeSportFilter && activeSportFilter !== 'all' && activeSportFilter !== 'profile_matched') ||
+                      (selectedSkillLevel && selectedSkillLevel !== 'all') ||
+                      (selectedTimeSlots && selectedTimeSlots.length < 3)
+                    ) {
+                      const updated = recordNewPlayerDesire({
+                        sportKey: activeSportFilter !== 'all' && activeSportFilter !== 'profile_matched' ? activeSportFilter : null,
+                        skillLevel: selectedSkillLevel !== 'all' ? selectedSkillLevel : null,
+                        timeSlot: selectedTimeSlots.length === 1 ? selectedTimeSlots[0] : null,
+                        source: 'Áp dụng Bộ Lọc Ghép Trận Nâng Cao',
+                      })
+                      setLearnedDesires(updated)
+                    }
                     setFilterDrawerOpen(false)
                     setToastMessage({
                       title: 'Đã Cập Nhật Bộ Lọc!',

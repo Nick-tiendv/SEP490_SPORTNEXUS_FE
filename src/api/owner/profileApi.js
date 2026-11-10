@@ -1,9 +1,10 @@
-import { get, post, put, upload } from './request.js'
+import { get, post, upload } from './request.js'
+import { getMyProfile as getPlayerOrOwnerProfile, updateMyProfile as updatePlayerOrOwnerProfile, uploadMyAvatar as uploadPlayerOrOwnerAvatar } from '../player/profileApi.js'
 
 // ---------- Hồ sơ cá nhân: /api/auth/me ----------
-export const getMyProfile = () => get('/api/auth/me')
-export const updateMyProfile = payload => put('/api/auth/me', payload)
-export const uploadMyAvatar = file => upload('/api/auth/me/avatar', 'file', file)
+export const getMyProfile = getPlayerOrOwnerProfile
+export const updateMyProfile = updatePlayerOrOwnerProfile
+export const uploadMyAvatar = uploadPlayerOrOwnerAvatar
 export const logout = () => post('/api/auth/logout')
 // ChangePasswordRequest: oldPassword, newPassword (>= 6 ký tự), confirmPassword.
 export const changePassword = ({ oldPassword, newPassword, confirmPassword }) => post('/api/auth/change-password', { oldPassword, newPassword, confirmPassword })
