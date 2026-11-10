@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { vnClock } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 
@@ -42,8 +43,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
       slotIds: [s.id],
       durationHours: 2,
       rawSlots: [s],
-      formattedStart: s.startTime?.slice(11, 16) || '',
-      formattedEnd: s.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(s.startTime) || '',
+      formattedEnd: vnClock(s.endTime) || '',
     }))
   }
 
@@ -72,8 +73,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
       isPast,
       durationHours: 2,
       rawSlots: [slotA, slotB],
-      formattedStart: slotA.startTime?.slice(11, 16) || '',
-      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(slotA.startTime) || '',
+      formattedEnd: vnClock(slotB.endTime) || '',
       note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
     })
   }
@@ -188,8 +189,8 @@ function CourtDetails() {
                       courtName: activeCourt.name,
                       courtId: activeCourt.id,
                       sportName: activeCourt.sportName,
-                      formattedStart: firstAvail.startTime?.slice(11, 16),
-                      formattedEnd: firstAvail.endTime?.slice(11, 16),
+                      formattedStart: vnClock(firstAvail.startTime),
+                      formattedEnd: vnClock(firstAvail.endTime),
                     },
                   ],
             )
@@ -263,15 +264,7 @@ function CourtDetails() {
     return () => { isMounted = false }
   }, [facility?.id, activeCourt?.id])
 
-  const formatTimeSlot = (isoString) => {
-    if (!isoString) return ''
-    try {
-      const d = new Date(isoString)
-      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
-    } catch {
-      return isoString.slice(11, 16)
-    }
-  }
+  const formatTimeSlot = vnClock
 
   // Kiểm tra ca thi đấu có khả dụng hay không (case-insensitive)
   const isSlotAvailable = (slot) => {

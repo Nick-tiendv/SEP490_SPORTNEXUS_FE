@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { vnClock } from '../../../utils/vnTime.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
 import './MapBooking.css'
@@ -284,8 +285,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
       slotIds: [s.id],
       durationHours: 2,
       rawSlots: [s],
-      formattedStart: s.startTime?.slice(11, 16) || '',
-      formattedEnd: s.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(s.startTime) || '',
+      formattedEnd: vnClock(s.endTime) || '',
     }))
   }
 
@@ -314,8 +315,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
       isPast,
       durationHours: 2,
       rawSlots: [slotA, slotB],
-      formattedStart: slotA.startTime?.slice(11, 16) || '',
-      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(slotA.startTime) || '',
+      formattedEnd: vnClock(slotB.endTime) || '',
       note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
     })
   }
@@ -888,13 +889,13 @@ function MapBooking() {
       const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
       // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
       const inWindow = (s) => {
-        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
-        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
+        const start = s.formattedStart || vnClock(s.startTime) || '00:00'
+        const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
         return (!fromTime || start >= fromTime) && (!toTime || (end === '00:00' ? '24:00' : end) <= toTime)
       }
       return grouped2h.filter(inWindow).map((s) => {
-        const start = s.formattedStart || s.startTime?.slice(11, 16) || '00:00'
-        const end = s.formattedEnd || s.endTime?.slice(11, 16) || '00:00'
+        const start = s.formattedStart || vnClock(s.startTime) || '00:00'
+        const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
         const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
         return {
           id: s.id,

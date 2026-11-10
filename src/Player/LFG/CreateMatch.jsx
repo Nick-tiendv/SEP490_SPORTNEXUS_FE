@@ -9,6 +9,7 @@ import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
+import { vnClock } from '../../utils/vnTime.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
 const calculateDurationHours = (rangeStr) => {
@@ -79,8 +80,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
   const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
   if (firstSlotDiffHours >= 1.8) {
     return sorted.map((s) => {
-      const start = s.startTime?.slice(11, 16) || '00:00'
-      const end = s.endTime?.slice(11, 16) || '00:00'
+      const start = vnClock(s.startTime) || '00:00'
+      const end = vnClock(s.endTime) || '00:00'
       const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
       const price = Number(s.price) > 0 ? Number(s.price) : defaultPrice * 2
       return {
@@ -108,8 +109,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
     // Không nhận ca lẻ 1 tiếng ở cuối vì quy chuẩn hệ thống bắt buộc 2 tiếng
     if (!slotB) break
 
-    const start = slotA.startTime?.slice(11, 16) || '00:00'
-    const end = slotB.endTime?.slice(11, 16) || '00:00'
+    const start = vnClock(slotA.startTime) || '00:00'
+    const end = vnClock(slotB.endTime) || '00:00'
     const isAvailA = slotA.status === 'Available' && !slotA.isPast && slotA.isBookable
     const isAvailB = slotB.status === 'Available' && !slotB.isPast && slotB.isBookable
     const isAvail = isAvailA && isAvailB

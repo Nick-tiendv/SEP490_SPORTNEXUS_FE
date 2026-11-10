@@ -1,6 +1,7 @@
 // SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { uid, nowMs } from '../../../utils/ids.js'
+import { vnClock } from '../../../utils/vnTime.js'
 import { confirmDialog } from '../../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -50,7 +51,7 @@ function resolveSelectedSlotWindow(slots, anchorSlot, actualCourtId, state) {
   const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   const isBookable = (item) =>
     Boolean(item && !item.isPast && item.isBookable !== false && String(item.status || 'available').toLowerCase() === 'available')
-  const formatHHMM = (iso) => (typeof iso === "string" && iso.length >= 16 ? iso.slice(11, 16) : "")
+  const formatHHMM = vnClock
   const formatSlotSpans = (list) => {
     if (!Array.isArray(list) || list.length === 0) return ''
     const ordered = [...list].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -201,7 +202,7 @@ function SplitPayment() {
         let matchedSlot = null
         if (startStr) {
           matchedSlot = slots.find(
-            (s) => s.startTime?.slice(11, 16) === startStr && s.isBookable !== false && !s.isPast
+            (s) => vnClock(s.startTime) === startStr && s.isBookable !== false && !s.isPast
           )
         }
         // Nếu không khớp chính xác giờ bắt đầu, lấy ca khả dụng đầu tiên còn trống
@@ -237,7 +238,7 @@ function SplitPayment() {
   const address = state.address || 'Hồ Chí Minh'
   const locationName = state.locationName || (address.includes(',') ? address.split(',').slice(-2).join(', ').trim() : address) || 'Hồ Chí Minh'
   const slotTime = activeSlotData
-    ? (activeSlotData.displayRange || `${activeSlotData.startTime?.slice(11, 16)} - ${activeSlotData.endTime?.slice(11, 16)}`)
+    ? (activeSlotData.displayRange || `${vnClock(activeSlotData.startTime)} - ${vnClock(activeSlotData.endTime)}`)
     : (state.slot || '20:00 - 22:00')
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
   const totalAmount = Number(state.total) || 120000
