@@ -7,6 +7,12 @@ import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
 import SocialLoginButtons from './SocialLoginButtons.jsx'
 import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
 
+// Vai trò đăng ký công khai: chỉ Player / Owner (Admin không đăng ký qua form này)
+const ROLE_OPTIONS = [
+  { value: 'player', label: 'Người chơi (Player)', hint: 'Đặt sân nhanh, tìm bạn ghép trận giao lưu & tham gia giải đấu.' },
+  { value: 'court_owner', label: 'Chủ sân (Court Owner)', hint: 'Quản lý cụm sân, biểu phí, lịch đặt sân & doanh thu.' },
+]
+
 // Trình độ theo BE: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL
 const SKILL_LEVELS = [
   { value: 'BEGINNER', label: 'Mới chơi' },
@@ -223,80 +229,27 @@ function Register() {
             
             {/* Form */}
             <form className="space-y-5" onSubmit={handleSubmit} noValidate aria-busy={loading}>
-              {/* Role Selection Field (Người chơi / Chủ sân) */}
+              {/* Vai trò đăng ký: dropdown 2 lựa chọn cố định (không tải từ bảng Role để không lộ Admin) */}
               <div>
-                <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                <label htmlFor="register-role" className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Vai trò đăng ký <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  {/* Player Card */}
-                  <button
-                    type="button"
-                    aria-pressed={role === 'player'}
-                    onClick={() => setRole('player')}
-                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
-                      role === 'player'
-                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'player' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-xl">🏃‍♂️</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
-                        <span>Người chơi</span>
-                        <span className="text-xs text-gray-500 font-normal">(Player)</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Đặt sân nhanh, tìm bạn ghép trận giao lưu &amp; tham gia giải đấu
-                      </p>
-                    </div>
-                    {role === 'player' && (
-                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Court Owner Card */}
-                  <button
-                    type="button"
-                    aria-pressed={role === 'court_owner'}
-                    onClick={() => setRole('court_owner')}
-                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
-                      role === 'court_owner'
-                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'court_owner' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-xl">🏟️</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
-                        <span>Chủ sân</span>
-                        <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Quản lý cụm sân, biểu phí, lịch đặt sân &amp; doanh thu tự động
-                      </p>
-                    </div>
-                    {role === 'court_owner' && (
-                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                </div>
+                <select
+                  id="register-role"
+                  name="role"
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  required
+                  aria-describedby="register-role-hint"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none cursor-pointer"
+                >
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p id="register-role-hint" className="mt-1 text-xs text-gray-500">
+                  {ROLE_OPTIONS.find((option) => option.value === role)?.hint}
+                </p>
               </div>
 
               {/* Username Field */}
