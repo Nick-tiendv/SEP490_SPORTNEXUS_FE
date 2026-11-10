@@ -77,6 +77,7 @@ export default function Settlement() {
   const [showBankModal, setShowBankModal] = useState(false)
   const [bankForm, setBankForm] = useState({ bankName: '', bankAccountNumber: '', bankAccountHolder: '' })
   const [busy, setBusy] = useState(false)
+  const [cancellingId, setCancellingId] = useState(null)
 
   const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
@@ -164,9 +165,18 @@ export default function Settlement() {
     }
   }
 
+  // Nút xác nhận ghi rõ hành động: mặc định "Hủy" / "Đồng ý" khiến người dùng bấm "Hủy" (đóng hộp thoại)
+  // tưởng là hủy yêu cầu, rồi thấy yêu cầu vẫn "Chờ duyệt".
   const handleCancelWithdrawal = async (item) => {
-    if (!(await confirmDialog(`Hủy yêu cầu rút ${formatVND(item.amount)}? Tiền sẽ được trả lại ví.`))) return
+    const ok = await confirmDialog(`Hủy yêu cầu rút ${formatVND(item.amount)}? Số tiền này sẽ được trả lại ví của bạn.`, {
+      title: 'Hủy yêu cầu rút tiền',
+      confirmLabel: 'Hủy yêu cầu',
+      cancelLabel: 'Giữ lại',
+      danger: true,
+    })
+    if (!ok) return
     setBusy(true)
+    setCancellingId(item.id)
     try {
       await cancelWithdrawal(item.id)
       showToast('Đã hủy yêu cầu rút tiền, tiền đã trả lại ví.')
@@ -175,6 +185,7 @@ export default function Settlement() {
       showToast(error.message, 'error')
     } finally {
       setBusy(false)
+      setCancellingId(null)
     }
   }
 
@@ -395,7 +406,8 @@ export default function Settlement() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {withdrawalItems.map((item) => {
-                const status = WITHDRAWAL_STATUS[String(item.status).toUpperCase()] || WITHDRAWAL_STATUS.PENDING
+                // Trạng thái lạ: hiện nguyên văn thay vì giả làm "Chờ duyệt"
+                const status = WITHDRAWAL_STATUS[String(item.status).toUpperCase()] || { label: String(item.status || '—'), bg: '#F1F5F9', color: '#475569' }
                 return (
                   <div key={item.id} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
@@ -415,9 +427,9 @@ export default function Settlement() {
                       <button
                         onClick={() => handleCancelWithdrawal(item)}
                         disabled={busy}
-                        style={{ marginTop: '8px', padding: '5px 12px', borderRadius: '8px', border: 'none', background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ marginTop: '8px', padding: '5px 12px', borderRadius: '8px', border: 'none', background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy && cancellingId !== item.id ? 0.6 : 1 }}
                       >
-                        Hủy yêu cầu
+                        {cancellingId === item.id ? 'Đang hủy…' : 'Hủy yêu cầu'}
                       </button>
                     )}
                   </div>

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   getLfgs,
+  getLfgById,
   getMyLfgCards,
   getJoinedLfgs,
   claimLfgSlot,
@@ -25,9 +26,17 @@ import {
 } from '../../api/player/lfgApi.js'
 import * as communityApi from '../../api/player/communityApi.js'
 import { RecommendedLfgSection } from './RecommendedLfg.jsx'
+import LfgDetailModal from './LfgDetailModal.jsx'
+import LfgReasonPicker from './LfgReasonPicker.jsx'
+import { finalReason } from './lfgReason.js'
+
+// Mốc chốt kèo: 48 giờ trước giờ chơi
+const LFG_LOCK_BEFORE_MS = 48 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
+import { getBookingQrTicket } from '../../api/player/bookingApi.js'
+import { vnClock } from '../../utils/vnTime.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { getMySports } from '../../api/player/profileApi.js'
 import {
@@ -81,6 +90,16 @@ const FEED_IMAGES = {
 }
 const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
 
+// Trạng thái người tham gia / của tôi trong kèo (LfgParticipantResponse.status, joined.myStatus)
+const PARTICIPANT_STATUS_TEXT = {
+  PENDING: 'Đang chờ duyệt',
+  ACCEPTED: 'Đã vào kèo (giữ cọc)',
+  REJECTED: 'Bị từ chối',
+  LEFT: 'Đã rời kèo',
+  REMOVED: 'Bị chủ kèo loại',
+  CANCELLED: 'Đã hủy',
+}
+
 // Chuyển một thẻ LFG từ backend sang dạng thẻ hiển thị trên bảng tin.
 const toFeedMatch = (card) => {
   const sportName = card.sportName || card.sportCategoryName || card.sport || ''
@@ -107,7 +126,9 @@ const toFeedMatch = (card) => {
     sportName: sportName || SPORT_CATALOG[sport]?.name || 'Cầu Lông',
     sport,
     sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
-    subBadge: [card.format, card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
+    // Thể thức thật theo sideSize (số người mỗi phe); không có = giao lưu không chia phe
+    subBadge: [card.sideSize === undefined ? null : Number(card.sideSize) > 0 ? `${card.sideSize} vs ${card.sideSize}` : 'Giao lưu', card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
+    sideSize: Number(card.sideSize) > 0 ? Number(card.sideSize) : null,
     levelTag: lfgSkillLabel(card.skillLevelTag || card.skillLevel) || 'Mọi trình độ',
     skillTag: String(card.skillLevelTag || '').toUpperCase(),
     slotTag: `Cần ${Number(card.remainingSlots) || 0} người`,
@@ -149,9 +170,11 @@ function CommunityFeed() {
   const [claimError, setClaimError] = useState(null)
   const [selectedClaimSide, setSelectedClaimSide] = useState('any')
   const [qrTicketModal, setQrTicketModal] = useState(null)
+  const [detailCardId, setDetailCardId] = useState(null) // kèo đang xem chi tiết (LfgDetailModal)
   const [cancelMatchModal, setCancelMatchModal] = useState(null)
   const [leaveMatchModal, setLeaveMatchModal] = useState(null)
   const [leaveReason, setLeaveReason] = useState('')
+  const [leaveReasonPick, setLeaveReasonPick] = useState('')
   const [cancelReasonsList, setCancelReasonsList] = useState([])
   const [selectedCancelReason, setSelectedCancelReason] = useState('')
   const [customCancelReason, setCustomCancelReason] = useState('')
@@ -160,6 +183,23 @@ function CommunityFeed() {
   // LFG Cancel Requests & Bỏ phiếu hủy kèo (POST /cancel-requests, GET /cancel-requests/latest, POST /vote)
   const [cancelVoteModal, setCancelVoteModal] = useState(null) // { card, request, isLoading }
   const [cancelRequestReason, setCancelRequestReason] = useState('')
+  const [cancelRequestPick, setCancelRequestPick] = useState('')
+
+  // Mốc chốt kèo T − 48 giờ (luật BE hiện tại, xem QĐ-D): trước mốc chủ kèo tự hủy / người chơi tự rời;
+  // sau mốc chủ kèo phải tạo yêu cầu hủy và các thành viên bỏ phiếu. Giờ hiện tại cập nhật mỗi phút.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60000)
+    return () => clearInterval(timer)
+  }, [])
+  const isPastLock = (card) => Boolean(card?.startTime) && nowMs >= new Date(card.startTime).getTime() - LFG_LOCK_BEFORE_MS
+
+  // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
+  useEffect(() => {
+    let cancelled = false
+    getLfgCancelReasons().then((list) => { if (!cancelled) setCancelReasonsList(list) })
+    return () => { cancelled = true }
+  }, [])
   const [isSubmittingCancelReq, setIsSubmittingCancelReq] = useState(false)
 
   // Bảng tin cộng đồng (14 API /api/v1/community/*)
@@ -218,16 +258,19 @@ function CommunityFeed() {
 
   useEffect(() => {
     let cancelled = false
-    getLfgs({ page: 1, pageSize: 50 })
+    // SideSize: lọc thể thức thật phía BE (1 = đơn 1 vs 1, 2 = đôi 2 vs 2)
+    getLfgs({ page: 1, pageSize: 50, SideSize: selectedFormat === 'all' ? undefined : Number(selectedFormat) })
       .then((res) => {
         if (cancelled) return
-        setMatches((res?.items || []).map(toFeedMatch).map(sanitizeMatch))
+        // Phòng hờ: sàn chỉ hiện kèo còn mở (không hủy, chưa tới giờ chơi, còn suất)
+        const open = (res?.items || []).filter((c) => String(c.status || '').toUpperCase() !== 'CANCELLED' && !c.isStarted && (c.remainingSlots == null || Number(c.remainingSlots) > 0))
+        setMatches(open.map(toFeedMatch).map(sanitizeMatch))
         setLfgListError('')
       })
       .catch((err) => !cancelled && setLfgListError(err?.message || 'Không tải được danh sách kèo.'))
       .finally(() => !cancelled && setIsLoadingLfgs(false))
     return () => { cancelled = true }
-  }, [lfgReload])
+  }, [lfgReload, selectedFormat])
 
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (chưa khai thì hiện 'Chưa đặt khu vực')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
@@ -310,9 +353,30 @@ function CommunityFeed() {
 
   // Load My Cards (Chủ kèo) - Bước 2
   // fetchX: chỉ gọi API và cập nhật kết quả; loadX: bật trạng thái đang tải rồi gọi fetchX
+  // /my-cards không có participants: lấy thêm chi tiết từng kèo (GET /lfgs/{id}) để chủ kèo thấy người
+  // xin vào / đã vào (duyệt, từ chối, loại). Lỗi chi tiết của 1 kèo thì giữ thẻ, danh sách thành viên trống.
+  const withParticipants = async (card) => {
+    try {
+      const detail = await getLfgById(card.id)
+      return {
+        ...card,
+        acceptedCount: detail?.acceptedCount,
+        pendingCount: detail?.pendingCount,
+        participants: (detail?.participants || []).map((p) => ({
+          ...p,
+          name: p.fullName || 'Người chơi',
+          avatar: p.avatarUrl || '',
+          status: String(p.status || '').toUpperCase(),
+        })),
+      }
+    } catch {
+      return { ...card, participants: [] }
+    }
+  }
   const fetchMyCards = (status = myStatusFilter) =>
     getMyLfgCards(status === 'all' ? undefined : status)
-      .then((list) => setMyLfgCards(Array.isArray(list) ? list : []))
+      .then((list) => Promise.all((Array.isArray(list) ? list : []).map(withParticipants)))
+      .then((list) => setMyLfgCards(list))
       .catch((err) => console.warn('[CommunityFeed] Lỗi lấy kèo của tôi:', err))
       .finally(() => setIsLoadingMyCards(false))
   const loadMyCards = (status = myStatusFilter) => {
@@ -602,26 +666,28 @@ function CommunityFeed() {
   }
 
   // Mở modal Yêu cầu hủy & Bỏ phiếu hủy: POST /cancel-requests, GET /cancel-requests/latest, POST /vote
-  const handleOpenCancelVoteModal = async (card) => {
-    setCancelVoteModal({ card, request: null, isLoading: true })
+  const handleOpenCancelVoteModal = async (card, { asHost = false } = {}) => {
+    setCancelVoteModal({ card, asHost, request: null, isLoading: true })
     setCancelRequestReason('')
+    setCancelRequestPick('')
     try {
       const latestReq = await getLatestLfgCancelRequest(card.id)
-      setCancelVoteModal({ card, request: latestReq, isLoading: false })
+      setCancelVoteModal({ card, asHost, request: latestReq, isLoading: false })
     } catch (err) {
       console.warn('[CommunityFeed] Chưa có yêu cầu hủy nào:', err)
-      setCancelVoteModal({ card, request: null, isLoading: false })
+      setCancelVoteModal({ card, asHost, request: null, isLoading: false })
     }
   }
 
   const handleCreateCancelReq = async (cardId) => {
-    if (!cancelRequestReason.trim()) {
-      toast.warning('Vui lòng nhập lý do đề xuất hủy kèo!')
+    const reason = finalReason(cancelRequestPick, cancelRequestReason)
+    if (!reason) {
+      toast.warning('Vui lòng chọn hoặc nhập lý do đề xuất hủy kèo!')
       return
     }
     setIsSubmittingCancelReq(true)
     try {
-      await createLfgCancelRequest(cardId, { reason: cancelRequestReason.trim() })
+      await createLfgCancelRequest(cardId, { reason })
       setToastMessage({
         title: 'Đã Tạo Yêu Cầu Hủy Kèo',
         desc: 'Yêu cầu hủy kèo đã được gửi tới tất cả thành viên để bỏ phiếu.',
@@ -693,7 +759,7 @@ function CommunityFeed() {
     try {
       // Gọi API Claim Slot: POST /api/v1/lfgs/{cardId}/claim
       await claimLfgSlot(bookingModal.id, {
-        side: selectedClaimSide || 'any',
+        side: bookingModal.sideSize > 0 ? selectedClaimSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
       })
@@ -714,6 +780,7 @@ function CommunityFeed() {
 
       setBookingModal(null)
       loadJoinedCards()
+      setLfgReload((value) => value + 1) // kèo vừa nhận có thể đã đủ người: tải lại sàn
       handleTabChange('joined')
     } catch (err) {
       console.error('[CommunityFeed] Lỗi nhận suất:', err)
@@ -788,6 +855,7 @@ function CommunityFeed() {
         type: 'success',
       })
       loadMyCards()
+      setLfgReload((value) => value + 1)
     } catch (err) {
       setToastMessage({
         title: 'Lỗi loại thành viên',
@@ -800,33 +868,24 @@ function CommunityFeed() {
   }
 
   // Chủ kèo: Mở modal hủy kèo - 2.6 Bước 5
-  const handleOpenCancelModal = async (card) => {
+  const handleOpenCancelModal = (card) => {
     setCancelMatchModal(card)
     setSelectedCancelReason('')
     setCustomCancelReason('')
-    try {
-      const reasons = await getLfgCancelReasons()
-      setCancelReasonsList(Array.isArray(reasons) ? reasons : [])
-      if (Array.isArray(reasons) && reasons.length > 0) {
-        const first = reasons[0]
-        setSelectedCancelReason(typeof first === 'string' ? first : first?.label || first?.reason)
-      }
-    } catch (err) {
-      console.warn('[CommunityFeed] Lỗi lấy lý do hủy:', err)
-      setCancelReasonsList(['Bận việc đột xuất', 'Thời tiết xấu', 'Không đủ người chơi', 'Lý do khác'])
-      setSelectedCancelReason('Bận việc đột xuất')
-    }
   }
 
   // Chủ kèo: Xác nhận hủy kèo - 2.6 Bước 5
   const handleConfirmCancelMatch = async () => {
     if (!cancelMatchModal) return
-    const isCustom = selectedCancelReason === 'Lý do khác' || selectedCancelReason === 'Khác (Tự nhập lý do)'
-    const finalReason = isCustom ? customCancelReason.trim() || 'Lý do khác' : selectedCancelReason || 'Bận việc đột xuất'
+    const reason = finalReason(selectedCancelReason, customCancelReason)
+    if (!reason) {
+      toast.warning('Vui lòng chọn hoặc nhập lý do hủy kèo.')
+      return
+    }
 
     setActionLoadingId(cancelMatchModal.id)
     try {
-      await cancelLfg(cancelMatchModal.id, { reason: finalReason })
+      await cancelLfg(cancelMatchModal.id, { reason })
       setToastMessage({
         title: 'Hủy Kèo Ghép Thành Công',
         desc: 'Đã hủy kèo. Hoàn 100% tiền cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 24h hoàn 100%).',
@@ -834,6 +893,7 @@ function CommunityFeed() {
       })
       setCancelMatchModal(null)
       loadMyCards()
+      setLfgReload((value) => value + 1) // kèo đã hủy phải biến khỏi sàn
     } catch (err) {
       setToastMessage({
         title: 'Lỗi hủy kèo',
@@ -849,6 +909,7 @@ function CommunityFeed() {
   const handleOpenLeaveModal = (card) => {
     setLeaveMatchModal(card)
     setLeaveReason('')
+    setLeaveReasonPick('')
   }
 
   // Người tham gia: Xác nhận rời kèo - 2.6 Bước 4
@@ -868,7 +929,7 @@ function CommunityFeed() {
 
     setActionLoadingId(leaveMatchModal.id)
     try {
-      await leaveLfg(leaveMatchModal.id, { reason: leaveReason.trim() || 'Rút khỏi kèo' })
+      await leaveLfg(leaveMatchModal.id, { reason: finalReason(leaveReasonPick, leaveReason) || undefined })
       setToastMessage({
         title: 'Rời Kèo Thành Công',
         desc: 'Đã rời kèo (hoàn 100% tiền) hoặc rút yêu cầu đang chờ.',
@@ -876,6 +937,7 @@ function CommunityFeed() {
       })
       setLeaveMatchModal(null)
       loadJoinedCards()
+      setLfgReload((value) => value + 1) // mở lại 1 suất trên sàn
     } catch (err) {
       setToastMessage({
         title: 'Lỗi rời kèo',
@@ -888,27 +950,33 @@ function CommunityFeed() {
   }
 
   // Mở vé QR Check-in - 2.6 Bước 3 & 2.7 Bước 1
-  const handleOpenQrTicket = async (cardId, matchInfo = {}) => {
+  // Người tham gia: GET /lfgs/{cardId}/qr-ticket. Chủ kèo: BE trả 400, phải dùng vé của đơn đặt sân
+  // GET /bookings/{bookingId}/qr-ticket. Sân / giờ lấy từ vé BE trả về, không dùng giá trị mẫu.
+  const handleOpenQrTicket = async (cardId, card = {}, { asHost = false } = {}) => {
+    const timeOf = (start, end) =>
+      start ? `${vnClock(start)} - ${vnClock(end)}, ${new Date(start).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : '—'
     setQrTicketModal({
       isOpen: true,
       isLoading: true,
       cardId,
-      title: matchInfo.title || 'Vé QR Check-in Kèo Ghép LFG',
-      courtName: matchInfo.courtName || 'Sân SportNexus',
-      facilityAddress: matchInfo.facilityAddress || 'TP. Hồ Chí Minh',
-      time: matchInfo.time || '19:30 - 21:00',
-      ticketCode: matchInfo.ticketCode || '',
+      title: card.description || card.title || `Kèo ${card.sportName || 'ghép trận'}`,
+      courtName: [card.courtName, card.facilityName].filter(Boolean).join(' • ') || '—',
+      time: timeOf(card.startTime, card.endTime),
+      ticketCode: `LFG-${String(cardId).slice(0, 8).toUpperCase()}`,
+      isCheckedIn: false,
       qrCode: null,
     })
 
     try {
-      const res = await getLfgQrTicket(cardId)
+      const res = asHost && card.bookingId ? await getBookingQrTicket(card.bookingId) : await getLfgQrTicket(cardId)
       setQrTicketModal((prev) => ({
         ...prev,
         isLoading: false,
         ticketData: res,
         qrCode: res?.qrCode || res?.code || (typeof res === 'string' ? res : null),
-        ticketCode: res?.ticketCode || res?.code || prev.ticketCode,
+        courtName: [res?.courtName, res?.facilityName].filter(Boolean).join(' • ') || prev.courtName,
+        time: res?.startTime ? timeOf(res.startTime, res.endTime) : prev.time,
+        isCheckedIn: Boolean(res?.isCheckedIn),
       }))
     } catch (err) {
       // Không tạo mã giả: mã không có trên hệ thống thì chủ sân quét sẽ báo lỗi.
@@ -1004,11 +1072,23 @@ function CommunityFeed() {
     setSelectedTimeSlots(['morning', 'afternoon', 'evening'])
     setSelectedSkillLevel('all')
     setSelectedDistance('all')
+    if (selectedFormat !== 'all') setIsLoadingLfgs(true)
     setSelectedFormat('all')
     setFilterMinFairPlay(true)
     setFilterFlashOnly(false)
     setFilterStandardCourt(false)
   }
+
+  // Kèo đã tham gia: BE trả cả kèo đã hủy và kèo mình đã rời / bị loại / bị từ chối (myStatus).
+  // Mặc định ẩn các kèo này, cho bấm xem lại; kèo còn hiệu lực xếp trước.
+  const [showInactiveJoined, setShowInactiveJoined] = useState(false)
+  const myStatusOf = (card) => String(card.myStatus || card.claimStatus || '').toUpperCase()
+  const isJoinedInactive = (card) =>
+    String(card.status || '').toUpperCase() === 'CANCELLED' || ['REJECTED', 'LEFT', 'REMOVED', 'CANCELLED'].includes(myStatusOf(card))
+  const inactiveJoinedCount = joinedLfgCards.filter(isJoinedInactive).length
+  const visibleJoinedCards = joinedLfgCards
+    .filter((card) => showInactiveJoined || !isJoinedInactive(card))
+    .sort((a, b) => Number(isJoinedInactive(a)) - Number(isJoinedInactive(b)) || new Date(a.startTime) - new Date(b.startTime))
 
   // Filtered matches (ưu tiên hiển thị các kèo gần vị trí hồ sơ người chơi lên đầu)
   // Trích xuất thói quen ghép trận & tính toán bộ đề xuất cá nhân hóa (3 hạng mục: Sàn ghép trận, Kèo ghép, Bảng tin cộng đồng)
@@ -1412,9 +1492,16 @@ function CommunityFeed() {
                 <span className="material-symbols-outlined text-4xl text-gray-400 mb-2">
                   search_off
                 </span>
-                <p className="font-bold text-gray-700">Chưa tìm thấy kèo phù hợp bộ lọc</p>
+                <p className="font-bold text-gray-700">
+                  {matches.length === 0 ? 'Hiện chưa có kèo nào đang mở' : 'Chưa tìm thấy kèo phù hợp bộ lọc'}
+                </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Vui lòng chọn bộ lọc khác hoặc tự đăng kèo mới ngay!
+                  {matches.length === 0 ? 'Vui lòng quay lại sau hoặc tự đăng kèo mới ngay!' : 'Vui lòng chọn bộ lọc khác hoặc tự đăng kèo mới ngay!'}
+                </p>
+                {/* BE không đưa lên sàn: kèo của chính bạn, kèo đã đủ người, kèo đã qua giờ chơi */}
+                <p className="text-[11px] text-gray-400 mt-2">
+                  Sàn chỉ hiện kèo của người khác còn suất và chưa tới giờ chơi. Kèo bạn tạo nằm ở tab{' '}
+                  <button type="button" className="font-bold text-[#15803D] underline" onClick={() => handleTabChange('my_cards')}>Kèo của tôi</button>.
                 </p>
               </div>
             ) : (
@@ -1674,15 +1761,20 @@ function CommunityFeed() {
                 ) : (
                   myLfgCards.map((card) => {
                     const statusColorMap = {
+                      PENDING: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                       OPEN: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                       FILLED: 'bg-blue-50 text-blue-700 border-blue-200',
                       CANCELLED: 'bg-rose-50 text-rose-700 border-rose-200',
                     }
                     const statusTextMap = {
-                      OPEN: 'Đang Tuyển (OPEN)',
-                      FILLED: 'Đã Đủ Người (FILLED)',
-                      CANCELLED: 'Đã Hủy (CANCELLED)',
+                      PENDING: 'Đang Tuyển',
+                      OPEN: 'Đang Tuyển',
+                      FILLED: 'Đã Đủ Người',
+                      CANCELLED: 'Đã Hủy',
                     }
+                    // Kèo còn thao tác được: chưa hủy và chưa tới giờ chơi
+                    const cardActive = card.status !== 'CANCELLED' && !card.isStarted
+                    const acceptedCount = card.acceptedCount ?? (card.participants || []).filter((p) => p.status === 'ACCEPTED').length
 
                     return (
                       <div
@@ -1703,7 +1795,7 @@ function CommunityFeed() {
                                 {card.requireApproval ? '🛡️ Cần Duyệt Người' : '⚡ Tự Động Vào'}
                               </span>
                             </div>
-                            <h3 className="font-black text-base text-[#111827] mt-1">{card.title}</h3>
+                            <h3 className="font-black text-base text-[#111827] mt-1">{card.description || card.title || `Kèo ${card.sportName || 'ghép trận'}`}</h3>
                             <p className="text-xs text-gray-500 flex items-center gap-1">
                               <span className="material-symbols-outlined text-[15px] text-[#3B6817]">location_on</span>
                               <span>{card.courtName} • {card.facilityAddress}</span>
@@ -1722,10 +1814,10 @@ function CommunityFeed() {
                         <div className="bg-[#FAFBF9] rounded-xl p-4 border border-gray-100">
                           <div className="flex items-center justify-between mb-3">
                             <span className="text-xs font-black text-gray-800 uppercase tracking-wide">
-                              Danh Sách Thành Viên Tham Gia ({card.participants?.length || 0}/{card.totalSlots || (card.slotsNeeded || 2) + 1})
+                              Thành Viên: {acceptedCount} đã vào / cần {card.totalSlots ?? '—'}{card.pendingCount ? ` • ${card.pendingCount} chờ duyệt` : ''}
                             </span>
                             <span className="text-[11px] text-gray-500 font-medium">
-                              {card.status === 'OPEN' ? `Cần thêm ${card.slotsNeeded || 1} người` : 'Đã khóa danh sách'}
+                              {card.status === 'CANCELLED' ? 'Kèo đã hủy' : card.isStarted ? 'Đã tới giờ chơi' : card.status === 'FILLED' ? 'Đã đủ người' : `Còn ${card.remainingSlots ?? '—'} suất`}
                             </span>
                           </div>
 
@@ -1735,31 +1827,32 @@ function CommunityFeed() {
                             <div className="flex flex-col gap-2.5">
                               {card.participants.map((p) => {
                                 const isPending = p.status === 'PENDING'
+                                const isInactive = !['PENDING', 'ACCEPTED'].includes(p.status)
                                 const loadingKey = `${card.id}-${p.userId}`
                                 const isLoadingThis = actionLoadingId === loadingKey
 
                                 return (
                                   <div
                                     key={p.userId}
-                                    className="p-2.5 rounded-xl bg-white border border-gray-200/80 flex items-center justify-between gap-3 flex-wrap"
+                                    className={`p-2.5 rounded-xl border border-gray-200/80 flex items-center justify-between gap-3 flex-wrap ${isInactive ? 'bg-gray-50 opacity-70' : 'bg-white'}`}
                                   >
                                     <div className="flex items-center gap-3">
-                                      <img
-                                        src={p.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
-                                        alt={p.name}
-                                        className="w-9 h-9 rounded-full object-cover border border-gray-200"
-                                      />
+                                      {p.avatar ? (
+                                        <img src={p.avatar} alt={p.name} className="w-9 h-9 rounded-full object-cover border border-gray-200" />
+                                      ) : (
+                                        <span className="w-9 h-9 rounded-full bg-[#EAF7EE] text-[#15803D] text-xs font-black flex items-center justify-center border border-gray-200">{String(p.name || '?').slice(0, 2).toUpperCase()}</span>
+                                      )}
                                       <div>
                                         <div className="flex items-center gap-2">
                                           <span className="font-bold text-xs text-[#111827]">{p.name}</span>
                                           <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#EAF7EE] text-[#15803D]">
-                                            Fair Play {p.fairPlayScore || 100}
+                                            Fair Play {p.fairPlayScore ?? '—'}
                                           </span>
                                         </div>
                                         <span className="text-[11px] text-gray-400 block">
                                           Trạng thái:{' '}
-                                          <strong className={isPending ? 'text-amber-600' : 'text-emerald-700'}>
-                                            {isPending ? 'Đang chờ duyệt' : 'Đã tham gia (Giữ cọc)'}
+                                          <strong className={isPending ? 'text-amber-600' : isInactive ? 'text-gray-500' : 'text-emerald-700'}>
+                                            {PARTICIPANT_STATUS_TEXT[p.status] || p.status || '—'}
                                           </strong>
                                         </span>
                                       </div>
@@ -1768,7 +1861,7 @@ function CommunityFeed() {
                                     {/* Actions for Participant */}
                                     <div className="flex items-center gap-2">
                                       {/* Bước 3: Approve / Reject (chỉ khi requireApproval = true và pending) */}
-                                      {isPending ? (
+                                      {isInactive || !cardActive ? null : isPending ? (
                                         <>
                                           <button
                                             disabled={isLoadingThis}
@@ -1827,8 +1920,17 @@ function CommunityFeed() {
                           </span>
 
                           <div className="flex items-center gap-2 flex-wrap">
+                            {/* Xem chi tiết kèo: GET /api/v1/lfgs/{cardId} */}
+                            <button
+                              onClick={() => setDetailCardId(card.id)}
+                              className="px-3 py-1.5 rounded-xl bg-white hover:bg-gray-50 text-gray-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-gray-300"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">visibility</span>
+                              <span>Xem chi tiết</span>
+                            </button>
+
                             {/* Sửa kèo: PUT /api/v1/lfgs/{cardId} */}
-                            {card.status !== 'CANCELLED' && (
+                            {cardActive && (
                               <button
                                 onClick={() => navigate(`/create-match?cardId=${card.id}&mode=edit`)}
                                 className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-emerald-200"
@@ -1838,28 +1940,30 @@ function CommunityFeed() {
                               </button>
                             )}
 
-                            {/* Bỏ phiếu hủy kèo (Vote Cancel): POST /cancel-requests & /vote */}
-                            {card.status !== 'CANCELLED' && (
+                            {/* Sau mốc chốt kèo (T − 48h): chủ kèo tạo yêu cầu hủy để thành viên bỏ phiếu */}
+                            {cardActive && isPastLock(card) && (
                               <button
-                                onClick={() => handleOpenCancelVoteModal(card)}
+                                onClick={() => handleOpenCancelVoteModal(card, { asHost: true })}
                                 className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
                               >
                                 <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
-                                <span>Bỏ Phiếu Hủy</span>
+                                <span>Yêu Cầu Hủy (Bỏ Phiếu)</span>
                               </button>
                             )}
 
-                            {/* Mở vé QR Check-in (2.7 Bước 1) */}
+                            {/* Mở vé QR Check-in (2.7 Bước 1): kèo đã hủy thì không còn vé */}
+                            {card.status !== 'CANCELLED' && (
                             <button
-                              onClick={() => handleOpenQrTicket(card.id, card)}
+                              onClick={() => handleOpenQrTicket(card.id, card, { asHost: true })}
                               className="px-4 py-2 rounded-xl bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] font-bold text-xs flex items-center gap-1.5 cursor-pointer"
                             >
                               <span className="material-symbols-outlined text-[17px]">qr_code_2</span>
                               <span>Vé QR Check-in</span>
                             </button>
+                            )}
 
-                            {/* Hủy kèo đơn phương (2.6 Bước 5) */}
-                            {card.status !== 'CANCELLED' && (
+                            {/* Hủy kèo đơn phương (2.6 Bước 5): chỉ trước mốc chốt kèo T − 48h */}
+                            {cardActive && !isPastLock(card) && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
                                 className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -1888,17 +1992,27 @@ function CommunityFeed() {
                   </div>
                 </div>
 
+                {!isLoadingJoined && inactiveJoinedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowInactiveJoined((v) => !v)}
+                    className="self-start px-3 py-1.5 rounded-xl bg-white border border-gray-300 text-gray-700 text-xs font-bold cursor-pointer hover:bg-gray-50"
+                  >
+                    {showInactiveJoined ? 'Ẩn' : 'Hiện'} kèo đã hủy / đã rời ({inactiveJoinedCount})
+                  </button>
+                )}
+
                 {isLoadingJoined ? (
                   <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
                     <span className="material-symbols-outlined text-4xl text-[#3B6817] animate-spin">progress_activity</span>
                     <p className="text-sm font-bold text-gray-700">Đang tải danh sách kèo đã tham gia...</p>
                   </div>
-                ) : joinedLfgCards.length === 0 ? (
+                ) : visibleJoinedCards.length === 0 ? (
                   <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
                     <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
                       <span className="material-symbols-outlined text-3xl">sports_tennis</span>
                     </div>
-                    <p className="font-black text-gray-800 text-base">Bạn chưa tham gia kèo ghép nào</p>
+                    <p className="font-black text-gray-800 text-base">{joinedLfgCards.length === 0 ? 'Bạn chưa tham gia kèo ghép nào' : 'Bạn không còn kèo nào đang tham gia'}</p>
                     <p className="text-xs text-gray-500 max-w-md">
                       Khám phá sàn ghép trận và chốt slot ngay để giao lưu thể thao cùng các vận động viên khác!
                     </p>
@@ -1910,34 +2024,45 @@ function CommunityFeed() {
                     </button>
                   </div>
                 ) : (
-                  joinedLfgCards.map((card) => {
-                    const isPending = card.claimStatus === 'PENDING'
-                    const isInvited = card.claimStatus === 'INVITED' || card.invitationStatus === 'INVITED' || card.isInvitation
+                  visibleJoinedCards.map((card) => {
+                    // myStatus (BE): PENDING | ACCEPTED | REJECTED | LEFT | REMOVED | CANCELLED
+                    const myStatus = myStatusOf(card)
+                    const isPending = myStatus === 'PENDING'
+                    const isInvited = myStatus === 'INVITED' || card.invitationStatus === 'INVITED' || card.isInvitation
+                    const cardCancelled = String(card.status || '').toUpperCase() === 'CANCELLED'
+                    const inactive = isJoinedInactive(card)
+                    const badgeText = cardCancelled
+                      ? 'Kèo Đã Hủy'
+                      : isInvited
+                      ? 'Được Mời Vào Kèo'
+                      : PARTICIPANT_STATUS_TEXT[myStatus] || 'Đã Vào Đội Hình'
 
                     return (
                       <div
                         key={card.id}
-                        className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-all"
+                        className={`rounded-2xl border shadow-sm p-5 flex flex-col gap-4 transition-all ${inactive ? 'bg-gray-50 border-gray-200 opacity-75' : 'bg-white border-gray-200/90 hover:shadow-md'}`}
                       >
                         <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3 flex-wrap">
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span
                                 className={`px-2.5 py-0.5 rounded-md text-xs font-black border ${
-                                  isInvited
+                                  inactive
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : isInvited
                                     ? 'bg-purple-50 text-purple-700 border-purple-200'
                                     : isPending
                                     ? 'bg-amber-50 text-amber-700 border-amber-200'
                                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 }`}
                               >
-                                {isInvited ? 'Được Mời Vào Kèo' : isPending ? 'Đang Chờ Chủ Kèo Duyệt' : 'Đã Vào Đội Hình'}
+                                {badgeText}
                               </span>
                               <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1E40AF]">
                                 {card.sportName || card.sport?.toUpperCase() || 'THỂ THAO'}
                               </span>
                             </div>
-                            <h3 className="font-black text-base text-[#111827] mt-1">{card.title}</h3>
+                            <h3 className="font-black text-base text-[#111827] mt-1">{card.description || card.title || `Kèo ${card.sportName || 'ghép trận'}`}</h3>
                             <p className="text-xs text-gray-500 flex items-center gap-1">
                               <span className="material-symbols-outlined text-[15px] text-[#3B6817]">location_on</span>
                               <span>{card.courtName} • {card.facilityAddress}</span>
@@ -1947,7 +2072,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Cọc giữ chỗ Escrow</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {new Intl.NumberFormat('vi-VN').format(card.pricePerPerson || 45000)} đ
+                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : '—'}
                             </span>
                           </div>
                         </div>
@@ -1965,8 +2090,19 @@ function CommunityFeed() {
 
                         {/* Actions for Participant */}
                         <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 flex-wrap">
+                          <button
+                            onClick={() => setDetailCardId(card.id)}
+                            className="px-3 py-1.5 rounded-xl bg-white hover:bg-gray-50 text-gray-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-gray-300"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">visibility</span>
+                            <span>Xem chi tiết</span>
+                          </button>
                           {/* Lời mời tham gia: Chấp nhận POST /invitation/accept & Từ chối POST /invitation/decline */}
-                          {isInvited ? (
+                          {inactive ? (
+                            <span className="text-xs text-gray-500 font-semibold">
+                              {cardCancelled ? 'Kèo đã bị hủy, tiền cọc được hoàn theo chính sách.' : 'Bạn không còn trong kèo này.'}
+                            </span>
+                          ) : isInvited ? (
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleAcceptLfgInvite(card.id)}
@@ -1985,7 +2121,8 @@ function CommunityFeed() {
                             </div>
                           ) : (
                             <>
-                              {/* Bỏ phiếu hủy kèo (Vote Cancel): POST /cancel-requests & /vote */}
+                              {/* Bỏ phiếu hủy kèo (Vote Cancel): chỉ người đã vào kèo, trước giờ chơi */}
+                              {!isPending && !card.isStarted && isPastLock(card) && (
                               <button
                                 onClick={() => handleOpenCancelVoteModal(card)}
                                 className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
@@ -1993,8 +2130,10 @@ function CommunityFeed() {
                                 <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
                                 <span>Bỏ Phiếu Hủy Kèo</span>
                               </button>
+                              )}
 
-                              {/* Rời kèo (Bước 4) */}
+                              {/* Rời kèo (Bước 4): không rời được khi đã tới giờ chơi */}
+                              {!card.isStarted && (
                               <button
                                 onClick={() => handleOpenLeaveModal(card)}
                                 className="px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
@@ -2002,6 +2141,7 @@ function CommunityFeed() {
                                 <span className="material-symbols-outlined text-[16px]">logout</span>
                                 <span>{isPending ? 'Rút yêu cầu' : 'Rời kèo'}</span>
                               </button>
+                              )}
 
                               {/* Mở vé QR (Bước 3 & 2.7) */}
                               {!isPending && (
@@ -2643,16 +2783,17 @@ function CommunityFeed() {
               </div>
             </div>
 
-            {/* Chọn Phía / Đội tham gia (A / B / Bất kỳ) */}
+            {/* Chọn phe A / B: chỉ kèo đối kháng (sideSize) mới có phe thật; kèo giao lưu không chọn phe */}
+            {bookingModal.sideSize > 0 && (
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-black uppercase text-gray-500 tracking-wider">
-                Chọn vị trí / Đội hình:
+                Chọn phe ({bookingModal.sideSize} vs {bookingModal.sideSize}):
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { key: 'any', label: 'Bất Kỳ (Ngẫu Nhiên)' },
-                  { key: 'A', label: 'Đội A (Chủ Sân)' },
-                  { key: 'B', label: 'Đội B (Đối Thủ)' },
+                  { key: 'any', label: 'Hệ thống xếp' },
+                  { key: 'A', label: 'Phe A' },
+                  { key: 'B', label: 'Phe B' },
                 ].map((s) => (
                   <button
                     key={s.key}
@@ -2669,6 +2810,7 @@ function CommunityFeed() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Quy chế Duyệt Kèo (2.6 Người tham gia Bước 2) */}
             <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
@@ -2743,6 +2885,8 @@ function CommunityFeed() {
       )}
 
       {/* ================= MODAL: VÉ QR CHECK-IN TẠI SÂN (2.6 Bước 3 & 2.7 Bước 1) ================= */}
+      {detailCardId && <LfgDetailModal cardId={detailCardId} onClose={() => setDetailCardId(null)} />}
+
       {qrTicketModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 flex flex-col items-center gap-4 text-center">
@@ -2780,7 +2924,7 @@ function CommunityFeed() {
                     <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#16A34A] animate-pulse"></div>
                   </div>
                   <span className="font-mono text-xs font-black px-3 py-1 rounded-md bg-gray-200 text-gray-800 tracking-wider">
-                    {qrTicketModal.ticketCode || qrTicketModal.qrCode || '—'}
+                    {qrTicketModal.ticketCode}{qrTicketModal.isCheckedIn ? ' • Đã check-in' : ''}
                   </span>
                 </div>
               )}
@@ -2835,37 +2979,22 @@ function CommunityFeed() {
             </div>
 
             <p className="text-xs text-gray-600">
-              Bạn đang yêu cầu hủy kèo: <strong>{cancelMatchModal.title}</strong>
+              Bạn đang hủy kèo: <strong>{cancelMatchModal.description || cancelMatchModal.title || 'Kèo ghép'}</strong>
             </p>
 
-            {/* Reason selector */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-gray-700">Lý do hủy kèo:</label>
-              <select
-                value={selectedCancelReason}
-                onChange={(e) => setSelectedCancelReason(e.target.value)}
-                className="p-2.5 rounded-xl border border-gray-300 text-xs bg-white text-gray-800 focus:outline-none focus:border-[#3B6817]"
-              >
-                {cancelReasonsList.map((r, i) => {
-                  const val = typeof r === 'string' ? r : r.label || r.reason || r.name
-                  return (
-                    <option key={i} value={val}>
-                      {val}
-                    </option>
-                  )
-                })}
-              </select>
-
-              {(selectedCancelReason === 'Lý do khác' || selectedCancelReason === 'Khác (Tự nhập lý do)') && (
-                <textarea
-                  rows="2"
-                  placeholder="Nhập lý do chi tiết..."
-                  value={customCancelReason}
-                  onChange={(e) => setCustomCancelReason(e.target.value)}
-                  className="p-2.5 rounded-xl border border-gray-300 text-xs w-full focus:outline-none focus:border-[#3B6817]"
-                />
-              )}
-            </div>
+            {/* Lý do hủy: dropdown từ GET /lfgs/cancel-reasons */}
+            <LfgReasonPicker
+              label="Lý do hủy kèo"
+              required
+              reasons={cancelReasonsList}
+              picked={selectedCancelReason}
+              onPick={setSelectedCancelReason}
+              custom={customCancelReason}
+              onCustom={setCustomCancelReason}
+            />
+            <p className="text-[11px] text-gray-500 m-0">
+              Chủ kèo chỉ tự hủy được trước giờ chơi 48 tiếng. Sau mốc này cần tạo yêu cầu hủy để các thành viên bỏ phiếu.
+            </p>
 
             {/* Refund policy note (2.6 Bước 5) */}
             <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
@@ -2914,19 +3043,18 @@ function CommunityFeed() {
             </div>
 
             <p className="text-xs text-gray-600">
-              Bạn có chắc chắn muốn rời kèo ghép <strong>{leaveMatchModal.title}</strong>?
+              Bạn có chắc chắn muốn rời kèo ghép <strong>{leaveMatchModal.description || leaveMatchModal.title || 'Kèo ghép'}</strong>?
             </p>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-gray-700">Lý do rời kèo (tùy chọn):</label>
-              <input
-                type="text"
-                placeholder="Nhập lý do rút khỏi trận..."
-                value={leaveReason}
-                onChange={(e) => setLeaveReason(e.target.value)}
-                className="p-2.5 rounded-xl border border-gray-300 text-xs w-full focus:outline-none focus:border-[#3B6817]"
-              />
-            </div>
+            <LfgReasonPicker
+              label="Lý do rời kèo"
+              reasons={cancelReasonsList}
+              picked={leaveReasonPick}
+              onPick={setLeaveReasonPick}
+              custom={leaveReason}
+              onCustom={setLeaveReason}
+              placeholder="Nhập lý do rút khỏi trận..."
+            />
 
             {/* 2-hour window rule (2.6 Bước 4) */}
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed flex items-start gap-2">
@@ -3332,19 +3460,18 @@ function CommunityFeed() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="material-symbols-outlined text-gray-600 text-[16px]">group</span>
-                    <label className="font-bold text-gray-800">Thể thức &amp; Giới tính:</label>
+                    <label className="font-bold text-gray-800">Thể thức (số người mỗi phe):</label>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { key: 'all', label: 'Tất cả thể thức' },
-                      { key: 'mixed', label: 'Đôi Nam Nữ' },
-                      { key: 'men', label: 'Đôi Nam' },
-                      { key: 'women', label: 'Đôi Nữ' },
+                      { key: '1', label: 'Đơn 1 vs 1' },
+                      { key: '2', label: 'Đôi 2 vs 2' },
                     ].map((f) => (
                       <button
                         key={f.key}
                         type="button"
-                        onClick={() => setSelectedFormat(f.key)}
+                        onClick={() => { if (f.key !== selectedFormat) { setIsLoadingLfgs(true); setSelectedFormat(f.key) } }}
                         className={`py-2 px-3 rounded-xl border text-[11px] font-bold text-center transition-all ${
                           selectedFormat === f.key
                             ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
@@ -3631,10 +3758,10 @@ function CommunityFeed() {
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    Người đầu tạo kèo (Host) đóng <strong className="text-gray-900 font-bold">1/4 tiền sân</strong> làm tiền cọc giữ sân ngay từ đầu.
+                    Chủ kèo (Host) trả trước <strong className="text-gray-900 font-bold">100% tiền sân</strong>: hệ thống đặt ca và trừ ví chủ kèo ngay khi tạo kèo.
                   </li>
                   <li>
-                    Chi phí còn lại được chia đều cho <strong className="text-gray-900 font-bold">3 người chơi khác</strong>. Các thành viên nhận slot phải hoàn tất thanh toán phần chia trong vòng <strong className="text-[#0284C7] font-bold">30 phút</strong>.
+                    Mỗi người nhận slot trả đúng mức <strong className="text-gray-900 font-bold">"Giá mỗi người"</strong> hiển thị trên kèo (hệ thống tính, mặc định chia đều tiền sân cho tổng số người chơi). Khoản này được giữ trong Escrow.
                   </li>
                 </ul>
               </div>
@@ -3733,7 +3860,7 @@ function CommunityFeed() {
                     <span className="material-symbols-outlined text-[16px]">info</span>
                     <span>Đang có yêu cầu hủy kèo cần các thành viên biểu quyết:</span>
                   </div>
-                  <p><strong>Lý do:</strong> {cancelVoteModal.request.reason || 'Bận việc đột xuất'}</p>
+                  <p><strong>Lý do:</strong> {cancelVoteModal.request.reason || '—'}</p>
                   <p className="text-[11px] text-amber-700 mt-1">
                     Trạng thái: <strong>{cancelVoteModal.request.status || 'PENDING_VOTE'}</strong> • Đồng ý: {cancelVoteModal.request.approveCount || 0} • Từ chối: {cancelVoteModal.request.declineCount || 0}
                   </p>
@@ -3760,18 +3887,37 @@ function CommunityFeed() {
                   </button>
                 </div>
               </div>
+            ) : !cancelVoteModal.asHost ? (
+              // Người tham gia không tạo yêu cầu hủy: chờ chủ kèo đề xuất rồi bỏ phiếu
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-gray-600">
+                  Hiện chưa có yêu cầu hủy nào cho kèo này. Khi chủ kèo đề xuất hủy, bạn sẽ bỏ phiếu tại đây.
+                </p>
+                <div className="flex items-center justify-end pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setCancelVoteModal(null)}
+                    className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <p className="text-xs text-gray-600">
-                  Hiện chưa có yêu cầu hủy nào cho kèo này. Nếu bạn muốn đề xuất hủy kèo để các thành viên cùng bỏ phiếu, vui lòng nhập lý do bên dưới:
+                  Kèo đã qua mốc chốt (48 tiếng trước giờ chơi) nên không tự hủy được. Hãy tạo yêu cầu hủy để các thành viên cùng bỏ phiếu:
                 </p>
 
-                <textarea
-                  rows={3}
-                  value={cancelRequestReason}
-                  onChange={(e) => setCancelRequestReason(e.target.value)}
-                  placeholder="Nhập lý do đề xuất hủy kèo (ví dụ: trời mưa to, sân cúp điện, ca bận đột xuất)..."
-                  className="w-full text-xs text-gray-800 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-amber-600 resize-none"
+                <LfgReasonPicker
+                  label="Lý do đề xuất hủy"
+                  required
+                  reasons={cancelReasonsList}
+                  picked={cancelRequestPick}
+                  onPick={setCancelRequestPick}
+                  custom={cancelRequestReason}
+                  onCustom={setCancelRequestReason}
+                  placeholder="Nhập lý do đề xuất hủy kèo..."
                 />
 
                 <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
@@ -3784,7 +3930,7 @@ function CommunityFeed() {
                   </button>
                   <button
                     type="button"
-                    disabled={isSubmittingCancelReq || !cancelRequestReason.trim()}
+                    disabled={isSubmittingCancelReq || !finalReason(cancelRequestPick, cancelRequestReason)}
                     onClick={() => handleCreateCancelReq(cancelVoteModal.card.id)}
                     className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md disabled:opacity-50"
                   >

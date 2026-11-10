@@ -131,15 +131,15 @@ function Comment({ comment, postId, onChanged, depth = 0 }) {
   const [replying, setReplying] = useState('')
   const [showReply, setShowReply] = useState(false)
   const save = async () => {
-    try { await updatePostComment(comment.id, editing); setEditing(null); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bình luận.') }
+    try { await updatePostComment(comment.id, editing); setEditing(null); toast.success('Đã sửa bình luận.'); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bình luận.') }
   }
   const remove = async () => {
     if (!(await confirmDialog('Xóa bình luận này?'))) return
-    try { await deletePostComment(comment.id); onChanged(true) } catch (e) { toast.error(e?.message || 'Không xóa được bình luận.') }
+    try { await deletePostComment(comment.id); toast.success('Đã xóa bình luận.'); onChanged(true) } catch (e) { toast.error(e?.message || 'Không xóa được bình luận.') }
   }
   const reply = async () => {
     if (!replying.trim()) return
-    try { await createPostComment(postId, { content: replying, parentCommentId: comment.id }); setReplying(''); setShowReply(false); onChanged() } catch (e) { toast.error(e?.message || 'Không gửi được trả lời.') }
+    try { await createPostComment(postId, { content: replying, parentCommentId: comment.id }); setReplying(''); setShowReply(false); toast.success('Đã gửi trả lời.'); onChanged() } catch (e) { toast.error(e?.message || 'Không gửi được trả lời.') }
   }
   return (
     <div className="snx-comment" style={{ marginLeft: depth ? 44 : 0 }}>
@@ -224,7 +224,7 @@ function PostCard({ post, onAuthor, onChanged, onRemoved }) {
     }
   }
   const save = async () => {
-    try { await updateCommunityPost(post.id, { content: editing }); setEditing(null); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bài viết.') }
+    try { await updateCommunityPost(post.id, { content: editing }); setEditing(null); toast.success('Đã sửa bài viết.'); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bài viết.') }
   }
   const remove = async () => {
     if (!(await confirmDialog('Xóa bài viết này?'))) return

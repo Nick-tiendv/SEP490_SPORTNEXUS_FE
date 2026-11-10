@@ -3,13 +3,15 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { forgotPassword } from '../api/auth/authApi.js'
+import { isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
 
 function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  // POST /api/auth/forgot-password: BE gửi mã OTP tới số điện thoại của tài khoản.
+  // POST /api/auth/forgot-password: BE kiểm tra số điện thoại có tài khoản (luồng cũ: BE tạo mã OTP).
+  // Có cấu hình Firebase → gửi SMS mã OTP thật qua Firebase (giống app).
   const handleSubmit = async (e) => {
     e.preventDefault()
     const phone = email.trim()
@@ -17,6 +19,7 @@ function ForgotPassword() {
     setLoading(true)
     try {
       await forgotPassword(phone)
+      if (isFirebasePhoneEnabled) await sendPhoneCode(phone)
       toast.success('Đã gửi mã xác thực. Vui lòng kiểm tra tin nhắn.')
       navigate('/verify-account', { state: { phone } })
     } catch (error) {

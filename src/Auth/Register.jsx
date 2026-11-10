@@ -5,6 +5,13 @@ import './auth-pages.css'
 import { toast } from 'sonner'
 import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
 import SocialLoginButtons from './SocialLoginButtons.jsx'
+import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
+
+// Vai trò đăng ký công khai: chỉ Player / Owner (Admin không đăng ký qua form này)
+const ROLE_OPTIONS = [
+  { value: 'player', label: 'Người chơi (Player)', hint: 'Đặt sân nhanh, tìm bạn ghép trận giao lưu & tham gia giải đấu.' },
+  { value: 'court_owner', label: 'Chủ sân (Court Owner)', hint: 'Quản lý cụm sân, biểu phí, lịch đặt sân & doanh thu.' },
+]
 
 // Trình độ theo BE: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL
 const SKILL_LEVELS = [
@@ -30,8 +37,8 @@ function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  // Xác thực SĐT bắt buộc: gửi mã qua send-otp (REGISTER) rồi gửi kèm otpCode khi đăng ký.
-  // Không gọi verify-otp trước, vì BE sẽ đánh dấu mã đã dùng và đăng ký sẽ báo mã sai.
+  // Xác thực SĐT bắt buộc. Firebase (khi có cấu hình): SMS thật, gửi firebaseIdToken khi đăng ký.
+  // Luồng cũ: send-otp (REGISTER) rồi gửi kèm otpCode; không gọi verify-otp trước vì BE sẽ đánh dấu mã đã dùng.
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [otpBusy, setOtpBusy] = useState(false)
@@ -102,7 +109,13 @@ function Register() {
     submitting.current = true
     setLoading(true)
     try {
+      // Firebase: kiểm tra mã SMS trên Firebase rồi gửi ID token cho BE thay vì otpCode.
+      if (isFirebasePhoneEnabled) {
+        payload.firebaseIdToken = await confirmPhoneCode(payload.phone, payload.otpCode)
+        delete payload.otpCode
+      }
       await registerUser(payload)
+      clearPhoneVerification()
       try {
         localStorage.setItem('sportnexus_user_role', role)
         localStorage.setItem('sportnexus_registered_role', role)
@@ -145,13 +158,20 @@ function Register() {
 
   const handleSendOtp = async () => {
     if (!phone.trim()) { toast.error('Vui lòng nhập số điện thoại trước.'); return }
+    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(phone.replace(/[\s.-]/g, ''))) {
+      setErrors((prev) => ({ ...prev, phone: 'Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).' }))
+      return
+    }
     setOtpBusy(true)
     try {
-      const res = await sendOtp(phone.trim(), 'REGISTER')
+      let devOtp = null
+      // Có cấu hình Firebase → gửi SMS thật qua Firebase (giống app). Chưa có → luồng send-otp cũ của BE.
+      if (isFirebasePhoneEnabled) await sendPhoneCode(phone.trim())
+      else devOtp = (await sendOtp(phone.trim(), 'REGISTER'))?.devOtp
       setOtpSent(true)
       setOtpCode('')
       setErrors((prev) => ({ ...prev, otp: undefined }))
-      toast.success(res?.devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${res.devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
+      toast.success(devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
     } catch (error) {
       toast.error(error?.message || 'Không gửi được mã OTP.')
     } finally {
@@ -236,80 +256,27 @@ function Register() {
             
             {/* Form */}
             <form className="space-y-5" onSubmit={handleSubmit} noValidate aria-busy={loading}>
-              {/* Role Selection Field (Người chơi / Chủ sân) */}
+              {/* Vai trò đăng ký: dropdown 2 lựa chọn cố định (không tải từ bảng Role để không lộ Admin) */}
               <div>
-                <label className="block text-sm font-medium text-[#2D5F3F] mb-2">
+                <label htmlFor="register-role" className="block text-sm font-medium text-[#2D5F3F] mb-2">
                   Vai trò đăng ký <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  {/* Player Card */}
-                  <button
-                    type="button"
-                    aria-pressed={role === 'player'}
-                    onClick={() => setRole('player')}
-                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
-                      role === 'player'
-                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'player' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-xl">🏃‍♂️</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
-                        <span>Người chơi</span>
-                        <span className="text-xs text-gray-500 font-normal">(Player)</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Đặt sân nhanh, tìm bạn ghép trận giao lưu &amp; tham gia giải đấu
-                      </p>
-                    </div>
-                    {role === 'player' && (
-                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Court Owner Card */}
-                  <button
-                    type="button"
-                    aria-pressed={role === 'court_owner'}
-                    onClick={() => setRole('court_owner')}
-                    className={`w-full text-left cursor-pointer p-4 rounded-xl border-2 transition-all flex items-start gap-3 relative ${
-                      role === 'court_owner'
-                        ? 'border-[#4A7C59] bg-[#E8F5E3] shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      role === 'court_owner' ? 'bg-[#4A7C59] text-white shadow-xs' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      <span className="text-xl">🏟️</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1 font-bold text-[#2D5F3F] text-sm sm:text-base">
-                        <span>Chủ sân</span>
-                        <span className="text-xs text-gray-500 font-normal">(Court Owner)</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Quản lý cụm sân, biểu phí, lịch đặt sân &amp; doanh thu tự động
-                      </p>
-                    </div>
-                    {role === 'court_owner' && (
-                      <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-[#4A7C59] rounded-full flex items-center justify-center shadow-xs">
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                </div>
+                <select
+                  id="register-role"
+                  name="role"
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  required
+                  aria-describedby="register-role-hint"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none cursor-pointer"
+                >
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p id="register-role-hint" className="mt-1 text-xs text-gray-500">
+                  {ROLE_OPTIONS.find((option) => option.value === role)?.hint}
+                </p>
               </div>
 
               {/* Username Field */}

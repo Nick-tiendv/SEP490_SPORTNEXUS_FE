@@ -1,10 +1,18 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
+
+// Chu kỳ tải lại lưới ca ngầm để thấy ca vừa bị người khác đặt
+const SLOT_REFRESH_MS = 20000
+
+// Ca còn đặt được (khung 2 tiếng đã ghép)
+const isSlotOpen = (slot) =>
+  Boolean(slot) && String(slot.status || '').toLowerCase() === 'available' && slot.isBookable !== false && !slot.isPast
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
 function getNext7Days() {
@@ -42,8 +50,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
       slotIds: [s.id],
       durationHours: 2,
       rawSlots: [s],
-      formattedStart: s.startTime?.slice(11, 16) || '',
-      formattedEnd: s.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(s.startTime) || '',
+      formattedEnd: vnClock(s.endTime) || '',
     }))
   }
 
@@ -72,8 +80,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
       isPast,
       durationHours: 2,
       rawSlots: [slotA, slotB],
-      formattedStart: slotA.startTime?.slice(11, 16) || '',
-      formattedEnd: slotB.endTime?.slice(11, 16) || '',
+      formattedStart: vnClock(slotA.startTime) || '',
+      formattedEnd: vnClock(slotB.endTime) || '',
       note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
     })
   }
@@ -161,50 +169,76 @@ function CourtDetails() {
     )
   }, [courtsList, selectedCourtId])
 
+  // Ca đang chọn (ref) để đối chiếu với lưới mới tải về mà không phụ thuộc closure cũ
+  const selectedSlotsRef = useRef(selectedSlots)
+  useEffect(() => { selectedSlotsRef.current = selectedSlots }, [selectedSlots])
+
+  // Bỏ khỏi lựa chọn các ca của sân / ngày vừa tải mà không còn trống (người khác vừa đặt, sân bảo trì…)
+  const dropTakenSelections = useCallback((courtId, dateStr, freshSlots) => {
+    const freshById = new Map(freshSlots.map((s) => [s.id, s]))
+    const taken = selectedSlotsRef.current.filter((s) => {
+      if (s.courtId !== courtId || vnDateKey(s.startTime) !== dateStr) return false
+      const fresh = freshById.get(s.id)
+      return !fresh || !isSlotOpen(fresh)
+    })
+    if (taken.length === 0) return 0
+    const takenIds = new Set(taken.map((s) => s.id))
+    setSelectedSlots((prev) => prev.filter((s) => !takenIds.has(s.id)))
+    const labels = taken.map((s) => `${s.formattedStart} - ${s.formattedEnd} (${s.courtName})`).join(', ')
+    toast.warning(`Ca ${labels} vừa có người đặt hoặc không còn trống, đã bỏ khỏi lựa chọn của bạn.`)
+    return taken.length
+  }, [])
+
   // GỌI API GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD
-  useEffect(() => {
-    let isMounted = true
-    async function loadSlots() {
-      if (!activeCourt?.id) return
-      try {
+  // Không tự chọn ca: người dùng tự chọn giờ. silent = tải lại ngầm (realtime), không hiện vòng xoay.
+  const [slotsCheckedAt, setSlotsCheckedAt] = useState(null)
+  const activeCourtId = activeCourt?.id
+  const activeCourtPrice = activeCourt?.defaultPrice || 120000
+  const latestSlotsKey = useRef('') // sân|ngày đang xem, để bỏ kết quả trả về muộn của sân / ngày cũ
+  const loadSlots = useCallback(async ({ silent = false } = {}) => {
+    if (!activeCourtId) return
+    const courtId = activeCourtId
+    const dateStr = selectedDateStr
+    const requestKey = `${courtId}|${dateStr}`
+    latestSlotsKey.current = requestKey
+    try {
+      if (!silent) {
         setSlotsLoading(true)
         setSlotsError(null)
-        const slotsData = await getCourtSlots(activeCourt.id, selectedDateStr)
-        if (isMounted) {
-          const raw = Array.isArray(slotsData) ? slotsData : []
-          const slots = buildTwoHourSlots(raw, activeCourt.defaultPrice || 120000)
-          setCourtSlots(slots)
-          // Chọn sẵn ca trống đầu tiên nếu người dùng chưa chọn ca nào
-          const firstAvail = slots.find(
-            (slot) => String(slot.status || '').toLowerCase() === 'available' && slot.isBookable !== false && !slot.isPast,
-          )
-          if (firstAvail) {
-            setSelectedSlots((prev) =>
-              prev.length > 0
-                ? prev
-                : [
-                    {
-                      ...firstAvail,
-                      courtName: activeCourt.name,
-                      courtId: activeCourt.id,
-                      sportName: activeCourt.sportName,
-                      formattedStart: firstAvail.startTime?.slice(11, 16),
-                      formattedEnd: firstAvail.endTime?.slice(11, 16),
-                    },
-                  ],
-            )
-          }
-        }
-      } catch (err) {
-        console.warn(`[CourtDetails] Lỗi khi tải lưới ca sân ${activeCourt.id}:`, err)
-        if (isMounted) setSlotsError('Không thể tải lưới ca của sân con này. Vui lòng thử lại.')
-      } finally {
-        if (isMounted) setSlotsLoading(false)
       }
+      const slotsData = await getCourtSlots(courtId, dateStr)
+      if (latestSlotsKey.current !== requestKey) return
+      const slots = buildTwoHourSlots(Array.isArray(slotsData) ? slotsData : [], activeCourtPrice)
+      setCourtSlots(slots)
+      setSlotsError(null)
+      setSlotsCheckedAt(new Date())
+      dropTakenSelections(courtId, dateStr, slots)
+    } catch (err) {
+      console.warn(`[CourtDetails] Lỗi khi tải lưới ca sân ${courtId}:`, err)
+      // Lỗi khi tải ngầm thì giữ lưới đang có, lần sau thử lại
+      if (!silent && latestSlotsKey.current === requestKey) setSlotsError('Không thể tải lưới ca của sân con này. Vui lòng thử lại.')
+    } finally {
+      if (!silent && latestSlotsKey.current === requestKey) setSlotsLoading(false)
     }
-    loadSlots()
-    return () => { isMounted = false }
-  }, [activeCourt?.id, activeCourt?.name, activeCourt?.sportName, selectedDateStr, activeCourt?.defaultPrice])
+  }, [activeCourtId, activeCourtPrice, selectedDateStr, dropTakenSelections])
+
+  // Tải khi đổi sân / ngày (chạy sau microtask để không setState đồng bộ trong effect)
+  useEffect(() => {
+    Promise.resolve().then(() => loadSlots())
+  }, [loadSlots])
+
+  // Realtime: tải lại ngầm mỗi 20 giây khi tab đang mở, và ngay khi quay lại tab
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') loadSlots({ silent: true }) }
+    const timer = setInterval(refresh, SLOT_REFRESH_MS)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [loadSlots])
 
   // Format giờ từ ISO string "2026-10-19T06:00:00+07:00" -> "06:00"
 
@@ -263,15 +297,7 @@ function CourtDetails() {
     return () => { isMounted = false }
   }, [facility?.id, activeCourt?.id])
 
-  const formatTimeSlot = (isoString) => {
-    if (!isoString) return ''
-    try {
-      const d = new Date(isoString)
-      return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })
-    } catch {
-      return isoString.slice(11, 16)
-    }
-  }
+  const formatTimeSlot = vnClock
 
   // Kiểm tra ca thi đấu có khả dụng hay không (case-insensitive)
   const isSlotAvailable = (slot) => {
@@ -362,9 +388,11 @@ function CourtDetails() {
     const firstId = sorted[0].id
     const allIds = sorted.map((s) => s.id)
 
+    // numberOfSlots = tổng số ca 1 tiếng đã chọn (Cách 1: số ca liên tiếp). Ca rời nhau đi theo Cách 2,
+    // SplitPayment gửi courtSlotIds kèm numberOfSlots = 1 để BE không đặt thêm ca liền sau mỗi ca.
     return {
       courtSlotId: firstId,
-      numberOfSlots: isConsecutive ? sorted.length : 2,
+      numberOfSlots: sorted.length,
       courtSlotIds: allIds,
       isConsecutive,
     }
@@ -387,7 +415,28 @@ function CourtDetails() {
     'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
 
   // Chuyển sang Bước 3 & Bước 4 tại SplitPayment
-  const handleCheckout = () => {
+  // Trước khi sang thanh toán: tải lại lưới ca của từng sân / ngày đã chọn và bỏ ca không còn trống.
+  // Trả true nếu mọi ca vẫn còn trống.
+  const verifySelectionStillOpen = async () => {
+    const groups = new Map()
+    for (const s of selectedSlotsRef.current) {
+      const key = `${s.courtId}|${vnDateKey(s.startTime)}`
+      if (!groups.has(key)) groups.set(key, { courtId: s.courtId, dateStr: vnDateKey(s.startTime) })
+    }
+    let dropped = 0
+    for (const { courtId, dateStr } of groups.values()) {
+      const price = courtsList.find((c) => c.id === courtId)?.defaultPrice || 120000
+      const raw = await getCourtSlots(courtId, dateStr)
+      const fresh = buildTwoHourSlots(Array.isArray(raw) ? raw : [], price)
+      if (courtId === activeCourt?.id && dateStr === selectedDateStr) setCourtSlots(fresh)
+      dropped += dropTakenSelections(courtId, dateStr, fresh)
+    }
+    return dropped === 0
+  }
+
+  const [checkingOut, setCheckingOut] = useState(false)
+  const handleCheckout = async () => {
+    if (checkingOut) return
     if (selectedSlots.length === 0) {
       toast.warning('Vui lòng chọn ít nhất 1 ca sân còn trống trước khi tiếp tục!')
       return
@@ -398,6 +447,16 @@ function CourtDetails() {
     if (validSlots.length === 0) {
       toast.error('Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
       return
+    }
+
+    setCheckingOut(true)
+    try {
+      if (!(await verifySelectionStillOpen())) return // đã báo ca bị bỏ, để người dùng chọn lại
+    } catch (err) {
+      toast.error(err?.message || 'Không kiểm tra được tình trạng ca sân. Vui lòng thử lại.')
+      return
+    } finally {
+      setCheckingOut(false)
     }
 
     const primarySport = activeCourt?.sportName?.toLowerCase().includes('pickleball')
@@ -720,6 +779,17 @@ function CourtDetails() {
               </div>
             </div>
 
+            {/* Realtime: lưới ca tự làm mới; ca đang chọn bị người khác đặt sẽ tự bỏ chọn */}
+            {slotsCheckedAt && !slotsLoading && (
+              <div className="flex items-center gap-1.5 text-[12px] text-on-surface-variant">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>
+                  Tự cập nhật tình trạng ca mỗi {SLOT_REFRESH_MS / 1000} giây · lần cuối lúc{' '}
+                  {slotsCheckedAt.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })}
+                </span>
+              </div>
+            )}
+
             {/* State Loading */}
             {slotsLoading && (
               <div className="py-12 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
@@ -1036,12 +1106,14 @@ function CourtDetails() {
 
             <button
               type="button"
-              disabled={selectedSlots.length === 0}
+              disabled={selectedSlots.length === 0 || checkingOut}
               className="w-full py-space-md rounded-xl bg-primary-container hover:bg-primary-fixed text-on-primary font-headline-sm text-headline-sm font-extrabold flex items-center justify-center gap-space-sm transition-all shadow-[0_0_28px_rgba(0,229,255,0.45)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               onClick={handleCheckout}
             >
               <span>
-                {selectedSlots.length > 0
+                {checkingOut
+                  ? 'Đang kiểm tra ca còn trống…'
+                  : selectedSlots.length > 0
                   ? `Xác Nhận & Tiếp Tục Thanh Toán (${selectedSlots.length} Ca)`
                   : 'Vui Lòng Chọn Ít Nhất 1 Ca Sân'}
               </span>

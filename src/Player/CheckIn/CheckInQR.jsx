@@ -9,6 +9,7 @@ import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
 import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
 import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
+import { vnDateKey } from '../../utils/vnTime.js'
 
 const formatBookingStatusLabel = (rawStatus) => {
   const upper = String(rawStatus || '').toUpperCase()
@@ -21,6 +22,19 @@ const formatBookingStatusLabel = (rawStatus) => {
 }
 
 const clockVN = (value) => (value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—')
+
+// Khung check-in theo BE: từ 1 giờ trước giờ chơi tới hết ca. Qua ca / qua ngày thì mã QR hết hiệu lực.
+const CHECKIN_OPEN_BEFORE_MS = 60 * 60 * 1000
+// 'expired' | 'early' | 'open' | 'unknown'
+function checkInWindowOf(ticket, nowMs) {
+  const startMs = ticket?.startAt ? new Date(ticket.startAt).getTime() : NaN
+  const endMs = ticket?.endAt ? new Date(ticket.endAt).getTime() : NaN
+  if (Number.isFinite(endMs) && nowMs > endMs) return 'expired'
+  // Thiếu giờ kết thúc: hết hiệu lực khi đã qua ngày chơi (theo giờ Việt Nam)
+  if (!Number.isFinite(endMs) && Number.isFinite(startMs) && vnDateKey(startMs) < vnDateKey(nowMs)) return 'expired'
+  if (Number.isFinite(startMs) && nowMs < startMs - CHECKIN_OPEN_BEFORE_MS) return 'early'
+  return Number.isFinite(startMs) ? 'open' : 'unknown'
+}
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
@@ -381,6 +395,15 @@ function CheckInQR() {
   // Khi người chơi chưa check-in thì nút vẫn sáng.
   // Đã check-in: theo trạng thái vé từ BE (chủ sân quét QR trên máy của họ)
   const checkInDone = String(ticketData?.status || '').toUpperCase() === 'CHECKED_IN'
+
+  // Hiệu lực mã QR theo giờ hiện tại (cập nhật mỗi 30 giây): qua ca / qua ngày thì vô hiệu hóa QR
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+  const checkInWindow = checkInWindowOf(ticketData, nowMs)
+  const qrExpired = !checkInDone && !isCancelled && checkInWindow === 'expired'
   // Trạng thái check-out (ghi nhận trên máy) theo mã vé đang xem
   const currentTicketCode = (ticketData?.ticketCode || '').replace('#', '').trim()
   const [checkedOutCode, setCheckedOutCode] = useState(null)
@@ -398,7 +421,7 @@ function CheckInQR() {
   // Tự hỏi lại BE mỗi 20 giây khi vé chưa check-in (chủ sân quét trên máy của họ)
   useEffect(() => {
     const status = String(ticketData?.status || '').toUpperCase()
-    if (!ticketData?.id || ['CHECKED_IN', 'CANCELLED'].includes(status)) return undefined
+    if (!ticketData?.id || qrExpired || ['CHECKED_IN', 'CANCELLED'].includes(status)) return undefined
     const timer = setInterval(() => {
       fetchTicket()
         .then((ticket) => {
@@ -409,7 +432,7 @@ function CheckInQR() {
         .catch(() => { /* lỗi mạng tạm thời: thử lại ở lượt sau */ })
     }, 20000)
     return () => clearInterval(timer)
-  }, [ticketData?.id, ticketData?.status, fetchTicket])
+  }, [ticketData?.id, ticketData?.status, fetchTicket, qrExpired])
 
   // Modal Check-out và Đánh giá sau trận
   const [showCheckOutModal, setShowCheckOutModal] = useState(false)
@@ -1159,9 +1182,9 @@ function CheckInQR() {
 
             {/* Stylized QR Code Graphic matching screenshot */}
             <div
-              onClick={() => setShowCheckInModal(true)}
+              onClick={() => { if (!qrExpired) setShowCheckInModal(true) }}
               style={{
-                cursor: 'pointer',
+                cursor: qrExpired ? 'not-allowed' : 'pointer',
                 padding: '12px',
                 background: '#ffffff',
                 borderRadius: '16px',
@@ -1180,8 +1203,8 @@ function CheckInQR() {
               }}
               title="Nhấn để mô phỏng quét QR vào cổng"
             >
-              {/* Laser scan line effect */}
-              <div
+              {/* Laser scan line effect (tắt khi mã QR đã hết hiệu lực) */}
+              {!qrExpired && <div
                 style={{
                   position: 'absolute',
                   left: '12px',
@@ -1192,10 +1215,24 @@ function CheckInQR() {
                   animation: 'laserScan 2.4s ease-in-out infinite',
                   pointerEvents: 'none',
                 }}
-              />
+              />}
 
               {/* Mã QR thật của vé (qrCode do BE cấp); chủ sân quét mã này tại cổng để check-in */}
-              {ticketData?.qrCode ? (
+              {ticketData?.qrCode && qrExpired ? (
+                // Qua ca / qua ngày: không hiện mã quét được nữa (BE cũng từ chối khi quét)
+                <div style={{ position: 'relative', background: '#ffffff', borderRadius: 14, padding: 12 }}>
+                  <div style={{ filter: 'blur(6px) grayscale(1)', opacity: 0.35 }} aria-hidden="true">
+                    <QRCodeSVG value="SPORTNEXUS-EXPIRED" size={166} level="M" />
+                  </div>
+                  <div role="status" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center', padding: 16 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 34, color: '#B91C1C' }}>event_busy</span>
+                    <strong style={{ color: '#B91C1C', fontSize: 14 }}>Mã QR đã hết hiệu lực</strong>
+                    <span style={{ color: '#475569', fontSize: 11.5, fontWeight: 600 }}>
+                      Ca chơi đã kết thúc lúc {ticketData.allowedCheckInEnd} ngày {ticketData.playDate}, không thể dùng mã này để check-in.
+                    </span>
+                  </div>
+                </div>
+              ) : ticketData?.qrCode ? (
                 <div style={{ background: '#ffffff', borderRadius: 14, padding: 12 }}>
                   <QRCodeSVG value={ticketData.qrCode} size={166} level="M" />
                 </div>
@@ -1203,6 +1240,13 @@ function CheckInQR() {
                 <div style={{ width: 190, height: 190, display: 'grid', placeItems: 'center', background: '#ffffff', borderRadius: 14, color: '#6b7280', fontSize: 12, textAlign: 'center', padding: 12 }}>Chưa có mã vé</div>
               )}
             </div>
+
+            {/* Chưa tới khung check-in: BE chỉ nhận từ 1 giờ trước giờ chơi */}
+            {!checkInDone && !isCancelled && checkInWindow === 'early' && (
+              <div role="status" style={{ marginTop: 12, padding: '6px 12px', borderRadius: 8, background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E', fontSize: 12, fontWeight: 700, textAlign: 'center' }}>
+                Chưa tới giờ check-in. Mã QR dùng được từ {ticketData?.allowedCheckInStart} ngày {ticketData?.playDate}.
+              </div>
+            )}
 
             {/* Fixed QR code info */}
             <div
@@ -1298,7 +1342,7 @@ function CheckInQR() {
                 >
                   <span style={{ color: '#15803D', fontWeight: 600 }}>🎟️ Khung check-in mở:</span>
                   <span style={{ color: '#166534', fontWeight: 800 }}>
-                    {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
+                    {`${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
                   </span>
                 </div>
               </div>

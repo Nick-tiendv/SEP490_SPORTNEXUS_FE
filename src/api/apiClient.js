@@ -15,6 +15,9 @@ export function configureAuthentication(readToken, onUnauthorized, readMockSessi
   return () => { tokenReader = () => null; unauthorizedHandler = () => {}; mockSessionReader = () => false }
 }
 
+// Có ký tự tiếng Việt có dấu → câu thông báo BE viết cho người dùng.
+const VIETNAMESE_TEXT = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i
+
 export function normalizeApiError(error) {
   if (error?.isNormalized) return error
   const status = error?.response?.status || 0
@@ -25,13 +28,18 @@ export function normalizeApiError(error) {
     403: 'Bạn không có quyền thực hiện thao tác này.',
     404: 'Không tìm thấy API yêu cầu.',
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
+    413: 'File tải lên quá lớn. Vui lòng chọn ảnh tối đa 5MB.',
+    415: 'Định dạng dữ liệu tải lên không được hỗ trợ. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.',
     413: 'Tệp tải lên vượt quá dung lượng cho phép (tối đa 5MB).',
     415: 'Định dạng dữ liệu hoặc tệp tải lên không được hỗ trợ.',
   }
 
   let message = null
-  // 503 mang thông báo nghiệp vụ từ BE (vd: "Chức năng nạp tiền tạm thời chưa sẵn sàng") nên giữ nguyên văn
-  if (typeof body?.message === 'string' && body.message.length <= 300 && (status < 500 || status === 503)) {
+  // 4xx và 503: message là thông báo nghiệp vụ của BE → giữ nguyên văn.
+  // 5xx khác: chỉ hiện khi là câu tiếng Việt BE tự trả (vd "Tải logo lên thất bại, vui lòng thử lại sau."),
+  // không hiện nội dung exception tiếng Anh.
+  const isBusinessMessage = status < 500 || status === 503 || VIETNAMESE_TEXT.test(body?.message || '')
+  if (typeof body?.message === 'string' && body.message.length <= 300 && isBusinessMessage) {
     message = body.message
   } else if (body?.errors && typeof body.errors === 'object') {
     const errorList = Object.entries(body.errors)
@@ -85,6 +93,9 @@ apiClient.interceptors.request.use(config => {
 
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
   else config.headers.delete('Authorization')
+  // FormData: bỏ Content-Type JSON mặc định. Nếu giữ, axios 1.x chuyển FormData thành chuỗi JSON
+  // (BE trả 415). Để trống thì trình duyệt tự đặt multipart/form-data kèm boundary.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) config.headers.setContentType(false)
 
   // Khi gửi FormData (multipart/form-data), phải xóa Content-Type 'application/json' mặc định
   // để Axios không serialize FormData thành chuỗi JSON {"file":{}} gây lỗi 415 từ backend.

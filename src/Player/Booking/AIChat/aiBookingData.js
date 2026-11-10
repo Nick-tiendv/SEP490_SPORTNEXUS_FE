@@ -1,5 +1,6 @@
 // aiBookingData.js — Dữ liệu vị trí, hồ sơ người chơi và lời chào cho Trợ lý AI SportNexus
 // Gợi ý sân/ca/kèo đều lấy từ BE (POST /api/v1/ai/chat), FE không tự sinh câu trả lời.
+import { reverseGeocode } from '../../../utils/geolocation.js'
 
 export const DISTRICT_CENTERS = {
   q7: { name: 'Quận 7', address: 'Nguyễn Thị Thập, P. Tân Quy, Quận 7', lat: 10.734, lng: 106.7215 },
@@ -35,20 +36,13 @@ export function haversineDistance(lat1, lon1, lat2, lon2) {
   return Math.max(0.3, Math.round(R * c * 10) / 10)
 }
 
-// Nhận diện quận gần nhất từ GPS
-export function detectClosestDistrict(lat, lng) {
-  if (lat == null || lng == null) return DISTRICT_CENTERS.q7
-  let closest = DISTRICT_CENTERS.q7
-  let minDist = Infinity
-  for (const key of Object.keys(DISTRICT_CENTERS)) {
-    const item = DISTRICT_CENTERS[key]
-    const d = haversineDistance(lat, lng, item.lat, item.lng) || 999
-    if (d < minDist) {
-      minDist = d
-      closest = item
-    }
-  }
-  return closest
+// Tên khu vực thật từ GPS (mọi tỉnh thành), thay cho việc lấy quận gần nhất trong danh sách TP.HCM cố định
+// (người ở Hà Nội trước đây bị báo là một quận ở TP.HCM). Trả { name: ngắn, address: đầy đủ }.
+export async function describeArea(lat, lng) {
+  const place = await reverseGeocode(lat, lng)
+  if (!place) return { name: 'Vị trí hiện tại', address: `Vị trí hiện tại (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})` }
+  const parts = place.split(', ')
+  return { name: parts.slice(-2).join(', '), address: place }
 }
 
 export function getUserProfileContext() {

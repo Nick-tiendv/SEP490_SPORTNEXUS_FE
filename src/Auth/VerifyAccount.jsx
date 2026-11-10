@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { forgotPassword } from '../api/auth/authApi.js'
+import { confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
 import './auth-pages.css'
 
 function VerifyAccount() {
@@ -13,6 +14,7 @@ function VerifyAccount() {
   const [timer, setTimer] = useState(60)
   const [canResend, setCanResend] = useState(false)
   const [isResending, setIsResending] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const inputRefs = useRef([])
 
   // Đếm ngược 60 giây trước khi cho gửi lại mã
@@ -69,8 +71,9 @@ function VerifyAccount() {
     
     setIsResending(true)
     try {
-      // Gửi lại OTP: gọi lại POST /api/auth/forgot-password
-      await forgotPassword(phone)
+      // Gửi lại OTP: Firebase gửi SMS mới; luồng cũ gọi lại POST /api/auth/forgot-password
+      if (isFirebasePhoneEnabled) await sendPhoneCode(phone)
+      else await forgotPassword(phone)
       toast.success('Đã gửi lại mã xác thực.')
       setTimer(60)
       setCanResend(false)
@@ -85,10 +88,23 @@ function VerifyAccount() {
 
   const handleSubmit = async () => {
     const verificationCode = code.join('')
-    if (verificationCode.length !== 6) return
+    if (verificationCode.length !== 6 || verifying) return
 
-    // Mã OTP được backend kiểm tra cùng lúc đặt mật khẩu mới (POST /api/auth/reset-password)
-    navigate('/reset-password', { state: { phone, otpCode: verificationCode } })
+    // Luồng cũ: mã OTP được backend kiểm tra cùng lúc đặt mật khẩu mới (POST /api/auth/reset-password)
+    if (!isFirebasePhoneEnabled) {
+      navigate('/reset-password', { state: { phone, otpCode: verificationCode } })
+      return
+    }
+    // Firebase: kiểm tra mã SMS ngay tại đây, chuyển ID token sang bước đặt mật khẩu
+    setVerifying(true)
+    try {
+      const firebaseIdToken = await confirmPhoneCode(phone, verificationCode)
+      navigate('/reset-password', { state: { phone, firebaseIdToken } })
+    } catch (error) {
+      toast.error(error?.message || 'Mã OTP không chính xác.')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const handleBack = () => {
@@ -238,7 +254,7 @@ function VerifyAccount() {
           {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={code.some(digit => !digit)}
+            disabled={verifying || code.some(digit => !digit)}
             className={`w-full py-4 rounded-xl font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]
               ${code.every(digit => digit) 
                 ? 'bg-[#4A7C3E] hover:bg-[#3d6634]' 

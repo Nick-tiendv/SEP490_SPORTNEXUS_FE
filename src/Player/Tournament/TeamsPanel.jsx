@@ -34,6 +34,9 @@ const INVITE_STATUS = {
   EXPIRED: ['Hết hạn', 'gray'],
 }
 
+const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const LOGO_MAX_BYTES = 5 * 1024 * 1024
+
 function Avatar({ name, url, large }) {
   return <span className={`snx-avatar-sm ${large ? 'snx-avatar-sm--lg' : ''}`}>{url ? <img src={url} alt={name} /> : initials(name)}</span>
 }
@@ -50,6 +53,21 @@ async function run(action, success) {
   }
 }
 
+// BE bỏ qua lặng lẽ các SĐT không có tài khoản hợp lệ (vẫn trả "Success"),
+// nên đếm lời mời thực tế đã tạo để báo đúng cho người dùng.
+async function reportInvitations(teamId, requested) {
+  let sent
+  try {
+    sent = (await getTeamInvitations(teamId)).filter((inv) => String(inv.status || '').toUpperCase() === 'PENDING').length
+  } catch {
+    toast.warning('Không kiểm tra được lời mời. Vui lòng mở chi tiết đội để xem các lời mời đã gửi.')
+    return
+  }
+  if (sent >= requested) toast.success(`Đã gửi ${sent} lời mời tới các thành viên.`)
+  else if (sent === 0) toast.warning('Chưa gửi được lời mời nào: các số điện thoại chưa có tài khoản SportNexus hợp lệ.')
+  else toast.warning(`Chỉ gửi được ${sent}/${requested} lời mời: ${requested - sent} số điện thoại chưa có tài khoản SportNexus hợp lệ.`)
+}
+
 function CreateTeamModal({ onClose, onCreated }) {
   const [form, setForm] = useState({ name: '', description: '', phones: '', sportCategoryId: '' })
   const [saving, setSaving] = useState(false)
@@ -59,10 +77,14 @@ function CreateTeamModal({ onClose, onCreated }) {
     if (!form.name.trim()) { toast.error('Vui lòng nhập tên đội.'); return }
     if (!form.sportCategoryId) { toast.error('Vui lòng chọn môn của đội.'); return }
     setSaving(true)
-    const memberPhones = form.phones.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean)
+    const memberPhones = [...new Set(form.phones.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean))]
     // POST /api/v1/teams: sportCategoryId bắt buộc; thành viên nhập số điện thoại sẽ nhận lời mời.
     // Chưa có Elo môn này → BE trả 403, app tự mở khảo sát toàn diện của môn.
-    const ok = await run(() => createTeam({ name: form.name.trim(), description: form.description.trim(), sportCategoryId: form.sportCategoryId, memberPhones }), 'Đã tạo đội. Lời mời đã được gửi tới các thành viên.')
+    const ok = await run(async () => {
+      const team = await createTeam({ name: form.name.trim(), description: form.description.trim(), sportCategoryId: form.sportCategoryId, memberPhones })
+      toast.success('Đã tạo đội.')
+      if (memberPhones.length > 0) await reportInvitations(team.id, memberPhones.length)
+    })
     setSaving(false)
     if (ok) onCreated()
   }
@@ -106,10 +128,23 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
   const [edit, setEdit] = useState(null)
   const [invite, setInvite] = useState({ phone: '', message: '' })
   const logoRef = useRef(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const refresh = () => { team.refresh(); sent.refresh(); onChanged() }
   const act = async (action, success, closeAfter) => {
     if (await run(action, success)) { if (closeAfter) { onChanged(); onClose() } else refresh() }
+  }
+
+  // Đổi logo: kiểm tra định dạng / dung lượng theo BE (JPG/PNG/WEBP ≤ 5MB) trước khi gửi.
+  const changeLogo = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = '' // reset để chọn lại cùng file (vd thử lại sau khi lỗi) vẫn kích hoạt onChange
+    if (!file) return
+    if (!LOGO_TYPES.includes(file.type)) { toast.error('Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.'); return }
+    if (file.size > LOGO_MAX_BYTES) { toast.error('Ảnh vượt quá 5MB. Vui lòng chọn ảnh nhỏ hơn.'); return }
+    setUploadingLogo(true)
+    await act(() => uploadTeamLogo(teamId, file), 'Đã cập nhật logo.')
+    setUploadingLogo(false)
   }
 
   return (
@@ -148,8 +183,8 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
             {isCaptain && !edit && (
               <div className="snx-row">
                 <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setEdit({ name: t.name, description: t.description })}><span className="material-symbols-outlined">edit</span>Sửa thông tin</button>
-                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => logoRef.current?.click()}><span className="material-symbols-outlined">image</span>Đổi logo</button>
-                <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && act(() => uploadTeamLogo(teamId, e.target.files[0]), 'Đã cập nhật logo.')} />
+                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={uploadingLogo} onClick={() => logoRef.current?.click()}><span className="material-symbols-outlined">image</span>{uploadingLogo ? 'Đang tải logo…' : 'Đổi logo'}</button>
+                <input ref={logoRef} type="file" accept={LOGO_TYPES.join(',')} hidden onChange={changeLogo} />
                 <span className="snx-spacer" />
                 <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={async () => (await confirmDialog(`Giải tán đội "${t.name}"?`)) && act(() => deleteTeam(teamId), 'Đã giải tán đội.', true)}><span className="material-symbols-outlined">delete</span>Giải tán đội</button>
               </div>

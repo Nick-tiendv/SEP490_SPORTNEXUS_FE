@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   DISTRICT_CENTERS,
   buildWelcomeMessage,
-  detectClosestDistrict,
+  describeArea,
   getUserProfileContext,
 } from './aiBookingData.js'
 import {
@@ -74,9 +74,9 @@ function AIChatBooking() {
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const { latitude, longitude } = pos.coords
-          const closest = detectClosestDistrict(latitude, longitude)
+          const closest = await describeArea(latitude, longitude)
           const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
           const newLoc = {
             lat: latitude,
@@ -92,7 +92,7 @@ function AIChatBooking() {
           )
         },
         () => { },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     }
   }, [])
@@ -283,9 +283,9 @@ function AIChatBooking() {
 
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const { latitude, longitude } = pos.coords
-          const closest = detectClosestDistrict(latitude, longitude)
+          const closest = await describeArea(latitude, longitude)
           const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
           applyNewLoc({
             lat: latitude,
@@ -306,7 +306,7 @@ function AIChatBooking() {
             updatedAt: nowStr,
           })
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     } else {
       const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })

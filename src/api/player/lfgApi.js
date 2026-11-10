@@ -341,18 +341,15 @@ export async function leaveLfg(cardId, payload = {}) {
  */
 export async function getLfgCancelReasons() {
   try {
+    // BE trả mảng chuỗi, vd ["Bận việc đột xuất", …, "Lý do khác"]
     const response = await apiClient.get(`${LFGS_ENDPOINT}/cancel-reasons`, { skipAuth: true })
     const body = response.data
-    return body?.data || body?.result || body || []
+    const list = body?.data || body?.result || body
+    return (Array.isArray(list) ? list : []).map((r) => (typeof r === 'string' ? r : r?.label || r?.reason || r?.name || '')).filter(Boolean)
   } catch (error) {
+    // Không tự bịa danh sách: giao diện cho nhập lý do tự do khi không tải được
     console.warn('[lfgApi] Không thể lấy lý do hủy kèo:', error)
-    return [
-      { code: 1, label: 'Bận việc đột xuất / Thay đổi lịch trình' },
-      { code: 2, label: 'Thời tiết xấu / Không thuận lợi di chuyển' },
-      { code: 3, label: 'Không đủ người chơi tham gia' },
-      { code: 4, label: 'Vấn đề sức khỏe / Chấn thương' },
-      { code: 5, label: 'Khác (Tự nhập lý do)' },
-    ]
+    return []
   }
 }
 

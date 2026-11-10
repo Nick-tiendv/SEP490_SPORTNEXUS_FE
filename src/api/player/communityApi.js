@@ -178,9 +178,8 @@ export async function uploadPostImage(file) {
   const formData = new FormData()
   formData.append('file', file)
   try {
-    const response = await apiClient.post(`${COMMUNITY_ENDPOINT}/posts/images`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    // Không tự đặt Content-Type: trình duyệt tự thêm multipart boundary.
+    const response = await apiClient.post(`${COMMUNITY_ENDPOINT}/posts/images`, formData)
     const body = response.data
     return body?.data || body?.result || body
   } catch (error) {

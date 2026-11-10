@@ -9,6 +9,7 @@ import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
+import { vnClock } from '../../utils/vnTime.js'
 import { getMySports } from '../../api/player/profileApi.js'
 import {
   loadProfileRegisteredSports,
@@ -30,6 +31,13 @@ const calculateDurationHours = (rangeStr) => {
 }
 
 // Định dạng ngày theo giờ địa phương YYYY-MM-DD
+// Thể thức kèo theo sideSize của BE (số người mỗi phe)
+const SIDE_SIZE_OPTIONS = [
+  { value: null, label: 'Giao lưu', hint: 'Không chia phe' },
+  { value: 1, label: 'Đơn 1 vs 1', hint: 'Chia phe A / B' },
+  { value: 2, label: 'Đôi 2 vs 2', hint: 'Chia phe A / B' },
+]
+
 function formatLocalDate(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -85,8 +93,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
   const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
   if (firstSlotDiffHours >= 1.8) {
     return sorted.map((s) => {
-      const start = s.startTime?.slice(11, 16) || '00:00'
-      const end = s.endTime?.slice(11, 16) || '00:00'
+      const start = vnClock(s.startTime) || '00:00'
+      const end = vnClock(s.endTime) || '00:00'
       const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
       const price = Number(s.price) > 0 ? Number(s.price) : defaultPrice * 2
       return {
@@ -114,8 +122,8 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
     // Không nhận ca lẻ 1 tiếng ở cuối vì quy chuẩn hệ thống bắt buộc 2 tiếng
     if (!slotB) break
 
-    const start = slotA.startTime?.slice(11, 16) || '00:00'
-    const end = slotB.endTime?.slice(11, 16) || '00:00'
+    const start = vnClock(slotA.startTime) || '00:00'
+    const end = vnClock(slotB.endTime) || '00:00'
     const isAvailA = slotA.status === 'Available' && !slotA.isPast && slotA.isBookable
     const isAvailB = slotB.status === 'Available' && !slotB.isPast && slotB.isBookable
     const isAvail = isAvailA && isAvailB
@@ -231,8 +239,8 @@ function CreateMatch() {
     return Number.isInteger(hours) ? hours : hours.toFixed(1)
   }, [preferredTimeRange])
 
-  // Formats (multi-select)
-  const [selectedFormats, setSelectedFormats] = useState(['mixed']) // 'mixed', 'men', 'women', 'single'
+  // Thể thức (sideSize của BE): null = giao lưu không chia phe, 1 = đơn 1 vs 1, 2 = đôi 2 vs 2
+  const [sideSize, setSideSize] = useState(null)
 
   // Skill Level
   const [skillLevel, setSkillLevel] = useState('intermediate') // 'intermediate', 'beginner', 'pro'
@@ -451,9 +459,11 @@ function CreateMatch() {
       getLfgById(editCardId)
         .then((res) => {
           if (res) {
-            if (res.slotsNeeded) setSlotsNeeded(res.slotsNeeded)
+            const needed = res.totalSlots ?? res.slotsNeeded
+            if (needed) setSlotsNeeded(Number(needed))
             if (res.pricePerPerson) setPricePerPerson(String(res.pricePerPerson))
             if (res.description) setDescription(res.description)
+            if (res.sideSize != null) setSideSize(Number(res.sideSize) || null)
             if (res.requireApproval !== undefined) setRequireApproval(Boolean(res.requireApproval))
           }
         })
@@ -512,17 +522,6 @@ function CreateMatch() {
     setIsDistrictDropdownOpen(false)
   }
 
-  // Toggle format helper
-  const toggleFormat = (f) => {
-    if (selectedFormats.includes(f)) {
-      if (selectedFormats.length > 1) {
-        setSelectedFormats(selectedFormats.filter((item) => item !== f))
-      }
-    } else {
-      setSelectedFormats([...selectedFormats, f])
-    }
-  }
-
   // Handle Match Publishing & save into feed
   // 2.6 Chủ kèo Bước 1: POST /api/v1/lfgs
   const handlePublishMatch = async () => {
@@ -565,13 +564,12 @@ function CreateMatch() {
         ? 'ADVANCED'
         : 'INTERMEDIATE'
 
-    const parsedPrice = pricePerPerson ? Number(pricePerPerson) : undefined
     // Nếu đang sửa kèo: Gọi PUT /api/v1/lfgs/{cardId}
     if (isEditMode) {
       try {
+        // UpdateLfgRequest: totalSlots (số người cần tìm), skillLevelTag, description, requireApproval. Không có giá.
         await updateLfg(editCardId, {
-          slotsNeeded: Number(slotsNeeded) || 3,
-          pricePerPerson: parsedPrice,
+          totalSlots: Number(slotsNeeded) || 3,
           skillLevelTag: skillTag,
           description: description.trim() || undefined,
           requireApproval: Boolean(requireApproval),
@@ -593,10 +591,11 @@ function CreateMatch() {
       await createLfg({
         courtSlotId,
         slotsNeeded: Number(slotsNeeded) || 3,
-        pricePerPerson: parsedPrice,
+        // Không gửi pricePerPerson: chủ kèo không tự đặt giá, BE chia đều tiền sân
         skillLevelTag: skillTag,
         description: description.trim() || undefined,
         requireApproval: Boolean(requireApproval),
+        sideSize: sideSize || undefined,
       })
     } catch (apiErr) {
       console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
@@ -1317,33 +1316,30 @@ function CreateMatch() {
                   </label>
                 </div>
 
-                {/* Thể thức thi đấu */}
+                {/* Thể thức thi đấu: sideSize của BE (số người mỗi phe). Bỏ trống = giao lưu, không chia phe A/B.
+                    BE không có trường giới tính (Đôi Nam / Nữ / Nam Nữ) nên không cho chọn. */}
                 <div className="mb-4">
-                  <p className="text-xs font-bold text-gray-700 mb-2">Thể thức thi đấu cần tìm:</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {[
-                      { id: 'mixed', label: 'Đôi Nam Nữ' },
-                      { id: 'men', label: 'Đôi Nam' },
-                      { id: 'women', label: 'Đôi Nữ' },
-                      { id: 'single', label: 'Đơn 1vs1' },
-                    ].map((fmt) => (
+                  <p className="text-xs font-bold text-gray-700 mb-2">Thể thức thi đấu:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {SIDE_SIZE_OPTIONS.map((fmt) => (
                       <button
-                        key={fmt.id}
+                        key={fmt.label}
                         type="button"
-                        onClick={() => toggleFormat(fmt.id)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          selectedFormats.includes(fmt.id)
+                        disabled={isEditMode}
+                        aria-pressed={sideSize === fmt.value}
+                        onClick={() => { setSideSize(fmt.value); if (fmt.value) setSlotsNeeded(fmt.value * 2 - 1) }}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-center flex flex-col items-center justify-center gap-0.5 transition-all ${isEditMode ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} ${
+                          sideSize === fmt.value
                             ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
                             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-[16px]">
-                          {selectedFormats.includes(fmt.id) ? 'check_box' : 'check_box_outline_blank'}
-                        </span>
                         <span>{fmt.label}</span>
+                        <span className="text-[10px] font-medium text-gray-500">{fmt.hint}</span>
                       </button>
                     ))}
                   </div>
+                  {isEditMode && <p className="text-[10.5px] text-gray-500 mt-1">Không đổi được thể thức sau khi đã tạo kèo.</p>}
                 </div>
 
                 {/* Yêu cầu Trình độ Người chơi */}
@@ -1551,25 +1547,16 @@ function CreateMatch() {
                     </span>
                   </div>
 
-                  {/* pricePerPerson */}
+                  {/* Giá mỗi người: chủ kèo không tự đặt, hệ thống tự chia đều tiền sân (BE tính pricePerPerson) */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Tiền mỗi người đóng:
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="Để trống = Tự chia đều tiền sân"
-                        value={pricePerPerson}
-                        onChange={(e) => setPricePerPerson(e.target.value)}
-                        className="w-full h-10 pl-3 pr-8 bg-white border border-gray-300 rounded-xl text-xs font-bold text-[#111827] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2D5F3F]"
-                      />
-                      <span className="absolute right-3 top-2.5 text-xs text-gray-400 font-bold">đ</span>
+                    <span className="block text-xs font-bold text-gray-700 mb-1.5">Tiền mỗi người đóng:</span>
+                    <div className="w-full min-h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#111827] flex items-center">
+                      {isEditMode && pricePerPerson
+                        ? `${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ / người`
+                        : 'Hệ thống tự chia đều tiền sân'}
                     </div>
                     <span className="text-[10.5px] text-gray-500 mt-1 block">
-                      {pricePerPerson
-                        ? `Mỗi người đóng: ${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ`
-                        : `Chia đều dự kiến: ~${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / (slotsNeeded + 1)))} đ / người`}
+                      Chủ kèo không tự đặt giá. Giá chính xác hiển thị trên kèo sau khi tạo.
                     </span>
                   </div>
                 </div>
