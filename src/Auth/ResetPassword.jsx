@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { resetPassword } from '../api/auth/authApi.js'
+import { clearPhoneVerification } from './firebasePhone.js'
 import './auth-pages.css'
 
 function ResetPassword() {
   const navigate = useNavigate()
-  const { phone, otpCode } = useLocation().state || {}
+  // otpCode (luồng OTP cũ của BE) hoặc firebaseIdToken (Firebase Phone Auth, từ VerifyAccount)
+  const { phone, otpCode, firebaseIdToken } = useLocation().state || {}
   const [loading, setLoading] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -74,7 +76,8 @@ function ResetPassword() {
     if (!allCriteriaMet || loading) return
     setLoading(true)
     try {
-      await resetPassword({ phone, otpCode, newPassword, confirmPassword })
+      await resetPassword({ phone, otpCode, firebaseIdToken, newPassword, confirmPassword })
+      clearPhoneVerification()
       navigate('/login', { state: { message: 'Mật khẩu đã được cập nhật thành công! Vui lòng đăng nhập lại.' } })
     } catch (error) {
       // Sai hoặc hết hạn OTP: BE trả message, quay lại bước nhập mã nếu cần
@@ -89,7 +92,7 @@ function ResetPassword() {
   }
 
   // Vào thẳng trang này mà không qua bước nhập mã OTP
-  if (!phone || !otpCode) return <Navigate to="/forgot-password" replace />
+  if (!phone || (!otpCode && !firebaseIdToken)) return <Navigate to="/forgot-password" replace />
 
   return (
     <div className="min-h-screen flex flex-col sport-animated-bg">

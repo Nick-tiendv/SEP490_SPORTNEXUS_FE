@@ -9,11 +9,12 @@ function validateResponse(body) {
   }
   return body
 }
-// RegisterRequest: username, password, fullName, phone, email (+ role, otpCode khi có: Player | Owner, mã OTP xác thực SĐT)
-const registrationPayload = ({ username, password, fullName, phone, email, role, otpCode, sports }) => ({
+// RegisterRequest: username, password, fullName, phone, email (+ role: Player | Owner)
+// Xác thực SĐT: firebaseIdToken (Firebase Phone Auth, SMS thật) hoặc otpCode (luồng send-otp cũ của BE).
+const registrationPayload = ({ username, password, fullName, phone, email, role, otpCode, firebaseIdToken, sports }) => ({
   username, password, fullName, phone, email,
   ...(role ? { role } : {}),
-  ...(otpCode ? { otpCode } : {}),
+  ...(firebaseIdToken ? { firebaseIdToken } : otpCode ? { otpCode } : {}),
   ...(Array.isArray(sports) && sports.length ? { sports } : {}),
 })
 export async function registerUser(payload) {
@@ -63,9 +64,10 @@ export async function verifyOtp({ phone, otpCode, type = 'REGISTER' }) {
 export async function forgotPassword(identifier) {
   return validateResponse((await apiClient.post('/api/auth/forgot-password', { identifier }, { skipAuth: true })).data)
 }
-// ResetPasswordRequest: phone, otpCode, newPassword, confirmPassword. BE kiểm tra OTP trong bước này.
-export async function resetPassword({ phone, otpCode, newPassword, confirmPassword }) {
-  return validateResponse((await apiClient.post('/api/auth/reset-password', { phone, otpCode, newPassword, confirmPassword }, { skipAuth: true })).data)
+// ResetPasswordRequest: phone, otpCode | firebaseIdToken, newPassword, confirmPassword. BE kiểm tra mã / token trong bước này.
+export async function resetPassword({ phone, otpCode, firebaseIdToken, newPassword, confirmPassword }) {
+  const proof = firebaseIdToken ? { firebaseIdToken } : { otpCode }
+  return validateResponse((await apiClient.post('/api/auth/reset-password', { phone, ...proof, newPassword, confirmPassword }, { skipAuth: true })).data)
 }
 
 // ---------- Đăng nhập mạng xã hội: POST /api/auth/google | /api/auth/facebook ----------

@@ -5,6 +5,7 @@ import './auth-pages.css'
 import { toast } from 'sonner'
 import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
 import SocialLoginButtons from './SocialLoginButtons.jsx'
+import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
 
 // Trình độ theo BE: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL
 const SKILL_LEVELS = [
@@ -30,8 +31,8 @@ function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  // Xác thực SĐT bắt buộc: gửi mã qua send-otp (REGISTER) rồi gửi kèm otpCode khi đăng ký.
-  // Không gọi verify-otp trước, vì BE sẽ đánh dấu mã đã dùng và đăng ký sẽ báo mã sai.
+  // Xác thực SĐT bắt buộc. Firebase (khi có cấu hình): SMS thật, gửi firebaseIdToken khi đăng ký.
+  // Luồng cũ: send-otp (REGISTER) rồi gửi kèm otpCode; không gọi verify-otp trước vì BE sẽ đánh dấu mã đã dùng.
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [otpBusy, setOtpBusy] = useState(false)
@@ -101,7 +102,13 @@ function Register() {
     submitting.current = true
     setLoading(true)
     try {
+      // Firebase: kiểm tra mã SMS trên Firebase rồi gửi ID token cho BE thay vì otpCode.
+      if (isFirebasePhoneEnabled) {
+        payload.firebaseIdToken = await confirmPhoneCode(payload.phone, payload.otpCode)
+        delete payload.otpCode
+      }
       await registerUser(payload)
+      clearPhoneVerification()
       try {
         localStorage.setItem('sportnexus_user_role', role)
         localStorage.setItem('sportnexus_registered_role', role)
@@ -118,13 +125,20 @@ function Register() {
 
   const handleSendOtp = async () => {
     if (!phone.trim()) { toast.error('Vui lòng nhập số điện thoại trước.'); return }
+    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(phone.replace(/[\s.-]/g, ''))) {
+      setErrors((prev) => ({ ...prev, phone: 'Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).' }))
+      return
+    }
     setOtpBusy(true)
     try {
-      const res = await sendOtp(phone.trim(), 'REGISTER')
+      let devOtp = null
+      // Có cấu hình Firebase → gửi SMS thật qua Firebase (giống app). Chưa có → luồng send-otp cũ của BE.
+      if (isFirebasePhoneEnabled) await sendPhoneCode(phone.trim())
+      else devOtp = (await sendOtp(phone.trim(), 'REGISTER'))?.devOtp
       setOtpSent(true)
       setOtpCode('')
       setErrors((prev) => ({ ...prev, otp: undefined }))
-      toast.success(res?.devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${res.devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
+      toast.success(devOtp ? `Đã gửi mã OTP (môi trường thử nghiệm: ${devOtp}).` : 'Đã gửi mã OTP tới số điện thoại.')
     } catch (error) {
       toast.error(error?.message || 'Không gửi được mã OTP.')
     } finally {
