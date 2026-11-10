@@ -15,6 +15,9 @@ export function configureAuthentication(readToken, onUnauthorized, readMockSessi
   return () => { tokenReader = () => null; unauthorizedHandler = () => {}; mockSessionReader = () => false }
 }
 
+// Có ký tự tiếng Việt có dấu → câu thông báo BE viết cho người dùng.
+const VIETNAMESE_TEXT = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i
+
 export function normalizeApiError(error) {
   if (error?.isNormalized) return error
   const status = error?.response?.status || 0
@@ -30,8 +33,11 @@ export function normalizeApiError(error) {
   }
 
   let message = null
-  // 503 mang thông báo nghiệp vụ từ BE (vd: "Chức năng nạp tiền tạm thời chưa sẵn sàng") nên giữ nguyên văn
-  if (typeof body?.message === 'string' && body.message.length <= 300 && (status < 500 || status === 503)) {
+  // 4xx và 503: message là thông báo nghiệp vụ của BE → giữ nguyên văn.
+  // 5xx khác: chỉ hiện khi là câu tiếng Việt BE tự trả (vd "Tải logo lên thất bại, vui lòng thử lại sau."),
+  // không hiện nội dung exception tiếng Anh.
+  const isBusinessMessage = status < 500 || status === 503 || VIETNAMESE_TEXT.test(body?.message || '')
+  if (typeof body?.message === 'string' && body.message.length <= 300 && isBusinessMessage) {
     message = body.message
   } else if (body?.errors && typeof body.errors === 'object') {
     const errorList = Object.entries(body.errors)
