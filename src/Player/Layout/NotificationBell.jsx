@@ -55,6 +55,31 @@ const toBellItem = (n) => {
   return { ...style, ...n, details: '', time: timeAgo(n.createdAt), link: linkFor(n, style) }
 }
 
+const formatCleanTitle = (rawTitle = '') =>
+  String(rawTitle || 'Thông báo')
+    .replace(/\s*\((?:Trạng thái:\s*)?(?:PAID|PENDING|CANCELLED)\)\s*/gi, '')
+    .replace(/\s*•\s*(?:Hoàn 100%|Không hoàn tiền)/gi, '')
+    .replace(/!+$/, '')
+    .trim()
+
+const cleanNotificationText = (rawText = '') =>
+  String(rawText || '')
+    .replace(/Tiền giữ trong frozenBalance\s*•\s*/gi, '')
+    .replace(/Tiền giữ trong frozenBalance/gi, 'Bảo chứng Ví Escrow')
+    .trim()
+
+const getShortSummary = (rawMessage = '') => {
+  const cleaned = cleanNotificationText(rawMessage)
+  if (!cleaned) return ''
+  const firstSentence = cleaned.split(/\.\s+/)[0] || cleaned
+  return firstSentence
+    .replace(/,\s*bắt đầu\s+.*$/i, '')
+    .replace(/\s*\(\d{1,2}:\d{2}\s+\d{1,2}\/\d{1,2}\/\d{4}\)\s*$/i, '')
+    .replace(/\.$/, '')
+    .trim()
+
+}
+
 // Nhóm theo type của BE: BOOKING | LFG | TEAM | TOURNAMENT | REVIEW | COMMUNITY | WALLET | REPORT | SYSTEM
 const FILTER_TABS = [
   { key: 'all', label: 'Tất cả' },
@@ -83,6 +108,7 @@ export default function NotificationBell({ linkable = true }) {
   const [loading, setLoading] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [toastMessage, setToastMessage] = useState(null)
+  const [expandedId, setExpandedId] = useState(null)
   const containerRef = useRef(null)
 
   // Thông báo lấy từ GET /api/v1/notifications, tải lại mỗi 60 giây và mỗi lần mở chuông
@@ -272,6 +298,11 @@ export default function NotificationBell({ linkable = true }) {
       setUnreadCount((c) => Math.max(0, c - 1))
       markNotificationRead(item.id).catch(() => {})
     }
+    setExpandedId((prev) => (prev === item.id ? null : item.id))
+  }
+
+  const handleNavigateLink = (e, item) => {
+    e.stopPropagation()
     if (linkable && item.link) {
       setIsOpen(false)
       navigate(item.link)
@@ -555,20 +586,20 @@ export default function NotificationBell({ linkable = true }) {
                             : 'font-extrabold text-[#111827]'
                         }`}
                       >
-                        {item.title}
+                        {formatCleanTitle(item.title)}
                       </h4>
                       {!item.read && (
                         <span className="w-2 h-2 rounded-full bg-[#15803D] shrink-0" />
                       )}
                     </div>
 
-                    <p className="text-[11.5px] text-gray-600 leading-snug">
-                      {item.message}
+                    <p className={`text-[11.5px] text-gray-600 leading-snug ${expandedId === item.id ? 'whitespace-normal break-words' : 'truncate'}`}>
+                      {expandedId === item.id ? cleanNotificationText(item.message) : getShortSummary(item.message)}
                     </p>
 
-                    {item.details && (
-                      <div className="mt-1.5 p-1.5 px-2 rounded-lg bg-gray-50 border border-gray-100 text-[10.5px] text-gray-700 font-medium">
-                        {item.details}
+                    {expandedId === item.id && item.details && (
+                      <div className="mt-1.5 p-2 px-2.5 rounded-lg bg-gray-50 border border-gray-100 text-[10.5px] text-gray-700 font-medium break-words" style={{ overflowWrap: 'anywhere' }}>
+                        {cleanNotificationText(item.details)}
                       </div>
                     )}
 
@@ -577,8 +608,8 @@ export default function NotificationBell({ linkable = true }) {
                         <span className="material-symbols-outlined text-[12px]">schedule</span>
                         {item.time}
                       </span>
-                      {item.linkText && (
-                        <span className="text-[#15803D] font-bold group-hover:underline flex items-center gap-0.5">
+                      {expandedId === item.id && item.linkText && (
+                        <span onClick={(e) => handleNavigateLink(e, item)} className="text-[#15803D] font-bold hover:underline flex items-center gap-0.5">
                           {item.linkText}
                           <span className="material-symbols-outlined text-[13px]">chevron_right</span>
                         </span>

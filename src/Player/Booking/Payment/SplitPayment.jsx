@@ -1019,11 +1019,11 @@ function SplitPayment() {
               bg: paymentMode === 'split' ? '#FEF3C7' : '#EAF7EE',
               title: paymentMode === 'split'
                 ? 'Đã tạo đơn chia tiền (Trạng thái: PENDING)!'
-                : 'Đặt sân thành công (Trạng thái: PAID)!',
+                : 'Đặt sân thành công',
               message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
               details: paymentMode === 'split'
                 ? `Hạn góp tiền: 30 phút • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
-                : `Khung giờ: ${slotTime} • Tiền giữ trong frozenBalance • Mã vé: #${ticketTokenValue}`,
+                : `Khung giờ: ${slotTime} • Mã vé: #${ticketTokenValue}`,
               time: 'Vừa xong',
               unread: true,
               link: '/checkin',
@@ -2183,7 +2183,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               )}
 
               {bookingStatus === 'PAID' && (
-                <div className="sp-status-card sp-status-card--paid">
+                <div className="sp-status-card sp-status-card--paid" style={{ display: 'none' }}>
                   <div className="sp-status-icon-wrap">
                     <span className="material-symbols-outlined">verified</span>
                   </div>
@@ -2300,7 +2300,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               </div>
 
               {/* Thông tin mã QR check-in cố định sau khi đặt sân thành công */}
-              <div className="sp-ticket-timer-bar">
+              <div className="sp-ticket-timer-bar" style={{ display: 'none' }}>
                 <div className="sp-timer-bar-left">
                   <div
                     style={{
@@ -2333,7 +2333,70 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 </div>
               </div>
 
-              <div className="sp-ticket-token-id">MÃ VÉ CHECK-IN: #{qrToken}</div>
+              <div
+                className="sp-ticket-token-id"
+                style={{
+                  marginTop: '18px',
+                  width: '100%',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '14px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', letterSpacing: '0.5px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px', color: '#15803D' }}>confirmation_number</span>
+                    MÃ VÉ CHECK-IN
+                  </span>
+                  {qrToken && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(qrToken)
+                        toast.success('Đã sao chép mã vé check-in!')
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        background: '#FFFFFF',
+                        color: '#15803D',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>content_copy</span>
+                      <span>Sao chép</span>
+                    </button>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    background: '#FFFFFF',
+                    border: '1px dashed #CBD5E1',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    lineHeight: 1.5,
+                    wordBreak: 'break-all',
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  #{qrToken || '—'}
+                </div>
+              </div>
 
             </div>
 
@@ -2484,7 +2547,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
 
             {/* Khối 3: Phản Hồi Xác Nhận Từ Máy Chủ (Server API Response) */}
-            <div className="sp-info-card" style={{ border: '1.5px solid #86efac', background: '#f8fafc' }}>
+            <div className="sp-info-card" style={{ display: 'none', border: '1.5px solid #86efac', background: '#f8fafc' }}>
               <div className="sp-info-card-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }}>
                 <div className="sp-info-header-title">
                   <span className="material-symbols-outlined" style={{ color: '#16a34a' }}>cloud_done</span>
@@ -2512,7 +2575,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Mã Vé Check-in (QR Token):</span>
-                  <strong style={{ fontFamily: 'monospace', color: '#166534', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
+                  <strong style={{ fontFamily: 'monospace', color: '#166534', background: '#dcfce7', padding: '4px 8px', borderRadius: 4, fontSize: 12, wordBreak: 'break-all', overflowWrap: 'anywhere', maxWidth: '100%' }}>
                     #{qrToken}
                   </strong>
                 </div>
