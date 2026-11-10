@@ -34,6 +34,9 @@ const INVITE_STATUS = {
   EXPIRED: ['Hết hạn', 'gray'],
 }
 
+const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const LOGO_MAX_BYTES = 5 * 1024 * 1024
+
 function Avatar({ name, url, large }) {
   return <span className={`snx-avatar-sm ${large ? 'snx-avatar-sm--lg' : ''}`}>{url ? <img src={url} alt={name} /> : initials(name)}</span>
 }
@@ -106,10 +109,23 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
   const [edit, setEdit] = useState(null)
   const [invite, setInvite] = useState({ phone: '', message: '' })
   const logoRef = useRef(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const refresh = () => { team.refresh(); sent.refresh(); onChanged() }
   const act = async (action, success, closeAfter) => {
     if (await run(action, success)) { if (closeAfter) { onChanged(); onClose() } else refresh() }
+  }
+
+  // Đổi logo: kiểm tra định dạng / dung lượng theo BE (JPG/PNG/WEBP ≤ 5MB) trước khi gửi.
+  const changeLogo = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = '' // reset để chọn lại cùng file (vd thử lại sau khi lỗi) vẫn kích hoạt onChange
+    if (!file) return
+    if (!LOGO_TYPES.includes(file.type)) { toast.error('Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.'); return }
+    if (file.size > LOGO_MAX_BYTES) { toast.error('Ảnh vượt quá 5MB. Vui lòng chọn ảnh nhỏ hơn.'); return }
+    setUploadingLogo(true)
+    await act(() => uploadTeamLogo(teamId, file), 'Đã cập nhật logo.')
+    setUploadingLogo(false)
   }
 
   return (
@@ -148,8 +164,8 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
             {isCaptain && !edit && (
               <div className="snx-row">
                 <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setEdit({ name: t.name, description: t.description })}><span className="material-symbols-outlined">edit</span>Sửa thông tin</button>
-                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => logoRef.current?.click()}><span className="material-symbols-outlined">image</span>Đổi logo</button>
-                <input ref={logoRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => e.target.files?.[0] && act(() => uploadTeamLogo(teamId, e.target.files[0]), 'Đã cập nhật logo.')} />
+                <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={uploadingLogo} onClick={() => logoRef.current?.click()}><span className="material-symbols-outlined">image</span>{uploadingLogo ? 'Đang tải logo…' : 'Đổi logo'}</button>
+                <input ref={logoRef} type="file" accept={LOGO_TYPES.join(',')} hidden onChange={changeLogo} />
                 <span className="snx-spacer" />
                 <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={async () => (await confirmDialog(`Giải tán đội "${t.name}"?`)) && act(() => deleteTeam(teamId), 'Đã giải tán đội.', true)}><span className="material-symbols-outlined">delete</span>Giải tán đội</button>
               </div>
