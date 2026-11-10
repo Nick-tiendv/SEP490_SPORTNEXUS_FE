@@ -10,6 +10,8 @@ import NoFacilityState from '../NoFacilityState.jsx'
 import { addDays, formatDateTime, formatTime, formatVND, statusBadge, toDateKey } from '../shared.js'
 
 const PAGE_SIZE = 15
+// Trạng thái người chơi trong kèo LFG (BookingLfgParticipantInfo.status)
+const LFG_PLAYER_STATUS = { PENDING: 'Chờ duyệt', ACCEPTED: 'Đã vào kèo', REJECTED: 'Bị từ chối', LEFT: 'Đã rời', REMOVED: 'Bị loại', CANCELLED: 'Đã hủy' }
 // BookingStatus của BE: PENDING | PAID | CHECKED_IN | CANCELLED
 const STATUSES = [
   { value: '', label: 'Mọi trạng thái' },
@@ -71,7 +73,7 @@ function BookingDetailModal({ bookingId, onClose }) {
               </div>
             )}
             <div>
-              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Người chơi ({(b.participants || []).length})</h3>
+              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>{b.lfg ? 'Người đặt sân' : 'Người chơi'} ({(b.participants || []).length})</h3>
               <div className="snx-list">
                 {(b.participants || []).map((p) => (
                   <div key={p.userId || p.fullName} className="snx-list-item">
@@ -85,8 +87,36 @@ function BookingDetailModal({ bookingId, onClose }) {
               </div>
             </div>
             {b.lfg && (
-              <div className="snx-muted">
-                Kèo LFG: {b.lfg.acceptedCount}/{b.lfg.totalSlots} người • {formatVND(b.lfg.pricePerPerson)}/người • còn {b.lfg.remainingSlots} chỗ
+              // Người chơi kèo LFG nằm ở lfg.participants (không phải participants của đơn): chỉ người ACCEPTED sẽ đến sân;
+              // người chờ duyệt / đã rời / bị loại vẫn liệt kê nhưng không tính vào số người.
+              <div>
+                <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>
+                  Người chơi kèo LFG ({b.lfg.acceptedCount ?? 0} đã vào kèo • {b.lfg.checkedInCount ?? 0} đã check-in)
+                </h3>
+                <div className="snx-muted" style={{ marginBottom: 6 }}>
+                  {String(b.lfg.status).toUpperCase() === 'CANCELLED'
+                    ? `Kèo đã hủy${b.lfg.cancelReason ? `: ${b.lfg.cancelReason}` : ''}`
+                    : `Cần ${b.lfg.totalSlots ?? '—'} người • còn ${b.lfg.remainingSlots ?? '—'} suất • ${formatVND(b.lfg.pricePerPerson)}/người`}
+                  {' • '}Tổng dự kiến tại sân: {1 + (Number(b.lfg.acceptedCount) || 0)} người (gồm chủ kèo)
+                </div>
+                {(b.lfg.participants || []).length === 0 ? (
+                  <div className="snx-muted">Chưa có người chơi nhận suất.</div>
+                ) : (
+                  <div className="snx-list">
+                    {b.lfg.participants.map((p) => {
+                      const status = String(p.status || '').toUpperCase()
+                      return (
+                        <div key={p.userId || p.fullName} className="snx-list-item" style={status === 'ACCEPTED' ? undefined : { opacity: 0.6 }}>
+                          <span className="snx-avatar-sm">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : (p.fullName || '?').slice(0, 1)}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}><strong>{p.fullName}</strong><div className="snx-muted">{p.phone}</div></div>
+                          <span className="snx-muted">{LFG_PLAYER_STATUS[status] || status || '—'}</span>
+                          <span className="snx-muted">{formatVND(p.amountPaid)}</span>
+                          {status === 'ACCEPTED' && (p.isCheckedIn ? <span className="snx-badge snx-badge--green">Đã vào sân</span> : <span className="snx-badge snx-badge--gray">Chưa vào</span>)}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

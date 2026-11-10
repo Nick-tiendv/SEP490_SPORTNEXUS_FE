@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { claimLfgSlot, getLfgById } from '../../api/player/lfgApi.js'
+import { claimLfgSlot, getLfgById, lfgSkillLabel } from '../../api/player/lfgApi.js'
+import { vnClock } from '../../utils/vnTime.js'
 import { getWallet } from '../../api/player/walletApi.js'
 
 function FlashClaim() {
@@ -37,6 +38,29 @@ function FlashClaim() {
   const [errorMessage, setErrorMessage] = useState(null)
   const [successInfo, setSuccessInfo] = useState(null)
 
+  // Thông tin kèo hiển thị: lấy từ chi tiết BE, thiếu thì dùng dữ liệu bảng tin; không dùng giá trị mẫu
+  const loadingText = cardLoading ? 'Đang tải…' : '—'
+  const info = cardDetail
+    ? {
+        sport: (cardDetail.sportName || 'Kèo ghép').toUpperCase(),
+        level: lfgSkillLabel(cardDetail.skillLevelTag) || 'Mọi trình độ',
+        title: cardDetail.description || `Kèo ${cardDetail.sportName || 'ghép trận'}`,
+        location: [cardDetail.courtName, cardDetail.facilityName, cardDetail.facilityAddress].filter(Boolean).join(', ') || '—',
+        time: cardDetail.startTime
+          ? `${vnClock(cardDetail.startTime)} - ${vnClock(cardDetail.endTime)}, ${new Date(cardDetail.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
+          : '—',
+      }
+    : {
+        sport: matchFromState?.sportBadge || loadingText,
+        level: matchFromState?.levelTag || loadingText,
+        title: matchFromState?.title || loadingText,
+        location: matchFromState?.location || loadingText,
+        time: matchFromState?.time || loadingText,
+      }
+  // Phe A / B chỉ có ở kèo đối kháng (sideSize = số người mỗi phe); kèo giao lưu không chọn phe
+  const sideSize = Number(cardDetail?.sideSize ?? matchFromState?.sideSize) || 0
+  const hasSides = sideSize > 0
+
   // Ưu tiên giá BE; chỉ dùng giá từ bảng tin (cũng là pricePerPerson của BE) khi chưa tải được chi tiết
   const priceFromBe = cardDetail?.pricePerPerson ?? matchFromState?.price
   const depositKnown = priceFromBe != null && priceFromBe !== '' && Number.isFinite(Number(priceFromBe))
@@ -68,7 +92,7 @@ function FlashClaim() {
     setIsSubmitting(true)
     try {
       await claimLfgSlot(cardId, {
-        side: selectedSide,
+        side: hasSides ? selectedSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
       })
@@ -139,10 +163,10 @@ function FlashClaim() {
             <div className="flex items-center justify-between border-b border-gray-200/60 pb-3 mb-3">
               <div className="flex items-center gap-2.5">
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#EFF6FF] text-[#1E40AF]">
-                  {matchFromState?.sportBadge || 'PICKLEBALL ĐÔI'}
+                  {info.sport}
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {matchFromState?.levelTag || 'Trình Khá'}
+                  {info.level}
                 </span>
               </div>
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md ${
@@ -153,7 +177,7 @@ function FlashClaim() {
             </div>
 
             <h4 className="font-extrabold text-[#111827] text-sm sm:text-base leading-snug mb-3">
-              {matchFromState?.title || '[Pickleball Đôi] Cần 1 tay vợt giao lưu nâng cao (Trình Khá)'}
+              {info.title}
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-gray-600">
@@ -162,7 +186,7 @@ function FlashClaim() {
                 <div>
                   <span className="text-[10px] text-gray-400 block font-semibold uppercase">Địa điểm sân</span>
                   <span className="text-gray-800 font-medium leading-tight">
-                    {matchFromState?.location || 'Sân SportNexus Arena, Huỳnh Tấn Phát, Quận 7'}
+                    {info.location}
                   </span>
                 </div>
               </div>
@@ -170,19 +194,20 @@ function FlashClaim() {
                 <span className="material-symbols-outlined text-[17px] text-[#2D5F3F] shrink-0 mt-0.5">schedule</span>
                 <div>
                   <span className="text-[10px] text-gray-400 block font-semibold uppercase">Thời gian thi đấu</span>
-                  <span className="text-gray-800 font-semibold">{matchFromState?.time || 'Tối nay, 20:30 - 22:00'}</span>
+                  <span className="text-gray-800 font-semibold">{info.time}</span>
                 </div>
               </div>
             </div>
 
-            {/* Chọn Phe / Bên (Side selection) */}
+            {/* Chọn Phe / Bên: chỉ kèo đối kháng (sideSize) mới có phe A / B thật */}
+            {hasSides && (
             <div className="mt-3 pt-3 border-t border-gray-200/60 flex items-center justify-between text-xs">
-              <span className="text-gray-600 font-bold">Chọn vị trí thi đấu:</span>
+              <span className="text-gray-600 font-bold">Chọn phe ({sideSize} vs {sideSize}):</span>
               <div className="flex items-center gap-1.5">
                 {[
-                  { id: 'any', label: 'Bất kỳ' },
-                  { id: 'A', label: 'Bên A (Đội 1)' },
-                  { id: 'B', label: 'Bên B (Đội 2)' },
+                  { id: 'any', label: 'Hệ thống xếp' },
+                  { id: 'A', label: 'Phe A' },
+                  { id: 'B', label: 'Phe B' },
                 ].map((s) => (
                   <button
                     key={s.id}
@@ -199,6 +224,7 @@ function FlashClaim() {
                 ))}
               </div>
             </div>
+            )}
           </div>
 
           {/* Financial Summary: Khung tiền */}
