@@ -361,14 +361,15 @@ function RegistrationDecision({ tournamentId, onDone }) {
 }
 
 // Quản lý thêm cho giải đang chọn: sửa thông tin, giữ / trả sân, xếp sân, nhân sự, trọng tài, bảng xếp hạng.
-export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged, mode = 'owner' }) {
+// courtOnly: chủ sân xem giải người khác tổ chức tại sân mình, chỉ giữ / trả sân.
+export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged, mode = 'owner', courtOnly = false }) {
   // Người chơi làm BTC không giữ / trả sân được (court-blocks chỉ dành cho chủ sân / Admin)
   const canBlockCourts = mode !== 'player'
   const [editing, setEditing] = useState(false)
   const [assigning, setAssigning] = useState(null)
   const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId && canBlockCourts, initialData: [] })
   const schedule = useApi(() => getCourtSchedule(tournament.id), [tournament.id])
-  const staff = useApi(() => getTournamentStaff(tournament.id), [tournament.id], { initialData: [] })
+  const staff = useApi(() => getTournamentStaff(tournament.id), [tournament.id], { enabled: !courtOnly, initialData: [] })
   const referees = (staff.data || []).filter((m) => String(m.role).toUpperCase() === 'REFEREE')
   const [scheduling, setScheduling] = useState(false)
   const childStatus = String(child?.status || '').toUpperCase()
@@ -404,14 +405,14 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       <div className="snx-row" style={{ marginBottom: 12 }}>
         <h2 className="snx-card-title">Quản lý giải & lịch sân</h2>
         <span className="snx-spacer" />
-        {!closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setEditing(true)}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>Sửa thông tin giải</button>}
+        {!closed && !courtOnly && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setEditing(true)}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>Sửa thông tin giải</button>}
       </div>
       <div className="snx-form-grid" style={{ marginBottom: 16 }}>
         <div><div className="snx-muted">Thi đấu</div><strong>{tournament.startDate ? `${formatDate(tournament.startDate)} – ${formatDate(tournament.endDate)}` : 'Chưa đặt ngày'}</strong></div>
         <div><div className="snx-muted">Hạn đăng ký</div><strong>{tournament.registrationDeadline ? formatDateTime(tournament.registrationDeadline) : '—'}</strong></div>
       </div>
 
-      {child && childStatus === 'OPEN' && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
+      {!courtOnly && child && childStatus === 'OPEN' && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
 
       {!closed && canBlockCourts && (
         <>
@@ -428,7 +429,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         </div>
       )}
 
-      {child && matches.length > 0 && (
+      {!courtOnly && child && matches.length > 0 && (
         <>
           <div className="snx-row" style={{ margin: '18px 0 8px' }}>
             <h3 className="snx-card-title" style={{ fontSize: 15 }}>Xếp sân & trọng tài ({child.name})</h3>
@@ -464,9 +465,9 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         </>
       )}
 
-      {child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
+      {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
 
-      <StaffSection tournamentId={tournament.id} staff={staff.data || []} onChanged={staff.refresh} closed={closed} />
+      {!courtOnly && <StaffSection tournamentId={tournament.id} staff={staff.data || []} onChanged={staff.refresh} closed={closed} />}
 
       {editing && <EditInfoModal tournament={tournament} onClose={() => setEditing(false)} onSaved={onChanged} />}
       {assigning && (

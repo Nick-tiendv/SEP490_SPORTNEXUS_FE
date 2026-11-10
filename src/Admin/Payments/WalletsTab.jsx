@@ -75,7 +75,9 @@ function WalletDetails({ userId, base, onClose, onAdjust, onTransactions }) {
 }
 
 // POST /api/v1/admin/wallets/{userId}/adjust { amount, reason } — amount dương cộng tiền, âm trừ tiền.
+// Hệ thống thật (production) không cho cộng tiền tay (BE trả 403, chỉ bật trên môi trường test): gặp 403 thì chỉ còn trừ tiền.
 function AdjustDialog({ wallet, onClose, onDone }) {
+  const [creditBlocked, setCreditBlocked] = useState(false)
   const [direction, setDirection] = useState('add')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
@@ -92,13 +94,14 @@ function AdjustDialog({ wallet, onClose, onDone }) {
       await adjustWallet(wallet.userId, { amount: signed, reason: reason.trim() })
       onDone(`Đã ${direction === 'add' ? 'cộng' : 'trừ'} ${money(value)} vào ví của ${wallet.fullName}.`)
     } catch (err) {
+      if (err.status === 403 && direction === 'add') { setCreditBlocked(true); setDirection('subtract') }
       setError(err.message); setSubmitting(false)
     }
   }
   return <DemoDialog title="Điều chỉnh số dư ví" onClose={submitting ? noop : onClose}>
     <p>Ví của <strong>{wallet.fullName}</strong> · số dư hiện tại {money(wallet.balance)}</p>
     <form className="users-form" onSubmit={submit} noValidate>
-      <label>Loại điều chỉnh<select value={direction} onChange={event => setDirection(event.target.value)}><option value="add">Cộng tiền vào ví</option><option value="subtract">Trừ tiền khỏi ví</option></select></label>
+      <label>Loại điều chỉnh<select value={direction} onChange={event => setDirection(event.target.value)}><option value="add" disabled={creditBlocked}>Cộng tiền vào ví{creditBlocked ? ' (không cho phép trên hệ thống thật)' : ''}</option><option value="subtract">Trừ tiền khỏi ví</option></select></label>
       <label>Số tiền (₫)<input type="number" min="0" step="1000" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
       <label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Ví dụ: Bồi hoàn do lỗi hệ thống…" required /></label>
       {Number.isFinite(value) && value > 0 && <p className="payments-muted">Số dư sau điều chỉnh: {money(wallet.balance + signed)}</p>}

@@ -81,12 +81,12 @@ export const getMyProfile = async () => {
   }
   return data
 }
-// UpdateProfileRequest: fullName, avatarUrl
-
-export const updateMyProfile = ({ fullName, avatarUrl }) => {
+// UpdateProfileRequest: fullName, avatarUrl, username (đổi tên đăng nhập / định danh), bio (chuỗi rỗng = xóa).
+// Trường không gửi (undefined) thì BE giữ nguyên.
+export const updateMyProfile = ({ fullName, avatarUrl, username, bio }) => {
   const safeRemoteAvatar = avatarUrl && !String(avatarUrl).startsWith('data:') ? avatarUrl : null
   if (avatarUrl) saveLocalAvatar(avatarUrl)
-  return put('/api/auth/me', { fullName, avatarUrl: safeRemoteAvatar })
+  return put('/api/auth/me', { fullName, avatarUrl: safeRemoteAvatar, username, bio })
 }
 export async function uploadMyAvatar(file) {
   try {

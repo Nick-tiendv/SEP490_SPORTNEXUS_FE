@@ -307,18 +307,23 @@ function CourtDetails() {
   }
 
   // Toggle chọn một ca thi đấu (Chỉ ca trạng thái Available mới đặt được)
+  // Một lần đặt được nhiều sân con / nhiều ca nhưng phải cùng môn (BE chặn khác môn): chọn ca sân khác môn thì bỏ các ca đã chọn
+  const otherSport = (prev, sportName) => prev.length > 0 && prev[0].sportName !== sportName
+  const warnOtherSport = () => toast.info('Một lần đặt chỉ gồm các sân cùng môn. Đã bỏ các ca môn khác, sân môn khác vui lòng đặt riêng.')
+
   const handleToggleSlot = (slot, court) => {
     if (!isSlotAvailable(slot)) {
       return
     }
 
+    if (otherSport(selectedSlots, court.sportName)) warnOtherSport()
     setSelectedSlots((prev) => {
       const exists = prev.some((s) => s.id === slot.id)
       if (exists) {
         return prev.filter((s) => s.id !== slot.id)
       } else {
         return [
-          ...prev,
+          ...(otherSport(prev, court.sportName) ? [] : prev),
           {
             ...slot,
             courtName: court.name,
@@ -338,9 +343,11 @@ function CourtDetails() {
     const avail = courtSlots.filter(isSlotAvailable)
     if (avail.length === 0) return
 
+    if (otherSport(selectedSlots, activeCourt.sportName)) warnOtherSport()
     setSelectedSlots((prev) => {
+      const kept = otherSport(prev, activeCourt.sportName) ? [] : prev
       const newItems = avail
-        .filter((s) => !prev.some((p) => p.id === s.id))
+        .filter((s) => !kept.some((p) => p.id === s.id))
         .map((slot) => ({
           ...slot,
           courtName: activeCourt.name,
@@ -349,7 +356,7 @@ function CourtDetails() {
           formattedStart: formatTimeSlot(slot.startTime),
           formattedEnd: formatTimeSlot(slot.endTime),
         }))
-      return [...prev, ...newItems]
+      return [...kept, ...newItems]
     })
   }
 

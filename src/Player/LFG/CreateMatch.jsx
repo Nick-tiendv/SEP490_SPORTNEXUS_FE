@@ -32,6 +32,9 @@ const calculateDurationHours = (rangeStr) => {
 
 // Định dạng ngày theo giờ địa phương YYYY-MM-DD
 // Thể thức kèo theo sideSize của BE (số người mỗi phe)
+// Số ca liên tiếp tối đa của 1 kèo (BE: numberOfSlots 1 - 6)
+const MAX_LFG_COURT_SLOTS = 6
+
 const SIDE_SIZE_OPTIONS = [
   { value: null, label: 'Giao lưu', hint: 'Không chia phe' },
   { value: 1, label: 'Đơn 1 vs 1', hint: 'Chia phe A / B' },
@@ -448,10 +451,36 @@ function CreateMatch() {
   const handleSelectSlot = (slot) => {
     if (!slot.isAvailable) return
     setCourtSlotId(slot.id)
+    setSlotCount(1)
     setPreferredTimeRange(slot.timeRange)
     setCourtFee(slot.price)
     setCreateError(null)
   }
+
+  // Buổi chơi nhiều ca liên tiếp (QĐ-C, vd 2 ca x 2 tiếng = 4 tiếng): chọn ca bắt đầu rồi chọn số ca.
+  // BE gộp các ca thành 1 ca dài, giá mỗi người = tổng tiền sân / số người.
+  const [slotCount, setSlotCount] = useState(1)
+  const consecutiveRun = useMemo(() => {
+    const list = slotsKey && slotsResult.key === slotsKey ? slotsResult.slots : []
+    const i = list.findIndex((s) => s.id === courtSlotId)
+    if (i < 0) return []
+    const run = [list[i]]
+    for (let j = i + 1; j < list.length && run.length < MAX_LFG_COURT_SLOTS; j++) {
+      const prevEnd = run[run.length - 1].rawSlots.at(-1)?.endTime
+      if (!list[j].isAvailable || list[j].rawSlots[0]?.startTime !== prevEnd) break
+      run.push(list[j])
+    }
+    return run
+  }, [slotsKey, slotsResult, courtSlotId])
+  const applySlotCount = (count) => {
+    const picked = consecutiveRun.slice(0, count)
+    if (!picked.length) return
+    setSlotCount(picked.length)
+    setCourtFee(picked.reduce((sum, s) => sum + s.price, 0))
+    setPreferredTimeRange(`${picked[0].start} - ${picked[picked.length - 1].end}`)
+  }
+  // Số ca DB gửi BE (ca 1 tiếng cũ được ghép 2 ca thành 1 khung trên giao diện)
+  const dbSlotCount = consecutiveRun.slice(0, slotCount).reduce((n, s) => n + (s.slotIds?.length || 1), 0) || 1
 
   // Tải dữ liệu kèo cũ khi ở chế độ chỉnh sửa: GET /api/v1/lfgs/{cardId}
   useEffect(() => {
@@ -590,6 +619,7 @@ function CreateMatch() {
     try {
       await createLfg({
         courtSlotId,
+        numberOfSlots: dbSlotCount,
         slotsNeeded: Number(slotsNeeded) || 3,
         // Không gửi pricePerPerson: chủ kèo không tự đặt giá, BE chia đều tiền sân
         skillLevelTag: skillTag,
@@ -1291,6 +1321,21 @@ function CreateMatch() {
                         <p className="text-xs text-gray-600">
                           Khung giờ: <strong>{preferredTimeRange}</strong> ({preferredDurationHours} giờ) • Giá sân: <strong className="text-[#15803D]">{new Intl.NumberFormat('vi-VN').format(courtFee)} đ</strong>
                         </p>
+                        {!isEditMode && consecutiveRun.length > 1 && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            <span className="text-[11px] font-bold text-gray-700">Số ca liên tiếp:</span>
+                            {consecutiveRun.map((s, i) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => applySlotCount(i + 1)}
+                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${slotCount === i + 1 ? 'bg-[#15803D] text-white border-[#15803D]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#15803D]'}`}
+                              >
+                                {i + 1} ca (đến {s.end})
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-left sm:text-right shrink-0">

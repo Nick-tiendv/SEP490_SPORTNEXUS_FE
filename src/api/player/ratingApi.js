@@ -29,6 +29,8 @@ export const isTeamSport = sportName => !formatOptionsFor(sportName).some(([valu
 // AssessmentFormResponse: sportCategoryId, sportName, questions[{ code, question, type: SINGLE_CHOICE | SCALE_1_5, options[{ value, label }] }], current, blockedReason
 export const getAssessmentForm = sportId => get(`/api/v1/ratings/assessments/questions/${path(sportId)}`)
 export const getMyAssessments = async () => (await getList('/api/v1/ratings/assessments/me')).items
+// Lịch sử mọi lần làm khảo sát toàn diện (mới nhất trước), lọc theo môn; mỗi lần có formVersion (phiên bản bộ câu hỏi)
+export const getMyAssessmentHistory = async sportCategoryId => (await getList('/api/v1/ratings/assessments/me/history', sportCategoryId ? { sportCategoryId } : undefined)).items
 // Body: { answers: { CODE: value }, techniques: { TECH_n: 1..5 }, evidenceUrls[] }. Trả cả message của BE để hiện cho người dùng.
 export async function submitAssessment(sportId, { answers, techniques, evidenceUrls }) {
   const body = (await apiClient.post(`/api/v1/ratings/assessments/${path(sportId)}`, { answers, techniques, evidenceUrls })).data

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import {
   addParticipant,
   cancelTournament,
+  cancelTournamentInvitation,
   checkInParticipant,
   createTournament,
   deleteTournament,
@@ -13,8 +14,10 @@ import {
   getMyTournaments,
   getParticipants,
   getSports,
+  getTournamentInvitations,
   removeParticipant,
   updateMatchScore,
+  updateTournamentInfo,
 } from '../../api/owner'
 import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
@@ -40,7 +43,9 @@ const PURPOSES = [
   { key: 'EXCHANGE', label: 'Giao lưu' },
   { key: 'COMMERCIAL', label: 'Thương mại' },
   { key: 'DEVELOPMENT', label: 'Phát triển chuyên môn (từ Bán chuyên)' },
+  { key: 'INTERNAL', label: 'Nội bộ (chỉ người được mời, BTC được thi đấu)' },
 ]
+const INVITATION_STATUS = { PENDING: 'Chờ phản hồi', ACCEPTED: 'Đã nhận', DECLINED: 'Từ chối', CANCELLED: 'Đã thu hồi' }
 const BRACKET_FORMATS = [
   { key: '', label: 'Tự chọn thể thức' },
   { key: 'KNOCKOUT', label: 'Loại trực tiếp' },
@@ -114,7 +119,10 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const [selectedChildId, setSelectedChildId] = useState(null)
 
   const [sportsToken, setSportsToken] = useState(0)
-  const tournamentsLoad = useLoad(() => getMyTournaments(), `${listToken}`)
+  // Chủ sân: 'mine' = giải mình tổ chức; 'facility' = giải người khác tổ chức tại cơ sở (chỉ xem và giữ sân)
+  const [scope, setScope] = useState('mine')
+  const facilityScope = !isPlayer && scope === 'facility'
+  const tournamentsLoad = useLoad(() => getMyTournaments(facilityScope ? 'facility' : undefined), `${listToken}|${scope}`)
   const sportsLoad = useLoad(() => getSports(), `sports|${sportsToken}`)
   const sports = sportsLoad.data || []
 
@@ -128,6 +136,13 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const child = children.find((item) => item.id === selectedChildId) || children[0] || null
   const childStatus = String(child?.status || '').toUpperCase()
   const childId = child?.id || ''
+  // Giải người khác tổ chức tại sân mình: chủ sân chỉ xem và giữ sân, không thao tác thi đấu
+  const canManage = isPlayer || tournament?.isOrganizer !== false
+  const isInternal = String(tournament?.purpose || '').toUpperCase() === 'INTERNAL'
+  const [invitationsToken, setInvitationsToken] = useState(0)
+  const invitationsLoad = useLoad(() => getTournamentInvitations(childId), `inv|${childId}|${invitationsToken}`, !!childId && isInternal && canManage)
+  const invitations = invitationsLoad.key?.startsWith(`inv|${childId}`) ? invitationsLoad.data || [] : []
+  const [feeInput, setFeeInput] = useState('')
 
   const participantsLoad = useLoad(() => getParticipants(childId), `${childId}|${childToken}`, !!childId)
   const bracketLoad = useLoad(() => getBracket(childId), `${childId}|${childToken}`, !!childId)
@@ -168,15 +183,23 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
 
   // ---------- Người tham gia ----------
   const isTeamCategory = child?.categoryType === 'PREMADE_TEAMS'
+  // Giải nội bộ: BTC gửi lời mời (BE không thêm thẳng); người được mời chấp nhận mới vào bảng và đóng lệ phí
   const handleAddParticipant = (event) => {
     event.preventDefault()
     const value = newParticipant.trim()
     if (!value) return
     runAction(
       () => addParticipant(childId, isTeamCategory ? { userId: null, phone: null, teamId: value } : { userId: null, phone: value, teamId: null }),
-      isTeamCategory ? 'Đã thêm đội vào bảng đấu.' : 'Đã thêm vận động viên vào bảng đấu.',
-      { reloadList: true, after: () => setNewParticipant('') },
+      isTeamCategory ? 'Đã gửi lời mời tới đội trưởng.' : 'Đã gửi lời mời tới vận động viên.',
+      { reloadChild: false, after: () => { setNewParticipant(''); setInvitationsToken((v) => v + 1) } },
     )
+  }
+  const handleCancelInvitation = (invitation) =>
+    runAction(() => cancelTournamentInvitation(invitation.id), 'Đã thu hồi lời mời.', { reloadChild: false, after: () => setInvitationsToken((v) => v + 1) })
+  // Lệ phí bảng đấu: chỉ sửa khi bảng còn mở và chưa có ai đăng ký (gửi id bảng con)
+  const handleSaveFee = (event) => {
+    event.preventDefault()
+    runAction(() => updateTournamentInfo(childId, { entryFee: parseAmount(feeInput) }), 'Đã cập nhật lệ phí bảng đấu.', { reloadList: true, after: () => setFeeInput('') })
   }
   const handleRemoveParticipant = async (participant) => {
     const name = participant.teamName || participant.fullName
@@ -399,13 +422,23 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
 
       {/* DANH SÁCH GIẢI CỦA CƠ SỞ */}
       <div style={{ ...panelStyle, marginBottom: '24px' }}>
-        <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>{isPlayer ? 'Giải tôi tạo' : 'Giải đấu của cơ sở'} ({tournaments.length})</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>{isPlayer ? 'Giải tôi tạo' : facilityScope ? 'Giải người khác tổ chức tại cơ sở' : 'Giải đấu của cơ sở'} ({tournaments.length})</h3>
+          {!isPlayer && (
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {[['mine', 'Tôi tổ chức'], ['facility', 'Giải tại sân của tôi']].map(([key, label]) => (
+                <button key={key} type="button" onClick={() => { setScope(key); setSelectedTournamentId(null); setSelectedChildId(null) }}
+                  style={smallButton(scope === key ? '#1D4ED8' : '#FFFFFF', scope === key ? '#FFFFFF' : '#1D4ED8', '1px solid #BFDBFE')}>{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
         {tournamentsLoad.error ? (
           <div style={{ color: '#B91C1C', fontWeight: 700 }}>{tournamentsLoad.error}</div>
         ) : !tournamentsLoad.data ? (
           <div style={{ color: '#475569', fontWeight: 600 }}>Đang tải danh sách giải...</div>
         ) : tournaments.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{isPlayer ? 'Bạn chưa tạo giải nào' : 'Cơ sở chưa có giải đấu nào'}. Bấm "Tạo giải đấu mới" để bắt đầu.</div>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{facilityScope ? 'Chưa có giải nào do người khác tổ chức tại cơ sở này.' : `${isPlayer ? 'Bạn chưa tạo giải nào' : 'Cơ sở chưa có giải đấu nào'}. Bấm "Tạo giải đấu mới" để bắt đầu.`}</div>
         ) : (
           <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '4px' }}>
             {tournaments.map((item) => {
@@ -454,6 +487,16 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                 <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
                   {[tournament.categoryName, tournament.facilityName, `${tournament.totalChildren} bảng đấu`, TIER_LABEL[String(tournament.tier || '').toUpperCase()]].filter(Boolean).join(' • ')}
                 </div>
+                {!canManage && (
+                  <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '10px', background: '#EFF6FF', color: '#1E40AF', fontSize: '12.5px', fontWeight: 600 }}>
+                    Giải do {tournament.organizerName || 'người khác'} tổ chức tại cơ sở của bạn: bạn xem lịch và giữ khung giờ sân cho giải ở phần bên dưới.
+                  </div>
+                )}
+                {isInternal && (
+                  <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '10px', background: '#F5F3FF', color: '#5B21B6', fontSize: '12.5px', fontWeight: 600 }}>
+                    Giải nội bộ: không hiện công khai, người chơi chỉ tham gia qua lời mời của Ban tổ chức.
+                  </div>
+                )}
                 {String(tournament.approvalStatus || '').toUpperCase() === 'PENDING' && (
                   <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '10px', background: '#FEF3C7', color: '#92400E', fontSize: '12.5px', fontWeight: 600 }}>
                     Giải đang chờ Admin duyệt: chưa hiện công khai và chưa nhận đăng ký.
@@ -466,10 +509,10 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                 )}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {!['CANCELLED', 'FINISHED'].includes(String(tournament.status).toUpperCase()) && (
+                {canManage && !['CANCELLED', 'FINISHED'].includes(String(tournament.status).toUpperCase()) && (
                   <button onClick={() => setShowCancelModal(true)} disabled={busy} style={smallButton('#FFF7ED', '#C2410C', '1px solid #FED7AA')}>Hủy giải</button>
                 )}
-                {(String(tournament.status).toUpperCase() === 'CANCELLED' || tournament.totalParticipants === 0) && (
+                {canManage && (String(tournament.status).toUpperCase() === 'CANCELLED' || tournament.totalParticipants === 0) && (
                   <button onClick={handleDeleteTournament} disabled={busy} style={smallButton('#FEE2E2', '#B91C1C')}>Xóa giải</button>
                 )}
               </div>
@@ -514,6 +557,13 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                 </span>
               </div>
             )}
+            {child && canManage && childStatus === 'OPEN' && participants.length === 0 && (
+              <form onSubmit={handleSaveFee} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Lệ phí bảng "{child.name}" (chưa có ai đăng ký):</span>
+                <input inputMode="numeric" value={feeInput} onChange={(event) => setFeeInput(formatAmountInput(event.target.value))} placeholder={formatVND(child.entryFee)} style={{ ...inputStyle, width: '160px' }} />
+                <button type="submit" disabled={busy || feeInput === ''} style={smallButton('#1D4ED8', '#FFFFFF')}>Lưu lệ phí</button>
+              </form>
+            )}
           </div>
 
           {child && champion && (
@@ -526,7 +576,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             </div>
           )}
 
-          {child && (
+          {child && canManage && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '24px', marginBottom: '24px', alignItems: 'start' }}>
               {/* NGƯỜI THAM GIA */}
               <div style={panelStyle}>
@@ -547,16 +597,37 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                   )}
                 </div>
 
-                {childStatus === 'OPEN' && (
-                  <form onSubmit={handleAddParticipant} style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-                    <input
-                      value={newParticipant}
-                      onChange={(event) => setNewParticipant(event.target.value)}
-                      placeholder={isTeamCategory ? 'Nhập mã đội (teamId) để thêm' : 'Nhập số điện thoại VĐV để thêm'}
-                      style={inputStyle}
-                    />
-                    <button type="submit" disabled={busy || !newParticipant.trim()} style={{ ...smallButton('#10B981', '#FFFFFF'), whiteSpace: 'nowrap' }}>+ Thêm</button>
-                  </form>
+                {childStatus === 'OPEN' && isInternal && (
+                  <>
+                    <form onSubmit={handleAddParticipant} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      <input
+                        value={newParticipant}
+                        onChange={(event) => setNewParticipant(event.target.value)}
+                        placeholder={isTeamCategory ? 'Nhập mã đội (teamId) để mời' : 'Nhập số điện thoại VĐV để mời'}
+                        style={inputStyle}
+                      />
+                      <button type="submit" disabled={busy || !newParticipant.trim()} style={{ ...smallButton('#10B981', '#FFFFFF'), whiteSpace: 'nowrap' }}>+ Mời</button>
+                    </form>
+                    {invitations.length > 0 && (
+                      <div style={{ marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569' }}>Lời mời đã gửi ({invitations.length})</div>
+                        {invitations.map((invitation) => (
+                          <div key={invitation.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '12.5px' }}>
+                            <span style={{ flex: 1, fontWeight: 600, color: '#0F172A' }}>{invitation.teamName ? `${invitation.teamName} (${invitation.inviteeName})` : invitation.inviteeName}</span>
+                            <span style={{ color: '#475569' }}>{INVITATION_STATUS[invitation.status] || invitation.status}</span>
+                            {invitation.status === 'PENDING' && (
+                              <button type="button" onClick={() => handleCancelInvitation(invitation)} disabled={busy} style={smallButton('#FEE2E2', '#B91C1C')}>Thu hồi</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {childStatus === 'OPEN' && !isInternal && (
+                  <div style={{ marginBottom: '14px', fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
+                    Giải công khai: người chơi tự đăng ký. Muốn mời người, hãy tạo giải với mục đích "Nội bộ".
+                  </div>
                 )}
 
                 {participantsLoad.error ? (
@@ -671,6 +742,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             rounds={rounds}
             facilityId={isPlayer ? tournament.facilityId : facilityId}
             mode={mode}
+            courtOnly={!canManage}
             onChanged={() => { setListToken((value) => value + 1); setChildToken((value) => value + 1) }}
           />
         </>

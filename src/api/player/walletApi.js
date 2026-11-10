@@ -101,7 +101,8 @@ export async function getWallet() {
     const walletData = unwrap(response.data) || {}
     const balance = Number(walletData.balance ?? 0)
     const frozenBalance = Number(walletData.frozenBalance ?? 0)
-    const availableBalance = Number(walletData.availableBalance ?? balance - frozenBalance)
+    // Balance của BE đã là số dư khả dụng (tiền tạm giữ nằm riêng ở FrozenBalance), không trừ thêm
+    const availableBalance = Number(walletData.availableBalance ?? balance)
     const normalized = { ...walletData, balance, frozenBalance, availableBalance }
 
     // Đồng bộ cho TopBar và các trang khác đang đọc từ localStorage

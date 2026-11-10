@@ -173,30 +173,6 @@ export async function getParticipants(id) {
 export async function getBracket(id) {
   return toBracket(unwrap((await apiClient.get(`/api/v1/tournaments/${path(id)}/bracket`)).data))
 }
-// format: KNOCKOUT | ROUND_ROBIN | GROUP_KNOCKOUT (trống = BE tự chọn)
-export async function generateBracket(id, format) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/generate-bracket`, null, { params: format ? { format } : undefined })).data)
-}
 // Admin duyệt giải do người chơi tạo (giải PENDING không hiện công khai, không nhận đăng ký)
 export const approveTournament = async id => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/approve`)).data)
 export const rejectTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/reject`, { reason })).data)
-export async function randomPairing(id) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/execute-random-pairing`)).data)
-}
-// AddTournamentParticipantRequest: userId | phone | teamId.
-export async function addParticipant(id, { userId, phone, teamId }) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/participants`, { userId: userId || null, phone: phone || null, teamId: teamId || null })).data)
-}
-export async function removeParticipant(id, participantId) {
-  return unwrap((await apiClient.delete(`/api/v1/tournaments/${path(id)}/participants/${path(participantId)}`)).data)
-}
-export async function checkInParticipant(id, participantId) {
-  return unwrap((await apiClient.post(`/api/v1/tournaments/${path(id)}/check-in`, { participantId, qrCode: null })).data)
-}
-// UpdateMatchScoreRequest: { sets?, scoreP1, scoreP2, winnerId, tiebreakP1, tiebreakP2, resultType: NORMAL | WALKOVER | RETIRED }.
-export async function updateMatchScore(matchId, { scoreP1, scoreP2, winnerId, sets, tiebreakP1, tiebreakP2, resultType }) {
-  return unwrap((await apiClient.put(`/api/v1/matches/${path(matchId)}/score`, {
-    scoreP1, scoreP2, winnerId: winnerId || null, sets: sets?.length ? sets : null,
-    tiebreakP1: tiebreakP1 ?? null, tiebreakP2: tiebreakP2 ?? null, resultType: resultType || 'NORMAL',
-  })).data)
-}

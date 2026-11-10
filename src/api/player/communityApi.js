@@ -484,6 +484,16 @@ export async function deletePostComment(commentId) {
   }
 }
 
+// Lịch sử sửa (nội dung cũ trước mỗi lần sửa, mới nhất trước): [{ oldContent, oldMediaUrls, editedAt }]
+export async function getPostEditHistory(postId) {
+  const response = await apiClient.get(`${COMMUNITY_ENDPOINT}/posts/${postId}/edits`).catch((error) => { throw normalizeApiError(error) })
+  return response.data?.data || []
+}
+export async function getCommentEditHistory(commentId) {
+  const response = await apiClient.get(`${COMMUNITY_ENDPOINT}/comments/${commentId}/edits`).catch((error) => { throw normalizeApiError(error) })
+  return response.data?.data || []
+}
+
 export const likePost = likeCommunityPost
 export const unlikePost = unlikeCommunityPost
 

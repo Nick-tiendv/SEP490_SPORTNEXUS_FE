@@ -4,23 +4,33 @@ import { del, get, getList, patch, path, post, put } from './request.js'
 const url = id => `/api/v1/tournaments/${path(id)}`
 
 // ---------- Giải đấu ----------
-export const getMyTournaments = async () => (await getList('/api/v1/tournaments/my-tournaments')).items
+// scope = 'facility': giải người khác tổ chức tại cơ sở của tôi (chủ sân xem và giữ sân); mặc định: giải tôi tổ chức.
+// Mỗi giải có organizerId, organizerName, isOrganizer, purpose (INTERNAL = giải nội bộ), tier.
+export const getMyTournaments = async (scope) => (await getList('/api/v1/tournaments/my-tournaments', scope ? { scope } : undefined)).items
 export const getFacilityTournaments = async facilityId => (await getList(`/api/v1/facilities/${path(facilityId)}/tournaments`)).items
 export const getTournament = id => get(url(id))
 // CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules,
-// tier (AMATEUR | SEMI_PRO | PRO), purpose (EXCHANGE | COMMERCIAL | DEVELOPMENT), minRating, maxRating, minRatedMatches,
+// tier (AMATEUR | SEMI_PRO | PRO), purpose (EXCHANGE | COMMERCIAL | DEVELOPMENT | INTERNAL), minRating, maxRating, minRatedMatches,
 // children[{ name, categoryType, maxParticipants, minParticipants, entryFee, prizes, minTeamSize, maxTeamSize }].
 // Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; giải của Player chờ Admin duyệt.
 export const createTournament = payload => post('/api/v1/tournaments', payload)
 // UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Dùng id giải mẹ hoặc bảng con.
+// entryFee: lệ phí bảng đấu, gửi với id bảng con, chỉ khi bảng còn mở và chưa có ai đăng ký.
 export const updateTournamentInfo = (id, payload) => put(url(id), payload)
 export const deleteTournament = id => del(url(id))
 export const cancelTournament = (id, reason) => patch(`${url(id)}/cancel-tournament`, { reason })
 
 // ---------- Người / đội tham gia ----------
 export const getParticipants = async id => (await getList(`${url(id)}/participants`)).items
-// AddTournamentParticipantRequest: userId, phone, teamId.
+// AddTournamentParticipantRequest: userId, phone, teamId. Không còn thêm thẳng: BE gửi lời mời (chỉ giải nội bộ).
 export const addParticipant = (id, payload) => post(`${url(id)}/participants`, payload)
+
+// ---------- Lời mời giải nội bộ (purpose = INTERNAL) ----------
+// Mời VĐV (userId / phone) hoặc đội (teamId; đội trưởng nhận lời mời) vào bảng đấu; người được mời chấp nhận mới được đăng ký
+export const inviteToTournament = (childId, { userId, phone, teamId, message }) =>
+  post(`${url(childId)}/invitations`, { userId: userId || null, phone: phone || null, teamId: teamId || null, message: message || null })
+export const getTournamentInvitations = async childId => (await getList(`${url(childId)}/invitations`)).items
+export const cancelTournamentInvitation = invitationId => del(`/api/v1/tournaments/invitations/${path(invitationId)}`)
 export const removeParticipant = (id, participantId) => del(`${url(id)}/participants/${path(participantId)}`)
 export const checkInParticipant = (id, { participantId, qrCode }) => post(`${url(id)}/check-in`, { participantId, qrCode })
 
