@@ -824,7 +824,16 @@ function SplitPayment() {
     }
 
     const finalNumberOfSlots = Number(resolvedNumberOfSlots || state.numberOfSlots || (validSlotIds.length > 0 ? validSlotIds.length : 1)) || 1
-    const isConsecutive = state.isConsecutive !== false && (state.isConsecutive === true || validSlotIds.length <= 1 || Boolean(validSingleId))
+    // Cách 1 (N ca liên tiếp từ ca đầu) chỉ khi chắc chắn liên tiếp; nếu không rõ thì kiểm tra giờ các ca đã chọn.
+    const slotsAreContiguous = () => {
+      const picked = (Array.isArray(state.selectedSlots) ? state.selectedSlots : [])
+        .filter((s) => validSlotIds.includes(s?.id) && s.startTime && s.endTime)
+        .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+      if (picked.length !== validSlotIds.length) return false
+      return picked.every((s, i) => i === 0 || new Date(picked[i - 1].endTime).getTime() === new Date(s.startTime).getTime())
+    }
+    const isConsecutive = state.isConsecutive !== false &&
+      (validSlotIds.length <= 1 || state.isConsecutive === true || slotsAreContiguous())
 
     // Lấy danh sách ID người tham gia nếu chia tiền (Bước 2: participantIds: [...])
     const activeParticipantIds = paymentMode === 'split' && Array.isArray(invitedFriends)
@@ -835,7 +844,8 @@ function SplitPayment() {
       // Cách 1: courtSlotId + numberOfSlots (đặt N ca liên tiếp, tối đa 24). courtSlotIds để null
       return {
         courtSlotId: validSingleId,
-        numberOfSlots: finalNumberOfSlots,
+        // Có đủ danh sách ca thì số ca = đúng số ca đã chọn, tránh đặt dư khi state.numberOfSlots lệch
+        numberOfSlots: validSlotIds.length > 1 ? validSlotIds.length : finalNumberOfSlots,
         courtSlotIds: null,
         totalAmount: 0, // Server tự tính giá
         isSplitPayment: paymentMode === 'split',
@@ -843,10 +853,12 @@ function SplitPayment() {
       }
     }
 
-    // Cách 2: courtSlotIds (nhiều ca rời nhau). courtSlotId để null, numberOfSlots gửi số nguyên thay vì null (backend .NET không cho phép null System.Int32)
+    // Cách 2: courtSlotIds = đủ mọi ca (1 tiếng) đã chọn, courtSlotId để null.
+    // numberOfSlots phải là 1: BE coi mỗi id là ca bắt đầu và đặt numberOfSlots ca liên tiếp từ đó,
+    // gửi N (số ca) sẽ đặt dư ca và trừ dư tiền. Không gửi null vì BE là int không null.
     return {
       courtSlotId: null,
-      numberOfSlots: finalNumberOfSlots,
+      numberOfSlots: 1,
       courtSlotIds: validSlotIds.length > 0 ? validSlotIds : [validSingleId],
       totalAmount: 0,
       isSplitPayment: paymentMode === 'split',
@@ -960,7 +972,7 @@ function SplitPayment() {
             slotLabel: slotTime,
             date: state.date,
             hours,
-            numberOfSlots: bookingPayload.numberOfSlots || hours,
+            numberOfSlots: bookingPayload.courtSlotIds?.length || bookingPayload.numberOfSlots || hours,
             totalAmount: Number(activeSlotData?.price) || totalAmount,
             courtId: findSubCourtId(state),
             courtName: subCourt,
@@ -1163,7 +1175,7 @@ function SplitPayment() {
             slotLabel: slotTime,
             date: state.date,
             hours,
-            numberOfSlots: bookingPayload.numberOfSlots || hours,
+            numberOfSlots: bookingPayload.courtSlotIds?.length || bookingPayload.numberOfSlots || hours,
             totalAmount: Number(activeSlotData?.price) || totalAmount,
             courtId: findSubCourtId(state),
             courtName: subCourt,

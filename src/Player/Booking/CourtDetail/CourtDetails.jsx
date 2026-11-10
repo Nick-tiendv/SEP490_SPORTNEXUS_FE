@@ -355,9 +355,11 @@ function CourtDetails() {
     const firstId = sorted[0].id
     const allIds = sorted.map((s) => s.id)
 
+    // numberOfSlots = tổng số ca 1 tiếng đã chọn (Cách 1: số ca liên tiếp). Ca rời nhau đi theo Cách 2,
+    // SplitPayment gửi courtSlotIds kèm numberOfSlots = 1 để BE không đặt thêm ca liền sau mỗi ca.
     return {
       courtSlotId: firstId,
-      numberOfSlots: isConsecutive ? sorted.length : 2,
+      numberOfSlots: sorted.length,
       courtSlotIds: allIds,
       isConsecutive,
     }
