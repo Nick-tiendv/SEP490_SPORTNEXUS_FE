@@ -1784,7 +1784,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Cọc giữ chỗ Escrow</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {new Intl.NumberFormat('vi-VN').format(card.pricePerPerson || 45000)} đ
+                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : '—'}
                             </span>
                           </div>
                         </div>
@@ -3455,10 +3455,10 @@ function CommunityFeed() {
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    Người đầu tạo kèo (Host) đóng <strong className="text-gray-900 font-bold">1/4 tiền sân</strong> làm tiền cọc giữ sân ngay từ đầu.
+                    Chủ kèo (Host) trả trước <strong className="text-gray-900 font-bold">100% tiền sân</strong>: hệ thống đặt ca và trừ ví chủ kèo ngay khi tạo kèo.
                   </li>
                   <li>
-                    Chi phí còn lại được chia đều cho <strong className="text-gray-900 font-bold">3 người chơi khác</strong>. Các thành viên nhận slot phải hoàn tất thanh toán phần chia trong vòng <strong className="text-[#0284C7] font-bold">30 phút</strong>.
+                    Mỗi người nhận slot trả đúng mức <strong className="text-gray-900 font-bold">"Giá mỗi người"</strong> hiển thị trên kèo (hệ thống tính, mặc định chia đều tiền sân cho tổng số người chơi). Khoản này được giữ trong Escrow.
                   </li>
                 </ul>
               </div>
