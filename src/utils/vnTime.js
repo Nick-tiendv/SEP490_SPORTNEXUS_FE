@@ -16,3 +16,12 @@ export function vnClock(value) {
   const date = value instanceof Date ? value : new Date(value)
   return Number.isNaN(date.getTime()) ? '' : clockFormat.format(date)
 }
+
+const dateKeyFormat = new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
+
+// "2026-11-10T18:00:00+00:00" → "2026-11-11" (ngày theo giờ Việt Nam, dạng yyyy-MM-dd)
+export function vnDateKey(value) {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : dateKeyFormat.format(date)
+}
