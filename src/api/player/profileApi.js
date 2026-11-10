@@ -26,6 +26,9 @@ export const saveLocalAvatar = (avatarUrl) => {
     if (Object.keys(savedUser).length > 0) {
       localStorage.setItem('sportnexus_current_user', JSON.stringify({ ...savedUser, avatarUrl }))
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('player-profile-updated'))
+    }
   } catch {
     // bỏ qua lỗi bộ nhớ
   }

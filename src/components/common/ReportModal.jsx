@@ -9,10 +9,39 @@ import { uploadImage } from '../../api/player/uploadApi.js'
 // Danh sách lý do lấy từ GET /api/v1/reports/reasons?targetType= nên lý do mới của BE tự xuất hiện.
 const MAX_IMAGES = 5
 
-export default function ReportModal({ targetType = 'USER', targetUserId, targetObjectId, subject, onClose }) {
-  const reasons = useApi(() => getReportReasons(targetType), [targetType], { initialData: [] })
-  // getReportReasons trả danh sách mặc định (FACILITY) khi BE lỗi: chỉ giữ lý do đúng loại đối tượng
-  const options = (reasons.data || []).filter((r) => !r.targetType || String(r.targetType).toUpperCase() === targetType)
+const REPORT_TITLES = {
+  MATCH: 'Khiếu nại kết quả trận',
+  COMMUNITY_POST: 'Báo cáo bài viết vi phạm tiêu chuẩn cộng đồng',
+  POST_COMMENT: 'Báo cáo bình luận vi phạm quy tắc cộng đồng',
+  USER: 'Báo cáo người chơi',
+}
+
+const REPORT_SUCCESS_TOAST = {
+  MATCH: 'Đã gửi khiếu nại kết quả. Elo của trận sẽ chờ Admin xử lý.',
+  COMMUNITY_POST: 'Đã gửi báo cáo bài viết vi phạm tiêu chuẩn cộng đồng tới Admin.',
+  POST_COMMENT: 'Đã gửi báo cáo bình luận vi phạm quy tắc cộng đồng tới Admin.',
+  USER: 'Đã gửi báo cáo tới Admin.',
+}
+
+export function ReportModal({
+  targetType = 'USER',
+  targetUserId,
+  targetObjectId,
+  targetId,
+  subject,
+  targetName,
+  onClose,
+}) {
+  const normalizedTargetType = String(targetType || 'USER').toUpperCase()
+  const resolvedObjectId = targetObjectId ?? targetId
+  const resolvedSubject = subject || targetName
+  const reasons = useApi(() => getReportReasons(normalizedTargetType), [normalizedTargetType], { initialData: [] })
+  // getReportReasons trả danh sách mặc định (FACILITY) khi BE lỗi: giữ lý do đúng loại đối tượng hoặc ALL
+  const options = (reasons.data || []).filter((r) => {
+    if (!r.targetType) return true
+    const rt = String(r.targetType).toUpperCase()
+    return rt === normalizedTargetType || rt === 'ALL'
+  })
   const [reason, setReason] = useState('')
   const [description, setDescription] = useState('')
   const [images, setImages] = useState([])
@@ -40,8 +69,16 @@ export default function ReportModal({ targetType = 'USER', targetUserId, targetO
     if (description.trim().length < 10) { toast.error('Mô tả sự việc ít nhất 10 ký tự.'); return }
     setBusy(true)
     try {
-      await createReport({ targetType, targetUserId, targetObjectId, reason, description: description.trim(), evidenceImageUrls: images, requestedRefundPercentage: null })
-      toast.success(targetType === 'MATCH' ? 'Đã gửi khiếu nại kết quả. Elo của trận sẽ chờ Admin xử lý.' : 'Đã gửi báo cáo tới Admin.')
+      await createReport({
+        targetType: normalizedTargetType,
+        targetUserId,
+        targetObjectId: resolvedObjectId,
+        reason,
+        description: description.trim(),
+        evidenceImageUrls: images,
+        requestedRefundPercentage: null,
+      })
+      toast.success(REPORT_SUCCESS_TOAST[normalizedTargetType] || REPORT_SUCCESS_TOAST.USER)
       onClose(true)
     } catch (error) {
       toast.error(error?.message || 'Không gửi được báo cáo.')
@@ -55,8 +92,8 @@ export default function ReportModal({ targetType = 'USER', targetUserId, targetO
       <form className="snx-modal" role="dialog" aria-modal="true" aria-labelledby="report-title" onSubmit={submit}>
         <div className="snx-modal-head">
           <div>
-            <h2 id="report-title" className="snx-card-title">{targetType === 'MATCH' ? 'Khiếu nại kết quả trận' : 'Báo cáo người chơi'}</h2>
-            {subject && <p className="snx-card-subtitle">{subject}</p>}
+            <h2 id="report-title" className="snx-card-title">{REPORT_TITLES[normalizedTargetType] || REPORT_TITLES.USER}</h2>
+            {resolvedSubject && <p className="snx-card-subtitle">{resolvedSubject}</p>}
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={() => onClose(false)}><span className="material-symbols-outlined">close</span></button>
         </div>
@@ -103,3 +140,5 @@ export default function ReportModal({ targetType = 'USER', targetUserId, targetO
     </div>
   )
 }
+
+export default ReportModal

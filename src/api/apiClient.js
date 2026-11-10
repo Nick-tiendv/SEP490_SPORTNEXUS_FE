@@ -28,8 +28,6 @@ export function normalizeApiError(error) {
     403: 'Bạn không có quyền thực hiện thao tác này.',
     404: 'Không tìm thấy API yêu cầu.',
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
-    413: 'File tải lên quá lớn. Vui lòng chọn ảnh tối đa 5MB.',
-    415: 'Định dạng dữ liệu tải lên không được hỗ trợ. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.',
     413: 'Tệp tải lên vượt quá dung lượng cho phép (tối đa 5MB).',
     415: 'Định dạng dữ liệu hoặc tệp tải lên không được hỗ trợ.',
   }

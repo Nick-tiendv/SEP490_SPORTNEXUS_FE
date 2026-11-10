@@ -18,6 +18,7 @@ const formatBookingStatusLabel = (rawStatus) => {
   if (upper === 'PENDING') return 'CHỜ GÓP TIỀN'
   if (upper === 'CANCELLED') return 'ĐÃ HỦY'
   if (upper === 'COMPLETED') return 'HOÀN THÀNH'
+  if (upper === 'NO_SHOW' || upper === 'EXPIRED') return 'QUÁ GIỜ (VÔ HIỆU)'
   return upper || 'ĐÃ XÁC NHẬN'
 }
 
@@ -38,7 +39,7 @@ function checkInWindowOf(ticket, nowMs) {
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds }) => ({
+const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
   id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
@@ -55,6 +56,9 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, court
   allowedCheckInEnd: clockVN(endTime),
   playDate: dateVN(startTime),
   startAt: startTime || null,
+  endAt: endTime || null,
+  isNoShow: Boolean(isNoShow),
+  anyCheckedIn: Boolean(anyCheckedIn),
   escrowAmount: Number(amount) || 0,
   status: status || 'PENDING_CHECKIN',
   timeRangeLabel: timeRangeLabel || null,
@@ -83,14 +87,22 @@ function CheckInQR() {
           // Đặt sân: GET /api/v1/bookings/{bookingId}/qr-ticket
           let bookingId = searchParams.get('bookingId') || localStorage.getItem('sportnexus_last_booking_id')
           if (!bookingId) {
-            // Không có mã đơn trên URL: lấy đơn sắp tới gần nhất của người dùng
-            const upcoming = await getUpcomingBookings()
+            // Không có mã đơn trên URL: lấy đơn sắp tới gần nhất của người dùng (hoặc đơn đặt sân gần nhất nếu không còn đơn sắp tới)
+            const upcoming = await getUpcomingBookings().catch(() => [])
             const enrichedUpcoming = await enrichPlayerBookings(upcoming)
             bookingId = enrichedUpcoming[0]?.id || enrichedUpcoming[0]?.bookingId || upcoming[0]?.id || upcoming[0]?.bookingId || null
           }
+          if (!bookingId) {
+            const myList = await getMyBookings().catch(() => [])
+            const enrichedMy = await enrichPlayerBookings(myList)
+            bookingId = enrichedMy[0]?.id || enrichedMy[0]?.bookingId || myList[0]?.id || myList[0]?.bookingId || null
+          }
           if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
           // qr-ticket trả về chuỗi mã QR; chi tiết đơn lấy từ GET /api/v1/bookings/{bookingId}
-          const [qr, detail] = await Promise.all([getBookingQrTicket(bookingId), getBookingById(bookingId)])
+          const [qr, detail] = await Promise.all([
+            getBookingQrTicket(bookingId).catch(() => null),
+            getBookingById(bookingId),
+          ])
           {
             const participants = detail?.participants || []
             const me = participants.find((p) => String(p.userId) === String(currentUser.id)) || participants.find((p) => p.isHost) || {}
@@ -105,25 +117,55 @@ function CheckInQR() {
               myBookings: mySiblings,
             })
 
+            const groupIdsLower = new Set(
+              [bookingId, ...(Array.isArray(playWindow?.groupedBookingIds) ? playWindow.groupedBookingIds : [])]
+                .filter(Boolean)
+                .map((id) => String(id).trim().toLowerCase())
+            )
+            const matchedSiblings = [...upcomingSiblings, ...mySiblings].filter((s) =>
+              groupIdsLower.has(String(s?.bookingId || s?.id || '').trim().toLowerCase())
+            )
+            const anyParticipantCheckedIn =
+              Boolean(me.isCheckedIn) ||
+              participants.some((p) => Boolean(p?.isCheckedIn)) ||
+              Number(detail?.checkedInCount) > 0 ||
+              matchedSiblings.some(
+                (s) =>
+                  Number(s?.checkedInCount) > 0 ||
+                  (Array.isArray(s?.participants) && s.participants.some((p) => Boolean(p?.isCheckedIn)))
+              )
+            const rawDetailStatus = String(detail?.bookingStatus || detail?.status || '').toUpperCase()
+            const siblingCheckedIn =
+              (Array.isArray(playWindow?.groupedSlots) &&
+                playWindow.groupedSlots.some((s) => ['CHECKED_IN', 'COMPLETED'].includes(String(s?.status || '').toUpperCase()))) ||
+              matchedSiblings.some((s) => ['CHECKED_IN', 'COMPLETED'].includes(String(s?.bookingStatus || s?.status || '').toUpperCase()))
+            const isBookingCheckedIn =
+              anyParticipantCheckedIn ||
+              ['CHECKED_IN', 'COMPLETED'].includes(rawDetailStatus) ||
+              siblingCheckedIn
+
+            const rawQrCode =
+              (typeof qr === 'string' ? qr : (qr?.qrCode || qr?.qrToken || qr?.code)) ||
+              detail?.qrCode ||
+              detail?.ticketCode ||
+              ''
+
             return toTicket({
               id: bookingId,
-              qrCode: typeof qr === 'string' ? qr : qr?.qrCode,
+              qrCode: rawQrCode,
               facilityId: detail?.facilityId,
               facilityName: detail?.facilityName,
               facilityAddress: detail?.facilityAddress,
               courtName: detail?.courtName,
               sportName: detail?.sportName,
-              startTime: detail?.startTime,
-              endTime: detail?.endTime,
-              status: me.isCheckedIn || String(detail?.bookingStatus).toUpperCase() === 'CHECKED_IN' ? 'CHECKED_IN' : detail?.bookingStatus,
-              amount: detail?.paidAmount ?? detail?.totalAmount,
-              ...{
-                startTime: playWindow.startTime ?? detail?.startTime,
-                endTime: playWindow.endTime ?? detail?.endTime,
-                amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
-                timeRangeLabel: playWindow.timeRangeLabel,
-                groupedBookingIds: playWindow.groupedBookingIds,
-              },
+              startTime: playWindow.startTime ?? detail?.startTime,
+              endTime: playWindow.endTime ?? detail?.endTime,
+              status: isBookingCheckedIn ? 'CHECKED_IN' : (detail?.bookingStatus || detail?.status),
+              isNoShow: Boolean(detail?.isNoShow) || rawDetailStatus === 'NO_SHOW',
+              anyCheckedIn: isBookingCheckedIn,
+              amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
+              timeRangeLabel: playWindow.timeRangeLabel,
+              groupedBookingIds: playWindow.groupedBookingIds,
             })
           }
         } else if (ticketType === 'lfg') {
@@ -133,6 +175,7 @@ function CheckInQR() {
           const res = await getLfgQrTicket(cardId)
 
           {
+            const lfgCheckedIn = Boolean(res?.isCheckedIn) || ['CHECKED_IN', 'COMPLETED'].includes(String(res?.status || '').toUpperCase())
             return toTicket({
               id: res?.lfgCardId || cardId,
               qrCode: res?.qrCode,
@@ -140,7 +183,9 @@ function CheckInQR() {
               courtName: res?.courtName,
               startTime: res?.startTime,
               endTime: res?.endTime,
-              status: res?.isCheckedIn ? 'CHECKED_IN' : 'PENDING_CHECKIN',
+              status: lfgCheckedIn ? 'CHECKED_IN' : (res?.status || 'PENDING_CHECKIN'),
+              anyCheckedIn: lfgCheckedIn,
+              isNoShow: Boolean(res?.isNoShow),
               sportType: 'KÈO GHÉP TRẬN LFG',
             })
           }
@@ -151,6 +196,7 @@ function CheckInQR() {
           const res = await getTournamentQrTicket(tournamentId)
 
           {
+            const tournamentCheckedIn = Boolean(res?.isCheckedIn) || String(res?.tournamentStatus || '').toUpperCase() === 'CHECKED_IN'
             return toTicket({
               id: res?.tournamentId || tournamentId,
               qrCode: res?.qrCode,
@@ -158,8 +204,11 @@ function CheckInQR() {
               facilityName: res?.facilityName,
               facilityAddress: res?.facilityAddress,
               courtName: res?.teamName || res?.fullName,
+              startTime: res?.startTime,
+              endTime: res?.endTime,
               sportType: res?.tournamentName || 'GIẢI ĐẤU',
-              status: res?.tournamentStatus,
+              status: tournamentCheckedIn ? 'CHECKED_IN' : res?.tournamentStatus,
+              anyCheckedIn: tournamentCheckedIn,
             })
           }
         }
@@ -244,15 +293,81 @@ function CheckInQR() {
     })
   }
 
+  // Đồng hồ thời gian thực để tự động vô hiệu hóa mã QR ngay khi ca sân vượt quá giờ mà chưa có ai check-in
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 15000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Hủy đơn và hoàn tiền (Image 2)
+  const rawTicketStatus = String(ticketData?.status || '').toUpperCase()
+  const isCancelled = rawTicketStatus === 'CANCELLED'
+  // Đã check-in: theo trạng thái vé từ BE hoặc có người chơi trong đơn đã check-in
+  const checkInDone =
+    rawTicketStatus === 'CHECKED_IN' ||
+    rawTicketStatus === 'COMPLETED' ||
+    Boolean(ticketData?.anyCheckedIn)
+
+  const isPastPlayWindow = useMemo(() => {
+    if (!ticketData) return false
+    const endMs = ticketData.endAt ? new Date(ticketData.endAt).getTime() : NaN
+    if (Number.isFinite(endMs)) return nowMs > endMs
+    const startMs = ticketData.startAt ? new Date(ticketData.startAt).getTime() : NaN
+    if (Number.isFinite(startMs)) return nowMs > startMs
+    return false
+  }, [ticketData, nowMs])
+
+  const checkInWindow = checkInWindowOf(ticketData, nowMs)
+
+  // Sân đã vượt quá giờ mà không có người chơi nào check-in
+  const isExpiredNoCheckIn =
+    !checkInDone &&
+    !isCancelled &&
+    (isPastPlayWindow ||
+      checkInWindow === 'expired' ||
+      Boolean(ticketData?.isNoShow) ||
+      rawTicketStatus === 'NO_SHOW' ||
+      rawTicketStatus === 'EXPIRED')
+
+  // Mã QR bị làm mờ và vô hiệu hóa khi sân đã được check-in hoặc đã vượt quá giờ mà không người chơi nào check-in (hoặc đã hủy)
+  const isQrDisabled = checkInDone || isExpiredNoCheckIn || isCancelled
+
   // 2.7 Bước 2: Chủ sân quét QR trên máy của họ (POST /checkin/scan là API của chủ sân).
   // Người chơi chỉ kiểm tra lại trạng thái vé từ BE.
   const handleGateScanCheckIn = async () => {
+    if (checkInDone) {
+      setScanError('Sân này đã được check-in trước đó. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
+      return
+    }
+    if (isExpiredNoCheckIn) {
+      setScanError('Sân đã vượt quá giờ thi đấu mà không có người chơi nào check-in. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
+      return
+    }
+    if (isCancelled) {
+      setScanError('Đơn đặt sân đã bị hủy. Mã QR đã bị vô hiệu hóa.')
+      return
+    }
     setIsScanningCheckIn(true)
     setScanError(null)
     try {
       const ticket = await fetchTicket()
       if (ticket) setTicketData(ticket)
-      if (String(ticket?.status).toUpperCase() !== 'CHECKED_IN') {
+      const fetchedStatus = String(ticket?.status || '').toUpperCase()
+      const fetchedEndMs = ticket?.endAt ? new Date(ticket.endAt).getTime() : NaN
+      const fetchedExpired =
+        fetchedStatus !== 'CHECKED_IN' &&
+        fetchedStatus !== 'COMPLETED' &&
+        !ticket?.anyCheckedIn &&
+        ((Number.isFinite(fetchedEndMs) && nowMs > fetchedEndMs) ||
+          Boolean(ticket?.isNoShow) ||
+          fetchedStatus === 'NO_SHOW' ||
+          fetchedStatus === 'EXPIRED')
+      if (fetchedExpired) {
+        setScanError('Sân đã vượt quá giờ thi đấu mà không có người chơi nào check-in. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
+        return
+      }
+      if (fetchedStatus !== 'CHECKED_IN' && fetchedStatus !== 'COMPLETED' && !ticket?.anyCheckedIn) {
         setScanError('Vé chưa được check-in. Hãy đưa mã QR (hoặc mã vé dự phòng) cho chủ sân quét tại quầy.')
         return
       }
@@ -277,8 +392,6 @@ function CheckInQR() {
     }
   }
 
-  // Hủy đơn và hoàn tiền (Image 2)
-  const isCancelled = String(ticketData?.status || '').toUpperCase() === 'CANCELLED'
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancellationReasons, setCancellationReasons] = useState([])
   const [selectedReasonCode, setSelectedReasonCode] = useState(1)
@@ -299,6 +412,11 @@ function CheckInQR() {
   const handleOpenCancelModal = async () => {
     if (checkInDone) {
       setToastMessage('❌ Đơn đã check-in tại sân không thể hủy!')
+      setTimeout(() => setToastMessage(null), 3500)
+      return
+    }
+    if (isExpiredNoCheckIn) {
+      setToastMessage('❌ Đơn đã vượt quá giờ thi đấu, không thể hủy!')
       setTimeout(() => setToastMessage(null), 3500)
       return
     }
@@ -390,20 +508,6 @@ function CheckInQR() {
     }
   }
   
-  // Trạng thái Check-in & Check-out:
-  // Banner / Nút "Đã check-in" chỉ bị làm mờ khi chủ sân scan QR từ tài khoản của chủ sân.
-  // Khi người chơi chưa check-in thì nút vẫn sáng.
-  // Đã check-in: theo trạng thái vé từ BE (chủ sân quét QR trên máy của họ)
-  const checkInDone = String(ticketData?.status || '').toUpperCase() === 'CHECKED_IN'
-
-  // Hiệu lực mã QR theo giờ hiện tại (cập nhật mỗi 30 giây): qua ca / qua ngày thì vô hiệu hóa QR
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 30000)
-    return () => clearInterval(timer)
-  }, [])
-  const checkInWindow = checkInWindowOf(ticketData, nowMs)
-  const qrExpired = !checkInDone && !isCancelled && checkInWindow === 'expired'
   // Trạng thái check-out (ghi nhận trên máy) theo mã vé đang xem
   const currentTicketCode = (ticketData?.ticketCode || '').replace('#', '').trim()
   const [checkedOutCode, setCheckedOutCode] = useState(null)
@@ -418,21 +522,22 @@ function CheckInQR() {
   }, [checkInDone, currentTicketCode])
   const checkOutDone = checkInDone && Boolean(currentTicketCode) && (checkedOutCode === currentTicketCode || storedCheckOutDone)
 
-  // Tự hỏi lại BE mỗi 20 giây khi vé chưa check-in (chủ sân quét trên máy của họ)
+  // Tự hỏi lại BE mỗi 20 giây khi vé còn hiệu lực check-in (chủ sân quét trên máy của họ)
   useEffect(() => {
-    const status = String(ticketData?.status || '').toUpperCase()
-    if (!ticketData?.id || qrExpired || ['CHECKED_IN', 'CANCELLED'].includes(status)) return undefined
+    if (!ticketData?.id || isQrDisabled) return undefined
     const timer = setInterval(() => {
       fetchTicket()
         .then((ticket) => {
           if (!ticket) return
           setTicketData(ticket)
-          if (String(ticket.status).toUpperCase() === 'CHECKED_IN') setToastMessage('🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
+          if (String(ticket.status).toUpperCase() === 'CHECKED_IN' || ticket.anyCheckedIn) {
+            setToastMessage('🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
+          }
         })
         .catch(() => { /* lỗi mạng tạm thời: thử lại ở lượt sau */ })
     }, 20000)
     return () => clearInterval(timer)
-  }, [ticketData?.id, ticketData?.status, fetchTicket, qrExpired])
+  }, [ticketData?.id, isQrDisabled, fetchTicket])
 
   // Modal Check-out và Đánh giá sau trận
   const [showCheckOutModal, setShowCheckOutModal] = useState(false)
@@ -470,6 +575,17 @@ function CheckInQR() {
 
   // Mã dự phòng khi camera của chủ sân lỗi: chính là mã QR của vé (chủ sân nhập tay ở trang Quét QR)
   const handleCopyOTP = async () => {
+    if (isQrDisabled) {
+      setToastMessage(
+        checkInDone
+          ? '⚠️ Sân đã được check-in, mã vé đã bị vô hiệu hóa!'
+          : isExpiredNoCheckIn
+          ? '⚠️ Sân đã quá giờ mà không ai check-in, mã vé đã bị vô hiệu hóa!'
+          : '⚠️ Đơn đặt sân đã bị hủy, mã vé đã bị vô hiệu hóa!'
+      )
+      setTimeout(() => setToastMessage(null), 3000)
+      return
+    }
     if (!ticketData?.qrCode) {
       setToastMessage('⚠️ Chưa có mã vé để sao chép.')
       setTimeout(() => setToastMessage(null), 3000)
@@ -671,7 +787,7 @@ function CheckInQR() {
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              background: '#DCFCE7',
+              background: isExpiredNoCheckIn || isCancelled ? '#FEE2E2' : '#DCFCE7',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -683,19 +799,21 @@ function CheckInQR() {
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: '#10B981',
-                boxShadow: '0 0 10px #10B981',
+                background: isExpiredNoCheckIn || isCancelled ? '#EF4444' : '#10B981',
+                boxShadow: isExpiredNoCheckIn || isCancelled ? '0 0 8px #EF4444' : '0 0 10px #10B981',
               }}
             />
-            <span
-              style={{
-                position: 'absolute',
-                inset: 0,
-                borderRadius: '50%',
-                border: '2px solid #10B981',
-                animation: 'radarPulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite',
-              }}
-            />
+            {!isExpiredNoCheckIn && !isCancelled && (
+              <span
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: '50%',
+                  border: '2px solid #10B981',
+                  animation: 'radarPulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite',
+                }}
+              />
+            )}
           </div>
 
           {/* Court status text */}
@@ -724,7 +842,15 @@ function CheckInQR() {
                 </>
               ) : checkInDone ? (
                 <>
-                  <span style={{ color: '#0284C7' }}>Đang Hoạt Động</span> • {ticketData?.gate || '—'}
+                  <span style={{ color: '#0284C7' }}>Đã Check-in (Mã QR Đã Khóa)</span> • {ticketData?.gate || '—'}
+                </>
+              ) : isExpiredNoCheckIn ? (
+                <>
+                  <span style={{ color: '#DC2626' }}>Quá Giờ Check-in (Đã Vô Hiệu)</span> • {ticketData?.gate || '—'}
+                </>
+              ) : isCancelled ? (
+                <>
+                  <span style={{ color: '#64748B' }}>Đơn Đã Bị Hủy</span> • {ticketData?.gate || '—'}
                 </>
               ) : (
                 <>
@@ -938,7 +1064,13 @@ function CheckInQR() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    background: '#DCFCE7',
+                    background: checkInDone
+                      ? '#E0F2FE'
+                      : isExpiredNoCheckIn
+                      ? '#FEE2E2'
+                      : isCancelled
+                      ? '#F1F5F9'
+                      : '#DCFCE7',
                     padding: '4px 10px',
                     borderRadius: '20px',
                     whiteSpace: 'nowrap',
@@ -949,15 +1081,45 @@ function CheckInQR() {
                     style={{
                       fontSize: '10.5px',
                       fontWeight: 800,
-                      color: '#15803D',
+                      color: checkInDone
+                        ? '#0369A1'
+                        : isExpiredNoCheckIn
+                        ? '#B91C1C'
+                        : isCancelled
+                        ? '#475569'
+                        : '#15803D',
                       textTransform: 'uppercase',
                       letterSpacing: '0.4px',
                     }}
                   >
-                    TRẬN ĐẤU SẮP TỚI
+                    {checkInDone
+                      ? 'ĐÃ CHECK-IN VÀO SÂN'
+                      : isExpiredNoCheckIn
+                      ? 'ĐÃ QUÁ GIỜ CHECK-IN'
+                      : isCancelled
+                      ? 'ĐƠN ĐÃ BỊ HỦY'
+                      : 'TRẬN ĐẤU SẮP TỚI'}
                   </span>
-                  <span style={{ color: '#EA580C', fontSize: '11px', fontWeight: 700 }}>
-                    🕒 Còn 45 phút
+                  <span
+                    style={{
+                      color: checkInDone
+                        ? '#0284C7'
+                        : isExpiredNoCheckIn
+                        ? '#DC2626'
+                        : isCancelled
+                        ? '#64748B'
+                        : '#EA580C',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {checkInDone
+                      ? '🔒 Mã QR đã khóa'
+                      : isExpiredNoCheckIn
+                      ? '⛔ Mã QR đã vô hiệu hóa'
+                      : isCancelled
+                      ? '⛔ Vé không còn hiệu lực'
+                      : `🕒 ${ticketData?.startTime || '—'}`}
                   </span>
                 </div>
 
@@ -1182,62 +1344,156 @@ function CheckInQR() {
 
             {/* Stylized QR Code Graphic matching screenshot */}
             <div
-              onClick={() => { if (!qrExpired) setShowCheckInModal(true) }}
+              onClick={isQrDisabled ? undefined : () => setShowCheckInModal(true)}
               style={{
-                cursor: qrExpired ? 'not-allowed' : 'pointer',
+                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
                 padding: '12px',
-                background: '#ffffff',
+                background: isQrDisabled ? '#F8FAFC' : '#ffffff',
                 borderRadius: '16px',
-                border: '1px solid #E5E7EB',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+                border: isQrDisabled ? '1.5px dashed #CBD5E1' : '1px solid #E5E7EB',
+                boxShadow: isQrDisabled ? 'none' : '0 4px 20px rgba(0, 0, 0, 0.04)',
                 position: 'relative',
                 transition: 'transform 0.2s, box-shadow 0.2s',
               }}
               onMouseEnter={(e) => {
+                if (isQrDisabled) return
                 e.currentTarget.style.transform = 'scale(1.02)'
                 e.currentTarget.style.boxShadow = '0 8px 26px rgba(22, 163, 74, 0.16)'
               }}
               onMouseLeave={(e) => {
+                if (isQrDisabled) return
                 e.currentTarget.style.transform = 'scale(1)'
                 e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.04)'
               }}
-              title="Nhấn để mô phỏng quét QR vào cổng"
+              title={
+                checkInDone
+                  ? 'Sân đã được check-in • Mã QR đã bị vô hiệu hóa và không thể check-in lại'
+                  : isExpiredNoCheckIn
+                  ? 'Sân đã vượt quá giờ mà không có người chơi check-in • Mã QR đã bị vô hiệu hóa'
+                  : isCancelled
+                  ? 'Đơn đặt sân đã bị hủy • Mã QR đã bị vô hiệu hóa'
+                  : 'Nhấn để mô phỏng quét QR vào cổng'
+              }
             >
-              {/* Laser scan line effect (tắt khi mã QR đã hết hiệu lực) */}
-              {!qrExpired && <div
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  right: '12px',
-                  height: '2px',
-                  background: 'linear-gradient(90deg, transparent, #22C55E, transparent)',
-                  boxShadow: '0 0 10px #22C55E',
-                  animation: 'laserScan 2.4s ease-in-out infinite',
-                  pointerEvents: 'none',
-                }}
-              />}
+              {/* Laser scan line effect (chỉ hiển thị khi mã QR còn hiệu lực) */}
+              {!isQrDisabled && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    right: '12px',
+                    height: '2px',
+                    background: 'linear-gradient(90deg, transparent, #22C55E, transparent)',
+                    boxShadow: '0 0 10px #22C55E',
+                    animation: 'laserScan 2.4s ease-in-out infinite',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
 
-              {/* Mã QR thật của vé (qrCode do BE cấp); chủ sân quét mã này tại cổng để check-in */}
-              {ticketData?.qrCode && qrExpired ? (
-                // Qua ca / qua ngày: không hiện mã quét được nữa (BE cũng từ chối khi quét)
-                <div style={{ position: 'relative', background: '#ffffff', borderRadius: 14, padding: 12 }}>
-                  <div style={{ filter: 'blur(6px) grayscale(1)', opacity: 0.35 }} aria-hidden="true">
-                    <QRCodeSVG value="SPORTNEXUS-EXPIRED" size={166} level="M" />
-                  </div>
-                  <div role="status" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, textAlign: 'center', padding: 16 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 34, color: '#B91C1C' }}>event_busy</span>
-                    <strong style={{ color: '#B91C1C', fontSize: 14 }}>Mã QR đã hết hiệu lực</strong>
-                    <span style={{ color: '#475569', fontSize: 11.5, fontWeight: 600 }}>
-                      Ca chơi đã kết thúc lúc {ticketData.allowedCheckInEnd} ngày {ticketData.playDate}, không thể dùng mã này để check-in.
-                    </span>
-                  </div>
-                </div>
-              ) : ticketData?.qrCode ? (
-                <div style={{ background: '#ffffff', borderRadius: 14, padding: 12 }}>
-                  <QRCodeSVG value={ticketData.qrCode} size={166} level="M" />
+              {/* Mã QR thật của vé (qrCode do BE cấp); bị làm mờ và vô hiệu hóa nếu đã check-in hoặc đã quá giờ */}
+              {ticketData?.qrCode || isQrDisabled ? (
+                <div
+                  style={{
+                    background: '#ffffff',
+                    borderRadius: 14,
+                    padding: 12,
+                    filter: isQrDisabled ? 'blur(5px) grayscale(100%)' : 'none',
+                    opacity: isQrDisabled ? 0.28 : 1,
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                    transition: 'filter 0.25s ease, opacity 0.25s ease',
+                  }}
+                >
+                  <QRCodeSVG
+                    value={isQrDisabled ? 'DISABLED-QR-TICKET' : ticketData.qrCode}
+                    size={166}
+                    level="M"
+                  />
                 </div>
               ) : (
                 <div style={{ width: 190, height: 190, display: 'grid', placeItems: 'center', background: '#ffffff', borderRadius: 14, color: '#6b7280', fontSize: 12, textAlign: 'center', padding: 12 }}>Chưa có mã vé</div>
+              )}
+
+              {/* Lớp phủ thông báo trạng thái vô hiệu hóa trực tiếp trên mã QR bị làm mờ */}
+              {isQrDisabled && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '16px',
+                    background: checkInDone
+                      ? 'rgba(240, 253, 244, 0.45)'
+                      : 'rgba(248, 250, 252, 0.5)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '12px',
+                    textAlign: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      border: checkInDone
+                        ? '1.5px solid #86EFAC'
+                        : isExpiredNoCheckIn
+                        ? '1.5px solid #FCA5A5'
+                        : '1.5px solid #CBD5E1',
+                      borderRadius: '14px',
+                      padding: '10px 14px',
+                      boxShadow: '0 8px 20px rgba(15, 23, 42, 0.12)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      maxWidth: '185px',
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: '26px',
+                        color: checkInDone ? '#15803D' : isExpiredNoCheckIn ? '#DC2626' : '#64748B',
+                      }}
+                    >
+                      {checkInDone ? 'lock' : isExpiredNoCheckIn ? 'timer_off' : 'cancel'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        color: checkInDone ? '#166534' : isExpiredNoCheckIn ? '#991B1B' : '#334155',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.3px',
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {checkInDone
+                        ? 'Đã Check-in • Đã Vô Hiệu Hóa'
+                        : isExpiredNoCheckIn
+                        ? 'Quá Giờ • Đã Vô Hiệu Hóa'
+                        : 'Vé Đã Bị Hủy'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: checkInDone ? '#15803D' : isExpiredNoCheckIn ? '#B91C1C' : '#64748B',
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {checkInDone
+                        ? 'Sân đã được check-in, không thể check-in nữa'
+                        : isExpiredNoCheckIn
+                        ? 'Vượt quá giờ không ai check-in, không thể check-in nữa'
+                        : 'Mã QR không còn hiệu lực'}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1266,7 +1522,11 @@ function CheckInQR() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  color: '#15803D',
+                  color: isQrDisabled
+                    ? isExpiredNoCheckIn
+                      ? '#DC2626'
+                      : '#64748B'
+                    : '#15803D',
                   fontSize: '13px',
                   fontWeight: 800,
                 }}
@@ -1275,12 +1535,19 @@ function CheckInQR() {
                   className="material-symbols-outlined"
                   style={{
                     fontSize: '18px',
-                    color: '#16A34A',
+                    color: isQrDisabled
+                      ? isExpiredNoCheckIn
+                        ? '#DC2626'
+                        : '#64748B'
+                      : '#16A34A',
                   }}
                 >
-                  verified
+                  {isQrDisabled ? 'block' : 'verified'}
                 </span>
-                <span style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>Mã QR Check-in: #{ticketData?.ticketCode || '—'}</span>
+                <span style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                  Mã QR Check-in: #{ticketData?.ticketCode || '—'}
+                  {isQrDisabled ? ' (Đã vô hiệu hóa)' : ''}
+                </span>
               </div>
 
               {/* Tên cơ sở & địa chỉ sân */}
@@ -1333,57 +1600,101 @@ function CheckInQR() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    background: '#F0FDF4',
-                    border: '1px solid #BBF7D0',
+                    background: isExpiredNoCheckIn
+                      ? '#FEF2F2'
+                      : isQrDisabled
+                      ? '#F1F5F9'
+                      : '#F0FDF4',
+                    border: isExpiredNoCheckIn
+                      ? '1px solid #FECACA'
+                      : isQrDisabled
+                      ? '1px solid #CBD5E1'
+                      : '1px solid #BBF7D0',
                     padding: '5px 12px',
                     borderRadius: '8px',
                     fontSize: '11.5px',
                   }}
                 >
-                  <span style={{ color: '#15803D', fontWeight: 600 }}>🎟️ Khung check-in mở:</span>
-                  <span style={{ color: '#166534', fontWeight: 800 }}>
-                    {`${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
+                  <span
+                    style={{
+                      color: isExpiredNoCheckIn
+                        ? '#B91C1C'
+                        : isQrDisabled
+                        ? '#475569'
+                        : '#15803D',
+                      fontWeight: 600,
+                    }}
+                  >
+                    🎟️ {isQrDisabled ? 'Trạng thái mã QR:' : 'Khung check-in mở:'}
+                  </span>
+                  <span
+                    style={{
+                      color: isExpiredNoCheckIn
+                        ? '#991B1B'
+                        : isQrDisabled
+                        ? '#334155'
+                        : '#166534',
+                      fontWeight: 800,
+                    }}
+                  >
+                    {checkInDone
+                      ? 'Đã check-in • Vô hiệu hóa'
+                      : isExpiredNoCheckIn
+                      ? 'Quá giờ • Không thể check-in'
+                      : isCancelled
+                      ? 'Đã hủy • Vô hiệu hóa'
+                      : (ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.allowedCheckInStart || '—'} - ${ticketData?.allowedCheckInEnd || '—'}`}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Buttons: Check-in / Check-out / Đánh giá bạn chơi */}
-            {!checkInDone && (
-              <button
-                type="button"
-                onClick={() => setShowCheckInModal(true)}
-                style={{
-                  marginTop: '10px',
-                  width: '100%',
-                  maxWidth: '360px',
-                  padding: '9px 16px',
-                  borderRadius: '12px',
-                  border: '1.5px dashed #10B981',
-                  background: '#F0FDF4',
-                  color: '#15803D',
-                  fontSize: '12.5px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#DCFCE7'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#F0FDF4'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                  qr_code_scanner
-                </span>
-                Mô phỏng quét mã vào cổng (Check-in)
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={isQrDisabled}
+              onClick={isQrDisabled ? undefined : () => setShowCheckInModal(true)}
+              style={{
+                marginTop: '10px',
+                width: '100%',
+                maxWidth: '360px',
+                padding: '9px 16px',
+                borderRadius: '12px',
+                border: isQrDisabled
+                  ? '1.5px dashed #CBD5E1'
+                  : '1.5px dashed #10B981',
+                background: isQrDisabled ? '#F1F5F9' : '#F0FDF4',
+                color: isQrDisabled ? '#94A3B8' : '#15803D',
+                fontSize: '12.5px',
+                fontWeight: 700,
+                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
+                opacity: isQrDisabled ? 0.65 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                if (!isQrDisabled) e.currentTarget.style.background = '#DCFCE7'
+              }}
+              onMouseLeave={(e) => {
+                if (!isQrDisabled) e.currentTarget.style.background = '#F0FDF4'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                {checkInDone ? 'lock' : isExpiredNoCheckIn ? 'timer_off' : isCancelled ? 'block' : 'qr_code_scanner'}
+              </span>
+              <span>
+                {checkInDone
+                  ? 'Sân đã check-in • Mã QR đã bị vô hiệu hóa'
+                  : isExpiredNoCheckIn
+                  ? 'Quá giờ check-in • Không thể check-in được nữa'
+                  : isCancelled
+                  ? 'Đơn đã hủy • Không thể check-in'
+                  : 'Mô phỏng quét mã vào cổng (Check-in)'}
+              </span>
+            </button>
 
             {checkInDone && !checkOutDone && (
               <button
@@ -1471,7 +1782,7 @@ function CheckInQR() {
             <button
               type="button"
               onClick={handleOpenCancelModal}
-              disabled={checkInDone || isCancelled}
+              disabled={isQrDisabled}
               style={{
                 marginTop: '10px',
                 width: '100%',
@@ -1480,25 +1791,25 @@ function CheckInQR() {
                 borderRadius: '12px',
                 border: isCancelled
                   ? '1px solid #CBD5E1'
-                  : checkInDone
+                  : checkInDone || isExpiredNoCheckIn
                   ? '1px solid #E2E8F0'
                   : '1.5px solid #EF4444',
                 background: isCancelled
                   ? '#F1F5F9'
-                  : checkInDone
+                  : checkInDone || isExpiredNoCheckIn
                   ? '#F8FAFC'
                   : '#FEF2F2',
                 color: isCancelled
                   ? '#64748B'
-                  : checkInDone
+                  : checkInDone || isExpiredNoCheckIn
                   ? '#94A3B8'
                   : '#DC2626',
                 fontSize: '13px',
                 fontWeight: 700,
-                cursor: (checkInDone || isCancelled) ? 'not-allowed' : 'pointer',
-                opacity: checkInDone ? 0.55 : 1,
-                filter: checkInDone ? 'grayscale(0.6)' : 'none',
-                boxShadow: (checkInDone || isCancelled)
+                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
+                opacity: checkInDone || isExpiredNoCheckIn ? 0.55 : 1,
+                filter: checkInDone || isExpiredNoCheckIn ? 'grayscale(0.6)' : 'none',
+                boxShadow: isQrDisabled
                   ? 'none'
                   : '0 4px 14px rgba(239, 68, 68, 0.16)',
                 display: 'flex',
@@ -1508,14 +1819,14 @@ function CheckInQR() {
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                if (!checkInDone && !isCancelled) {
+                if (!isQrDisabled) {
                   e.currentTarget.style.background = '#FEE2E2'
                   e.currentTarget.style.transform = 'translateY(-1px)'
                   e.currentTarget.style.boxShadow = '0 6px 18px rgba(239, 68, 68, 0.24)'
                 }
               }}
               onMouseLeave={(e) => {
-                if (!checkInDone && !isCancelled) {
+                if (!isQrDisabled) {
                   e.currentTarget.style.background = '#FEF2F2'
                   e.currentTarget.style.transform = 'none'
                   e.currentTarget.style.boxShadow = '0 4px 14px rgba(239, 68, 68, 0.16)'
@@ -1526,17 +1837,21 @@ function CheckInQR() {
                   ? 'Đơn đặt sân này đã được hủy'
                   : checkInDone
                   ? 'Chủ sân đã quét mã QR xác nhận check-in (Không thể hủy đơn)'
+                  : isExpiredNoCheckIn
+                  ? 'Sân đã vượt quá giờ thi đấu mà không ai check-in (Không thể hủy đơn)'
                   : 'Chưa check-in: Bạn có thể hủy đơn đặt sân và hoàn tiền theo quy định'
               }
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                {isCancelled ? 'cancel' : checkInDone ? 'block' : 'event_busy'}
+                {isCancelled ? 'cancel' : checkInDone || isExpiredNoCheckIn ? 'block' : 'event_busy'}
               </span>
               <span>
                 {isCancelled
                   ? 'Đơn đã được hủy'
                   : checkInDone
                   ? 'Đã check-in (Không thể hủy)'
+                  : isExpiredNoCheckIn
+                  ? 'Đã quá giờ (Không thể hủy)'
                   : 'Hủy đơn & Hoàn tiền'}
               </span>
             </button>
@@ -1552,6 +1867,7 @@ function CheckInQR() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              opacity: isQrDisabled ? 0.65 : 1,
             }}
           >
             <div>
@@ -1570,48 +1886,54 @@ function CheckInQR() {
                 style={{
                   fontSize: '15px',
                   fontWeight: 800,
-                  color: '#111827',
+                  color: isQrDisabled ? '#94A3B8' : '#111827',
                   letterSpacing: '1px',
                   wordBreak: 'break-all',
                   fontFamily: 'monospace',
                   marginTop: '2px',
+                  filter: isQrDisabled ? 'blur(5px)' : 'none',
+                  userSelect: isQrDisabled ? 'none' : 'auto',
+                  pointerEvents: isQrDisabled ? 'none' : 'auto',
                 }}
               >
-                {ticketData?.qrCode || '—'}
+                {isQrDisabled ? 'SNX-DISABLED-TICKET' : (ticketData?.qrCode || '—')}
               </div>
             </div>
 
             <button
               type="button"
+              disabled={isQrDisabled}
               onClick={handleCopyOTP}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: '#ffffff',
+                background: isQrDisabled ? '#F1F5F9' : '#ffffff',
                 border: '1px solid #D1D5DB',
                 borderRadius: '10px',
                 padding: '7px 14px',
                 fontSize: '12.5px',
                 fontWeight: 700,
-                color: '#374151',
-                cursor: 'pointer',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                color: isQrDisabled ? '#94A3B8' : '#374151',
+                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
+                boxShadow: isQrDisabled ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
+                if (isQrDisabled) return
                 e.currentTarget.style.background = '#F9FAFB'
                 e.currentTarget.style.borderColor = '#9CA3AF'
               }}
               onMouseLeave={(e) => {
+                if (isQrDisabled) return
                 e.currentTarget.style.background = '#ffffff'
                 e.currentTarget.style.borderColor = '#D1D5DB'
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#4B5563' }}>
-                content_copy
+              <span className="material-symbols-outlined" style={{ fontSize: '16px', color: isQrDisabled ? '#94A3B8' : '#4B5563' }}>
+                {isQrDisabled ? 'lock' : 'content_copy'}
               </span>
-              <span>{copied ? 'Đã chép' : 'Sao chép'}</span>
+              <span>{isQrDisabled ? 'Đã vô hiệu' : copied ? 'Đã chép' : 'Sao chép'}</span>
             </button>
           </div>
         </div>
@@ -1724,9 +2046,15 @@ function CheckInQR() {
 
               {!checkInDone ? (
                 <div style={{ padding: '22px', borderRadius: '16px', border: '1.5px dashed #CBD5E1', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '34px', color: '#D97706' }}>lock_clock</span>
-                  <div style={{ fontWeight: 800, color: '#1E293B', margin: '6px 0 4px' }}>Đánh giá đang khóa</div>
-                  Đưa mã QR cho chủ sân quét để check-in, sau đó bạn có thể chấm Fair Play cho bạn chơi.
+                  <span className="material-symbols-outlined" style={{ fontSize: '34px', color: isExpiredNoCheckIn ? '#DC2626' : '#D97706' }}>
+                    {isExpiredNoCheckIn ? 'timer_off' : 'lock_clock'}
+                  </span>
+                  <div style={{ fontWeight: 800, color: '#1E293B', margin: '6px 0 4px' }}>
+                    {isExpiredNoCheckIn ? 'Ca sân đã quá giờ mà không ai check-in' : 'Đánh giá đang khóa'}
+                  </div>
+                  {isExpiredNoCheckIn
+                    ? 'Sân đã vượt quá giờ thi đấu mà không có người chơi nào check-in. Mã vé QR và quyền đánh giá trận này đã bị vô hiệu hóa.'
+                    : 'Đưa mã QR cho chủ sân quét để check-in, sau đó bạn có thể chấm Fair Play cho bạn chơi.'}
                 </div>
               ) : !ticketPending || ticketPending.players.length === 0 ? (
                 <div style={{ padding: '22px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid #E2E8F0', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
@@ -2346,29 +2674,38 @@ function CheckInQR() {
                   </button>
                   <button
                     type="button"
-                    disabled={isScanningCheckIn}
+                    disabled={isScanningCheckIn || isQrDisabled}
                     onClick={handleGateScanCheckIn}
                     style={{
                       flex: 2,
                       padding: '11px 0',
                       borderRadius: '12px',
-                      background: isScanningCheckIn ? '#94A3B8' : 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
+                      background:
+                        isScanningCheckIn || isQrDisabled
+                          ? '#94A3B8'
+                          : 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
                       color: '#ffffff',
                       border: 'none',
                       fontSize: '13.5px',
                       fontWeight: 800,
-                      cursor: isScanningCheckIn ? 'not-allowed' : 'pointer',
+                      cursor: isScanningCheckIn || isQrDisabled ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)',
+                      boxShadow: isQrDisabled ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)',
                     }}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                      {isScanningCheckIn ? 'sync' : 'sensors'}
+                      {isQrDisabled ? 'block' : isScanningCheckIn ? 'sync' : 'sensors'}
                     </span>
-                    <span>{isScanningCheckIn ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái check-in'}</span>
+                    <span>
+                      {isQrDisabled
+                        ? 'Mã QR đã bị vô hiệu hóa'
+                        : isScanningCheckIn
+                          ? 'Đang kiểm tra...'
+                          : 'Kiểm tra trạng thái check-in'}
+                    </span>
                   </button>
                 </div>
               </>
@@ -3308,11 +3645,46 @@ function CheckInQR() {
                     const amount = item.totalAmount || item.totalPrice || item.price || 0
                     const status = item.status || 'CONFIRMED'
                     const rawStatusUpper = String(item.bookingStatus || status || 'CONFIRMED').toUpperCase()
-                    const isGreenStatus = rawStatusUpper === 'CONFIRMED' || rawStatusUpper === 'PAID' || rawStatusUpper === 'CHECKED_IN' || rawStatusUpper === 'COMPLETED'
-                    const badgeStyleOverride = {
-                      background: isGreenStatus ? '#DCFCE7' : rawStatusUpper === 'CANCELLED' ? '#FEE2E2' : '#EFF6FF',
-                      color: isGreenStatus ? '#15803D' : rawStatusUpper === 'CANCELLED' ? '#B91C1C' : '#1D4ED8',
-                    }
+                    const itemCheckedIn =
+                      rawStatusUpper === 'CHECKED_IN' ||
+                      rawStatusUpper === 'COMPLETED' ||
+                      Boolean(item.isCheckedIn) ||
+                      Number(item.checkedInCount) > 0 ||
+                      (Array.isArray(item.participants) &&
+                        item.participants.some((p) => Boolean(p?.isCheckedIn)))
+                    const itemEndMs = item.endTime ? new Date(item.endTime).getTime() : NaN
+                    const itemPastEnd = Number.isFinite(itemEndMs) && nowMs > itemEndMs
+                    const itemExpiredNoCheckIn =
+                      !itemCheckedIn &&
+                      rawStatusUpper !== 'CANCELLED' &&
+                      (rawStatusUpper === 'NO_SHOW' || rawStatusUpper === 'EXPIRED' || itemPastEnd)
+                    const itemQrDisabled =
+                      itemCheckedIn || itemExpiredNoCheckIn || rawStatusUpper === 'CANCELLED'
+
+                    const isGreenStatus =
+                      !itemExpiredNoCheckIn &&
+                      (rawStatusUpper === 'CONFIRMED' ||
+                        rawStatusUpper === 'PAID' ||
+                        itemCheckedIn)
+                    const badgeStyleOverride = itemExpiredNoCheckIn
+                      ? { background: '#FEF3C7', color: '#B45309' }
+                      : {
+                          background: isGreenStatus
+                            ? '#DCFCE7'
+                            : rawStatusUpper === 'CANCELLED'
+                              ? '#FEE2E2'
+                              : '#EFF6FF',
+                          color: isGreenStatus
+                            ? '#15803D'
+                            : rawStatusUpper === 'CANCELLED'
+                              ? '#B91C1C'
+                              : '#1D4ED8',
+                        }
+                    const badgeLabel = itemCheckedIn
+                      ? 'ĐÃ CHECK-IN (MÃ QR ĐÃ VÔ HIỆU)'
+                      : itemExpiredNoCheckIn
+                        ? 'QUÁ GIỜ CHƯA CHECK-IN (VÔ HIỆU)'
+                        : formatBookingStatusLabel(rawStatusUpper)
                     const formattedDate = item.playDate || (item.startTime ? dateVN(item.startTime) : '') || date
                     const formattedTime = item.displayTimeRange || (item.startTime && item.endTime ? `${clockVN(item.startTime)} - ${clockVN(item.endTime)}` : time)
 
@@ -3327,12 +3699,12 @@ function CheckInQR() {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           gap: '16px',
-                          background: '#ffffff',
+                          background: itemQrDisabled ? '#F8FAFC' : '#ffffff',
                           transition: 'all 0.15s',
                         }}
                       >
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                             <span
                               style={{
                                 fontSize: '11px',
@@ -3344,7 +3716,7 @@ function CheckInQR() {
                                 ...badgeStyleOverride,
                               }}
                             >
-                              {formatBookingStatusLabel(rawStatusUpper)}
+                              {badgeLabel}
                             </span>
                             <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: 600 }}>
                               📅 {formattedDate} • ⏰ {formattedTime}
@@ -3368,7 +3740,7 @@ function CheckInQR() {
                           onClick={() => handleSelectBookingTicket(item)}
                           style={{
                             padding: '8px 16px',
-                            background: '#10B981',
+                            background: itemQrDisabled ? '#64748B' : '#10B981',
                             color: '#ffffff',
                             fontWeight: 700,
                             fontSize: '12.5px',
@@ -3379,11 +3751,13 @@ function CheckInQR() {
                             alignItems: 'center',
                             gap: '6px',
                             whiteSpace: 'nowrap',
-                            boxShadow: '0 2px 6px rgba(16,185,129,0.3)',
+                            boxShadow: itemQrDisabled ? 'none' : '0 2px 6px rgba(16,185,129,0.3)',
                           }}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>qr_code_2</span>
-                          <span>Xem Mã QR</span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                            {itemQrDisabled ? 'block' : 'qr_code_2'}
+                          </span>
+                          <span>{itemQrDisabled ? 'Xem Vé (Đã Vô Hiệu)' : 'Xem Mã QR'}</span>
                         </button>
                       </div>
                     )
