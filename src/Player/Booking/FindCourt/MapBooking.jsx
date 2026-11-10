@@ -1065,8 +1065,7 @@ function MapBooking() {
       return
     }
 
-    const targetRoute = window.location.pathname.includes('test') ? '/test-split-payment' : '/split-payment'
-    navigate(targetRoute, {
+    navigate('/split-payment', {
       state: {
         facilityId: selectedCourt.id,
         courtId: firstRealCourtId,

@@ -3,6 +3,7 @@ import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
+import { RecommendedLfgWidget } from '../LFG/RecommendedLfg.jsx'
 import { useApi } from '../../hooks/useApi.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getSportCategories, getMySports } from '../../api/player/profileApi.js'
@@ -447,6 +448,8 @@ export default function CommunityPage() {
               ))}
             </div>
           </section>
+          {/* Kèo phù hợp với bạn (theo khảo sát người chơi) */}
+          <RecommendedLfgWidget />
         </aside>
       </div>
     </div>

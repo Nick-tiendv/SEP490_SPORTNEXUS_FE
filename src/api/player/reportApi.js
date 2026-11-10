@@ -5,7 +5,8 @@ export const REPORTS_ENDPOINT = '/api/v1/reports'
 /**
  * Lấy danh sách lý do báo cáo theo đối tượng
  * GET /api/v1/reports/reasons?targetType=...
- * @param {string} [targetType] - 'FACILITY' | 'BOOKING' | 'USER' | 'LFG'
+ * @param {string} [targetType] - 'FACILITY' | 'BOOKING' | 'USER' | 'COMMUNITY_POST' | 'MATCH'
+ * Mỗi lý do: { code, targetType, title, description, suggestedRefundPercentage } (vd USER có SKILL_MISREPRESENTATION)
  * @returns {Promise<Array>}
  */
 export async function getReportReasons(targetType = 'FACILITY') {
@@ -18,20 +19,20 @@ export async function getReportReasons(targetType = 'FACILITY') {
     const data = body?.data || body?.result || body
     if (Array.isArray(data)) return data
     return [
-      { code: 'FACILITY_POOR_QUALITY', label: 'Cơ sở vật chất xuống cấp, không đúng mô tả' },
-      { code: 'ATTITUDE_COMPLAINT', label: 'Thái độ phục vụ của nhân viên không tốt' },
-      { code: 'OVERBOOKING_OR_CLOSED', label: 'Sân bị trùng lịch hoặc đóng cửa không báo trước' },
-      { code: 'UNSPORTSMANLIKE', label: 'Hành vi phi thể thao / Bùng kèo / Trễ hẹn' },
-      { code: 'OTHER', label: 'Lý do khác' },
+      { code: 'FACILITY_POOR_QUALITY', targetType: 'FACILITY', label: 'Cơ sở vật chất xuống cấp, không đúng mô tả' },
+      { code: 'ATTITUDE_COMPLAINT', targetType: 'FACILITY', label: 'Thái độ phục vụ của nhân viên không tốt' },
+      { code: 'OVERBOOKING_OR_CLOSED', targetType: 'FACILITY', label: 'Sân bị trùng lịch hoặc đóng cửa không báo trước' },
+      { code: 'UNSPORTSMANLIKE', targetType: 'FACILITY', label: 'Hành vi phi thể thao / Bùng kèo / Trễ hẹn' },
+      { code: 'OTHER', targetType: 'FACILITY', label: 'Lý do khác' },
     ]
   } catch (error) {
     console.warn('[reportApi] Lỗi lấy lý do báo cáo, sử dụng mặc định:', error)
     return [
-      { code: 'FACILITY_POOR_QUALITY', label: 'Cơ sở vật chất xuống cấp, không đúng mô tả' },
-      { code: 'ATTITUDE_COMPLAINT', label: 'Thái độ phục vụ của nhân viên không tốt' },
-      { code: 'OVERBOOKING_OR_CLOSED', label: 'Sân bị trùng lịch hoặc đóng cửa không báo trước' },
-      { code: 'UNSPORTSMANLIKE', label: 'Hành vi phi thể thao / Bùng kèo / Trễ hẹn' },
-      { code: 'OTHER', label: 'Lý do khác' },
+      { code: 'FACILITY_POOR_QUALITY', targetType: 'FACILITY', label: 'Cơ sở vật chất xuống cấp, không đúng mô tả' },
+      { code: 'ATTITUDE_COMPLAINT', targetType: 'FACILITY', label: 'Thái độ phục vụ của nhân viên không tốt' },
+      { code: 'OVERBOOKING_OR_CLOSED', targetType: 'FACILITY', label: 'Sân bị trùng lịch hoặc đóng cửa không báo trước' },
+      { code: 'UNSPORTSMANLIKE', targetType: 'FACILITY', label: 'Hành vi phi thể thao / Bùng kèo / Trễ hẹn' },
+      { code: 'OTHER', targetType: 'FACILITY', label: 'Lý do khác' },
     ]
   }
 }

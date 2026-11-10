@@ -29,6 +29,7 @@ import {
   clearPendingDeposit,
   DEPOSIT_STATUS,
 } from '../../../api/player/walletApi.js'
+import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
@@ -146,6 +147,8 @@ const EMPTY_STATE = {}
 
 function SplitPayment() {
   const currentUser = useCurrentUser()
+  // Elo & Fair Play thật của người đặt (thẻ thông tin + vé)
+  const standing = usePlayerStanding()
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state || EMPTY_STATE
@@ -1809,11 +1812,11 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               <div className="sp-user-stats-grid">
                 <div className="sp-user-stat-card">
                   <small>TRÌNH ĐỘ</small>
-                  <strong>Khá (Phong trào)</strong>
+                  <strong>{eloText(standing.best)}</strong>
                 </div>
                 <div className="sp-user-stat-card">
                   <small>ĐIỂM FAIRPLAY</small>
-                  <strong className="sp-fairplay-color">⭐ 99.4/100</strong>
+                  <strong className="sp-fairplay-color">⭐ {fairPlayScoreOf(standing.fairPlay) ?? '—'}/100</strong>
                 </div>
               </div>
             </section>
@@ -1899,7 +1902,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <span className="material-symbols-outlined">verified_user</span>
                 <p className="sp-escrow-text">
                   <strong>Bảo chứng Escrow 100%:</strong> Tiền giữ tại Hợp đồng Ký quỹ thông minh SportNexus.
-                  Chủ sân chỉ nhận tiền sau khi bạn quét QR check-in vào sân thành công.
+                  Chủ sân chỉ nhận tiền sau khi hết ca 24 giờ (thời hạn khiếu nại). Vé điện tử được gửi kèm qua email.
                 </p>
               </div>
             </section>
@@ -2453,11 +2456,11 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               <div className="sp-pass-user-stats">
                 <div className="sp-pass-stat-pill">
                   <small>TRÌNH ĐỘ</small>
-                  <strong>Khá (Phong trào)</strong>
+                  <strong>{eloText(standing.best)}</strong>
                 </div>
                 <div className="sp-pass-stat-pill">
                   <small>ĐIỂM FAIRPLAY</small>
-                  <strong style={{ color: '#d97706' }}>⭐ 99.4/100</strong>
+                  <strong style={{ color: '#d97706' }}>⭐ {fairPlayScoreOf(standing.fairPlay) ?? '—'}/100</strong>
                 </div>
                 <div className="sp-pass-stat-pill">
                   <small>VAI TRÒ</small>

@@ -22,3 +22,5 @@ export const createWalkInBooking = payload => post('/api/v1/bookings/owner/walk-
 export const cancelOwnerBooking = (bookingId, { reasonCode, reason, lockSlotAfterCancel = false }) =>
   post(`/api/v1/bookings/owner/${path(bookingId)}/cancel`, { reasonCode, reason, lockSlotAfterCancel })
 export const getCancellationReasons = async () => (await getList('/api/v1/bookings/cancellation-reasons')).items
+// Kết thúc ca sớm: check-out mọi người chơi đang check-in của đơn (kể cả vé kèo LFG). Không hoàn tiền.
+export const endOwnerBookingSession = bookingId => post(`/api/v1/bookings/owner/${path(bookingId)}/end`)

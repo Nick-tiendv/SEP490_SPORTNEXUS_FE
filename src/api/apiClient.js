@@ -3,6 +3,11 @@ import axios from 'axios'
 let tokenReader = () => null
 let unauthorizedHandler = () => {}
 let mockSessionReader = () => false
+// Gọi khi BE trả 403 (vd chưa làm khảo sát): (status, message, requestConfig). Đăng ký ở utils/surveyGate.js.
+let forbiddenHandler = () => {}
+export function setForbiddenHandler(handler) {
+  forbiddenHandler = typeof handler === 'function' ? handler : () => {}
+}
 export function configureAuthentication(readToken, onUnauthorized, readMockSession = () => false) {
   tokenReader = readToken
   unauthorizedHandler = onUnauthorized
@@ -96,6 +101,11 @@ apiClient.interceptors.response.use(response => {
 }, error => {
   if (LOG_API) console.error(`%c[API Error ${error.response?.status || 'Network'}] ${error.config?.url}`, 'color: #DC2626; font-weight: bold;', error.response?.data || error.message)
   if (error.response?.status === 401 && !error.config?.skipAuth) unauthorizedHandler()
-  return Promise.reject(normalizeApiError(error))
+  const normalized = normalizeApiError(error)
+  // 403 do chưa làm khảo sát người chơi / khảo sát toàn diện môn → mở màn khảo sát
+  if (normalized.status === 403) {
+    try { forbiddenHandler(normalized.status, error.response?.data?.message, error.config) } catch { /* không chặn luồng lỗi */ }
+  }
+  return Promise.reject(normalized)
 })
 export default apiClient

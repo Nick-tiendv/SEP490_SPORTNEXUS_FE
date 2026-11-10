@@ -7,6 +7,7 @@ const USER_KEYS = [
   'available_balance',
   'player_profile_data',
   'player_sports_data',
+  'sportnexus_needs_onboarding',
   'player_match_reviews',
   'player_match_reviewed_ids',
   'sportnexus_last_checkout_session',

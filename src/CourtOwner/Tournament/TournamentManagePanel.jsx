@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
-import { assignMatchCourt, blockCourts, getCourtSchedule, getCourts, getFacilitySlots, releaseCourts, updateTournamentInfo } from '../../api/owner'
+import {
+  addTournamentStaff, assignMatchCourt, assignMatchOfficials, autoScheduleTournament, blockCourts, decideRegistration,
+  getCourtSchedule, getCourts, getFacilitySlots, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff, updateTournamentInfo,
+} from '../../api/owner'
+import { confirmDialog } from '../../components/common/confirm.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import { addDays, formatDate, formatDateTime, formatTime, toDateKey, toTimeSpan } from '../shared.js'
 
@@ -226,12 +230,170 @@ function AssignCourtModal({ match, tournamentId, facilityId, onClose, onAssigned
   )
 }
 
-// Quản lý thêm cho giải đang chọn: sửa thông tin, giữ / trả sân, xếp sân cho trận.
-export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged }) {
+const STAFF_ROLES = [['REFEREE', 'Trọng tài'], ['SCORER', 'Ghi điểm'], ['OTHER', 'Khác']]
+const STAFF_ROLE_LABEL = Object.fromEntries(STAFF_ROLES)
+
+// Nhân sự giải: người có accountId (tài khoản SportNexus) nhập được tỉ số
+function StaffSection({ tournamentId, staff, onChanged, closed }) {
+  const [form, setForm] = useState({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' })
+  const [busy, setBusy] = useState(false)
+  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!form.fullName.trim() || !form.phone.trim()) { toast.error('Nhập họ tên và số điện thoại.'); return }
+    setBusy(true)
+    try {
+      await addTournamentStaff(tournamentId, {
+        fullName: form.fullName.trim(), phone: form.phone.trim(), role: form.role,
+        accountId: form.accountId.trim() || null, note: form.note.trim() || null,
+      })
+      toast.success('Đã thêm nhân sự.')
+      setForm({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' })
+      onChanged()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const remove = async (member) => {
+    if (!(await confirmDialog(`Xóa ${member.fullName} khỏi nhân sự giải?`))) return
+    try {
+      await removeTournamentStaff(tournamentId, member.id || member.staffId)
+      toast.success('Đã xóa nhân sự.')
+      onChanged()
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+  return (
+    <>
+      <h3 className="snx-card-title" style={{ fontSize: 15, margin: '18px 0 8px' }}>Nhân sự giải ({staff.length})</h3>
+      {staff.length > 0 && (
+        <div className="snx-list" style={{ marginBottom: 10 }}>
+          {staff.map((m) => (
+            <div key={m.id || m.staffId} className="snx-list-item">
+              <div style={{ flex: 1 }}>
+                <strong style={{ fontSize: 14 }}>{m.fullName}</strong> <span className="snx-badge snx-badge--blue">{STAFF_ROLE_LABEL[String(m.role).toUpperCase()] || m.role}</span>
+                <div className="snx-muted">{m.phone}{m.accountId ? ' · Có tài khoản (nhập được tỉ số)' : ''}{m.note ? ` · ${m.note}` : ''}</div>
+              </div>
+              {!closed && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => remove(m)}>Xóa</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {!closed && (
+        <form className="snx-form-grid" onSubmit={submit}>
+          <label className="snx-field">Họ tên<input className="snx-input" maxLength={100} value={form.fullName} onChange={set('fullName')} /></label>
+          <label className="snx-field">Số điện thoại<input className="snx-input" maxLength={15} value={form.phone} onChange={set('phone')} /></label>
+          <label className="snx-field">Vai trò
+            <select className="snx-select" value={form.role} onChange={set('role')}>{STAFF_ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          </label>
+          <label className="snx-field">Mã tài khoản (không bắt buộc)<input className="snx-input" placeholder="accountId" value={form.accountId} onChange={set('accountId')} /></label>
+          <label className="snx-field">Ghi chú<input className="snx-input" maxLength={200} value={form.note} onChange={set('note')} /></label>
+          <div className="snx-field" style={{ justifyContent: 'flex-end' }}><button type="submit" className="snx-btn snx-btn--primary" disabled={busy}>Thêm nhân sự</button></div>
+        </form>
+      )}
+    </>
+  )
+}
+
+// Bảng xếp hạng vòng bảng / vòng tròn
+function StandingsSection({ childId }) {
+  const standings = useApi(() => getStandings(childId), [childId], { initialData: [], enabled: !!childId })
+  const groups = (standings.data || []).filter((g) => g?.rows?.length)
+  if (!groups.length) return null
+  return (
+    <>
+      <h3 className="snx-card-title" style={{ fontSize: 15, margin: '18px 0 8px' }}>Bảng xếp hạng</h3>
+      {groups.map((g) => (
+        <div key={g.group || 'all'} className="snx-table-wrap" style={{ marginBottom: 10 }}>
+          <table className="snx-table">
+            <thead><tr><th>{g.group ? `Bảng ${g.group}` : '#'}</th><th>Đấu thủ</th><th>Trận</th><th>T</th><th>H</th><th>B</th><th>HS</th><th>Điểm</th></tr></thead>
+            <tbody>
+              {g.rows.map((r) => (
+                <tr key={r.participantId}><td>{r.rank}</td><td>{r.name}</td><td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.diff > 0 ? `+${r.diff}` : r.diff}</td><td><strong>{r.points}</strong></td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </>
+  )
+}
+
+// Thiếu người khi hết hạn đăng ký: BTC chọn hủy / gia hạn / vẫn thi đấu trong 24 giờ
+function RegistrationDecision({ tournamentId, onDone }) {
+  const [decision, setDecision] = useState('EXTEND')
+  const [newDeadline, setNewDeadline] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (decision === 'EXTEND' && !newDeadline) { toast.error('Chọn hạn đăng ký mới.'); return }
+    if (decision === 'CANCEL' && !(await confirmDialog('Hủy bảng đấu và hoàn 100% lệ phí cho người đã đăng ký?'))) return
+    setBusy(true)
+    try {
+      await decideRegistration(tournamentId, { decision, newDeadline: decision === 'EXTEND' ? new Date(newDeadline).toISOString() : null, reason: reason.trim() || null })
+      toast.success('Đã ghi nhận quyết định.')
+      onDone()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="snx-alert snx-alert--info" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 16 }}>
+      <strong>Hết hạn đăng ký nhưng chưa đủ người?</strong>
+      <span>Chọn trong 24 giờ sau khi nhận thông báo: hủy (hoàn 100% lệ phí), gia hạn đăng ký hoặc vẫn thi đấu với số người hiện có (cần ≥ 2).</span>
+      <div className="snx-row">
+        <select className="snx-select" style={{ width: 'auto' }} value={decision} onChange={(e) => setDecision(e.target.value)}>
+          <option value="EXTEND">Gia hạn đăng ký</option>
+          <option value="CONTINUE">Vẫn thi đấu</option>
+          <option value="CANCEL">Hủy bảng đấu</option>
+        </select>
+        {decision === 'EXTEND' && <input className="snx-input" style={{ width: 'auto' }} type="datetime-local" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} aria-label="Hạn đăng ký mới" />}
+        <input className="snx-input" style={{ flex: '1 1 160px' }} placeholder="Lý do (không bắt buộc)" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busy} onClick={submit}>Xác nhận</button>
+      </div>
+    </div>
+  )
+}
+
+// Quản lý thêm cho giải đang chọn: sửa thông tin, giữ / trả sân, xếp sân, nhân sự, trọng tài, bảng xếp hạng.
+export default function TournamentManagePanel({ tournament, child, rounds, facilityId, onChanged, mode = 'owner' }) {
+  // Người chơi làm BTC không giữ / trả sân được (court-blocks chỉ dành cho chủ sân / Admin)
+  const canBlockCourts = mode !== 'player'
   const [editing, setEditing] = useState(false)
   const [assigning, setAssigning] = useState(null)
-  const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId, initialData: [] })
+  const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId && canBlockCourts, initialData: [] })
   const schedule = useApi(() => getCourtSchedule(tournament.id), [tournament.id])
+  const staff = useApi(() => getTournamentStaff(tournament.id), [tournament.id], { initialData: [] })
+  const referees = (staff.data || []).filter((m) => String(m.role).toUpperCase() === 'REFEREE')
+  const [scheduling, setScheduling] = useState(false)
+  const childStatus = String(child?.status || '').toUpperCase()
+  const autoSchedule = async () => {
+    setScheduling(true)
+    try {
+      await autoScheduleTournament(child?.id || tournament.id)
+      toast.success('Đã tự xếp ca và đề xuất trọng tài cho các trận.')
+      schedule.refresh()
+      onChanged()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setScheduling(false)
+    }
+  }
+  const setOfficial = async (match, staffId) => {
+    try {
+      await assignMatchOfficials(match.id, staffId ? [staffId] : [])
+      toast.success(staffId ? 'Đã phân trọng tài.' : 'Đã bỏ trọng tài.')
+      onChanged()
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
   const status = String(tournament.status || '').toUpperCase()
   const closed = ['CANCELLED', 'FINISHED'].includes(status)
   const matches = (rounds || []).flatMap((round) => round.matches || []).filter((m) => m.id)
@@ -249,7 +411,9 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         <div><div className="snx-muted">Hạn đăng ký</div><strong>{tournament.registrationDeadline ? formatDateTime(tournament.registrationDeadline) : '—'}</strong></div>
       </div>
 
-      {!closed && (
+      {child && childStatus === 'OPEN' && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
+
+      {!closed && canBlockCourts && (
         <>
           <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Giữ khung giờ sân cho giải</h3>
           <CourtBlockForm tournamentId={tournament.id} courts={courts.data || []} onDone={schedule.refresh} />
@@ -266,10 +430,14 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
 
       {child && matches.length > 0 && (
         <>
-          <h3 className="snx-card-title" style={{ fontSize: 15, margin: '18px 0 8px' }}>Xếp sân cho trận ({child.name})</h3>
+          <div className="snx-row" style={{ margin: '18px 0 8px' }}>
+            <h3 className="snx-card-title" style={{ fontSize: 15 }}>Xếp sân & trọng tài ({child.name})</h3>
+            <span className="snx-spacer" />
+            {!closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={scheduling} onClick={autoSchedule}>{scheduling ? 'Đang xếp…' : 'Tự xếp ca + trọng tài'}</button>}
+          </div>
           <div className="snx-table-wrap">
             <table className="snx-table">
-              <thead><tr><th>Vòng</th><th>Trận</th><th>Sân / giờ</th><th /></tr></thead>
+              <thead><tr><th>Vòng</th><th>Trận</th><th>Sân / giờ</th><th>Trọng tài</th><th /></tr></thead>
               <tbody>
                 {matches.map((m) => {
                   const done = ['FINISHED', 'COMPLETED'].includes(String(m.status).toUpperCase())
@@ -278,6 +446,14 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
                       <td>{m.roundName || `Vòng ${m.round}`}</td>
                       <td>{m.a?.name || 'Chờ xác định'} vs {m.b?.name || 'Chờ xác định'}</td>
                       <td>{m.court ? `${m.court} • ${formatDateTime(m.time)}` : <span className="snx-muted">Chưa xếp</span>}</td>
+                      <td>
+                        {!done && !closed && referees.length > 0 ? (
+                          <select className="snx-select" style={{ minWidth: 140 }} defaultValue="" onChange={(e) => setOfficial(m, e.target.value)} aria-label="Phân trọng tài">
+                            <option value="">— Chọn —</option>
+                            {referees.map((r) => <option key={r.id || r.staffId} value={r.id || r.staffId}>{r.fullName}</option>)}
+                          </select>
+                        ) : <span className="snx-muted">{referees.length ? '—' : 'Chưa có trọng tài'}</span>}
+                      </td>
                       <td>{!done && !closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setAssigning(m)}>{m.court ? 'Đổi sân' : 'Xếp sân'}</button>}</td>
                     </tr>
                   )
@@ -287,6 +463,10 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
           </div>
         </>
       )}
+
+      {child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
+
+      <StaffSection tournamentId={tournament.id} staff={staff.data || []} onChanged={staff.refresh} closed={closed} />
 
       {editing && <EditInfoModal tournament={tournament} onClose={() => setEditing(false)} onSaved={onChanged} />}
       {assigning && (

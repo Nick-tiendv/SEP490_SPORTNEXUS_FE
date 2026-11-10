@@ -12,7 +12,7 @@ import { decisionOptions, reportStatusLabels, toEnumKey } from '../src/Admin/Rev
 test('menu Admin tiếng Việt, đủ trang và giữ đường dẫn', () => {
   assert.deepEqual(adminMenu.map(item => item.label), [
     'Tổng quan', 'Quản lý người dùng', 'Quản lý chủ sân', 'Quản lý cơ sở thể thao',
-    'Quản lý đặt sân', 'Quản lý tìm nhóm chơi', 'Quản lý giải đấu', 'Quản lý đội', 'Quản lý thanh toán', 'Gói quảng bá',
+    'Quản lý đặt sân', 'Quản lý tìm nhóm chơi', 'Quản lý giải đấu', 'Quản lý đội', 'Elo & trình độ', 'Quản lý thanh toán', 'Gói quảng bá',
     'Đánh giá & Báo cáo', 'Danh mục dùng chung', 'Quản lý thông báo', 'Quản lý AI', 'Cài đặt hệ thống',
   ])
   assert.equal(adminMenu.find(item => item.path === '/admin/ai').enabled, false)
