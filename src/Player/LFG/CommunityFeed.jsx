@@ -30,8 +30,8 @@ import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
 import { finalReason } from './lfgReason.js'
 
-// Mốc chốt kèo: 48 giờ trước giờ chơi
-const LFG_LOCK_BEFORE_MS = 48 * 60 * 60 * 1000
+// Chủ kèo tự hủy được tới 24 giờ trước giờ chơi (BE trả hostCancelUntil); sau mốc này mới tạo yêu cầu hủy để bỏ phiếu
+const HOST_CANCEL_BEFORE_MS = 24 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
@@ -185,14 +185,18 @@ function CommunityFeed() {
   const [cancelRequestReason, setCancelRequestReason] = useState('')
   const [cancelRequestPick, setCancelRequestPick] = useState('')
 
-  // Mốc chốt kèo T − 48 giờ (luật BE hiện tại, xem QĐ-D): trước mốc chủ kèo tự hủy / người chơi tự rời;
+  // Mốc T − 24 giờ (QĐ-D): trước mốc chủ kèo tự hủy, không cần bỏ phiếu;
   // sau mốc chủ kèo phải tạo yêu cầu hủy và các thành viên bỏ phiếu. Giờ hiện tại cập nhật mỗi phút.
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
-  const isPastLock = (card) => Boolean(card?.startTime) && nowMs >= new Date(card.startTime).getTime() - LFG_LOCK_BEFORE_MS
+  const isPastLock = (card) => {
+    const until = card?.hostCancelUntil ? new Date(card.hostCancelUntil).getTime()
+      : card?.startTime ? new Date(card.startTime).getTime() - HOST_CANCEL_BEFORE_MS : null
+    return until != null && nowMs >= until
+  }
 
   // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
   useEffect(() => {
@@ -1086,9 +1090,15 @@ function CommunityFeed() {
   const isJoinedInactive = (card) =>
     String(card.status || '').toUpperCase() === 'CANCELLED' || ['REJECTED', 'LEFT', 'REMOVED', 'CANCELLED'].includes(myStatusOf(card))
   const inactiveJoinedCount = joinedLfgCards.filter(isJoinedInactive).length
+  // Sắp xếp kèo đã tham gia: giờ chơi gần nhất / vừa tham gia (myJoinedAt) / kèo tạo mới nhất (createdAt)
+  const [joinedSort, setJoinedSort] = useState('play_time')
+  const joinedOrder = (a, b) =>
+    joinedSort === 'joined' ? new Date(b.myJoinedAt || 0) - new Date(a.myJoinedAt || 0)
+      : joinedSort === 'created' ? new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+      : new Date(a.startTime) - new Date(b.startTime)
   const visibleJoinedCards = joinedLfgCards
     .filter((card) => showInactiveJoined || !isJoinedInactive(card))
-    .sort((a, b) => Number(isJoinedInactive(a)) - Number(isJoinedInactive(b)) || new Date(a.startTime) - new Date(b.startTime))
+    .sort((a, b) => Number(isJoinedInactive(a)) - Number(isJoinedInactive(b)) || joinedOrder(a, b))
 
   // Filtered matches (ưu tiên hiển thị các kèo gần vị trí hồ sơ người chơi lên đầu)
   // Trích xuất thói quen ghép trận & tính toán bộ đề xuất cá nhân hóa (3 hạng mục: Sàn ghép trận, Kèo ghép, Bảng tin cộng đồng)
@@ -1940,7 +1950,7 @@ function CommunityFeed() {
                               </button>
                             )}
 
-                            {/* Sau mốc chốt kèo (T − 48h): chủ kèo tạo yêu cầu hủy để thành viên bỏ phiếu */}
+                            {/* Trong 24 giờ cuối: chủ kèo tạo yêu cầu hủy để thành viên bỏ phiếu */}
                             {cardActive && isPastLock(card) && (
                               <button
                                 onClick={() => handleOpenCancelVoteModal(card, { asHost: true })}
@@ -1962,7 +1972,7 @@ function CommunityFeed() {
                             </button>
                             )}
 
-                            {/* Hủy kèo đơn phương (2.6 Bước 5): chỉ trước mốc chốt kèo T − 48h */}
+                            {/* Hủy kèo đơn phương (2.6 Bước 5): tới trước giờ chơi 24 giờ */}
                             {cardActive && !isPastLock(card) && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
@@ -1992,15 +2002,29 @@ function CommunityFeed() {
                   </div>
                 </div>
 
-                {!isLoadingJoined && inactiveJoinedCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowInactiveJoined((v) => !v)}
-                    className="self-start px-3 py-1.5 rounded-xl bg-white border border-gray-300 text-gray-700 text-xs font-bold cursor-pointer hover:bg-gray-50"
-                  >
-                    {showInactiveJoined ? 'Ẩn' : 'Hiện'} kèo đã hủy / đã rời ({inactiveJoinedCount})
-                  </button>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                    Sắp xếp
+                    <select
+                      value={joinedSort}
+                      onChange={(e) => setJoinedSort(e.target.value)}
+                      className="px-2 py-1.5 rounded-xl bg-white border border-gray-300 text-gray-700 text-xs font-bold cursor-pointer"
+                    >
+                      <option value="play_time">Giờ chơi gần nhất</option>
+                      <option value="joined">Vừa tham gia</option>
+                      <option value="created">Kèo tạo mới nhất</option>
+                    </select>
+                  </label>
+                  {!isLoadingJoined && inactiveJoinedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowInactiveJoined((v) => !v)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-gray-300 text-gray-700 text-xs font-bold cursor-pointer hover:bg-gray-50"
+                    >
+                      {showInactiveJoined ? 'Ẩn' : 'Hiện'} kèo đã hủy / đã rời ({inactiveJoinedCount})
+                    </button>
+                  )}
+                </div>
 
                 {isLoadingJoined ? (
                   <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
@@ -2067,6 +2091,13 @@ function CommunityFeed() {
                               <span className="material-symbols-outlined text-[15px] text-[#3B6817]">location_on</span>
                               <span>{card.courtName} • {card.facilityAddress}</span>
                             </p>
+                            {(card.myJoinedAt || card.createdAt) && (
+                              <p className="text-[11px] text-gray-400 m-0">
+                                {card.myJoinedAt && `Tham gia lúc ${new Date(card.myJoinedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`}
+                                {card.myJoinedAt && card.createdAt && ' • '}
+                                {card.createdAt && `Kèo tạo lúc ${new Date(card.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`}
+                              </p>
+                            )}
                           </div>
 
                           <div className="text-right">
@@ -2993,7 +3024,7 @@ function CommunityFeed() {
               onCustom={setCustomCancelReason}
             />
             <p className="text-[11px] text-gray-500 m-0">
-              Chủ kèo chỉ tự hủy được trước giờ chơi 48 tiếng. Sau mốc này cần tạo yêu cầu hủy để các thành viên bỏ phiếu.
+              Chủ kèo tự hủy được tới trước giờ chơi 24 tiếng. Sau mốc này cần tạo yêu cầu hủy để các thành viên bỏ phiếu.
             </p>
 
             {/* Refund policy note (2.6 Bước 5) */}
@@ -3906,7 +3937,7 @@ function CommunityFeed() {
             ) : (
               <div className="flex flex-col gap-3">
                 <p className="text-xs text-gray-600">
-                  Kèo đã qua mốc chốt (48 tiếng trước giờ chơi) nên không tự hủy được. Hãy tạo yêu cầu hủy để các thành viên cùng bỏ phiếu:
+                  Chỉ còn dưới 24 tiếng trước giờ chơi nên không tự hủy được. Hãy tạo yêu cầu hủy để các thành viên cùng bỏ phiếu:
                 </p>
 
                 <LfgReasonPicker

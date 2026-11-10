@@ -77,7 +77,8 @@ function CreateTeamModal({ onClose, onCreated }) {
     if (!form.name.trim()) { toast.error('Vui lòng nhập tên đội.'); return }
     if (!form.sportCategoryId) { toast.error('Vui lòng chọn môn của đội.'); return }
     setSaving(true)
-    const memberPhones = [...new Set(form.phones.split(/[\s,;]+/).map((p) => p.trim()).filter(Boolean))]
+    // Tách theo dấu phẩy / chấm phẩy / xuống dòng (không theo dấu cách: "0912 345 678" là 1 số); BE tự chuẩn hóa +84, dấu cách
+    const memberPhones = [...new Set(form.phones.split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean))]
     // POST /api/v1/teams: sportCategoryId bắt buộc; thành viên nhập số điện thoại sẽ nhận lời mời.
     // Chưa có Elo môn này → BE trả 403, app tự mở khảo sát toàn diện của môn.
     const ok = await run(async () => {

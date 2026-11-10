@@ -289,11 +289,10 @@ function SplitPayment() {
   const [payosSession, setPayosSession] = useState(null)
   const [payosCheckAttempt, setPayosCheckAttempt] = useState(0)
 
-  // Wallet balance state (synced with TopBar via localStorage & custom event)
-  const [walletBalance, setWalletBalance] = useState(() => {
-    const saved = localStorage.getItem('escrow_balance')
-    return saved !== null ? Number(saved) : 0
-  })
+  // Số dư khả dụng (balance) và tiền đang tạm giữ (frozenBalance) luôn lấy từ GET /api/v1/wallet;
+  // localStorage chỉ là bản sao do getWallet ghi để TopBar đồng bộ, không dùng làm số dư ban đầu
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [frozenBalance, setFrozenBalance] = useState(0)
 
   // Đồng bộ số dư ví thực tế từ Backend API
   useEffect(() => {
@@ -302,17 +301,12 @@ function SplitPayment() {
       .then((w) => {
         if (isMounted && w && typeof w.balance === 'number') {
           setWalletBalance(w.balance)
+          setFrozenBalance(Number(w.frozenBalance) || 0)
         }
       })
       .catch(() => {})
     return () => { isMounted = false }
   }, [])
-
-  // Số dư bị đóng băng trong hợp đồng Escrow (frozenBalance) theo Bước 4
-  const [frozenBalance, setFrozenBalance] = useState(() => {
-    const saved = localStorage.getItem('frozen_balance')
-    return saved !== null ? Number(saved) : 0
-  })
 
   // Mã QR Check-in Pass sau khi đặt sân thành công
   const [qrToken, setQrToken] = useState('') // lấy từ GET /bookings/{id}/qr-ticket sau khi đặt thành công

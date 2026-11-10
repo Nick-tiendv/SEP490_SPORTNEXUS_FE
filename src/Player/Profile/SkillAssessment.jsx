@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { getPublicSports as getSportCategories } from '../../api/auth/authApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import {
-  EVIDENCE_STATUS, getAssessmentForm, getMyAssessments, getMyRatings, isTechniqueCode, submitAssessment,
+  EVIDENCE_STATUS, getAssessmentForm, getMyAssessmentHistory, getMyAssessments, getMyRatings, isTechniqueCode, submitAssessment,
 } from '../../api/player/ratingApi.js'
 import { useApi } from '../../hooks/useApi.js'
 import EloLeaderboard from '../../components/common/EloLeaderboard.jsx'
@@ -36,6 +36,36 @@ function AssessmentResult({ result }) {
       )}
       {result.reviewNote && <p className="snx-muted" style={{ marginTop: 6 }}>Ghi chú duyệt: {result.reviewNote}</p>}
       {result.createdAt && <p className="snx-muted" style={{ marginTop: 6 }}>Làm ngày {dateVN(result.createdAt)}</p>}
+    </div>
+  )
+}
+
+// Lịch sử các lần làm khảo sát môn đang chọn (điểm / Elo của lần cũ giữ nguyên dù bộ câu hỏi đã đổi)
+function AssessmentHistory({ sportId }) {
+  const history = useApi(() => getMyAssessmentHistory(sportId), [sportId], { initialData: [] })
+  if (history.loading || history.error || history.data.length === 0) return null
+  return (
+    <div className="snx-card" style={{ padding: 16 }}>
+      <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Lịch sử khảo sát ({history.data.length})</h3>
+      <div className="snx-table-wrap">
+        <table className="snx-table">
+          <thead><tr><th>Ngày làm</th><th>Điểm</th><th>Elo khởi đầu</th><th>Bằng chứng</th><th>Phiên bản câu hỏi</th></tr></thead>
+          <tbody>
+            {history.data.map((a) => {
+              const [label, tone] = EVIDENCE_STATUS[a.evidenceStatus] || [a.evidenceStatus || '—', 'gray']
+              return (
+                <tr key={a.id}>
+                  <td>{dateVN(a.createdAt)}</td>
+                  <td>{a.score}/100</td>
+                  <td>{a.assignedRating}{a.computedRating > a.assignedRating ? ` (điểm quy ra ${a.computedRating})` : ''}</td>
+                  <td>{a.evidenceStatus && a.evidenceStatus !== 'NONE' ? <span className={`snx-badge snx-badge--${tone}`}>{label}</span> : '—'}</td>
+                  <td>{a.formVersion ?? '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -225,6 +255,7 @@ export default function SkillAssessment() {
           )}
         </>
       )}
+      {sportId && <AssessmentHistory key={`${sportId}|${current?.id || ''}`} sportId={sportId} />}
       <EloLeaderboard key={sportId || 'all'} initialSportId={sportId} />
     </div>
   )

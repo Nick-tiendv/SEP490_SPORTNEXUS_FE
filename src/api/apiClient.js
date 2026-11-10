@@ -28,8 +28,6 @@ export function normalizeApiError(error) {
     403: 'Bạn không có quyền thực hiện thao tác này.',
     404: 'Không tìm thấy API yêu cầu.',
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
-    413: 'File tải lên quá lớn. Vui lòng chọn ảnh tối đa 5MB.',
-    415: 'Định dạng dữ liệu tải lên không được hỗ trợ. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.',
     413: 'Tệp tải lên vượt quá dung lượng cho phép (tối đa 5MB).',
     415: 'Định dạng dữ liệu hoặc tệp tải lên không được hỗ trợ.',
   }
@@ -66,6 +64,9 @@ export function normalizeApiError(error) {
     isNormalized: true,
     data: body,
     errors: body?.errors,
+    // Mã lỗi nghiệp vụ của BE (ONBOARDING_REQUIRED | RATING_REQUIRED | TEAM_SPORT_REQUIRED) và thông tin kèm theo
+    errorCode: body?.errorCode || null,
+    errorDetail: body?.errorDetail || null,
   })
 }
 
@@ -113,9 +114,9 @@ apiClient.interceptors.response.use(response => {
   if (LOG_API) console.error(`%c[API Error ${error.response?.status || 'Network'}] ${error.config?.url}`, 'color: #DC2626; font-weight: bold;', error.response?.data || error.message)
   if (error.response?.status === 401 && !error.config?.skipAuth) unauthorizedHandler()
   const normalized = normalizeApiError(error)
-  // 403 do chưa làm khảo sát người chơi / khảo sát toàn diện môn → mở màn khảo sát
-  if (normalized.status === 403) {
-    try { forbiddenHandler(normalized.status, error.response?.data?.message, error.config) } catch { /* không chặn luồng lỗi */ }
+  // 403 do chưa làm khảo sát người chơi / khảo sát toàn diện môn, hoặc lỗi có errorCode (vd đội chưa khai môn) → mở đúng màn
+  if (normalized.status === 403 || normalized.errorCode) {
+    try { forbiddenHandler(normalized.status, error.response?.data?.message, error.config, error.response?.data) } catch { /* không chặn luồng lỗi */ }
   }
   return Promise.reject(normalized)
 })

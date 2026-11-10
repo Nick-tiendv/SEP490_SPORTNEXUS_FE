@@ -116,6 +116,12 @@ export async function getMatch(matchId) {
   return Array.isArray(data) ? data[0] || null : data
 }
 
+// Lời mời giải nội bộ tôi nhận được. status: PENDING | ACCEPTED | DECLINED | CANCELLED (trống = tất cả)
+export const getMyTournamentInvitations = async (status) => (await getList(`${TOURNAMENTS_ENDPOINT}/my-invitations`, status ? { status } : undefined)).items
+// Chấp nhận = đăng ký thật (kiểm tra khảo sát / Elo / số người, giữ lệ phí trong ví); từ chối thì báo Ban tổ chức
+export const respondTournamentInvitation = (invitationId, accept) =>
+  post(`${TOURNAMENTS_ENDPOINT}/invitations/${encodeURIComponent(invitationId)}/respond`, { accept: Boolean(accept) })
+
 export default {
   getTournamentQrTicket,
   checkInTournament,

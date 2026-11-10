@@ -2,7 +2,7 @@
 // Enum theo BE: ReportStatus, ReportTargetType (ReportEnums.cs) và Decision của AdminResolveReportRequest.
 
 export const reportStatusLabels = { PENDING: 'Chờ xử lý', OWNER_RESPONDED: 'Chủ sân đã giải trình', RESOLVED_REFUNDED: 'Đã hoàn tiền', RESOLVED_NO_REFUND: 'Đã xử lý, không hoàn tiền', REJECTED: 'Đã bác bỏ', WITHDRAWN: 'Người báo cáo đã rút' }
-export const targetTypeLabels = { BOOKING: 'Đặt sân', FACILITY: 'Cơ sở thể thao', USER: 'Người chơi', COMMUNITY_POST: 'Bài viết cộng đồng' }
+export const targetTypeLabels = { BOOKING: 'Đặt sân', FACILITY: 'Cơ sở thể thao', USER: 'Người chơi', COMMUNITY_POST: 'Bài viết cộng đồng', POST_COMMENT: 'Bình luận', MATCH: 'Kết quả trận đấu' }
 // Giá trị `decision` gửi lên POST /reports/admin/{id}/resolve: REFUND | RESOLVE_NO_REFUND | REJECT.
 export const decisionOptions = [
   { value: 'REFUND', label: 'Chấp nhận, hoàn tiền cho người báo cáo' },

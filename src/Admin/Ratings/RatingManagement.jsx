@@ -3,12 +3,14 @@ import { BadgeCheck, Flag, Medal, RefreshCw } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import EloLeaderboard from '../../components/common/EloLeaderboard.jsx'
-import { clearRatingFlag, listAssessments, listFlaggedRatings, penalizeRating, reviewAssessment } from '../../api/admin/ratingApi.js'
+import { clearRatingFlag, getUserSkillProfile, listAssessments, listFlaggedRatings, penalizeRating, reviewAssessment } from '../../api/admin/ratingApi.js'
+import SkillQuestions from './SkillQuestions.jsx'
 import '../Users/users.css'
 import '../LFG/lfg.css'
 
 // Admin kiểm soát Elo: duyệt bằng chứng khảo sát (Elo khởi đầu > 1400), xử lý hồ sơ Elo bị gắn cờ, xem bảng xếp hạng.
-const EVIDENCE = { PENDING: ['Pending', 'Chờ duyệt'], APPROVED: ['Confirmed', 'Đã duyệt'], REJECTED: ['Cancelled', 'Từ chối'], NONE: ['Completed', 'Không có'] }
+const EVIDENCE = { PENDING: ['Pending', 'Chờ duyệt'], APPROVED: ['Confirmed', 'Đã duyệt'], REJECTED: ['Cancelled', 'Từ chối'], NONE: ['Completed', 'Không có bằng chứng'] }
+const LABELS = { MALE: 'Nam', FEMALE: 'Nữ', EXCHANGE: 'Giao lưu', TRAINING: 'Tập luyện', COMPETITION: 'Thi đấu', RARELY: 'Thỉnh thoảng', WEEKLY_1_2: '1 – 2 buổi / tuần', WEEKLY_3_PLUS: 'Từ 3 buổi / tuần' }
 const noop = () => {}
 const dateTime = value => (value ? new Date(value).toLocaleString('vi-VN') : '—')
 
@@ -63,6 +65,34 @@ function FlagDialog({ item, penalize, onClose, onDone }) {
   </DemoDialog>
 }
 
+// Hồ sơ trình độ 1 người chơi: khảo sát người chơi (thói quen, lịch rảnh, khu vực), Elo, mọi lần khảo sát toàn diện
+function ProfileDialog({ user, onClose }) {
+  const [state, setState] = useState({ data: null, error: '' })
+  useEffect(() => {
+    let cancelled = false
+    getUserSkillProfile(user.userId).then(data => !cancelled && setState({ data, error: '' })).catch(error => !cancelled && setState({ data: null, error: error.message }))
+    return () => { cancelled = true }
+  }, [user.userId])
+  const o = state.data?.onboarding
+  return <DemoDialog title={`Hồ sơ trình độ · ${user.fullName || ''}`} onClose={onClose}>
+    {!state.data && !state.error && <p>Đang tải…</p>}
+    {state.error && <p className="users-form-error" role="alert">{state.error}</p>}
+    {state.data && <div style={{ display: 'grid', gap: 12, fontSize: 13 }}>
+      <section><strong>Khảo sát người chơi</strong>{o?.isCompleted
+        ? <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+          <li>Môn: {(o.sports || []).map(s => `${s.sportName} (${s.skillLevel}${s.preferredFormats?.length ? `, ${s.preferredFormats.join('/')}` : ''})`).join('; ') || '—'}</li>
+          <li>Mục tiêu: {LABELS[o.goal] || o.goal || '—'} · Tần suất: {LABELS[o.frequency] || o.frequency || '—'} · Giới tính: {LABELS[o.gender] || '—'}</li>
+          <li>Lịch rảnh: {(o.availability || []).length} khung giờ · Khu vực: {o.latitude != null ? `${o.latitude}, ${o.longitude} (bán kính ${o.radiusKm ?? '—'} km)` : 'Chưa khai'}</li>
+          <li>Làm lúc: {dateTime(o.completedAt)}</li>
+        </ul> : <p style={{ margin: '4px 0 0' }}>Chưa làm khảo sát người chơi.</p>}</section>
+      <section><strong>Elo</strong>{(state.data.ratings || []).length
+        ? <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{state.data.ratings.map(r => <li key={`${r.ownerType}|${r.ownerId}|${r.sportCategoryId}`}>{r.sportName} · {r.ownerType === 'TEAM' ? `Đội ${r.ownerName}` : 'Cá nhân'}: <strong>{r.rating}</strong> ({r.rank}, {r.ratedMatches} trận giải)</li>)}</ul>
+        : <p style={{ margin: '4px 0 0' }}>Chưa có Elo.</p>}</section>
+      <section><strong>Khảo sát toàn diện ({(state.data.assessments || []).length} lần)</strong>{(state.data.assessments || []).length > 0 && <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{state.data.assessments.map(a => <li key={a.id}>{dateTime(a.createdAt)} · {a.sportName} · {a.score}/100 → Elo {a.assignedRating}{a.computedRating > a.assignedRating ? ` (quy ra ${a.computedRating})` : ''}{a.flags?.length ? ` · Mâu thuẫn: ${a.flags.join('; ')}` : ''}</li>)}</ul>}</section>
+    </div>}
+  </DemoDialog>
+}
+
 export default function RatingManagement() {
   const [tab, setTab] = useState('assessments')
   const [evidenceStatus, setEvidenceStatus] = useState('PENDING')
@@ -87,7 +117,7 @@ export default function RatingManagement() {
   const loadingAssessments = assessments.key !== `${evidenceStatus}|${reload}`
   const done = message => { setDialog(null); setNotice(message); setReload(v => v + 1) }
   const kpis = [
-    { icon: BadgeCheck, className: 'total', label: evidenceStatus === 'PENDING' ? 'Bằng chứng chờ duyệt' : 'Khảo sát đang lọc', value: assessments.items.length },
+    { icon: BadgeCheck, className: 'total', label: evidenceStatus === 'PENDING' ? 'Bằng chứng chờ duyệt' : 'Khảo sát đang lọc (tối đa 200)', value: assessments.items.length },
     { icon: Flag, className: 'full', label: 'Hồ sơ Elo bị gắn cờ', value: flagged.items.length },
   ]
 
@@ -97,8 +127,8 @@ export default function RatingManagement() {
     {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
 
     <section className="lfg-toolbar"><div className="lfg-filter-row">
-      {[['assessments', 'Bằng chứng khảo sát'], ['flagged', 'Hồ sơ bị gắn cờ'], ['leaderboard', 'Bảng xếp hạng']].map(([key, label]) => <button key={key} className={`users-button ${tab === key ? 'primary' : ''}`} onClick={() => setTab(key)}>{key === 'leaderboard' && <Medal size={13} />}{label}</button>)}
-      {tab === 'assessments' && <label>Trạng thái<select value={evidenceStatus} onChange={e => setEvidenceStatus(e.target.value)}>{['PENDING', 'APPROVED', 'REJECTED', 'NONE'].map(s => <option key={s} value={s}>{EVIDENCE[s][1]}</option>)}</select></label>}
+      {[['assessments', 'Khảo sát toàn diện'], ['flagged', 'Hồ sơ bị gắn cờ'], ['questions', 'Câu hỏi khảo sát'], ['leaderboard', 'Bảng xếp hạng']].map(([key, label]) => <button key={key} className={`users-button ${tab === key ? 'primary' : ''}`} onClick={() => setTab(key)}>{key === 'leaderboard' && <Medal size={13} />}{label}</button>)}
+      {tab === 'assessments' && <label>Trạng thái<select value={evidenceStatus} onChange={e => setEvidenceStatus(e.target.value)}><option value="ALL">Tất cả khảo sát</option>{['PENDING', 'APPROVED', 'REJECTED', 'NONE'].map(s => <option key={s} value={s}>{EVIDENCE[s][1]}</option>)}</select></label>}
     </div></section>
 
     {tab === 'assessments' && <section className="lfg-table-panel"><header><h2>Khảo sát toàn diện <span>{assessments.items.length}</span></h2></header>
@@ -111,7 +141,7 @@ export default function RatingManagement() {
           <td>{a.flags?.length ? a.flags.join('; ') : '—'}</td>
           <td><div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{(a.evidenceUrls || []).map((url, i) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Bằng chứng ${i + 1}`} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6 }} /></a>)}{!a.evidenceUrls?.length && '—'}</div></td>
           <td><StatusBadge status={tone} label={label} />{a.reviewNote && <small>{a.reviewNote}</small>}</td>
-          <td>{a.evidenceStatus === 'PENDING' && <div style={{ display: 'flex', gap: 6 }}><button className="users-button primary" onClick={() => setDialog({ type: 'review', item: a, approve: true })}>Duyệt</button><button className="users-button users-danger" onClick={() => setDialog({ type: 'review', item: a, approve: false })}>Từ chối</button></div>}</td>
+          <td><div style={{ display: 'flex', gap: 6 }}><button className="users-button" onClick={() => setDialog({ type: 'profile', item: a })}>Hồ sơ</button>{a.evidenceStatus === 'PENDING' && <><button className="users-button primary" onClick={() => setDialog({ type: 'review', item: a, approve: true })}>Duyệt</button><button className="users-button users-danger" onClick={() => setDialog({ type: 'review', item: a, approve: false })}>Từ chối</button></>}</div></td>
         </tr> })}</tbody></table>
         {!loadingAssessments && !assessments.items.length && <p className="lfg-empty">Không có khảo sát nào ở trạng thái này.</p>}</div></section>}
 
@@ -128,9 +158,11 @@ export default function RatingManagement() {
         </tr>)}</tbody></table>
         {!flagged.items.length && !flagged.error && <p className="lfg-empty">Không có hồ sơ nào bị gắn cờ.</p>}</div></section>}
 
+    {tab === 'questions' && <SkillQuestions onNotice={setNotice} />}
     {tab === 'leaderboard' && <EloLeaderboard />}
 
     {dialog?.type === 'review' && <ReviewDialog assessment={dialog.item} approve={dialog.approve} onClose={() => setDialog(null)} onDone={done} />}
+    {dialog?.type === 'profile' && <ProfileDialog user={dialog.item} onClose={() => setDialog(null)} />}
     {dialog?.type === 'flag' && <FlagDialog item={dialog.item} penalize={dialog.penalize} onClose={() => setDialog(null)} onDone={done} />}
   </div>
 }

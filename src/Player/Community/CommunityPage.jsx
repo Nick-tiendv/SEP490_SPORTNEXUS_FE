@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { RecommendedLfgWidget } from '../LFG/RecommendedLfg.jsx'
 import { useApi } from '../../hooks/useApi.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
+import ReportModal from '../../components/common/ReportModal.jsx'
 import { getSportCategories, getMySports } from '../../api/player/profileApi.js'
 import {
   normalizeSportKey,
@@ -19,9 +20,11 @@ import {
   createPostComment,
   deleteCommunityPost,
   deletePostComment,
+  getCommentEditHistory,
   getCommunityPosts,
   getMyCommunityPosts,
   getPostComments,
+  getPostEditHistory,
   getUserCommunityPosts,
   likeCommunityPost,
   unlikeCommunityPost,
@@ -130,6 +133,8 @@ function Comment({ comment, postId, onChanged, depth = 0 }) {
   const [editing, setEditing] = useState(null)
   const [replying, setReplying] = useState('')
   const [showReply, setShowReply] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [reporting, setReporting] = useState(false)
   const save = async () => {
     try { await updatePostComment(comment.id, editing); setEditing(null); toast.success('Đã sửa bình luận.'); onChanged() } catch (e) { toast.error(e?.message || 'Không sửa được bình luận.') }
   }
@@ -157,10 +162,15 @@ function Comment({ comment, postId, onChanged, depth = 0 }) {
         </div>
         <div className="snx-comment-actions">
           <span>{timeAgo(comment.createdAt)}</span>
+          {comment.isEdited && <button type="button" onClick={() => setShowHistory((v) => !v)}>Đã chỉnh sửa</button>}
           {depth === 0 && <button type="button" onClick={() => setShowReply((v) => !v)}>Trả lời</button>}
-          {comment.isMine && editing === null && <button type="button" onClick={() => setEditing(comment.content)}>Sửa</button>}
+          {/* Chỉ sửa được trong 15 phút sau khi đăng (BE trả canEdit) */}
+          {comment.isMine && comment.canEdit && editing === null && <button type="button" onClick={() => setEditing(comment.content)}>Sửa</button>}
           {comment.isMine && <button type="button" onClick={remove}>Xóa</button>}
+          {!comment.isMine && <button type="button" onClick={() => setReporting(true)}>Báo cáo</button>}
         </div>
+        {showHistory && <EditHistory load={() => getCommentEditHistory(comment.id)} />}
+        {reporting && <ReportModal targetType="POST_COMMENT" targetObjectId={comment.id} subject={`Bình luận của ${comment.userName}: “${comment.content}”`} onClose={() => setReporting(false)} />}
         {showReply && (
           <div className="snx-row" style={{ marginTop: 6 }}>
             <input className="snx-input" placeholder={`Trả lời ${comment.userName}…`} value={replying} onChange={(e) => setReplying(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && reply()} />
@@ -171,6 +181,24 @@ function Comment({ comment, postId, onChanged, depth = 0 }) {
           <Comment key={r.id} comment={r} postId={postId} onChanged={onChanged} depth={1} />
         ))}
       </div>
+    </div>
+  )
+}
+
+// Nội dung cũ trước mỗi lần sửa (BE lưu, ai xem được bài / bình luận thì xem được lịch sử)
+function EditHistory({ load }) {
+  const history = useApi(load, [], { initialData: [] })
+  if (history.loading) return <p className="snx-muted" style={{ margin: 0 }}>Đang tải lịch sử sửa…</p>
+  if (history.error) return <p className="snx-muted" style={{ margin: 0 }}>{history.error}</p>
+  if (!history.data.length) return <p className="snx-muted" style={{ margin: 0 }}>Chưa chỉnh sửa lần nào.</p>
+  return (
+    <div className="snx-stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, background: '#f7faf9' }}>
+      {history.data.map((h, i) => (
+        <div key={`${h.editedAt}-${i}`}>
+          <div className="snx-muted" style={{ fontSize: 12 }}>Trước lần sửa lúc {new Date(h.editedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{h.oldContent}</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -209,6 +237,10 @@ function PostCard({ post, onAuthor, onChanged, onRemoved }) {
   const [commentCount, setCommentCount] = useState(Number(post.commentCount) || 0)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  // "Bài viết của tôi" gồm cả bài đã xóa / bị Admin ẩn: chỉ xem, không tương tác
+  const removed = post.status && post.status !== 'ACTIVE'
 
   const toggleLike = async () => {
     const next = !liked
@@ -239,16 +271,25 @@ function PostCard({ post, onAuthor, onChanged, onRemoved }) {
         <Avatar name={post.authorName} url={post.authorAvatarUrl} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <button type="button" className="snx-feed-author" onClick={() => onAuthor({ id: post.authorId, name: post.authorName })}>{post.authorName}</button>
-          <div className="snx-muted">{timeAgo(post.createdAt)}{post.updatedAt && post.updatedAt !== post.createdAt ? ' · đã sửa' : ''}</div>
+          <div className="snx-muted">
+            {timeAgo(post.createdAt)}
+            {post.isEdited && <> · <button type="button" className="snx-link-button" style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }} onClick={() => setShowHistory((v) => !v)}>đã chỉnh sửa</button></>}
+          </div>
         </div>
+        {post.status === 'DELETED' && <span className="snx-badge snx-badge--gray">Đã xóa</span>}
+        {post.status === 'HIDDEN' && <span className="snx-badge snx-badge--red">Bị Admin ẩn</span>}
         {post.sportName && <span className="snx-badge snx-badge--green">{post.sportName}</span>}
-        {post.isMine && editing === null && (
+        {!post.isMine && <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Báo cáo bài viết" title="Báo cáo bài viết" onClick={() => setReporting(true)}><span className="material-symbols-outlined">flag</span></button>}
+        {post.isMine && !removed && editing === null && (
           <>
             <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Sửa bài" onClick={() => setEditing(post.content)}><span className="material-symbols-outlined">edit</span></button>
             <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Xóa bài" onClick={remove}><span className="material-symbols-outlined">delete</span></button>
           </>
         )}
       </header>
+      {post.status === 'HIDDEN' && post.hiddenReason && <div className="snx-alert snx-alert--error" style={{ margin: 0 }}>Lý do ẩn: {post.hiddenReason}</div>}
+      {showHistory && <EditHistory load={() => getPostEditHistory(post.id)} />}
+      {reporting && <ReportModal targetType="COMMUNITY_POST" targetObjectId={post.id} subject={`Bài viết của ${post.authorName}`} onClose={() => setReporting(false)} />}
 
       {editing !== null ? (
         <div className="snx-stack" style={{ gap: 8 }}>
@@ -279,15 +320,15 @@ function PostCard({ post, onAuthor, onChanged, onRemoved }) {
         </Link>
       )}
 
-      <footer className="snx-row" style={{ borderTop: '1px solid #eef2f1', paddingTop: 8 }}>
+      {!removed && <footer className="snx-row" style={{ borderTop: '1px solid #eef2f1', paddingTop: 8 }}>
         <button type="button" className={`snx-btn snx-btn--ghost snx-btn--sm ${liked ? 'snx-liked' : ''}`} aria-pressed={liked} onClick={toggleLike}>
           <span className="material-symbols-outlined">{liked ? 'favorite' : 'favorite_border'}</span>{likeCount}
         </button>
         <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <span className="material-symbols-outlined">chat_bubble</span>{commentCount} bình luận
         </button>
-      </footer>
-      {open && <Comments postId={post.id} onCountChange={(d) => setCommentCount((c) => Math.max(0, c + d))} />}
+      </footer>}
+      {open && !removed && <Comments postId={post.id} onCountChange={(d) => setCommentCount((c) => Math.max(0, c + d))} />}
     </article>
   )
 }
@@ -333,7 +374,8 @@ export default function CommunityPage() {
   const fetchPage = useCallback(async (pageNo) => {
     const params = { page: pageNo, pageSize: PAGE_SIZE }
     if (author) return getUserCommunityPosts(author.id, params)
-    if (tab === 'mine') return getMyCommunityPosts(params)
+    // Bài viết của tôi: gồm cả bài đã xóa / bị ẩn (xem status, lý do ẩn)
+    if (tab === 'mine') return getMyCommunityPosts({ ...params, includeRemoved: true })
     return getCommunityPosts({ ...params, sortBy, sportCategoryId: sportId || undefined, keyword: search || undefined })
   }, [author, tab, sortBy, sportId, search])
 

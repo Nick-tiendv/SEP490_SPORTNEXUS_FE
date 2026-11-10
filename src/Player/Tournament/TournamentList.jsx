@@ -15,6 +15,8 @@ import {
   getMatch,
   getTournamentBracket,
   getTournamentParticipants,
+  getMyTournamentInvitations,
+  respondTournamentInvitation,
 } from '../../api/player/tournamentApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
@@ -51,6 +53,7 @@ const TABS = [
   { key: 'mine', label: 'Giải của tôi', icon: 'how_to_reg' },
   { key: 'matches', label: 'Lịch thi đấu', icon: 'sports_score' },
   { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
+  { key: 'invitations', label: 'Lời mời giải', icon: 'mail' },
   { key: 'organize', label: 'Giải tôi tổ chức', icon: 'campaign' },
 ]
 
@@ -306,6 +309,57 @@ function RegisterModal({ target, teams, onClose, onDone }) {
   )
 }
 
+// Lời mời vào giải nội bộ: chấp nhận = đăng ký thật (giữ lệ phí trong ví, kiểm tra khảo sát / Elo); lỗi thì lời mời vẫn chờ
+const INVITATION_STATUS = { PENDING: ['Chờ phản hồi', 'amber'], ACCEPTED: ['Đã nhận', 'green'], DECLINED: ['Đã từ chối', 'gray'], CANCELLED: ['BTC đã thu hồi', 'gray'] }
+function InvitationsPanel({ onChanged }) {
+  const invitations = useApi(() => getMyTournamentInvitations(), [], { initialData: [] })
+  const [busyId, setBusyId] = useState(null)
+  const respond = async (invitation, accept) => {
+    if (accept && invitation.entryFee > 0 && !(await confirmDialog(`Nhận lời mời và đóng lệ phí ${money(invitation.entryFee)} (giữ trong ví tới khi giải kết thúc)?`))) return
+    setBusyId(invitation.id)
+    try {
+      await respondTournamentInvitation(invitation.id, accept)
+      toast.success(accept ? 'Đã nhận lời mời và đăng ký bảng đấu.' : 'Đã từ chối lời mời.')
+      invitations.refresh()
+      if (accept) onChanged?.()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+  if (invitations.loading) return <p className="snx-muted">Đang tải…</p>
+  if (invitations.error) return <div className="snx-alert snx-alert--error">{invitations.error}</div>
+  if (!invitations.data.length) return <div className="snx-empty"><span className="material-symbols-outlined">mail</span>Bạn chưa có lời mời giải đấu nào.</div>
+  return (
+    <div className="snx-card">
+      <div className="snx-list">
+        {invitations.data.map((inv) => {
+          const [label, tone] = INVITATION_STATUS[inv.status] || [inv.status, 'gray']
+          return (
+            <div key={inv.id} className="snx-list-item" style={{ alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong style={{ fontSize: 14 }}>{inv.parentTournamentName ? `${inv.parentTournamentName} · ${inv.tournamentName}` : inv.tournamentName}</strong>
+                <div className="snx-muted">
+                  {[`Mời bởi ${inv.invitedByName}`, inv.teamName && `Đội ${inv.teamName}`, `Lệ phí ${money(inv.entryFee)}`, inv.startDate && `Thi đấu ${date(inv.startDate)}`, inv.registrationDeadline && `Hạn ${dateTime(inv.registrationDeadline)}`].filter(Boolean).join(' · ')}
+                </div>
+                {inv.message && <div style={{ fontSize: 13, marginTop: 4 }}>“{inv.message}”</div>}
+              </div>
+              <span className={`snx-badge snx-badge--${tone}`}>{label}</span>
+              {inv.status === 'PENDING' && (
+                <div className="snx-row" style={{ gap: 6 }}>
+                  <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busyId === inv.id} onClick={() => respond(inv, true)}>Nhận lời mời</button>
+                  <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={busyId === inv.id} onClick={() => respond(inv, false)}>Từ chối</button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MyMatches({ onBrowse }) {
   const matches = useApi(() => getMyMatches(), [], { initialData: [] })
   if (matches.loading) return <p className="snx-muted">Đang tải…</p>
@@ -408,6 +462,7 @@ function TournamentList() {
       </div>
 
       {tab === 'teams' && <TeamsPanel />}
+      {tab === 'invitations' && <InvitationsPanel onChanged={() => mine.refresh?.()} />}
       {tab === 'organize' && <TournamentWorkspace mode="player" embedded />}
       {tab === 'matches' && <MyMatches onBrowse={() => setTab('open')} />}
 
