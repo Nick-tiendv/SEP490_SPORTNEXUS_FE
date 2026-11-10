@@ -11,6 +11,7 @@ export default function InteractiveCourtMap({
   onSelectCourt,
   effectiveOrigin = 'Thủ Đức',
   originCoords = null,
+  searchArea = null, // { label, bounds: [[s, w], [n, e]] } | { label, center: { lat, lng }, radiusKm }
   isEditingOrigin = false,
   setIsEditingOrigin,
   customOrigin = '',
@@ -233,6 +234,23 @@ export default function InteractiveCourtMap({
       }, 850)
     }
   }, [selectedCourt])
+
+  // Khu vực người dùng nhập ở ô Vị trí: vẽ viền và thu phóng vừa khu vực để thấy các sân trong đó.
+  // Khai báo sau effect bay tới sân đang chọn để khung nhìn khu vực được ưu tiên khi đổi khu vực.
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!map || !window.L) return undefined
+    const L = window.L
+    if (!searchArea) return undefined
+    const style = { color: '#16a34a', weight: 1.5, dashArray: '6 4', fillOpacity: 0.05, interactive: false }
+    const layer = searchArea.center
+      ? L.circle([searchArea.center.lat, searchArea.center.lng], { ...style, radius: searchArea.radiusKm * 1000 })
+      : L.rectangle(searchArea.bounds, style)
+    layer.addTo(map)
+    map.invalidateSize()
+    map.fitBounds(layer.getBounds(), { padding: [24, 24], maxZoom: 16 })
+    return () => { map.removeLayer(layer) }
+  }, [searchArea, isLeafletReady])
 
   // Hàm bay về vị trí người chơi
   const handleLocateMe = () => {

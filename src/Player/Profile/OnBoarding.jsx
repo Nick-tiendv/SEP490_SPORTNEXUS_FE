@@ -7,6 +7,8 @@ import {
   formatOptionsFor, getOnboarding, saveOnboarding,
 } from '../../api/player/ratingApi.js'
 import { setNeedsOnboarding } from '../../utils/surveyGate.js'
+import { formatAccuracy, getCurrentLocation, isApproximate, reverseGeocode } from '../../utils/geolocation.js'
+import LocationPickerMap from '../../components/common/LocationPickerMap.jsx'
 
 // Khảo sát người chơi (PUT /api/auth/me/onboarding, thay toàn bộ).
 // Bắt buộc ít nhất 1 môn (tối đa 10) và 1 khung giờ rảnh (tối đa 28). Làm ở lần đăng nhập đầu, sửa lại được.
@@ -54,7 +56,9 @@ export default function OnBoarding() {
   const [sports, setSports] = useState([]) // [{ sportCategoryId, skillLevel, preferredFormats[] }]
   const [slots, setSlots] = useState([]) // [{ dayOfWeek, startTime, endTime }]
   const [slotDraft, setSlotDraft] = useState({ dayOfWeek: 6, startTime: '07:00', endTime: '09:00' })
-  const [location, setLocation] = useState(null) // { latitude, longitude }
+  const [location, setLocation] = useState(null) // { latitude, longitude, accuracy? }
+  const [locating, setLocating] = useState(false)
+  const [place, setPlace] = useState({ key: '', name: '' }) // tên khu vực theo tọa độ (key = "lat,lng")
   const [radiusKm, setRadiusKm] = useState(5)
   const [maxPrice, setMaxPrice] = useState('')
   const [goal, setGoal] = useState(null)
@@ -116,14 +120,30 @@ export default function OnBoarding() {
     addSlots([{ ...slotDraft }])
   }
 
-  const locate = () => {
-    if (!navigator.geolocation) { toast.error('Trình duyệt không hỗ trợ định vị.'); return }
-    navigator.geolocation.getCurrentPosition(
-      pos => setLocation({ latitude: Number(pos.coords.latitude.toFixed(6)), longitude: Number(pos.coords.longitude.toFixed(6)) }),
-      () => toast.error('Không lấy được vị trí. Vui lòng cho phép truy cập vị trí.'),
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
+  // Lấy vị trí: thử nhanh (Wi-Fi / IP) trước rồi mới tới GPS; sai số lớn thì nhắc chỉnh trên bản đồ.
+  const locate = async () => {
+    if (locating) return
+    setLocating(true)
+    try {
+      const found = await getCurrentLocation()
+      setLocation(found)
+      if (isApproximate(found.accuracy)) toast.warning(`Vị trí chỉ là ước lượng (sai số khoảng ${formatAccuracy(found.accuracy)}). Bạn có thể bấm lên bản đồ để chỉnh lại.`)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setLocating(false)
+    }
   }
+
+  // Tên khu vực của vị trí đang chọn (tra theo tọa độ, mọi tỉnh thành)
+  const locationKey = location ? `${location.latitude},${location.longitude}` : ''
+  useEffect(() => {
+    if (!location) return undefined
+    let cancelled = false
+    reverseGeocode(location.latitude, location.longitude).then(name => { if (!cancelled) setPlace({ key: `${location.latitude},${location.longitude}`, name }) })
+    return () => { cancelled = true }
+  }, [location])
+  const placeName = place.key === locationKey ? place.name : ''
 
   const submit = async () => {
     if (saving) return
@@ -233,16 +253,21 @@ export default function OnBoarding() {
 
             <Section step="3" title="Khu vực và mức giá" hint="Không bắt buộc. Dùng để gợi ý sân và kèo gần bạn.">
               <div className="snx-row" style={{ gap: 8 }}>
-                <button type="button" className="snx-btn snx-btn--secondary" onClick={locate}>
-                  <span className="material-symbols-outlined">my_location</span>{location ? 'Lấy lại vị trí hiện tại' : 'Dùng vị trí hiện tại'}
+                <button type="button" className="snx-btn snx-btn--secondary" onClick={locate} disabled={locating}>
+                  <span className="material-symbols-outlined">my_location</span>{locating ? 'Đang lấy vị trí…' : location ? 'Lấy lại vị trí hiện tại' : 'Dùng vị trí hiện tại'}
                 </button>
-                {location && (
-                  <>
-                    <span className="snx-muted">{location.latitude}, {location.longitude}</span>
-                    <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setLocation(null)}>Bỏ vị trí</button>
-                  </>
-                )}
+                {location && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setLocation(null)}>Bỏ vị trí</button>}
               </div>
+              {location ? (
+                <p className="snx-muted" style={{ margin: 0 }}>
+                  <strong>{placeName || `${location.latitude}, ${location.longitude}`}</strong>
+                  {location.accuracy > 0 && ` · sai số khoảng ${formatAccuracy(location.accuracy)}`}
+                  {isApproximate(location.accuracy) && ' (vị trí ước lượng, hãy chỉnh lại trên bản đồ nếu chưa đúng)'}
+                </p>
+              ) : (
+                <p className="snx-muted" style={{ margin: 0 }}>Hoặc bấm lên bản đồ để chọn khu vực bạn hay chơi.</p>
+              )}
+              <LocationPickerMap value={location} onChange={setLocation} />
               {location && (
                 <label className="snx-field">Sẵn sàng đi tối đa: {radiusKm} km
                   <input type="range" min="1" max="50" value={radiusKm} onChange={e => setRadiusKm(Number(e.target.value))} />

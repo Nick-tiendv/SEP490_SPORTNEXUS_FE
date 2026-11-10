@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { geocodeAddress } from '../../../utils/geolocation.js'
 import { vnClock } from '../../../utils/vnTime.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -112,6 +113,27 @@ const DISTRICT_COORDS = {
   tanphu: { lat: 10.7901, lng: 106.6281, name: 'Tân Phú' },
   govap: { lat: 10.8388, lng: 106.6653, name: 'Gò Vấp' },
   binhtan: { lat: 10.7825, lng: 106.6085, name: 'Bình Tân' },
+}
+
+// Quận cũ đã gộp vào TP. Thủ Đức: detectDistrictKey trả 'thuduc' (tâm ở Linh Chiểu) nên lệch ~7 km.
+// Dùng tọa độ riêng khi người dùng nhập đích danh các khu này làm điểm xuất phát.
+const LEGACY_AREA_COORDS = [
+  { match: ['quan 2', 'q2', 'thao dien', 'an phu', 'an khanh', 'thu thiem', 'binh an'], lat: 10.7872, lng: 106.7498 },
+  { match: ['quan 9', 'q9', 'hiep phu', 'tang nhon phu', 'le van viet', 'long thanh my'], lat: 10.8428, lng: 106.8287 },
+]
+// Bán kính tìm sân quanh một địa chỉ cụ thể (khi không có ranh giới khu vực)
+const AREA_RADIUS_KM = 3
+// Sai số GPS tối đa còn dùng làm điểm xuất phát (vị trí đoán theo IP / Wi-Fi thường > 1 km)
+const GPS_TRUST_METERS = 1000
+// Khu vực chọn nhanh ở ô "Khu vực"
+const QUICK_AREAS = ['Quận 1', 'Quận 2', 'Quận 3', 'Quận 7', 'Bình Thạnh', 'Gò Vấp', 'Tân Bình', 'Thủ Đức']
+
+const localOriginCoords = (text = '') => {
+  const norm = normalizeText(text)
+  const legacy = LEGACY_AREA_COORDS.find((area) => area.match.some((m) => new RegExp(`(^|[^a-z0-9])${m}($|[^a-z0-9])`).test(norm)))
+  if (legacy) return { lat: legacy.lat, lng: legacy.lng }
+  const district = DISTRICT_COORDS[detectDistrictKey(text)] || DISTRICT_COORDS.thuduc
+  return { lat: district.lat, lng: district.lng }
 }
 
 // Tính khoảng cách sân linh hoạt theo vị trí người chơi và tọa độ vệ tinh GPS trực tiếp từ Google Maps
@@ -490,6 +512,49 @@ function MapBooking() {
     return userProfileLocation || 'Thủ Đức'
   }, [customOrigin, userProfileLocation])
 
+  // Tọa độ của vị trí người dùng tự nhập (tra địa chỉ, chờ ngừng gõ 600ms)
+  const [customGeo, setCustomGeo] = useState({ key: '', coords: null })
+  useEffect(() => {
+    const text = customOrigin.trim()
+    if (!text) return undefined
+    let cancelled = false
+    const timer = setTimeout(() => {
+      geocodeAddress(text).then((coords) => { if (!cancelled) setCustomGeo({ key: text, coords }) })
+    }, 600)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [customOrigin])
+
+  // Điểm xuất phát dùng cho ghim bản đồ, khoảng cách và chỉ đường:
+  // vị trí tự nhập (tọa độ tra được, chưa có thì ước theo khu vực) > GPS thiết bị > khu vực trong hồ sơ.
+  const originPoint = useMemo(() => {
+    const text = customOrigin.trim()
+    if (text) return (customGeo.key === text && customGeo.coords) || localOriginCoords(text)
+    // Chỉ tin GPS khi đủ chính xác: máy tính không có GPS thường bị đoán theo IP, lệch hàng chục km
+    if (gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS) return gpsCoords
+    return localOriginCoords(userProfileLocation || 'Thủ Đức')
+  }, [customOrigin, customGeo, gpsCoords, userProfileLocation])
+
+  // Khu vực người dùng nhập ở ô "Vị trí" (quận 1, quận 2, Thủ Đức…) → chỉ hiện sân trong khu vực đó.
+  // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể / chưa tra được → bán kính quanh điểm đó.
+  const [areaOffFor, setAreaOffFor] = useState('') // khu vực người dùng đã bấm "Xem tất cả"
+  const searchArea = useMemo(() => {
+    const label = customOrigin.trim()
+    if (!label || areaOffFor === label) return null
+    const bounds = customGeo.key === label ? customGeo.coords?.bounds : null
+    // Ranh giới ≥ ~1 km mới là khu vực; nhỏ hơn là một địa chỉ cụ thể
+    if (bounds && (bounds.north - bounds.south > 0.009 || bounds.east - bounds.west > 0.009)) {
+      return { label, bounds: [[bounds.south, bounds.west], [bounds.north, bounds.east]] }
+    }
+    return { label, center: { lat: originPoint.lat, lng: originPoint.lng }, radiusKm: AREA_RADIUS_KM }
+  }, [customOrigin, customGeo, areaOffFor, originPoint])
+  const inSearchArea = useCallback((court) => {
+    if (!searchArea) return true
+    if (!court.lat || !court.lng) return false
+    if (searchArea.center) return haversineDistanceKm(searchArea.center.lat, searchArea.center.lng, court.lat, court.lng) <= searchArea.radiusKm
+    const [[south, west], [north, east]] = searchArea.bounds
+    return court.lat >= south && court.lat <= north && court.lng >= west && court.lng <= east
+  }, [searchArea])
+
   // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
   useEffect(() => {
     const handleProfileUpdate = (e) => {
@@ -617,9 +682,9 @@ function MapBooking() {
 
     return list.map((c) => ({
       ...c,
-      distance: getDistanceForCourt(c, effectiveOrigin, gpsCoords),
+      distance: getDistanceForCourt(c, effectiveOrigin, originPoint),
     }))
-  }, [apiFacilities, effectiveOrigin, gpsCoords])
+  }, [apiFacilities, effectiveOrigin, originPoint])
 
   const courtMatchesSport = useCallback((c) => {
     if (Array.isArray(c.sports) && c.sports.length > 0) {
@@ -695,12 +760,13 @@ function MapBooking() {
   const toggleAmenity = (id) => setSelectedAmenities((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   const filteredCourts = useMemo(() => {
     const byTime = freeFacilityIds ? baseFilteredCourts.filter((c) => freeFacilityIds.has(String(c.id))) : baseFilteredCourts
-    if (!selectedAmenities.length) return byTime
-    return byTime.filter((c) => {
+    const byArea = byTime.filter(inSearchArea)
+    if (!selectedAmenities.length) return byArea
+    return byArea.filter((c) => {
       const ids = (c.amenities || []).map((a) => String(a.id ?? a.amenityId ?? ''))
       return selectedAmenities.every((id) => ids.includes(id))
     })
-  }, [baseFilteredCourts, selectedAmenities, freeFacilityIds])
+  }, [baseFilteredCourts, selectedAmenities, freeFacilityIds, inSearchArea])
 
 
 
@@ -1176,6 +1242,7 @@ function MapBooking() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur()
                   }}
+                  placeholder="Tìm tên sân, tên đường…"
                   aria-label="Tìm kiếm sân theo quận, tên đường hoặc tên sân"
                 />
                 {query && (
@@ -1237,6 +1304,52 @@ function MapBooking() {
                   )}
                 </ul>
               )}
+            </div>
+
+            {/* Khu vực: nhập quận / phường / địa chỉ → chỉ hiện sân trong khu vực đó trên danh sách và bản đồ */}
+            <div className="mb-label-row">
+              <span className="mb-label">Khu vực</span>
+              {customOrigin && (
+                <button type="button" className="mb-link-btn" onClick={() => setCustomOrigin('')}>Bỏ chọn</button>
+              )}
+            </div>
+            <div className="mb-search" style={{ marginBottom: 8 }}>
+              <div className="mb-search-box">
+                <span className="material-symbols-outlined mb-search-ic">location_on</span>
+                <input
+                  id="mb-area-input"
+                  type="text"
+                  className="mb-search-input"
+                  autoComplete="off"
+                  placeholder="Nhập quận, phường hoặc địa chỉ (vd: Quận 2)"
+                  value={customOrigin}
+                  onChange={(e) => { setCustomOrigin(e.target.value); setAreaOffFor('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+                  aria-label="Khu vực tìm sân"
+                />
+                {customOrigin && (
+                  <button type="button" className="mb-search-clear" onClick={() => setCustomOrigin('')} aria-label="Bỏ chọn khu vực">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              {QUICK_AREAS.map((area) => {
+                const active = normalizeText(customOrigin.trim()) === normalizeText(area)
+                return (
+                  <button
+                    key={area}
+                    type="button"
+                    className="mb-origin-chip"
+                    aria-pressed={active}
+                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : undefined}
+                    onClick={() => { setCustomOrigin(active ? '' : area); setAreaOffFor('') }}
+                  >
+                    {area}
+                  </button>
+                )
+              })}
             </div>
 
             <div className="mb-label-row">
@@ -1364,6 +1477,17 @@ function MapBooking() {
             <small>{filteredCourts.length} cụm sân khả dụng</small>
           </div>
 
+          {searchArea && (
+            <div className="mb-card" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', fontSize: 13 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#16a34a' }}>location_on</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                Đang xem sân trong khu vực <strong>{searchArea.label}</strong>
+                {searchArea.center && ` (bán kính ${searchArea.radiusKm} km)`}
+              </span>
+              <button type="button" className="mb-origin-chip" onClick={() => setAreaOffFor(searchArea.label)}>Xem tất cả</button>
+            </div>
+          )}
+
           {isLoadingApi ? (
             <div className="mb-card mb-empty">
               <span className="material-symbols-outlined mb-spin" style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>sync</span>
@@ -1372,7 +1496,9 @@ function MapBooking() {
           ) : filteredCourts.length === 0 ? (
             <div className="mb-card mb-empty">
               <span className="material-symbols-outlined">search_off</span>
-              {hasTimeFilter
+              {searchArea
+                ? `Không có sân phù hợp trong khu vực “${searchArea.label}”. Bấm “Xem tất cả” hoặc nhập khu vực khác.`
+                : hasTimeFilter
                 ? 'Không còn sân trống trong khung giờ này. Hãy thử ngày hoặc khung giờ khác.'
                 : 'Không tìm thấy sân phù hợp. Hãy thử từ khóa khác hoặc mở rộng tầm giá.'}
             </div>
@@ -1476,7 +1602,8 @@ function MapBooking() {
               selectedCourt={selectedCourt}
               onSelectCourt={handleSelectCourt}
               effectiveOrigin={effectiveOrigin}
-              originCoords={gpsCoords || DISTRICT_COORDS[detectDistrictKey(effectiveOrigin)] || DISTRICT_COORDS.thuduc}
+              originCoords={originPoint}
+              searchArea={searchArea}
               isEditingOrigin={isEditingOrigin}
               setIsEditingOrigin={setIsEditingOrigin}
               customOrigin={customOrigin}
@@ -1489,7 +1616,8 @@ function MapBooking() {
             {/* Thanh thông tin lộ trình & chỉ đường Google Maps gọn gàng, tách biệt bên dưới bản đồ */}
             {selectedCourt && (() => {
               const routeInfo = calculateRoute(selectedCourt, effectiveOrigin)
-              const originForDirections = gpsCoords
+              const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
+              const originForDirections = customOrigin.trim() ? customOrigin.trim() : trustedGps
                 ? `${gpsCoords.lat},${gpsCoords.lng}`
                 : effectiveOrigin
 
