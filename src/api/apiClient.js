@@ -25,6 +25,8 @@ export function normalizeApiError(error) {
     403: 'Bạn không có quyền thực hiện thao tác này.',
     404: 'Không tìm thấy API yêu cầu.',
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
+    413: 'File tải lên quá lớn. Vui lòng chọn ảnh tối đa 5MB.',
+    415: 'Định dạng dữ liệu tải lên không được hỗ trợ. Vui lòng chọn ảnh JPG, PNG hoặc WEBP.',
   }
 
   let message = null
@@ -81,6 +83,9 @@ apiClient.interceptors.request.use(config => {
   const token = config.skipAuth ? null : tokenReader()
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
   else config.headers.delete('Authorization')
+  // FormData: bỏ Content-Type JSON mặc định. Nếu giữ, axios 1.x chuyển FormData thành chuỗi JSON
+  // (BE trả 415). Để trống thì trình duyệt tự đặt multipart/form-data kèm boundary.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) config.headers.setContentType(false)
 
   if (LOG_API) console.log(`%c[API Request] ${config.method?.toUpperCase()} ${config.url}`, 'color: #0284C7; font-weight: bold;', safeBody(config.url, config.data || config.params || ''))
   return config
