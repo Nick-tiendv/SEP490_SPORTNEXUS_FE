@@ -119,6 +119,8 @@ export async function createLfg(payload) {
   try {
     const bodyPayload = {
       courtSlotId: payload.courtSlotId,
+      // Số ca liên tiếp từ courtSlotId (cùng sân) cho buổi chơi; BE gộp thành 1 ca dài
+      numberOfSlots: Number(payload.numberOfSlots) > 1 ? Number(payload.numberOfSlots) : 1,
       slotsNeeded: typeof payload.slotsNeeded === 'number' ? payload.slotsNeeded : 2,
       pricePerPerson: payload.pricePerPerson != null && payload.pricePerPerson !== '' ? Number(payload.pricePerPerson) : null,
       skillLevelTag: toSkillTag(payload.skillLevelTag),

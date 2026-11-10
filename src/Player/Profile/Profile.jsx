@@ -24,6 +24,7 @@ import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
+import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from '../../Auth/firebasePhone.js'
 import {
   getMyFacilityReviews,
   getFacilityReviewById,
@@ -216,8 +217,8 @@ export default function Profile() {
   const { logout } = useAuth()
   const navigate = useNavigate()
 
-  // Thông tin người chơi: tên, SĐT, ảnh lấy từ GET /api/auth/me.
-  // Khu vực và giới thiệu chưa có trên backend nên chỉ lưu trên máy (localStorage).
+  // Thông tin người chơi: tên, tên định danh, giới thiệu, SĐT, ảnh, tổng số trận lấy từ GET /api/auth/me.
+  // Khu vực lấy từ khảo sát người chơi (tọa độ lưu ở BE), không sửa ở đây.
   const [profile, setProfile] = useState(() => {
     let local = {}
     try { local = JSON.parse(localStorage.getItem('player_profile_data') || '{}') } catch { /* bỏ qua */ }
@@ -225,7 +226,7 @@ export default function Profile() {
       name: '',
       username: '',
       location: local.location || '',
-      bio: local.bio || '',
+      bio: '',
       joinDate: '',
       phone: '',
       email: '',
@@ -398,18 +399,48 @@ export default function Profile() {
     }
   }
 
-  // Cập nhật số điện thoại: POST /api/auth/me/phone
-  const handleUpdatePhone = async () => {
+  // Đổi số điện thoại: gửi OTP Firebase tới số MỚI → nhập mã → POST /api/auth/me/phone { phone, firebaseIdToken }
+  const [phoneOtp, setPhoneOtp] = useState('')
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false)
+  const [phoneBusy, setPhoneBusy] = useState(false)
+  const handleSendPhoneCode = async () => {
     if (!phoneInput.trim()) {
-      triggerToast('⚠️ Vui lòng nhập số điện thoại')
+      triggerToast('⚠️ Vui lòng nhập số điện thoại mới')
       return
     }
+    if (!isFirebasePhoneEnabled) {
+      triggerToast('⚠️ Chưa cấu hình xác thực số điện thoại (Firebase). Vui lòng liên hệ quản trị viên.')
+      return
+    }
+    setPhoneBusy(true)
     try {
-      await updatePhone({ phone: phoneInput.trim() })
-      setProfile((prev) => ({ ...prev, phone: phoneInput.trim() }))
-      triggerToast('🎉 Đã cập nhật số điện thoại thành công!')
+      await sendPhoneCode(phoneInput.trim())
+      setPhoneCodeSent(true)
+      triggerToast('📩 Đã gửi mã OTP tới số điện thoại mới.')
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không gửi được mã OTP'}`)
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
+  const handleUpdatePhone = async () => {
+    if (!phoneOtp.trim()) {
+      triggerToast('⚠️ Vui lòng nhập mã OTP')
+      return
+    }
+    setPhoneBusy(true)
+    try {
+      const firebaseIdToken = await confirmPhoneCode(phoneInput.trim(), phoneOtp.trim())
+      const res = await updatePhone({ phone: phoneInput.trim(), firebaseIdToken })
+      clearPhoneVerification()
+      setProfile((prev) => ({ ...prev, phone: res?.phone || phoneInput.trim() }))
+      setPhoneCodeSent(false)
+      setPhoneOtp('')
+      triggerToast('🎉 Đã đổi số điện thoại thành công!')
     } catch (err) {
       triggerToast(`⚠️ ${err?.message || 'Lỗi cập nhật số điện thoại'}`)
+    } finally {
+      setPhoneBusy(false)
     }
   }
 
@@ -605,17 +636,17 @@ export default function Profile() {
   // Tải hồ sơ, điểm Fair Play, số trận và danh sách môn từ backend khi mở trang
   useEffect(() => {
     let cancelled = false
-    Promise.allSettled([getMyProfile(), getMyFairPlay(), getMyBookings()]).then(([me, fairPlay, bookings]) => {
+    Promise.allSettled([getMyProfile(), getMyFairPlay()]).then(([me, fairPlay]) => {
       if (cancelled) return
       const u = me.status === 'fulfilled' ? me.value || {} : {}
       const fp = fairPlay.status === 'fulfilled' ? fairPlay.value || {} : {}
-      const list = bookings.status === 'fulfilled' && Array.isArray(bookings.value) ? bookings.value : []
       const rating = Number(fp.averageRating)
       const created = u.createdAt ? new Date(u.createdAt) : null
       setProfile((prev) => ({
         ...prev,
         name: u.fullName || prev.name,
         username: u.username ? `@${u.username}` : prev.username,
+        bio: u.bio ?? prev.bio,
         phone: u.phone || u.phoneNumber || prev.phone,
         email: u.email || prev.email,
         avatarUrl: u.avatarUrl || prev.avatarUrl,
@@ -624,7 +655,8 @@ export default function Profile() {
         reputationScore: Number.isFinite(rating) ? Math.round(rating * 10) / 10 : prev.reputationScore,
         totalReviews: Number(fp.ratingCount) || 0,
         fairPlayScore: fp.fairPlayScore ?? u.fairPlayScore ?? null,
-        matchesPlayed: list.filter((b) => /COMPLETED|CHECKED_IN/i.test(b.status || b.bookingStatus || '')).length,
+        // Tổng số trận = số lần đã check-in (đặt sân, kèo, giải), BE đếm
+        matchesPlayed: Number(u.matchesPlayed) || 0,
       }))
       setFairPlayHistory(Array.isArray(fp.history?.items) ? fp.history.items : [])
       if (u.phone || u.phoneNumber) setPhoneInput(u.phone || u.phoneNumber)
@@ -757,18 +789,28 @@ export default function Profile() {
       triggerToast('⚠️ Vui lòng nhập họ tên.')
       return
     }
+    // Họ tên, tên định danh (tên đăng nhập) và giới thiệu lưu lên backend (PUT /api/auth/me).
+    // SĐT đổi ở "Bảo mật tài khoản" (xác thực OTP), tổng số trận do hệ thống đếm, khu vực lấy từ khảo sát.
+    const username = (editForm.username || '').trim().replace(/^@/, '')
+    let saved
     try {
-      // Họ tên lưu lên backend (PUT /api/auth/me); khu vực & giới thiệu chỉ lưu trên máy.
-      await updateMyProfile({ fullName: editForm.name.trim(), avatarUrl: profile.avatarUrl ?? null })
+      saved = await updateMyProfile({ fullName: editForm.name.trim(), avatarUrl: profile.avatarUrl ?? null, username: username || undefined, bio: editForm.bio ?? '' })
     } catch (error) {
       triggerToast(`⚠️ ${error?.message || 'Không cập nhật được hồ sơ.'}`)
       return
     }
-    setProfile({ ...editForm, name: editForm.name.trim() })
-    localStorage.setItem('player_profile_data', JSON.stringify({ ...editForm, name: editForm.name.trim(), location: editForm.location, bio: editForm.bio, avatarUrl: editForm.avatarUrl || profile.avatarUrl || null }))
-    window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: editForm }))
+    setProfile((prev) => ({
+      ...prev,
+      name: saved?.fullName || editForm.name.trim(),
+      username: saved?.username ? `@${saved.username}` : prev.username,
+      bio: saved?.bio ?? '',
+    }))
+    window.dispatchEvent(new CustomEvent('player-profile-updated', { detail: { name: saved?.fullName || editForm.name.trim() } }))
     setShowEditModal(false)
-    triggerToast('✅ Cập nhật thông tin hồ sơ người chơi thành công!')
+    const usernameChanged = saved?.username && `@${saved.username}` !== profile.username
+    triggerToast(usernameChanged
+      ? `✅ Đã lưu hồ sơ. Từ nay đăng nhập bằng tên đăng nhập mới: ${saved.username}`
+      : '✅ Cập nhật thông tin hồ sơ người chơi thành công!')
   }
 
   return (
@@ -2171,127 +2213,46 @@ export default function Profile() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                  Khu vực thi đấu ưa thích
-                </label>
-                <input
-                  type="text"
-                  value={editForm.location}
-                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid #D1D5DB',
-                    fontSize: '14px',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
                   Số điện thoại
                 </label>
-                <input
-                  type="text"
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                <div
                   style={{
                     width: '100%',
                     padding: '10px 14px',
                     borderRadius: '12px',
-                    border: '1px solid #D1D5DB',
+                    border: '1px solid #E5E7EB',
                     fontSize: '14px',
-                    outline: 'none',
+                    background: '#F9FAFB',
+                    color: '#4B5563',
                   }}
-                />
+                >
+                  {profile.phone || 'Chưa có số điện thoại'}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Đổi số trong mục "Bảo mật tài khoản" (cần xác thực mã OTP gửi tới số mới).
+                </p>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
                   Tổng số trận đã đấu
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setEditForm((prev) => ({
-                      ...prev,
-                      matchesPlayed: Math.max(0, (parseInt(prev.matchesPlayed, 10) || 0) - 1),
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    -
-                  </button>
-
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={editForm.matchesPlayed === undefined ? '' : editForm.matchesPlayed}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '')
-                      setEditForm((prev) => ({
-                        ...prev,
-                        matchesPlayed: val === '' ? '' : parseInt(val, 10),
-                      }))
-                    }}
-                    onBlur={() => {
-                      if (editForm.matchesPlayed === '' || isNaN(editForm.matchesPlayed)) {
-                        setEditForm((prev) => ({ ...prev, matchesPlayed: 0 }))
-                      }
-                    }}
-                    placeholder="0"
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '1.5px solid #15803D',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#15803D',
-                      outline: 'none',
-                      background: '#F0FDF4',
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setEditForm((prev) => ({
-                      ...prev,
-                      matchesPlayed: (parseInt(prev.matchesPlayed, 10) || 0) + 1,
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    +
-                  </button>
+                <div
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid #E5E7EB',
+                    fontSize: '14px',
+                    background: '#F9FAFB',
+                    color: '#4B5563',
+                  }}
+                >
+                  {profile.matchesPlayed ?? 0}
                 </div>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                  Hệ thống tự đếm theo số lần check-in (đặt sân, kèo, giải đấu).
+                </p>
               </div>
 
               <div>
@@ -2301,6 +2262,7 @@ export default function Profile() {
                 <textarea
                   rows={3}
                   value={editForm.bio}
+                  maxLength={500}
                   onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                   style={{
                     width: '100%',
@@ -4727,7 +4689,7 @@ export default function Profile() {
                   <input
                     type="tel"
                     value={phoneInput}
-                    onChange={(e) => setPhoneInput(e.target.value)}
+                    onChange={(e) => { setPhoneInput(e.target.value); setPhoneCodeSent(false); setPhoneOtp('') }}
                     placeholder="Ví dụ: 0908 123 456"
                     style={{
                       width: '100%',
@@ -4740,9 +4702,33 @@ export default function Profile() {
                     }}
                   />
                 </div>
+                {phoneCodeSent && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
+                      Mã OTP gửi tới số mới:
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={phoneOtp}
+                      onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6 chữ số"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #D1D5DB',
+                        fontSize: '13px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={handleUpdatePhone}
+                  disabled={phoneBusy}
+                  onClick={phoneCodeSent ? handleUpdatePhone : handleSendPhoneCode}
                   style={{
                     padding: '10px',
                     borderRadius: '10px',
@@ -4751,11 +4737,22 @@ export default function Profile() {
                     color: '#FFFFFF',
                     fontWeight: 700,
                     fontSize: '13px',
-                    cursor: 'pointer',
+                    cursor: phoneBusy ? 'not-allowed' : 'pointer',
+                    opacity: phoneBusy ? 0.7 : 1,
                   }}
                 >
-                  Lưu số điện thoại
+                  {phoneBusy ? 'Đang xử lý...' : phoneCodeSent ? 'Xác nhận và lưu số mới' : 'Gửi mã OTP tới số mới'}
                 </button>
+                {phoneCodeSent && (
+                  <button
+                    type="button"
+                    disabled={phoneBusy}
+                    onClick={handleSendPhoneCode}
+                    style={{ background: 'none', border: 'none', color: '#15803D', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Gửi lại mã
+                  </button>
+                )}
               </div>
             )}
 

@@ -7,6 +7,7 @@ import { setForbiddenHandler } from '../api/apiClient.js'
 const FLAG_KEY = 'sportnexus_needs_onboarding'
 export const ONBOARDING_EVENT = 'sportnexus:onboarding-required'
 export const ASSESSMENT_EVENT = 'sportnexus:assessment-required'
+export const TEAM_SPORT_EVENT = 'sportnexus:team-sport-required'
 
 export function setNeedsOnboarding(value) {
   try {
@@ -29,9 +30,34 @@ function sportIdFromRequest(config) {
   return candidates.map(value => String(value ?? '')).find(value => GUID.test(value)) || ''
 }
 
-// Gọi từ interceptor của apiClient với lỗi 403 đã có message của BE
-export function detectSurveyGate(status, message, config) {
-  if (status !== 403 || typeof window === 'undefined') return
+const currentUserId = () => {
+  try { return localStorage.getItem('sportnexus_user_id') || '' } catch { return '' }
+}
+
+// Gọi từ interceptor của apiClient với lỗi 403 (hoặc lỗi có errorCode) đã có message của BE.
+// Ưu tiên errorCode của BE; BE cũ chưa trả errorCode thì đoán theo nội dung message.
+export function detectSurveyGate(status, message, config, body) {
+  if (typeof window === 'undefined') return
+  const code = body?.errorCode
+  const detail = body?.errorDetail || {}
+  if (code === 'ONBOARDING_REQUIRED') {
+    setNeedsOnboarding(true)
+    window.dispatchEvent(new CustomEvent(ONBOARDING_EVENT, { detail: { message } }))
+    return
+  }
+  if (code === 'RATING_REQUIRED') {
+    // Đăng ký giải theo đội: chỉ mở khảo sát khi chính mình thiếu Elo; người khác thiếu thì trang tự hiện message
+    const missing = Array.isArray(detail.missingUserIds) ? detail.missingUserIds.map(String) : []
+    const me = currentUserId()
+    if (missing.length && me && !missing.includes(me)) return
+    window.dispatchEvent(new CustomEvent(ASSESSMENT_EVENT, { detail: { message, sportId: detail.sportCategoryId || sportIdFromRequest(config) } }))
+    return
+  }
+  if (code === 'TEAM_SPORT_REQUIRED') {
+    window.dispatchEvent(new CustomEvent(TEAM_SPORT_EVENT, { detail: { message, teamId: detail.teamId } }))
+    return
+  }
+  if (code || status !== 403) return
   const text = fold(message)
   if (text.includes('khao sat nguoi choi')) {
     setNeedsOnboarding(true)

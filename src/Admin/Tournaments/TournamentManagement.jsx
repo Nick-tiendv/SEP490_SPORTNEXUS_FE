@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Trophy, UserRoundPlus, Clock3, BadgeCheck, Users, Download, ListFilter, Search, RefreshCw } from 'lucide-react'
 import TournamentTable from './TournamentTable.jsx'
 import TournamentDetails from './TournamentDetails.jsx'
-import { TournamentActionDialog, ParticipantDialog, AddParticipantDialog, ScoreDialog } from './TournamentDialogs.jsx'
+import { TournamentActionDialog } from './TournamentDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
 import { tournamentStats, statusLabels, statusFilterOptions, number, money, exportTournaments } from './tournamentData.js'
 import { getTournamentStatistics, listAdminTournaments } from '../../api/admin/tournamentApi.js'
@@ -63,9 +63,6 @@ export default function TournamentManagement() {
       <div className="tournaments-filter-row"><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)} disabled={!facilities.length}><option value="">{facilities.length ? 'Tất cả cơ sở' : 'Chưa có cơ sở'}</option>{facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>)}</select></label><label>Khóa<select value={filters.locked} onChange={event => change('locked', event.target.value)}><option value="">Tất cả</option><option value="true">Đang bị khóa</option><option value="false">Không bị khóa</option></select></label><button type="button" className="tournaments-text-button" onClick={reset} disabled={!activeFilters}>Đặt lại</button></div>
     </section>
     <div className={`tournaments-content-grid ${detail ? 'with-details' : ''}`}><TournamentTable tournaments={tournaments} total={list.total} totalPages={list.totalPages} loading={list.loading} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <TournamentDetails key={`${detail.id}#${reload}`} tournament={detail} onClose={() => setDetailId(null)} onAction={onAction} />}</div>
-    {['generate', 'pair', 'cancel', 'lock', 'unlock', 'approve', 'reject'].includes(dialog?.type) && <TournamentActionDialog type={dialog.type} context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
-    {dialog?.type === 'add' && <AddParticipantDialog context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
-    {dialog?.type === 'participant' && <ParticipantDialog context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
-    {dialog?.type === 'score' && <ScoreDialog context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
+    {['cancel', 'lock', 'unlock', 'approve', 'reject'].includes(dialog?.type) && <TournamentActionDialog type={dialog.type} context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}
   </div>
 }
