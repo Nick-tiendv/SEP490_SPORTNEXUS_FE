@@ -882,6 +882,7 @@ function Dashboard() {
 
   const {
     selectedSports,
+    toggleSport,
     selectAllSports,
     selectOnlySport,
     isSportActive,
@@ -1032,13 +1033,34 @@ function Dashboard() {
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
-                ? 'Đang xem toàn bộ sân & kèo cho tất cả các môn thể thao. Bạn có thể lọc môn ở thanh bên (Sidebar).'
-                : selectedSports.length === 0
-                ? 'Chưa chọn môn nào. Sử dụng bộ lọc ở thanh bên (Sidebar) để chọn môn thể thao.'
+                ? 'Đang xem toàn bộ sân & kèo cho tất cả các môn thể thao. Chọn môn bên dưới để lọc.'
                 : selectedSports.length === 1
-                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}. Sử dụng bộ lọc ở thanh bên (Sidebar) để thay đổi.`
-                : `${selectedSports.length} môn đang được lọc hiển thị. Sử dụng bộ lọc ở thanh bên (Sidebar) để thay đổi.`}
+                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}.`
+                : `${selectedSports.length} môn đang được lọc hiển thị.`}
             </p>
+            {/* Bộ lọc môn dùng chung (Trang chủ, Đặt sân, Ghép trận): bấm môn để thêm / bỏ, luôn giữ ít nhất 1 môn */}
+            <div role="group" aria-label="Lọc theo môn" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+              {SPORTS_LIST.map((s) => {
+                const active = isSportActive(s.key)
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => toggleSport(s.key)}
+                    className={`snx-sport-chip ${active ? 'active' : ''}`}
+                    style={{ flexDirection: 'row', gap: '6px', padding: '8px 12px' }}
+                    aria-pressed={active}
+                    title={isAllActive ? `Chỉ hiển thị ${s.label}` : active ? `Bỏ ${s.label}` : `Thêm ${s.label}`}
+                  >
+                    <span aria-hidden="true">{s.emoji}</span>
+                    <span className="snx-sport-chip-label">{s.label}</span>
+                  </button>
+                )
+              })}
+              {!isAllActive && (
+                <button type="button" className="snx-sport-all" onClick={selectAllSports}>Tất cả {SPORTS_LIST.length} môn</button>
+              )}
+            </div>
           </div>
         </div>
       </section>

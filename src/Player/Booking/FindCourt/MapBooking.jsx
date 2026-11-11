@@ -125,8 +125,11 @@ const LEGACY_AREA_COORDS = [
 const AREA_RADIUS_KM = 3
 // Sai số GPS tối đa còn dùng làm điểm xuất phát (vị trí đoán theo IP / Wi-Fi thường > 1 km)
 const GPS_TRUST_METERS = 1000
-// Lọc khung giờ: giờ tròn 05:00 → 23:00 (lịch sân chia theo giờ) và các buổi chọn nhanh
-const HOUR_OPTIONS = Array.from({ length: 19 }, (_, i) => `${String(i + 5).padStart(2, '0')}:00`)
+// Lọc khung giờ: 05:00 → 23:00, bước 15 phút (ca sân là bội số 15 phút) và các buổi chọn nhanh
+const HOUR_OPTIONS = Array.from({ length: 18 * 4 + 1 }, (_, i) => {
+  const minutes = 5 * 60 + i * 15
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+})
 const TIME_PRESETS = [
   { label: 'Sáng', from: '05:00', to: '11:00' },
   { label: 'Chiều', from: '11:00', to: '17:00' },
@@ -1592,7 +1595,7 @@ function MapBooking() {
                 <button type="button" className="mb-origin-chip" onClick={() => { setFromTime(''); setToTime('') }}>Bỏ lọc giờ</button>
               )}
             </div>
-            {/* Giờ tròn theo lịch sân (dropdown 24h, không dùng ô time của trình duyệt vì khó chọn phút / AM-PM) */}
+            {/* Giờ 24h bước 15 phút (dropdown, không dùng ô time của trình duyệt vì khó chọn phút / AM-PM) */}
             <div className="mb-price-inputs">
               <label className="mb-price-field" htmlFor="mb-from-time">
                 <small>Từ</small>
