@@ -28,6 +28,17 @@ const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRA
 const TIER_LABEL = { AMATEUR: 'Phong trào', SEMI_PRO: 'Bán chuyên', PRO: 'Chuyên nghiệp' }
 const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} đ` : 'Miễn phí')
 const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
+// Ngày của giải chưa được ban tổ chức nhập
+const dateOrTba = (value) => (value ? date(value) : 'Chưa công bố')
+// Lệ phí theo từng nội dung thi đấu: hiện khoảng thấp nhất – cao nhất
+const feeRange = (tournament) => {
+  if (tournament.entryFee != null) return money(tournament.entryFee)
+  const fees = (tournament.children || []).map((child) => child.entryFee).filter((fee) => fee != null)
+  if (fees.length === 0) return 'Theo từng nội dung'
+  const min = Math.min(...fees)
+  const max = Math.max(...fees)
+  return min === max ? money(min) : `${money(min)} – ${money(max)}`
+}
 const dateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—')
 
 const STATUS = {
@@ -70,9 +81,9 @@ function TournamentCard({ tournament, actions, onOpen }) {
         <StatusBadge value={tournament.registrationStatus || tournament.status} />
       </div>
       <dl className="snx-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10, margin: 0, fontSize: 13 }}>
-        <div><dt className="snx-muted">Bắt đầu</dt><dd style={{ margin: 0, fontWeight: 600 }}>{date(tournament.starts)}</dd></div>
-        <div><dt className="snx-muted">Hạn đăng ký</dt><dd style={{ margin: 0, fontWeight: 600 }}>{date(tournament.deadline)}</dd></div>
-        <div><dt className="snx-muted">Lệ phí</dt><dd style={{ margin: 0, fontWeight: 600 }}>{tournament.entryFee == null ? 'Xem chi tiết' : money(tournament.entryFee)}</dd></div>
+        <div><dt className="snx-muted">Bắt đầu</dt><dd style={{ margin: 0, fontWeight: 600 }}>{dateOrTba(tournament.starts)}</dd></div>
+        <div><dt className="snx-muted">Hạn đăng ký</dt><dd style={{ margin: 0, fontWeight: 600 }}>{dateOrTba(tournament.deadline)}</dd></div>
+        <div><dt className="snx-muted">Lệ phí</dt><dd style={{ margin: 0, fontWeight: 600 }}>{feeRange(tournament)}</dd></div>
         {tournament.teamName && <div><dt className="snx-muted">Đội</dt><dd style={{ margin: 0, fontWeight: 600 }}>{tournament.teamName}</dd></div>}
       </dl>
       <div className="snx-row">
@@ -173,7 +184,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         {detail.error && <div className="snx-alert snx-alert--error">{detail.error}</div>}
         {t && (
           <div className="snx-stack">
-            <div className="snx-row"><StatusBadge value={t.status} /><span className="snx-muted">{date(t.starts)} – {date(t.ends)} · Hạn đăng ký {date(t.deadline)}</span></div>
+            <div className="snx-row"><StatusBadge value={t.status} /><span className="snx-muted">{t.starts || t.ends ? `${dateOrTba(t.starts)} – ${dateOrTba(t.ends)}` : 'Lịch thi đấu chưa công bố'} · Hạn đăng ký {dateOrTba(t.deadline)}</span></div>
 
             <section>
               <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Nội dung thi đấu</h3>
