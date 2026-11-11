@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -24,11 +24,23 @@ const BULK_ACTIONS = [
   { value: 'DELETE', label: 'Xóa ca', hint: 'Xóa ca chưa bắt đầu và chưa có người đặt (vd sinh nhầm).' },
 ]
 
-function CourtPicker({ courts, value, onChange }) {
+// Môn của sân: CourtResponse.categoryName (lịch tuần trả sportName)
+const sportOfCourt = (court) => court?.categoryName || court?.sportName || ''
+
+// Sân sẽ thao tác: sân đã chọn (trong danh sách đang hiện); không chọn sân nào thì
+// - đang lọc theo môn: mọi sân của môn đó (gửi rõ id, tránh BE hiểu "rỗng" là mọi sân của cơ sở)
+// - không lọc: rỗng = mọi sân đang dùng
+const targetCourtIds = (selected, courts, scoped) => {
+  const visible = selected.filter((id) => courts.some((c) => String(c.id) === id))
+  if (visible.length) return visible
+  return scoped ? courts.map((c) => String(c.id)) : []
+}
+
+function CourtPicker({ courts, value, onChange, allLabel = 'Tất cả sân' }) {
   const all = value.length === 0
   return (
     <div className="snx-row">
-      <button type="button" className="snx-chip" aria-pressed={all} onClick={() => onChange([])}>Tất cả sân</button>
+      <button type="button" className="snx-chip" aria-pressed={all} onClick={() => onChange([])}>{allLabel}</button>
       {courts.map((c) => {
         const id = String(c.id)
         const on = value.includes(id)
@@ -38,7 +50,7 @@ function CourtPicker({ courts, value, onChange }) {
   )
 }
 
-function GenerateCard({ facilityId, courts, onDone }) {
+function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
   const today = toDateKey()
   const [form, setForm] = useState({ courtIds: [], dateFrom: today, dateTo: addDays(today, 6), openTime: '', closeTime: '', durationMinutes: 60, price: '' })
   const [busy, setBusy] = useState(false)
@@ -58,16 +70,17 @@ function GenerateCard({ facilityId, courts, onDone }) {
       price: form.price === '' ? null : Number(form.price),
       priceRules: [],
     }
+    const ids = targetCourtIds(form.courtIds, courts, scoped)
     setBusy(true)
     try {
-      if (form.courtIds.length === 1) {
+      if (ids.length === 1) {
         // 1 sân: POST /courts/{courtId}/slots/generate
-        const r = await generateCourtSlots(form.courtIds[0], body)
-        const name = courts.find((c) => String(c.id) === form.courtIds[0])?.name || 'Sân'
+        const r = await generateCourtSlots(ids[0], body)
+        const name = courts.find((c) => String(c.id) === ids[0])?.name || 'Sân'
         setResult([{ courtName: name, success: true, createdSlots: r?.createdSlots, updatedSlots: r?.updatedSlots, skippedSlots: r?.skippedSlots, pastSlots: r?.pastSlots }])
       } else {
         // Nhiều sân / tất cả: POST /facilities/{id}/slots/generate (courtIds rỗng = mọi sân đang dùng)
-        const r = await generateFacilitySlots(facilityId, { ...body, courtIds: form.courtIds.length ? form.courtIds : null })
+        const r = await generateFacilitySlots(facilityId, { ...body, courtIds: ids.length ? ids : null })
         setResult(Array.isArray(r) ? r : [])
       }
       toast.success('Đã sinh ca.')
@@ -84,7 +97,7 @@ function GenerateCard({ facilityId, courts, onDone }) {
       <h2 className="snx-card-title">Sinh ca hàng loạt</h2>
       <p className="snx-card-subtitle">Bỏ trống giờ = theo giờ mở cửa của cơ sở. Bỏ trống giá = giá mặc định của từng sân.</p>
       <div className="snx-stack" style={{ gap: 12, marginTop: 12 }}>
-        <CourtPicker courts={courts} value={form.courtIds} onChange={(courtIds) => setForm({ ...form, courtIds })} />
+        <CourtPicker courts={courts} allLabel={allLabel} value={form.courtIds.filter((id) => courts.some((c) => String(c.id) === id))} onChange={(courtIds) => setForm({ ...form, courtIds })} />
         <div className="snx-form-grid">
           <label className="snx-field">Từ ngày<input className="snx-input" type="date" min={today} value={form.dateFrom} onChange={set('dateFrom')} /></label>
           <label className="snx-field">Đến ngày<input className="snx-input" type="date" min={form.dateFrom} value={form.dateTo} onChange={set('dateTo')} /></label>
@@ -114,7 +127,7 @@ function GenerateCard({ facilityId, courts, onDone }) {
   )
 }
 
-function BulkCard({ facilityId, courts, onDone }) {
+function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
   const today = toDateKey()
   const [form, setForm] = useState({ action: 'LOCK', courtIds: [], dateFrom: today, dateTo: today, startTime: '', endTime: '', daysOfWeek: [], price: '' })
   const [busy, setBusy] = useState(false)
@@ -126,8 +139,9 @@ function BulkCard({ facilityId, courts, onDone }) {
     if (form.dateTo < form.dateFrom) { toast.error('Ngày kết thúc phải sau ngày bắt đầu.'); return }
     if (form.action === 'SET_PRICE' && !(Number(form.price) > 0)) { toast.error('Vui lòng nhập giá mới.'); return }
     if (form.action === 'DELETE' && !(await confirmDialog('Xóa mọi ca trống khớp bộ lọc? Không hoàn tác được.'))) return
+    const ids = targetCourtIds(form.courtIds, courts, scoped)
     const filter = {
-      courtIds: form.courtIds.length ? form.courtIds : null,
+      courtIds: ids.length ? ids : null,
       dateFrom: form.dateFrom,
       dateTo: form.dateTo,
       startTime: toTimeSpan(form.startTime),
@@ -157,7 +171,7 @@ function BulkCard({ facilityId, courts, onDone }) {
           {BULK_ACTIONS.map((a) => <button key={a.value} type="button" role="tab" aria-selected={form.action === a.value} className="snx-tab" onClick={() => setForm({ ...form, action: a.value })}>{a.label}</button>)}
         </div>
         <p className="snx-muted" style={{ margin: 0 }}>{action.hint}</p>
-        <CourtPicker courts={courts} value={form.courtIds} onChange={(courtIds) => setForm({ ...form, courtIds })} />
+        <CourtPicker courts={courts} allLabel={allLabel} value={form.courtIds.filter((id) => courts.some((c) => String(c.id) === id))} onChange={(courtIds) => setForm({ ...form, courtIds })} />
         <div className="snx-form-grid">
           <label className="snx-field">Từ ngày<input className="snx-input" type="date" min={today} value={form.dateFrom} onChange={set('dateFrom')} /></label>
           <label className="snx-field">Đến ngày<input className="snx-input" type="date" min={form.dateFrom} value={form.dateTo} onChange={set('dateTo')} /></label>
@@ -236,7 +250,18 @@ export default function OwnerSlots() {
   const range = useApi(() => getFacilitySlotsRange(facilityId, { from, to }), [facilityId, from], { enabled: !!facilityId })
   const r = range.data
   const days = r?.days || []
-  const courtRows = days[0]?.courts?.map((c) => ({ courtId: c.courtId, courtName: c.courtName, sportName: c.sportName })) || (courts.data || []).map((c) => ({ courtId: c.id, courtName: c.name }))
+  const courtRows = days[0]?.courts?.map((c) => ({ courtId: c.courtId, courtName: c.courtName, sportName: c.sportName })) || (courts.data || []).map((c) => ({ courtId: c.id, courtName: c.name, sportName: sportOfCourt(c) }))
+
+  // Lọc / nhóm theo môn: bảng 7 ngày và 2 thẻ thao tác hàng loạt chỉ làm việc với sân của môn đang chọn
+  const [sport, setSport] = useState('')
+  const allCourts = courts.data || []
+  const sportNames = [...new Set([...allCourts.map(sportOfCourt), ...courtRows.map((row) => row.sportName)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'))
+  const activeSport = sportNames.includes(sport) ? sport : ''
+  const scopedCourts = activeSport ? allCourts.filter((c) => sportOfCourt(c) === activeSport) : allCourts
+  const visibleRows = courtRows
+    .filter((row) => !activeSport || row.sportName === activeSport)
+    .sort((a, b) => (a.sportName || '').localeCompare(b.sportName || '', 'vi'))
+  const allCourtsLabel = activeSport ? `Tất cả sân ${activeSport}` : 'Tất cả sân'
   const openDay = open ? days[open.dayIndex] : null
   const openCourt = openDay?.courts?.find((c) => String(c.courtId) === String(open.courtId))
 
@@ -262,7 +287,19 @@ export default function OwnerSlots() {
           <button type="button" className="snx-btn snx-btn--secondary snx-btn--icon" onClick={() => setFrom(addDays(from, 7))} aria-label="Tuần sau"><span className="material-symbols-outlined">chevron_right</span></button>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setFrom(toDateKey())}>Hôm nay</button>
         </div>
+        {sportNames.length > 1 && (
+          <div className="snx-row" style={{ marginBottom: 12 }} role="group" aria-label="Lọc theo môn">
+            <span className="snx-muted">Môn:</span>
+            <button type="button" className="snx-chip" aria-pressed={!activeSport} onClick={() => setSport('')}>Tất cả ({allCourts.length || courtRows.length} sân)</button>
+            {sportNames.map((name) => (
+              <button key={name} type="button" className="snx-chip" aria-pressed={activeSport === name} onClick={() => setSport(name)}>
+                {name} ({courtRows.filter((row) => row.sportName === name).length} sân)
+              </button>
+            ))}
+          </div>
+        )}
         {range.error && <div className="snx-alert snx-alert--error">{range.error}</div>}
+        {r && activeSport && <p className="snx-muted" style={{ margin: '0 0 6px', fontSize: 12 }}>Số liệu dưới đây tính cho toàn cơ sở.</p>}
         {r && (
           <div className="snx-stats" style={{ marginBottom: 12 }}>
             <div className="snx-stat"><div className="snx-stat-label">Tổng ca</div><div className="snx-stat-value">{r.totalSlots}</div></div>
@@ -279,8 +316,12 @@ export default function OwnerSlots() {
             <table className="snx-table">
               <thead><tr><th>Sân</th>{days.map((d) => <th key={d.date}>{new Date(d.date).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}</th>)}</tr></thead>
               <tbody>
-                {courtRows.map((row) => (
-                  <tr key={row.courtId}>
+                {visibleRows.map((row, rowIndex) => (
+                  <Fragment key={row.courtId}>
+                  {!activeSport && sportNames.length > 1 && row.sportName !== visibleRows[rowIndex - 1]?.sportName && (
+                    <tr><td colSpan={days.length + 1} style={{ background: 'var(--snx-green-50)', fontWeight: 700 }}>{row.sportName || 'Chưa rõ môn'}</td></tr>
+                  )}
+                  <tr>
                     <td><strong>{row.courtName}</strong>{row.sportName && <div className="snx-muted">{row.sportName}</div>}</td>
                     {days.map((d, index) => {
                       const c = d.courts?.find((x) => String(x.courtId) === String(row.courtId))
@@ -299,6 +340,7 @@ export default function OwnerSlots() {
                       )
                     })}
                   </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -307,8 +349,8 @@ export default function OwnerSlots() {
       </div>
 
       <div className="snx-grid snx-grid--2">
-        <GenerateCard facilityId={facilityId} courts={courts.data || []} onDone={range.refresh} />
-        <BulkCard facilityId={facilityId} courts={courts.data || []} onDone={range.refresh} />
+        <GenerateCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={range.refresh} />
+        <BulkCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={range.refresh} />
       </div>
 
       {openDay && openCourt && <DaySlotsModal day={openDay} court={openCourt} onClose={() => setOpen(null)} onDeleted={range.refresh} />}

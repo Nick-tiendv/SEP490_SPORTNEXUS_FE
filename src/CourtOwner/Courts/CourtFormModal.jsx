@@ -8,6 +8,22 @@ const INDOOR_OPTIONS = [
   { value: 'false', label: 'Ngoài trời' },
 ]
 
+// Loại sân gợi ý theo môn (BE chưa có danh mục, vẫn lưu courtType dạng chuỗi và teamSize dạng số).
+// Tra theo tên môn từ API; môn không có trong bảng thì chủ sân tự nhập như trước.
+const COURT_PRESETS = [
+  { match: ['bong da', 'football', 'soccer'], types: [['Sân 5 người', 5], ['Sân 7 người', 7], ['Sân 11 người', 11]] },
+  { match: ['cau long', 'badminton'], types: [['Sân đơn', 1], ['Sân đôi', 2]] },
+  { match: ['pickleball'], types: [['Sân đơn', 1], ['Sân đôi', 2]] },
+  { match: ['tennis', 'quan vot'], types: [['Sân đơn', 1], ['Sân đôi', 2]] },
+  { match: ['bong ro', 'basketball'], types: [['Sân 3x3', 3], ['Sân 5x5', 5]] },
+  { match: ['bong chuyen', 'volleyball'], types: [['Sân 6 người', 6], ['Bóng chuyền bãi biển (2 người)', 2]] },
+]
+const plain = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/đ/gi, 'd').toLowerCase()
+const presetOf = (sportName) => {
+  const name = plain(sportName)
+  return name ? COURT_PRESETS.find((p) => p.match.some((m) => name.includes(m)))?.types || null : null
+}
+
 export default function CourtFormModal({ court, sports, defaultSportId = '', defaultPrice = '', busy = false, onClose, onSubmit }) {
   const editing = Boolean(court)
   const [form, setForm] = useState(() => ({
@@ -22,6 +38,19 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
   }))
   const [error, setError] = useState('')
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
+  const presets = presetOf(sports.find((sport) => sport.id === form.categoryId)?.name)
+  const teamSizeOptions = presets ? [...new Set(presets.map(([, size]) => size))].sort((a, b) => a - b) : []
+  // Giá trị đã lưu nhưng không nằm trong danh sách gợi ý: vẫn hiện để không mất dữ liệu
+  const legacyCourtType = Boolean(presets && form.courtType) && !presets.some(([label]) => label === form.courtType)
+  const legacyTeamSize = Boolean(presets && form.teamSize) && !teamSizeOptions.includes(Number(form.teamSize))
+  // Đổi môn: loại sân / số người mỗi đội của môn cũ không còn đúng
+  const changeSport = (event) => setForm((prev) => ({ ...prev, categoryId: event.target.value, courtType: '', teamSize: '' }))
+  // Chọn loại sân: tự điền số người mỗi đội tương ứng
+  const changeCourtType = (event) => {
+    const value = event.target.value
+    const preset = presets?.find(([label]) => label === value)
+    setForm((prev) => ({ ...prev, courtType: value, teamSize: preset ? String(preset[1]) : prev.teamSize }))
+  }
 
   const submit = (event) => {
     event.preventDefault()
@@ -62,7 +91,7 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
         <div className="snx-stack" style={{ gap: 12 }}>
           <div className="snx-form-grid">
             <label className="snx-field">Bộ môn *
-              <select className="snx-select" value={form.categoryId} onChange={set('categoryId')}>
+              <select className="snx-select" value={form.categoryId} onChange={changeSport}>
                 {!sports.length && <option value="">Đang tải…</option>}
                 {sports.map((sport) => <option key={sport.id} value={sport.id}>{sport.name}</option>)}
               </select>
@@ -71,7 +100,17 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
             <label className="snx-field">Giá mặc định / giờ (đ) *<input className="snx-input" type="number" min={0} step={1000} value={form.defaultPrice} onChange={set('defaultPrice')} /></label>
           </div>
           <div className="snx-form-grid">
-            <label className="snx-field">Loại sân<input className="snx-input" maxLength={50} value={form.courtType} onChange={set('courtType')} placeholder="VD: Sân 5 người" /></label>
+            <label className="snx-field">Loại sân
+              {presets ? (
+                <select className="snx-select" value={form.courtType} onChange={changeCourtType}>
+                  <option value="">Chưa khai báo</option>
+                  {legacyCourtType && <option value={form.courtType}>{form.courtType} (dữ liệu cũ)</option>}
+                  {presets.map(([label]) => <option key={label} value={label}>{label}</option>)}
+                </select>
+              ) : (
+                <input className="snx-input" maxLength={50} value={form.courtType} onChange={set('courtType')} placeholder="VD: Sân 5 người" />
+              )}
+            </label>
             <label className="snx-field">Mặt sân<input className="snx-input" maxLength={50} value={form.surfaceType} onChange={set('surfaceType')} placeholder="VD: Thảm PU, cỏ nhân tạo" /></label>
             <label className="snx-field">Trong nhà / ngoài trời
               <select className="snx-select" value={form.isIndoor} onChange={set('isIndoor')}>
@@ -79,7 +118,17 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
               </select>
             </label>
             <label className="snx-field">Số người tối đa<input className="snx-input" type="number" min={1} max={100} value={form.maxPlayers} onChange={set('maxPlayers')} /></label>
-            <label className="snx-field">Số người mỗi đội<input className="snx-input" type="number" min={1} max={15} value={form.teamSize} onChange={set('teamSize')} placeholder="Bóng đá 5 / 7 / 11" /></label>
+            <label className="snx-field">Số người mỗi đội
+              {presets ? (
+                <select className="snx-select" value={form.teamSize} onChange={set('teamSize')}>
+                  <option value="">Chưa khai báo</option>
+                  {legacyTeamSize && <option value={form.teamSize}>{form.teamSize} người (dữ liệu cũ)</option>}
+                  {teamSizeOptions.map((size) => <option key={size} value={String(size)}>{size} người</option>)}
+                </select>
+              ) : (
+                <input className="snx-input" type="number" min={1} max={15} value={form.teamSize} onChange={set('teamSize')} />
+              )}
+            </label>
           </div>
           {error && <div className="snx-alert snx-alert--error">{error}</div>}
         </div>

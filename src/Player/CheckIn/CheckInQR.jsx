@@ -68,6 +68,12 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, court
 function CheckInQR() {
   const [copied, setCopied] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
+  // Mọi thông báo đều tự tắt sau 4 giây (thông báo mới thì đếm lại từ đầu)
+  useEffect(() => {
+    if (!toastMessage) return undefined
+    const timer = setTimeout(() => setToastMessage(null), 4000)
+    return () => clearTimeout(timer)
+  }, [toastMessage])
   const [showCheckInModal, setShowCheckInModal] = useState(false)
 
   // 2.7 Bước 1: Quản lý loại vé QR (đặt sân / kèo LFG / giải đấu)
@@ -733,10 +739,13 @@ function CheckInQR() {
       {/* Toast Notification */}
       {toastMessage && (
         <div
+          role="status"
+          aria-live="polite"
           style={{
             position: 'fixed',
             top: '76px',
             right: '32px',
+            maxWidth: 'calc(100vw - 32px)',
             zIndex: 9999,
             background: '#065F46',
             color: '#ffffff',
@@ -755,6 +764,14 @@ function CheckInQR() {
             check_circle
           </span>
           <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            aria-label="Đóng thông báo"
+            style={{ marginLeft: '4px', background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 0, display: 'flex' }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+          </button>
         </div>
       )}
 
