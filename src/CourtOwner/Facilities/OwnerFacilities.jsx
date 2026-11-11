@@ -18,6 +18,7 @@ import {
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { statusBadge, toTimeSpan } from '../shared.js'
 import { VN_ADMIN_UNITS } from '../../data/vnAdministrativeUnits.js'
+import TimeInput24 from '../../components/common/TimeInput24.jsx'
 
 // So khớp tên tỉnh bỏ dấu và tiền tố ("TP. HCM", "Hồ Chí Minh" → "Thành phố Hồ Chí Minh")
 const normalizeArea = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd')
@@ -105,8 +106,8 @@ function FacilityForm({ form, setForm }) {
         <div className="snx-field" style={{ justifyContent: 'flex-end' }}><button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={useMyLocation}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>my_location</span>Lấy vị trí hiện tại</button></div>
       </div>
       <div className="snx-form-grid">
-        <label className="snx-field">Giờ mở cửa<input className="snx-input" type="time" {...field('openTime')} /></label>
-        <label className="snx-field">Giờ đóng cửa<input className="snx-input" type="time" {...field('closeTime')} /></label>
+        <div className="snx-field">Giờ mở cửa<TimeInput24 label="Giờ mở cửa" allowEmpty value={form.openTime} onChange={(v) => setForm({ ...form, openTime: v })} /></div>
+        <div className="snx-field">Giờ đóng cửa<TimeInput24 label="Giờ đóng cửa" allowEmpty value={form.closeTime} onChange={(v) => setForm({ ...form, closeTime: v })} /></div>
       </div>
       <label className="snx-field">Giới thiệu<textarea className="snx-textarea" rows={3} maxLength={2000} {...field('description')} /></label>
       <label className="snx-field">Nội quy sân<textarea className="snx-textarea" rows={2} maxLength={2000} {...field('rules')} /></label>
