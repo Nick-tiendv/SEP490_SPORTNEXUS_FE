@@ -39,6 +39,7 @@ import { vnClock } from '../../utils/vnTime.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { getMySports } from '../../api/player/profileApi.js'
 import { getOnboarding } from '../../api/player/ratingApi.js'
+import { createCommunityPost } from '../../api/player/communityApi.js'
 import { reverseGeocode } from '../../utils/geolocation.js'
 import {
   SPORT_CATALOG,
@@ -580,6 +581,26 @@ function CommunityFeed() {
     } catch (err) {
       console.warn('[CommunityFeed] Chưa có yêu cầu hủy nào:', err)
       setCancelVoteModal({ card, asHost, request: null, isLoading: false })
+    }
+  }
+
+  // Chia sẻ kèo đang tuyển lên Bảng tin cộng đồng: POST /api/v1/community/posts { content, lfgCardId }
+  // (BE chỉ nhận kèo còn suất và chưa tới giờ chơi; bài viết hiện thẻ kèo để người khác bấm nhận suất)
+  const [sharingCardId, setSharingCardId] = useState(null)
+  const handleShareToFeed = async (card) => {
+    const remaining = Number(card.remainingSlots ?? card.slotsNeeded) || 0
+    const place = [card.courtName, card.facilityName].filter(Boolean).join(' - ')
+    const when = card.startTime ? `${vnClock(card.startTime)} ngày ${new Date(card.startTime).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''
+    const content = `Kèo ${card.sportName || 'thể thao'} còn ${remaining} suất${place ? ` tại ${place}` : ''}${when ? `, ${when}` : ''}. Ai rảnh vào nhận suất chơi cùng nhé!`
+    if (!(await confirmDialog(`Đăng kèo này lên Bảng tin cộng đồng?\n\n"${content}"`))) return
+    setSharingCardId(card.id)
+    try {
+      await createCommunityPost({ content, lfgCardId: card.id, sportCategoryId: card.sportCategoryId || null })
+      toast.success('Đã đăng kèo lên Bảng tin cộng đồng.', { action: { label: 'Xem bảng tin', onClick: () => navigate('/feed') } })
+    } catch (error) {
+      toast.error(error?.message || 'Không đăng được kèo lên bảng tin.')
+    } finally {
+      setSharingCardId(null)
     }
   }
 
@@ -1843,6 +1864,18 @@ function CommunityFeed() {
                               >
                                 <span className="material-symbols-outlined text-[16px]">edit</span>
                                 <span>Sửa Kèo</span>
+                              </button>
+                            )}
+
+                            {/* Chia sẻ kèo còn suất lên Bảng tin cộng đồng */}
+                            {cardActive && card.status !== 'FILLED' && Number(card.remainingSlots ?? card.slotsNeeded) > 0 && (
+                              <button
+                                onClick={() => handleShareToFeed(card)}
+                                disabled={sharingCardId === card.id}
+                                className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-sky-200 disabled:opacity-50"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">share</span>
+                                <span>{sharingCardId === card.id ? 'Đang đăng…' : 'Đăng lên Bảng tin'}</span>
                               </button>
                             )}
 

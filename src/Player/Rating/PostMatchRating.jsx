@@ -649,7 +649,7 @@ function PostMatchRating() {
             <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <li>Đảm bảo người chơi đã có mặt thực tế tại sân đấu (Quy định 2.7: Cả hai người phải đã check-in).</li>
               <li>Chống spam đánh giá ảo hoặc gian lận điểm danh tiếng Fair Play thể thao.</li>
-              <li>Danh sách bạn chơi lấy từ những người đã cùng check-in; hạn chấm điểm kéo dài sau giờ kết thúc ca.</li>
+              <li>Danh sách bạn chơi lấy từ những người đã cùng check-in; được chấm điểm trong 24 giờ tính từ giờ kết thúc ca (không tính theo lúc check-out).</li>
             </ul>
           </div>
 
