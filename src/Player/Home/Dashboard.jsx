@@ -772,6 +772,45 @@ const sportKeyOf = (name = '') => {
   if (n.includes('tennis') || n.includes('quần vợt')) return 'tennis'
   return 'badminton'
 }
+// Chuyển 1 cơ sở thành thẻ "Gợi ý sân". Nhận cả 2 dạng dữ liệu của BE:
+// - FacilityResponse (GET /facilities): có courts[] (categoryName, defaultPrice), images/imageItems
+// - FacilitySearchItemResponse (GET /facilities/search): có sports[], minPrice, courtCount, thumbnailUrl
+const toSuggestedCourt = (fac) => {
+  const sportNames = Array.isArray(fac.sports) && fac.sports.length > 0
+    ? fac.sports.map((s) => s?.name)
+    : (fac.courts || []).map((c) => c.categoryName)
+  const sports = Array.from(new Set(sportNames.filter(Boolean).map(sportKeyOf)))
+  const sport = sports[0] || null
+
+  const courtPrices = (fac.courts || []).map((c) => Number(c.defaultPrice)).filter((n) => n > 0)
+  const minPrice = Number(fac.minPrice) > 0 ? Number(fac.minPrice) : (courtPrices.length ? Math.min(...courtPrices) : 0)
+  const courtCount = fac.courtCount ?? fac.courts?.length ?? 0
+
+  const thumb = fac.thumbnailUrl
+    || fac.imageItems?.find((img) => img.isThumbnail)?.url
+    || fac.images?.[0]
+    || SPORT_META[sport]?.img
+    || '/sports-bg.jpg'
+
+  return {
+    id: fac.id,
+    sport,
+    sports,
+    sportEmoji: SPORT_META[sport]?.emoji || '🏟️',
+    slot: fac.openTime && fac.closeTime
+      ? `Mở ${String(fac.openTime).slice(0, 5)} - ${String(fac.closeTime).slice(0, 5)}`
+      : 'Chưa cập nhật giờ mở cửa',
+    dist: fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || '',
+    name: fac.name,
+    surface: fac.description || '',
+    price: `${minPrice ? `Từ ${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${courtCount} sân`,
+    rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
+    img: thumb,
+    isFromApi: true,
+    rawFacility: fac,
+  }
+}
+
 const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
 const whenText = (start, end) => {
   if (!start) return '—'
@@ -882,44 +921,7 @@ function Dashboard() {
       try {
         const raw = await getFacilities()
         if (isMounted && Array.isArray(raw) && raw.length > 0) {
-          const transformed = raw.map((fac) => {
-            const firstCourt = fac.courts?.[0]
-            const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
-              ? 'badminton'
-              : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
-              ? 'pickleball'
-              : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
-              ? 'football'
-              : firstCourt?.categoryName?.toLowerCase().includes('bóng rổ')
-              ? 'basketball'
-              : firstCourt?.categoryName?.toLowerCase().includes('tennis')
-              ? 'tennis'
-              : 'badminton'
-
-            const emoji =
-              sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : sportKey === 'football' ? '⚽' : sportKey === 'basketball' ? '🏀' : '🎾'
-            const prices = (fac.courts || []).map((c) => Number(c.defaultPrice)).filter((n) => n > 0)
-            const minPrice = prices.length ? Math.min(...prices) : 0
-            const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || SPORT_META[sportKey]?.img
-            const distArea = fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || ''
-
-            return {
-              id: fac.id,
-              sport: sportKey,
-              sports: Array.from(new Set((fac.courts || []).map((c) => c.categoryName?.toLowerCase().includes('cầu lông') ? 'badminton' : c.categoryName?.toLowerCase().includes('pickleball') ? 'pickleball' : c.categoryName?.toLowerCase().includes('bóng đá') ? 'football' : c.categoryName?.toLowerCase().includes('tennis') ? 'tennis' : 'badminton'))),
-              sportEmoji: emoji,
-              slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
-              dist: distArea,
-              name: fac.name,
-              surface: fac.description || '',
-              price: `${minPrice ? `${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${fac.courts?.length || 0} sân`,
-              rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
-              img: thumb,
-              isFromApi: true,
-              rawFacility: fac,
-            }
-          })
-          setApiSuggestedCourts(transformed)
+          setApiSuggestedCourts(raw.map(toSuggestedCourt))
         }
       } catch (err) {
         console.warn('Dashboard: Không thể kết nối API /api/v1/facilities:', err)
@@ -939,42 +941,9 @@ function Dashboard() {
         PageSize: 12,
       })
       const results = searchRes?.items || (Array.isArray(searchRes) ? searchRes : [])
-      if (Array.isArray(results) && results.length > 0) {
-        const transformed = results.map((fac) => {
-          const firstCourt = fac.courts?.[0]
-          const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
-            ? 'badminton'
-            : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
-            ? 'pickleball'
-            : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
-            ? 'football'
-            : firstCourt?.categoryName?.toLowerCase().includes('tennis')
-            ? 'tennis'
-            : 'badminton'
-          const emoji = sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : '⚽'
-          const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
-          const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
-          return {
-            id: fac.id,
-            sport: sportKey,
-            sports: [sportKey],
-            sportEmoji: emoji,
-            slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
-            dist: fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : 'TP. HCM',
-            name: fac.name,
-            surface: fac.description || 'Sân đạt chuẩn thi đấu',
-            price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
-            rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★`,
-            img: thumb,
-            isFromApi: true,
-            rawFacility: fac,
-          }
-        })
-        setApiSuggestedCourts(transformed)
-      } else {
-        // Nếu không có kết quả tìm kiếm, gọi lại danh sách mặc định
-        const all = await getFacilities()
-        if (Array.isArray(all)) setApiSuggestedCourts(all)
+      setApiSuggestedCourts(Array.isArray(results) ? results.map(toSuggestedCourt) : [])
+      if (!Array.isArray(results) || results.length === 0) {
+        toast.info('Không tìm thấy cơ sở phù hợp với từ khóa.')
       }
     } catch (err) {
       toast.error(err?.message || 'Không tìm được cơ sở, vui lòng thử lại.')
@@ -1004,7 +973,8 @@ function Dashboard() {
     if (Array.isArray(c.sports) && c.sports.length > 0) {
       return c.sports.some((s) => isSportActive(s))
     }
-    return isSportActive(c.sport)
+    // Cơ sở chưa có sân con / chưa có môn: chỉ hiện khi xem tất cả môn
+    return isAllActive
   })
 
 
@@ -1984,7 +1954,7 @@ function Dashboard() {
                       >
                         {c.slot}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#6B7280' }}>• {c.dist}</span>
+                      {c.dist && <span style={{ fontSize: '11px', color: '#6B7280' }}>• {c.dist}</span>}
                     </div>
                     <p
                       style={{
