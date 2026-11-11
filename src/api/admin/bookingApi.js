@@ -90,9 +90,12 @@ export async function getAdminBooking(bookingId) {
 export async function cancelAdminBooking(bookingId, { reason, refundPercentage, lockSlotAfterCancel }) {
   return unwrap((await apiClient.post(`/api/v1/bookings/admin/${encodeURIComponent(bookingId)}/cancel`, { reason, refundPercentage, lockSlotAfterCancel })).data)
 }
+// Bỏ mục tự nhập của BE ({ isCustom: true, label: 'Khác (Tự nhập lý do)' }): hộp thoại đã có lựa chọn tự nhập riêng
 export async function getCancellationReasons() {
   const data = unwrap((await apiClient.get('/api/v1/bookings/cancellation-reasons')).data)
-  return toList(data).items.map(item => (typeof item === 'string' ? item : pick(item, 'reason', 'name', 'label', 'text', 'description'))).filter(Boolean)
+  return toList(data).items
+    .filter(item => !(item && typeof item === 'object' && item.isCustom))
+    .map(item => (typeof item === 'string' ? item : pick(item, 'reason', 'name', 'label', 'text', 'description'))).filter(Boolean)
 }
 export async function getFacilityOptions() {
   const data = unwrap((await apiClient.get('/api/v1/facilities')).data)
