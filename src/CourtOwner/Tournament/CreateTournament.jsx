@@ -478,6 +478,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         <>
           {/* THÔNG TIN GIẢI & BẢNG ĐẤU */}
           <div style={{ ...panelStyle, marginBottom: '24px' }}>
+            {tournament.imageUrl && <img src={tournament.imageUrl} alt={`Ảnh bìa giải ${tournament.name}`} style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }} />}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
