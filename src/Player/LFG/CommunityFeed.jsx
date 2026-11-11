@@ -40,6 +40,8 @@ import { getBookingQrTicket } from '../../api/player/bookingApi.js'
 import { vnClock } from '../../utils/vnTime.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { getMySports, readLocalAvatar } from '../../api/player/profileApi.js'
+import { getOnboarding } from '../../api/player/ratingApi.js'
+import { reverseGeocode } from '../../utils/geolocation.js'
 import {
   SPORT_CATALOG,
   normalizeSportKey,
@@ -51,6 +53,7 @@ import {
   buildPersonalizedLfgSuggestions,
   calculateDistanceFromRegisteredAddress,
   getDistanceRangeInfo,
+  haversineKm,
 } from './lfgSuggestionEngine.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
@@ -404,50 +407,42 @@ function CommunityFeed() {
     return () => { cancelled = true }
   }, [lfgReload, selectedFormat])
 
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (chưa khai thì hiện 'Chưa đặt khu vực')
-  const [userProfileLocation, setUserProfileLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.location) return parsed.location
-      }
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'Chưa đặt khu vực'
-  })
+  // Vị trí ghép trận lấy từ khảo sát người chơi (GET /api/auth/me/onboarding): tọa độ + bán kính sẵn sàng đi,
+  // tên khu vực tra từ tọa độ. Chưa khảo sát vị trí thì hiện 'Chưa đặt khu vực'.
+  const [playerArea, setPlayerArea] = useState({ coords: null, radiusKm: null, name: '' })
+  useEffect(() => {
+    let cancelled = false
+    getOnboarding()
+      .then((o) => {
+        if (cancelled || o?.latitude == null || o?.longitude == null) return
+        const coords = { lat: Number(o.latitude), lng: Number(o.longitude) }
+        setPlayerArea({ coords, radiusKm: Number(o.radiusKm) || null, name: '' })
+        reverseGeocode(coords.lat, coords.lng).then((name) => {
+          if (!cancelled && name) setPlayerArea((prev) => ({ ...prev, name }))
+        })
+      })
+      .catch((err) => console.warn('LFG: Không tải được khảo sát người chơi:', err))
+    return () => { cancelled = true }
+  }, [])
+  const userProfileLocation = playerArea.name
+    || (playerArea.coords ? `${playerArea.coords.lat.toFixed(4)}, ${playerArea.coords.lng.toFixed(4)}` : '')
+  const userLocationLabel = userProfileLocation || 'Chưa đặt khu vực'
+  // Khoảng cách thật (km) từ vị trí khảo sát tới kèo; thiếu tọa độ thì null
+  const realDistanceKm = (m) => (playerArea.coords && m?.lat != null && m?.lng != null
+    ? Math.round(haversineKm(playerArea.coords.lat, playerArea.coords.lng, Number(m.lat), Number(m.lng)) * 10) / 10
+    : null)
 
   // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
   useEffect(() => {
-    const handleProfileUpdate = (e) => {
-      const loc = e.detail?.location
-      if (loc) setUserProfileLocation(loc)
-      else {
-        try {
-          const saved = localStorage.getItem('player_profile_data')
-          if (saved) {
-            const parsed = JSON.parse(saved)
-            if (parsed.location) setUserProfileLocation(parsed.location)
-          }
-        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-      }
-    }
     const handleStorage = (e) => {
       if ((e.key === 'player_sports_data' || e.key === 'player_registered_sports') && e.newValue) {
         setProfileSports(loadProfileRegisteredSports())
       }
-      if (e.key === 'player_profile_data' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue)
-          if (parsed.location) setUserProfileLocation(parsed.location)
-        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-      }
     }
     const handleSportsUpdate = () => setProfileSports(loadProfileRegisteredSports())
-    window.addEventListener('player-profile-updated', handleProfileUpdate)
     window.addEventListener('player-sports-updated', handleSportsUpdate)
     window.addEventListener('storage', handleStorage)
     return () => {
-      window.removeEventListener('player-profile-updated', handleProfileUpdate)
       window.removeEventListener('player-sports-updated', handleSportsUpdate)
       window.removeEventListener('storage', handleStorage)
     }
@@ -462,6 +457,12 @@ function CommunityFeed() {
     if (normU.includes('binh thanh') && (normM.includes('binh thanh') || normM.includes('dinh bo linh'))) return true
     if (normU.includes('quan 7') && (normM.includes('quan 7') || normM.includes('huynh tan phat'))) return true
     return false
+  }
+  // Kèo gần người chơi: có tọa độ thì so với bán kính trong khảo sát (mặc định 5 km), không thì so theo tên khu vực
+  const isNearMe = (m) => {
+    const km = realDistanceKm(m)
+    if (km != null) return km <= (playerArea.radiusKm || 5)
+    return isMatchNearUser(m?.location, userProfileLocation)
   }
 
   // New match form state
@@ -1300,7 +1301,7 @@ function CommunityFeed() {
 
   const filteredMatches = matches
     .map((m) => {
-      const distanceKm = calculateDistanceFromRegisteredAddress({
+      const distanceKm = realDistanceKm(m) ?? calculateDistanceFromRegisteredAddress({
         targetAddress: m.location || m.facilityAddress || m.title || '',
         registeredAddress: userProfileLocation,
         targetLat: m.lat ?? null,
@@ -1354,8 +1355,8 @@ function CommunityFeed() {
       return true
     })
     .sort((a, b) => {
-      const aNear = isMatchNearUser(a.location, userProfileLocation) ? 1 : 0
-      const bNear = isMatchNearUser(b.location, userProfileLocation) ? 1 : 0
+      const aNear = isNearMe(a) ? 1 : 0
+      const bNear = isNearMe(b) ? 1 : 0
       return bNear - aNear
     })
 
@@ -1378,7 +1379,7 @@ function CommunityFeed() {
         <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] font-bold text-[11px] border border-[#FDE68A]">
             <span className="material-symbols-outlined text-[13px] text-[#D97706]">location_on</span>
-            <span>Vị trí ghép: {userProfileLocation}</span>
+            <span>Vị trí ghép: {userLocationLabel}</span>
           </div>
           {!isLoadingLfgs && !lfgListError && (
             <span className="text-gray-500 font-medium text-[12px]">{matches.length} kèo đang mở</span>
@@ -1746,10 +1747,10 @@ function CommunityFeed() {
                           >
                             {match.slotTag}
                           </span>
-                          {isMatchNearUser(match.location, userProfileLocation) && (
+                          {isNearMe(match) && (
                             <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                               <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
-                              Gần bạn ({userProfileLocation})
+                              {realDistanceKm(match) != null ? `Gần bạn (~${realDistanceKm(match)} km)` : `Gần bạn (${userProfileLocation})`}
                             </span>
                           )}
                         </div>
@@ -2819,7 +2820,7 @@ function CommunityFeed() {
           </div>
 
           {/* ================= RIGHT COLUMN: SIDEBAR CARDS ================= */}
-          <div className="lg:col-span-4 flex flex-col gap-5">
+          <div className="lg:col-span-4 flex flex-col gap-5 min-w-0">
             {/* Card 1: HỒ SƠ GHÉP TRẬN CÁ NHÂN (PROMINENT & HIGHLIGHTED) */}
             <div className="relative rounded-3xl bg-gradient-to-br from-white via-[#F7FCF8] to-[#EEF9F0] border-2 border-[#86EFAC] p-5 sm:p-6 shadow-[0_12px_36px_rgba(45,95,63,0.14)] hover:shadow-[0_16px_44px_rgba(45,95,63,0.2)] transition-all overflow-hidden group">
               {/* Top Glowing Color Accent Line */}
@@ -2831,8 +2832,8 @@ function CommunityFeed() {
               </div>
 
               {/* Header Badge */}
-              <div className="flex items-center justify-between mb-4 relative z-10 gap-2">
-                <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <div className="flex flex-wrap items-center justify-between mb-4 relative z-10 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px]">badge</span>
                   <span className="text-[11px] font-black uppercase tracking-wider text-[#1F2937]">
                     Hồ Sơ Ghép Trận Cá Nhân
@@ -2857,7 +2858,7 @@ function CommunityFeed() {
 
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight whitespace-nowrap">
+                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight break-words min-w-0">
                       {currentUser.name || 'Bạn'}
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
@@ -2865,9 +2866,21 @@ function CommunityFeed() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold whitespace-nowrap">
+                  <div className="flex items-start gap-1.5 mt-1 text-[12px] text-gray-700 font-bold">
                     <span className="material-symbols-outlined text-[15px] text-[#15803D] shrink-0">location_on</span>
-                    <span>Vị trí thi đấu: <strong className="text-[#15803D]">{userProfileLocation}</strong></span>
+                    <span className="min-w-0 break-words">
+                      Vị trí thi đấu:{' '}
+                      {userProfileLocation ? (
+                        <strong className="text-[#15803D]">
+                          {userProfileLocation}
+                          {playerArea.radiusKm ? ` (bán kính ${playerArea.radiusKm} km)` : ''}
+                        </strong>
+                      ) : (
+                        <button type="button" onClick={() => navigate('/onboarding')} className="text-[#B45309] underline cursor-pointer">
+                          Chưa đặt khu vực – cập nhật khảo sát
+                        </button>
+                      )}
+                    </span>
                   </div>
 
                   {standing.fairPlay && (
@@ -2888,7 +2901,7 @@ function CommunityFeed() {
 
               {/* Fair Play Score Highlight Box */}
               <div className="mb-4 p-3.5 rounded-2xl bg-white border border-[#D1EBD0] shadow-2xs relative z-10">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-800 whitespace-nowrap shrink-0">
                     <span className="material-symbols-outlined text-[17px] text-red-500">
                       flag
@@ -2909,7 +2922,7 @@ function CommunityFeed() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium whitespace-nowrap">
+                <div className="flex flex-wrap items-center justify-between gap-1 mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium">
                   <span className="flex items-center gap-1 text-[#15803D] shrink-0">
                     <span className="material-symbols-outlined text-[13px]">verified</span>
                     Tối thiểu để nhận kèo: {standing.fairPlay?.minClaimScore ?? '—'}
@@ -2920,8 +2933,8 @@ function CommunityFeed() {
 
               {/* 2 Stats Mini Cards */}
               <div className="grid grid-cols-2 gap-3 relative z-10">
-                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
+                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between min-w-0">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
                     Trận giải tính Elo:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
@@ -2930,13 +2943,13 @@ function CommunityFeed() {
                       verified_user
                     </span>
                   </div>
-                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1 whitespace-nowrap">
+                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1">
                     {standing.personal.length ? `Elo ${standing.personal.length} môn` : 'Chưa có Elo môn nào'}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
+                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between min-w-0">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
                     Đánh giá cộng đồng:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
@@ -2945,14 +2958,14 @@ function CommunityFeed() {
                       star
                     </span>
                   </div>
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1 whitespace-nowrap">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1">
                     {standing.fairPlay?.ratingCount ? `${standing.fairPlay.ratingCount} lượt đánh giá` : 'Chưa có đánh giá'}
                   </span>
                 </div>
               </div>
 
               {/* Quick Profile Footer Action */}
-              <div className="mt-3.5 pt-3 border-t border-[#DCEBDC] flex items-center justify-between text-[11px] font-bold relative z-10">
+              <div className="mt-3.5 pt-3 border-t border-[#DCEBDC] flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold relative z-10">
                 <span className="text-gray-500">Elo & khảo sát trình độ:</span>
                 <button type="button" onClick={() => navigate('/assessment')} className="inline-flex items-center gap-1 text-[#15803D] bg-[#EAF7EE] px-2 py-0.5 rounded-full cursor-pointer">
                   Xem chi tiết
