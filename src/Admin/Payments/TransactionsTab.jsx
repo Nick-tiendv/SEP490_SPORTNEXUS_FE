@@ -4,6 +4,7 @@ import { UserAvatar } from '../Users/UserDetails.jsx'
 import { listTransactions } from '../../api/admin/walletApi.js'
 import { PaymentStatus, Pager } from './PaymentShared.jsx'
 import { usePagedList } from '../components/listHooks.js'
+import { csvDateTime } from '../../utils/vnTime.js'
 import { TRANSACTION_TYPE_FILTERS, typeLabels, transactionStatusLabels, roleLabels, money, signedMoney, dateTime, shortId, downloadCsv } from './paymentData.js'
 
 const emptyFilters = { type: '', status: '', from: '', to: '', minAmount: '' }
@@ -22,7 +23,7 @@ export default function TransactionsTab({ user, onClearUser, onOpenWallet, reloa
   const reset = () => { setFilters(emptyFilters); setPage(1); onClearUser() }
   const exportCsv = () => {
     downloadCsv('giao-dich.csv', ['Mã giao dịch', 'Người dùng', 'Vai trò', 'Loại', 'Mô tả', 'Số tiền (đ)', 'Biến động số dư (đ)', 'Trạng thái', 'Mã tham chiếu', 'Thời gian'],
-      list.items.map(item => [item.id, item.fullName, roleLabels[item.role] || item.role, typeLabels[item.type] || item.type, item.description, item.amount, item.balanceChange, transactionStatusLabels[item.status] || item.status, item.referenceId, dateTime(item.createdAt)]))
+      list.items.map(item => [item.id, item.fullName, roleLabels[item.role] || item.role, typeLabels[item.type] || item.type, item.description, item.amount, item.balanceChange, transactionStatusLabels[item.status] || item.status, item.referenceId, csvDateTime(item.createdAt)]))
     onNotice(`Đã xuất ${list.items.length} giao dịch của trang hiện tại ra CSV.`)
   }
 

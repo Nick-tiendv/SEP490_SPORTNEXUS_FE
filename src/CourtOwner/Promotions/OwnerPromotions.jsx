@@ -4,7 +4,10 @@ import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
 import { getMyPromotions, getMyTournaments, getPromotionPackages, purchasePromotion } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
-import { formatDateTime, formatVND, statusBadge } from '../shared.js'
+import { formatDate, formatVND, statusBadge } from '../shared.js'
+
+// Số ngày quảng bá còn lại (làm tròn lên); 0 khi đã hết hạn
+const daysLeft = (endAt) => (endAt ? Math.max(0, Math.ceil((new Date(endAt).getTime() - Date.now()) / 86400000)) : 0)
 
 const TARGETS = [
   { value: 'FACILITY', label: 'Cơ sở', icon: 'domain' },
@@ -138,7 +141,7 @@ export default function OwnerPromotions() {
                     <tr key={p.id}>
                       <td><strong>{p.packageName}</strong></td>
                       <td>{p.targetName}<div className="snx-muted">{p.targetType === 'TOURNAMENT' ? 'Giải đấu' : 'Cơ sở'}</div></td>
-                      <td>{formatDateTime(p.startAt)}<div className="snx-muted">đến {formatDateTime(p.endAt)}</div></td>
+                      <td>{formatDate(p.startAt)} – {formatDate(p.endAt)}{daysLeft(p.endAt) > 0 && <div className="snx-muted">Còn {daysLeft(p.endAt)} ngày</div>}</td>
                       <td>{formatVND(p.price)}</td>
                       <td><span className={b.className}>{b.label}</span></td>
                     </tr>

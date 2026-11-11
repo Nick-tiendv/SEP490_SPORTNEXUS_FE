@@ -127,10 +127,13 @@ export default function NotificationBell({ linkable = true }) {
     return localStorage.getItem('sportnexus_browser_push_token') || ''
   })
 
-  const triggerToast = (msg) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3200)
-  }
+  const triggerToast = (msg) => setToastMessage(msg)
+  // Toast tự tắt sau 3,5 giây (toast mới thì đếm lại từ đầu), có nút đóng
+  useEffect(() => {
+    if (!toastMessage) return undefined
+    const timer = setTimeout(() => setToastMessage(null), 3500)
+    return () => clearTimeout(timer)
+  }, [toastMessage])
 
   // Số lượng chưa đọc từ server: GET /api/v1/notifications/unread-count (dự phòng: đếm trong danh sách đã tải)
   const fetchUnreadCount = useCallback(async (fallback) => {
@@ -397,6 +400,8 @@ export default function NotificationBell({ linkable = true }) {
       {/* Toast thông báo nhanh */}
       {toastMessage && (
         <div
+          role="status"
+          aria-live="polite"
           style={{
             position: 'fixed',
             top: '20px',
@@ -416,6 +421,14 @@ export default function NotificationBell({ linkable = true }) {
           }}
         >
           <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            aria-label="Đóng thông báo"
+            style={{ marginLeft: '4px', background: 'transparent', border: 'none', color: '#FFFFFF', cursor: 'pointer', padding: 0, display: 'flex', fontSize: '16px', lineHeight: 1 }}
+          >
+            ×
+          </button>
         </div>
       )}
 

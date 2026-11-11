@@ -68,6 +68,8 @@ export const getTournamentStaff = async id => (await getList(`${url(id)}/staff`)
 // { fullName, phone, role: REFEREE | SCORER | OTHER, accountId?, note? }
 export const addTournamentStaff = (id, payload) => post(`${url(id)}/staff`, payload)
 export const removeTournamentStaff = (id, staffId) => del(`${url(id)}/staff/${path(staffId)}`)
+// PUT /api/v1/tournaments/{id}/staff/{staffId}: body giống thêm nhân sự (ghi đè toàn bộ)
+export const updateTournamentStaff = (id, staffId, payload) => put(`${url(id)}/staff/${path(staffId)}`, payload)
 
 // POST /auto-schedule: tự xếp ca + đề xuất trọng tài
 export const autoScheduleTournament = id => post(`${url(id)}/auto-schedule`)
