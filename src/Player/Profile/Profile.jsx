@@ -20,6 +20,7 @@ import {
   deleteMyAccount,
 } from '../../api/player/profileApi.js'
 import { getMyFairPlay } from '../../api/player/lfgApi.js'
+import { getMyRatings, getMyAssessments } from '../../api/player/ratingApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
@@ -37,115 +38,82 @@ import {
   getMyReports,
   withdrawReport,
 } from '../../api/player/reportApi.js'
+import {
+  getNotificationSettings,
+  updateNotificationSettings,
+} from '../../api/player/notificationApi.js'
 
-const PRESET_SPORTS_CATALOG = [
-  { key: 'badminton', name: 'Cầu lông', icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' },
-  { key: 'pickleball', name: 'Pickleball', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
-  { key: 'football', name: 'Bóng đá', icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' },
-  { key: 'basketball', name: 'Bóng rổ', icon: '🏀', color: '#EA580C', bgColor: '#FFF7ED' },
-  { key: 'tennis', name: 'Quần vợt (Tennis)', icon: '🎾', color: '#65A30D', bgColor: '#F7FEE7' },
-  { key: 'table_tennis', name: 'Bóng bàn', icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' },
-  { key: 'volleyball', name: 'Bóng chuyền', icon: '🏐', color: '#F59E0B', bgColor: '#FEF3C7' },
-  { key: 'swimming', name: 'Bơi lội', icon: '🏊', color: '#06B6D4', bgColor: '#CFFAFE' },
-  { key: 'running', name: 'Chạy bộ / Điền kinh', icon: '🏃', color: '#10B981', bgColor: '#D1FAE5' },
-  { key: 'billiards', name: 'Bi-a (Billiards)', icon: '🎱', color: '#4B5563', bgColor: '#F3F4F6' },
-  { key: 'golf', name: 'Golf', icon: '⛳', color: '#059669', bgColor: '#D1FAE5' },
-  { key: 'bowling', name: 'Bowling', icon: '🎳', color: '#7C3AED', bgColor: '#EDE9FE' },
-  { key: 'cycling', name: 'Đạp xe', icon: '🚴', color: '#D97706', bgColor: '#FEF3C7' },
-  { key: 'martial_arts', name: 'Võ thuật', icon: '🥋', color: '#DC2626', bgColor: '#FEE2E2' },
-  { key: 'other', name: 'Môn thể thao khác (Tùy chỉnh)', icon: '🎯', color: '#15803D', bgColor: '#DCFCE7' },
+// Danh mục loại thông báo đồng bộ với GET/PUT /api/v1/notifications/settings (NotificationBell)
+const NOTIFICATION_TYPES_CATALOG = [
+  { code: 'BOOKING', label: 'Đặt sân & Lịch thi đấu', desc: 'Xác nhận đặt sân, đổi lịch và thông báo giờ chơi' },
+  { code: 'PAYMENT', label: 'Giao dịch ví & Nạp rút Escrow', desc: 'Biến động số dư, hoàn tiền cọc và thanh toán chia tiền' },
+  { code: 'CHECK_IN', label: 'Vé điện tử & Check-in QR', desc: 'Mã QR check-in, vé chia sẻ nhóm và cảnh báo giờ vào sân' },
+  { code: 'FEEDBACK', label: 'Đánh giá & Điểm Fair Play', desc: 'Lời khen bạn chơi, cập nhật uy tín và mời đánh giá sau trận' },
+  { code: 'COMMUNITY', label: 'Cộng đồng & Kèo LFG', desc: 'Lời mời ghép trận, bình luận bài viết và tương tác nhóm' },
+  { code: 'SYSTEM', label: 'Thông báo hệ thống & Bảo trì', desc: 'Cập nhật tính năng mới, bảo trì cụm sân và cảnh báo bảo mật' },
 ]
 
-// Lấy danh sách tiêu chí đánh giá trình độ phù hợp theo đặc thù từng môn thể thao (ví dụ: Cầu lông dùng "cầu" thay vì "bóng")
-const getSkillLevelOptions = (sportKeyOrId, sportName = '') => {
-  const key = String(sportKeyOrId || '').toLowerCase()
-  const name = String(sportName || '').toLowerCase()
-  const isShuttlecockSport =
-    key === 'badminton' ||
-    name.includes('cầu lông') ||
-    name.includes('badminton') ||
-    name.includes('cầu mây') ||
-    name.includes('đá cầu') ||
-    /\bcầu\b/i.test(name)
-
-  const isRacketOrNetBallSport =
-    ['pickleball', 'tennis', 'table_tennis', 'volleyball'].includes(key) ||
-    name.includes('pickleball') ||
-    name.includes('tennis') ||
-    name.includes('quần vợt') ||
-    name.includes('bóng bàn') ||
-    name.includes('bóng chuyền')
-
-  const isTeamBallSport =
-    ['football', 'basketball'].includes(key) ||
-    name.includes('bóng đá') ||
-    name.includes('bóng rổ') ||
-    name.includes('futsal') ||
-    name.includes('bóng')
-
-  if (isShuttlecockSport) {
-    return [
-      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
-      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, phát cầu tốt)' },
-      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
-      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ cầu chuẩn, phối hợp nhịp nhàng)' },
-      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, điều cầu khó)' },
-      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
-      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
-    ]
+// Kiểm tra mật khẩu theo AccountRules của BE (6-64 ký tự, khác mật khẩu cũ, xác nhận khớp)
+const validateChangePasswordForm = (form) => {
+  const errs = {}
+  if (!form.oldPassword) {
+    errs.oldPassword = 'Vui lòng nhập mật khẩu hiện tại.'
   }
-
-  if (isRacketOrNetBallSport) {
-    return [
-      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
-      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, phát bóng tốt)' },
-      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
-      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)' },
-      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, điều bóng khó)' },
-      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
-      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
-    ]
+  if (!form.newPassword) {
+    errs.newPassword = 'Vui lòng nhập mật khẩu mới.'
+  } else if (form.newPassword.length < 6 || form.newPassword.length > 64) {
+    errs.newPassword = 'Mật khẩu mới phải từ 6 đến 64 ký tự.'
+  } else if (form.oldPassword && form.newPassword === form.oldPassword) {
+    errs.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại.'
   }
-
-  if (isTeamBallSport) {
-    return [
-      { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
-      { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, kiểm soát bóng tốt)' },
-      { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
-      { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Đỡ bóng chuẩn, phối hợp nhịp nhàng)' },
-      { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, xử lý bóng khó)' },
-      { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
-      { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
-    ]
+  if (!form.confirmPassword) {
+    errs.confirmPassword = 'Vui lòng nhập xác nhận mật khẩu mới.'
+  } else if (form.confirmPassword !== form.newPassword) {
+    errs.confirmPassword = 'Mật khẩu xác nhận không khớp.'
   }
-
-  return [
-    { value: 'Mới tập chơi', label: 'Mới tập chơi (Căn bản, làm quen môn thể thao)' },
-    { value: 'Mới chơi - Đang tiến bộ', label: 'Mới chơi - Đang tiến bộ (Nắm luật, kỹ thuật cơ bản tốt)' },
-    { value: 'Trung bình', label: 'Trung bình (Giao lưu phong trào ổn định)' },
-    { value: 'Trung bình - Khá', label: 'Trung bình - Khá (Kỹ thuật chuẩn, phối hợp nhịp nhàng)' },
-    { value: 'Khá - Đánh chắc tay', label: 'Khá - Đánh chắc tay (Chiến thuật tốt, xử lý tình huống khó)' },
-    { value: 'Bán chuyên / Nâng cao', label: 'Bán chuyên / Nâng cao (Tập luyện chuyên sâu)' },
-    { value: 'Chuyên nghiệp / Thi đấu giải', label: 'Chuyên nghiệp / Thi đấu giải (Vận động viên thi đấu)' },
-  ]
+  return errs
 }
 
-// Chuyển một môn từ backend sang dạng thẻ hiển thị (icon/màu lấy theo danh mục có sẵn).
+const validateSetPasswordForm = (form) => {
+  const errs = {}
+  if (!form.newPassword) {
+    errs.newPassword = 'Vui lòng nhập mật khẩu mới.'
+  } else if (form.newPassword.length < 6 || form.newPassword.length > 64) {
+    errs.newPassword = 'Mật khẩu mới phải từ 6 đến 64 ký tự.'
+  }
+  if (!form.confirmPassword) {
+    errs.confirmPassword = 'Vui lòng nhập xác nhận mật khẩu mới.'
+  } else if (form.confirmPassword !== form.newPassword) {
+    errs.confirmPassword = 'Mật khẩu xác nhận không khớp.'
+  }
+  return errs
+}
+
+// Nhận diện biểu tượng và màu sắc hiển thị theo tên môn từ API danh mục (không dùng catalog môn cố định)
+const getSportVisual = (sportName = '') => {
+  const lower = String(sportName || '').toLowerCase()
+  if (lower.includes('cầu lông') || lower.includes('badminton')) return { icon: '🏸', color: '#15803D', bgColor: '#DCFCE7' }
+  if (lower.includes('pickleball') || lower.includes('bóng bàn')) return { icon: '🏓', color: '#0284C7', bgColor: '#E0F2FE' }
+  if (lower.includes('bóng đá') || lower.includes('football') || lower.includes('futsal')) return { icon: '⚽', color: '#2563EB', bgColor: '#EFF6FF' }
+  if (lower.includes('bóng rổ') || lower.includes('basketball')) return { icon: '🏀', color: '#EA580C', bgColor: '#FFF7ED' }
+  if (lower.includes('tennis') || lower.includes('quần vợt')) return { icon: '🎾', color: '#65A30D', bgColor: '#F7FEE7' }
+  if (lower.includes('bóng chuyền') || lower.includes('volleyball')) return { icon: '🏐', color: '#F59E0B', bgColor: '#FEF3C7' }
+  return { icon: '🏅', color: '#15803D', bgColor: '#DCFCE7' }
+}
+
+// Chuyển một môn từ backend sang dạng thẻ hiển thị (trình độ hiển thị lấy từ khảo sát/Elo GET /api/v1/ratings/me).
 const toUiSport = (sport) => {
-  const lower = (sport.name || '').toLowerCase()
-  const preset = PRESET_SPORTS_CATALOG.find((p) => lower && (p.name.toLowerCase().startsWith(lower) || lower.startsWith(p.name.toLowerCase().split(' (')[0])))
+  const visual = getSportVisual(sport.name)
   return {
-    id: sport.sportCategoryId,
-    sportCategoryId: sport.sportCategoryId,
-    name: sport.name || preset?.name || 'Môn thể thao',
-    icon: preset?.icon || '🎯',
-    level: skillLabel(sport.skillLevel) || 'Chưa có đánh giá',
+    id: String(sport.sportCategoryId),
+    sportCategoryId: String(sport.sportCategoryId),
+    name: sport.name || 'Môn thể thao',
+    icon: visual.icon,
+    level: skillLabel(sport.skillLevel) || 'Mới tập chơi',
+    skillLevelEnum: String(sport.skillLevel || 'BEGINNER').toUpperCase(),
     field: 'Trình độ',
-    ranked: true,
-    matches: 0,
-    winRate: '—',
-    color: preset?.color || '#15803D',
-    bgColor: preset?.bgColor || '#DCFCE7',
+    color: visual.color,
+    bgColor: visual.bgColor,
   }
 }
 
@@ -231,17 +199,21 @@ export default function Profile() {
       phone: '',
       email: '',
       avatarUrl: local.avatarUrl || localStorage.getItem('sportnexus_local_avatar') || null,
-      reputationScore: 0,
+      reputationScore: null,
       totalReviews: 0,
+      fairPlayScore: 100,
       matchesPlayed: 0,
-      winRate: 0,
-      punctualityRate: 0,
+      winRate: null,
+      punctualityRate: null,
+      hasPassword: true,
     }
   })
 
-  // Môn thể thao & trình độ: GET/PUT /api/auth/me/sports
+  // Môn thể thao & trình độ: GET/PUT /api/auth/me/sports + Elo / Khảo sát: GET /api/v1/ratings/me & /assessments/me
   const [sportsData, setSportsData] = useState([])
   const [sportCategories, setSportCategories] = useState([])
+  const [eloBySport, setEloBySport] = useState({})
+  const [assessmentBySport, setAssessmentBySport] = useState({})
 
   // Lưu profile khi thay đổi
   useEffect(() => {
@@ -256,15 +228,15 @@ export default function Profile() {
 
   // Trạng thái các Modal
   const [showEditModal, setShowEditModal] = useState(false)
-  const [showSkillModal, setShowSkillModal] = useState(false)
   const [showAddSportModal, setShowAddSportModal] = useState(false)
-  const [selectedSportToEdit, setSelectedSportToEdit] = useState(null)
   const [showAllReviewsModal, setShowAllReviewsModal] = useState(false)
   const [showMatchesModal, setShowMatchesModal] = useState(false)
   // Lịch sử cộng / trừ điểm Fair Play của tôi (GET /api/v1/fair-play/me)
   const [fairPlayHistory, setFairPlayHistory] = useState([])
-  const [showFavoriteCourtsModal, setShowFavoriteCourtsModal] = useState(false)
   const [showNotificationModal, setShowNotificationModal] = useState(false)
+  const [disabledNotifTypes, setDisabledNotifTypes] = useState([])
+  const [loadingNotifSettings, setLoadingNotifSettings] = useState(false)
+  const [savingNotifSettings, setSavingNotifSettings] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
@@ -296,11 +268,14 @@ export default function Profile() {
   const [showSecurityModal, setShowSecurityModal] = useState(false)
   const [securityTab, setSecurityTab] = useState('password') // 'password' | 'phone' | 'email' | 'set_pwd' | 'delete'
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordErrors, setPasswordErrors] = useState({})
   const [submittingPassword, setSubmittingPassword] = useState(false)
   const [phoneInput, setPhoneInput] = useState(profile.phone || '')
   const [emailOtp, setEmailOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [setPasswordFormData, setSetPasswordFormData] = useState({ newPassword: '', confirmPassword: '' })
+  const [setPwdErrors, setSetPwdErrors] = useState({})
+  const [submittingSetPassword, setSubmittingSetPassword] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const avatarInputRef = useRef(null)
 
@@ -375,25 +350,28 @@ export default function Profile() {
     }
   }
 
-  // Đổi mật khẩu: POST /api/auth/change-password
+  // Đổi mật khẩu: POST /api/auth/change-password (kiểm tra theo AccountRules BE: 6-64 ký tự, khác mật khẩu cũ, xác nhận khớp)
   const handleChangePassword = async (e) => {
     if (e) e.preventDefault()
-    if (!passwordForm.oldPassword || !passwordForm.newPassword) {
-      triggerToast('⚠️ Vui lòng nhập đầy đủ mật khẩu cũ và mới!')
-      return
-    }
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      triggerToast('⚠️ Mật khẩu xác nhận không khớp!')
-      return
-    }
+    const errs = validateChangePasswordForm(passwordForm)
+    setPasswordErrors(errs)
+    if (Object.keys(errs).length > 0) return
     setSubmittingPassword(true)
     try {
       await changePassword(passwordForm)
       triggerToast('🎉 Đổi mật khẩu thành công!')
       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+      setPasswordErrors({})
       setShowSecurityModal(false)
     } catch (err) {
-      triggerToast(`⚠️ ${err?.message || 'Không thể đổi mật khẩu'}`)
+      const msg = err?.message || 'Không thể đổi mật khẩu'
+      const lower = String(msg).toLowerCase()
+      if (lower.includes('cũ') || lower.includes('hiện tại') || lower.includes('old') || lower.includes('current') || lower.includes('không đúng') || lower.includes('sai')) {
+        setPasswordErrors({ oldPassword: msg })
+      } else {
+        setPasswordErrors({ general: msg })
+      }
+      triggerToast(`⚠️ ${msg}`)
     } finally {
       setSubmittingPassword(false)
     }
@@ -468,21 +446,65 @@ export default function Profile() {
     }
   }
 
-  // Thiết lập mật khẩu mới: POST /api/auth/set-password
+  // Thiết lập mật khẩu mới cho tài khoản Google/Facebook chưa có mật khẩu: POST /api/auth/set-password
   const handleSetPassword = async (e) => {
     if (e) e.preventDefault()
-    if (!setPasswordFormData.newPassword) return
-    if (setPasswordFormData.newPassword !== setPasswordFormData.confirmPassword) {
-      triggerToast('⚠️ Mật khẩu xác nhận không khớp!')
-      return
-    }
+    const errs = validateSetPasswordForm(setPasswordFormData)
+    setSetPwdErrors(errs)
+    if (Object.keys(errs).length > 0) return
+    setSubmittingSetPassword(true)
     try {
       await setPassword(setPasswordFormData)
       triggerToast('🎉 Thiết lập mật khẩu thành công!')
       setSetPasswordFormData({ newPassword: '', confirmPassword: '' })
+      setSetPwdErrors({})
+      setProfile((prev) => ({ ...prev, hasPassword: true }))
+      setSecurityTab('password')
       setShowSecurityModal(false)
     } catch (err) {
-      triggerToast(`⚠️ ${err?.message || 'Không thể thiết lập mật khẩu'}`)
+      const msg = err?.message || 'Không thể thiết lập mật khẩu'
+      setSetPwdErrors({ general: msg })
+      triggerToast(`⚠️ ${msg}`)
+    } finally {
+      setSubmittingSetPassword(false)
+    }
+  }
+
+  // Mở modal cài đặt thông báo: GET /api/v1/notifications/settings
+  const handleOpenNotificationModal = async () => {
+    setShowNotificationModal(true)
+    setLoadingNotifSettings(true)
+    try {
+      const data = await getNotificationSettings()
+      if (data && Array.isArray(data.disabledTypes)) {
+        setDisabledNotifTypes(data.disabledTypes)
+      } else {
+        const saved = localStorage.getItem('sportnexus_disabled_notif_types')
+        if (saved) setDisabledNotifTypes(JSON.parse(saved))
+      }
+    } catch (err) {
+      console.warn('[Profile] getNotificationSettings error:', err)
+      try {
+        const saved = localStorage.getItem('sportnexus_disabled_notif_types')
+        if (saved) setDisabledNotifTypes(JSON.parse(saved))
+      } catch { /* bỏ qua */ }
+    } finally {
+      setLoadingNotifSettings(false)
+    }
+  }
+
+  // Lưu cài đặt thông báo: PUT /api/v1/notifications/settings
+  const handleSaveNotificationSettings = async () => {
+    setSavingNotifSettings(true)
+    try {
+      await updateNotificationSettings({ disabledTypes: disabledNotifTypes })
+      localStorage.setItem('sportnexus_disabled_notif_types', JSON.stringify(disabledNotifTypes))
+      triggerToast('✅ Đã lưu cài đặt thông báo!')
+      setShowNotificationModal(false)
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không thể lưu cài đặt thông báo'}`)
+    } finally {
+      setSavingNotifSettings(false)
     }
   }
 
@@ -609,20 +631,9 @@ export default function Profile() {
   // Form edit profile tạm thời
   const [editForm, setEditForm] = useState({ ...profile })
 
-  // Form cập nhật trình độ cho môn đã có
-  const [skillForm, setSkillForm] = useState({
-    level: 'Trung bình - Khá',
-    matches: 0,
-  })
-
-  // Form thêm môn thể thao mới & tự đánh giá ban đầu
+  // Form thêm môn thể thao mới (danh sách môn lấy từ API /api/v1/master-data/sports)
   const [newSportForm, setNewSportForm] = useState({
-    sportKey: 'table_tennis',
-    customName: '',
-    customIcon: '🎯',
-    level: 'Mới tập chơi',
-    field: 'Trình độ',
-    matches: 0,
+    sportCategoryId: '',
   })
 
   // Toast helper
@@ -633,15 +644,19 @@ export default function Profile() {
     }, 3500)
   }
 
-  // Tải hồ sơ, điểm Fair Play, số trận và danh sách môn từ backend khi mở trang
+  // Tải hồ sơ, điểm Fair Play, số trận, Elo và danh sách môn từ backend khi mở trang
   useEffect(() => {
     let cancelled = false
     Promise.allSettled([getMyProfile(), getMyFairPlay()]).then(([me, fairPlay]) => {
       if (cancelled) return
       const u = me.status === 'fulfilled' ? me.value || {} : {}
       const fp = fairPlay.status === 'fulfilled' ? fairPlay.value || {} : {}
-      const rating = Number(fp.averageRating)
+      const rawRating = fp.averageRating ?? fp.avgRating ?? fp.ratingScore ?? u.averageRating ?? null
+      const parsedRating = rawRating !== null && rawRating !== '' ? Number(rawRating) : NaN
+      const ratingCount = Number(fp.ratingCount ?? fp.totalRatings ?? u.ratingCount) || 0
+      const fpScore = fp.fairPlayScore ?? fp.score ?? u.fairPlayScore ?? null
       const created = u.createdAt ? new Date(u.createdAt) : null
+      const hasPassword = u.hasPassword !== false
       setProfile((prev) => ({
         ...prev,
         name: u.fullName || prev.name,
@@ -651,24 +666,48 @@ export default function Profile() {
         email: u.email || prev.email,
         avatarUrl: u.avatarUrl || prev.avatarUrl,
         joinDate: created ? `Tháng ${String(created.getMonth() + 1).padStart(2, '0')}/${created.getFullYear()}` : prev.joinDate,
-        // GET /api/v1/fair-play/me: averageRating (sao), ratingCount, fairPlayScore (thang 100)
-        reputationScore: Number.isFinite(rating) ? Math.round(rating * 10) / 10 : prev.reputationScore,
-        totalReviews: Number(fp.ratingCount) || 0,
-        fairPlayScore: fp.fairPlayScore ?? u.fairPlayScore ?? null,
+        // GET /api/v1/fair-play/me: averageRating (sao 1-5 khi đã có lượt chấm), ratingCount, fairPlayScore (thang 100)
+        reputationScore: ratingCount > 0 && Number.isFinite(parsedRating) && parsedRating > 0
+          ? Math.round(parsedRating * 10) / 10
+          : null,
+        totalReviews: ratingCount,
+        fairPlayScore: fpScore != null && Number.isFinite(Number(fpScore)) ? Math.round(Number(fpScore) * 10) / 10 : 100,
         // Tổng số trận = số lần đã check-in (đặt sân, kèo, giải), BE đếm
         matchesPlayed: Number(u.matchesPlayed) || 0,
+        winRate: u.winRate != null && Number.isFinite(Number(u.winRate)) ? Number(u.winRate) : null,
+        punctualityRate: u.punctualityRate != null && Number.isFinite(Number(u.punctualityRate)) ? Number(u.punctualityRate) : null,
+        hasPassword,
       }))
-      setFairPlayHistory(Array.isArray(fp.history?.items) ? fp.history.items : [])
+      setSecurityTab((prev) => {
+        if (!hasPassword && prev === 'password') return 'set_pwd'
+        if (hasPassword && prev === 'set_pwd') return 'password'
+        return prev
+      })
+      setFairPlayHistory(Array.isArray(fp.history?.items) ? fp.history.items : (Array.isArray(fp.adjustments) ? fp.adjustments : []))
       if (u.phone || u.phoneNumber) setPhoneInput(u.phone || u.phoneNumber)
       if (me.status === 'rejected') triggerToast(`⚠️ ${me.reason?.message || 'Không tải được hồ sơ.'}`)
     })
-    Promise.all([getMySports(), getSportCategories()])
-      .then(([mine, categories]) => {
+    Promise.allSettled([getMySports(), getSportCategories(), getMyRatings(), getMyAssessments()])
+      .then(([mineRes, categoriesRes, ratingsRes, assessmentsRes]) => {
         if (cancelled) return
+        const mine = mineRes.status === 'fulfilled' && Array.isArray(mineRes.value) ? mineRes.value : []
+        const categories = categoriesRes.status === 'fulfilled' && Array.isArray(categoriesRes.value) ? categoriesRes.value : []
+        const ratings = ratingsRes.status === 'fulfilled' && Array.isArray(ratingsRes.value) ? ratingsRes.value : []
+        const assessments = assessmentsRes.status === 'fulfilled' && Array.isArray(assessmentsRes.value) ? assessmentsRes.value : []
+
         setSportCategories(categories)
         setSportsData(mine.map(toUiSport))
+        setEloBySport(
+          Object.fromEntries(
+            ratings
+              .filter((r) => String(r.ownerType).toUpperCase() !== 'TEAM' && String(r.ratingType).toUpperCase() !== 'TEAM')
+              .map((r) => [String(r.sportCategoryId), r])
+          )
+        )
+        setAssessmentBySport(
+          Object.fromEntries(assessments.map((a) => [String(a.sportCategoryId), a]))
+        )
       })
-      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -680,7 +719,12 @@ export default function Profile() {
       return false
     }
     try {
-      await updateMySports(next.map((s) => ({ sportCategoryId: s.sportCategoryId, skillLevel: s.level })))
+      await updateMySports(
+        next.map((s) => ({
+          sportCategoryId: s.sportCategoryId,
+          skillLevel: assessmentBySport[String(s.sportCategoryId)]?.skillLevel || s.skillLevelEnum || s.level || 'BEGINNER',
+        }))
+      )
       setSportsData(next)
       if (successText) triggerToast(successText)
       return true
@@ -690,94 +734,54 @@ export default function Profile() {
     }
   }
 
-  // Danh sách sân yêu thích
-  // Backend chưa có API sân yêu thích nên danh sách để trống.
-  const favoriteCourts = []
-
-  // Mở modal cập nhật trình độ & số trận
-  const handleOpenSkillModal = (sport) => {
-    setSelectedSportToEdit(sport)
-    setSkillForm({
-      level: sport.level.includes('Chưa có') ? 'Mới tập chơi' : sport.level,
-      matches: sport.matches !== undefined ? sport.matches : 0,
-    })
-    setShowSkillModal(true)
-  }
-
-  // Lưu trình độ & số trận
-  const handleSaveSkill = async () => {
-    if (!selectedSportToEdit) return
-    const numMatches = Math.max(0, parseInt(skillForm.matches, 10) || 0)
-    const next = sportsData.map((s) =>
-      s.id === selectedSportToEdit.id ? { ...s, level: skillForm.level, matches: numMatches, field: 'Trình độ', ranked: true } : s
-    )
-    if (await saveSports(next, `🎉 Đã cập nhật trình độ ${selectedSportToEdit.name} (${skillForm.level})!`)) {
-      setShowSkillModal(false)
-    }
-  }
-
-  // Mở modal thêm môn thể thao mới
+  // Mở modal thêm môn thể thao mới (lấy từ danh mục API sportCategories)
   const handleOpenAddSportModal = () => {
-    const available = PRESET_SPORTS_CATALOG.find(
-      (p) => p.key !== 'other' && !sportsData.some((s) => s.id === p.key || s.name.toLowerCase() === p.name.toLowerCase())
+    const available = sportCategories.find(
+      (c) => !sportsData.some((s) => String(s.sportCategoryId) === String(c.id))
     )
     setNewSportForm({
-      sportKey: available ? available.key : 'other',
-      customName: '',
-      customIcon: '🎯',
-      level: 'Mới tập chơi',
-      field: 'Trình độ',
-      matches: 0,
+      sportCategoryId: available ? String(available.id) : (sportCategories[0]?.id ? String(sportCategories[0].id) : ''),
     })
     setShowAddSportModal(true)
   }
 
-  // Lưu môn thể thao mới & tự đánh giá trình độ ban đầu
+  // Lưu môn thể thao mới lên backend (PUT /api/auth/me/sports)
   const handleSaveNewSport = async () => {
-    const isCustom = newSportForm.sportKey === 'other'
-    const preset = PRESET_SPORTS_CATALOG.find((p) => p.key === newSportForm.sportKey)
-    const sportName = isCustom ? newSportForm.customName.trim() : (preset ? preset.name : '')
-
-    if (!sportName) {
-      triggerToast('⚠️ Vui lòng nhập tên môn thể thao!')
+    const category = sportCategories.find((c) => String(c.id) === String(newSportForm.sportCategoryId))
+    if (!category) {
+      triggerToast('⚠️ Vui lòng chọn một môn thể thao trong danh mục hệ thống!')
       return
     }
 
     const isDuplicate = sportsData.some(
-      (s) => s.id === newSportForm.sportKey || s.name.toLowerCase() === sportName.toLowerCase()
+      (s) => String(s.sportCategoryId) === String(category.id) || s.name.toLowerCase() === category.name.toLowerCase()
     )
     if (isDuplicate) {
-      triggerToast(`⚠️ Môn "${sportName}" đã có sẵn trong danh sách kỹ năng của bạn!`)
+      triggerToast(`⚠️ Môn "${category.name}" đã có sẵn trong danh sách kỹ năng của bạn!`)
       return
     }
 
-    const baseName = sportName.toLowerCase().split(' (')[0]
-    const category = sportCategories.find((c) => c.name.toLowerCase() === sportName.toLowerCase() || c.name.toLowerCase().includes(baseName))
+    const assessed = assessmentBySport[String(category.id)]
+    const visual = getSportVisual(category.name)
     const newSport = {
-      sportCategoryId: category?.id || null,
-      id: category?.id || (isCustom ? `sport_${Date.now()}` : newSportForm.sportKey),
-      name: sportName,
-      icon: isCustom ? (newSportForm.customIcon.trim() || '🎯') : preset.icon,
-      level: newSportForm.level,
+      sportCategoryId: String(category.id),
+      id: String(category.id),
+      name: category.name,
+      icon: visual.icon,
+      level: assessed?.skillLevel ? skillLabel(assessed.skillLevel) : 'Mới tập chơi',
+      skillLevelEnum: String(assessed?.skillLevel || 'BEGINNER').toUpperCase(),
       field: 'Trình độ',
-      ranked: true,
-      matches: Number(newSportForm.matches) || 0,
-      winRate: '100%',
-      color: preset?.color || '#15803D',
-      bgColor: preset?.bgColor || '#DCFCE7',
+      color: visual.color,
+      bgColor: visual.bgColor,
     }
 
-    if (await saveSports([...sportsData, newSport], `🎉 Đã thêm môn ${newSport.name} (${newSport.level}) vào hồ sơ!`)) {
+    if (await saveSports([...sportsData, newSport], `🎉 Đã thêm môn ${newSport.name} vào hồ sơ!`)) {
       setShowAddSportModal(false)
     }
   }
 
-  // Xóa môn thể thao khỏi danh sách kỹ năng: PUT /api/auth/me/sports
+  // Xóa môn thể thao khỏi danh sách kỹ năng: PUT /api/auth/me/sports (cho phép xóa cả môn cuối cùng)
   const handleDeleteSport = async (sport) => {
-    if (sportsData.length <= 1) {
-      triggerToast('⚠️ Bạn cần giữ ít nhất một môn thể thao trong hồ sơ!')
-      return
-    }
     if ((await confirmDialog(`Bạn có chắc chắn muốn xóa môn "${sport.name}" khỏi danh sách trình độ kỹ năng?`))) {
       saveSports(sportsData.filter((s) => s.id !== sport.id), `🗑️ Đã xóa môn ${sport.name} khỏi danh sách kỹ năng.`)
     }
@@ -1112,8 +1116,10 @@ export default function Profile() {
                   </span>
                 </div>
 
-                {/* Badge: Người chơi uy tín 4.9 ★ (58) */}
+                {/* Badge: Người chơi uy tín (GET /api/v1/fair-play/me) */}
                 <div
+                  onClick={() => setShowAllReviewsModal(true)}
+                  title="Nhấn để xem chi tiết điểm Fair Play & đánh giá"
                   style={{
                     background: '#DCFCE7',
                     border: '1px solid #86EFAC',
@@ -1126,10 +1132,15 @@ export default function Profile() {
                     fontWeight: 700,
                     color: '#15803D',
                     boxShadow: '0 2px 6px rgba(21, 128, 61, 0.08)',
+                    cursor: 'pointer',
                   }}
                 >
                   <span style={{ color: '#EAB308' }}>★</span>
-                  <span>Người chơi uy tín {profile.reputationScore} ★ ({profile.totalReviews})</span>
+                  {profile.totalReviews > 0 && profile.reputationScore != null ? (
+                    <span>Người chơi uy tín {profile.reputationScore} ★ ({profile.totalReviews})</span>
+                  ) : (
+                    <span>Người chơi uy tín • Chưa có đánh giá</span>
+                  )}
                 </div>
               </div>
 
@@ -1201,11 +1212,11 @@ export default function Profile() {
                 )}
               </div>
 
-              {/* 3 THẺ THỐNG KÊ NHANH (48 Trận, 86% Tỷ lệ thắng, 99% Đúng giờ) */}
+              {/* THẺ THỐNG KÊ NHANH (Ẩn Tỷ lệ thắng & Đúng giờ khi BE chưa trả thống kê) */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: `repeat(${1 + (profile.winRate != null ? 1 : 0) + (profile.punctualityRate != null ? 1 : 0)}, 1fr)`,
                   gap: '10px',
                   background: '#F0FDF4',
                   borderRadius: '16px',
@@ -1213,7 +1224,7 @@ export default function Profile() {
                   border: '1px solid #DCFCE7',
                 }}
               >
-                {/* 1. Trận đã đấu */}
+                {/* 1. Trận đã đấu (lấy từ GET /api/auth/me matchesPlayed) */}
                 <div
                   style={{
                     textAlign: 'center',
@@ -1221,7 +1232,7 @@ export default function Profile() {
                     transition: 'transform 0.15s',
                   }}
                   onClick={() => setShowMatchesModal(true)}
-                  title="Nhấn để xem lịch sử 48 trận"
+                  title="Nhấn để xem lịch sử đặt sân"
                 >
                   <div
                     style={{
@@ -1245,59 +1256,67 @@ export default function Profile() {
                   </div>
                 </div>
 
-                {/* 2. Tỷ lệ thắng */}
-                <div
-                  style={{
-                    textAlign: 'center',
-                    borderLeft: '1px solid #D1FAE5',
-                    borderRight: '1px solid #D1FAE5',
-                  }}
-                >
+                {/* 2. Tỷ lệ thắng (chỉ hiển thị nếu BE trả về winRate) */}
+                {profile.winRate != null && (
                   <div
                     style={{
-                      fontSize: '22px',
-                      fontWeight: 800,
-                      color: '#15803D',
-                      lineHeight: 1.1,
+                      textAlign: 'center',
+                      borderLeft: '1px solid #D1FAE5',
                     }}
                   >
-                    {profile.winRate}%
+                    <div
+                      style={{
+                        fontSize: '22px',
+                        fontWeight: 800,
+                        color: '#15803D',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {profile.winRate}%
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: '#4B5563',
+                        fontWeight: 600,
+                        marginTop: '4px',
+                      }}
+                    >
+                      Tỷ lệ thắng
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: '#4B5563',
-                      fontWeight: 600,
-                      marginTop: '4px',
-                    }}
-                  >
-                    Tỷ lệ thắng
-                  </div>
-                </div>
+                )}
 
-                {/* 3. Đúng giờ (Cao) */}
-                <div style={{ textAlign: 'center' }}>
+                {/* 3. Đúng giờ (chỉ hiển thị nếu BE trả về punctualityRate) */}
+                {profile.punctualityRate != null && (
                   <div
                     style={{
-                      fontSize: '22px',
-                      fontWeight: 800,
-                      color: '#15803D',
-                      lineHeight: 1.1,
+                      textAlign: 'center',
+                      borderLeft: '1px solid #D1FAE5',
                     }}
                   >
-                    {profile.punctualityRate}%
+                    <div
+                      style={{
+                        fontSize: '22px',
+                        fontWeight: 800,
+                        color: '#15803D',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {profile.punctualityRate}%
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: '#4B5563',
+                        fontWeight: 600,
+                        marginTop: '4px',
+                      }}
+                    >
+                      Đúng giờ
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: '#4B5563',
-                      fontWeight: 600,
-                      marginTop: '4px',
-                    }}
-                  >
-                    Đúng giờ (Cao)
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -1324,7 +1343,7 @@ export default function Profile() {
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* 1. Lịch sử trận đấu */}
+              {/* 1. Lịch sử đặt sân */}
               <div
                 onClick={() => setShowMatchesModal(true)}
                 style={{
@@ -1365,12 +1384,12 @@ export default function Profile() {
                     </span>
                   </div>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
-                    Lịch sử trận đấu
+                    Lịch sử đặt sân
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803D' }}>
-                    48 trận
+                    {myBookings.length} đơn
                   </span>
                   <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
                     chevron_right
@@ -1378,63 +1397,9 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* 2. Sân yêu thích */}
+              {/* 2. Cài đặt thông báo (GET/PUT /api/v1/notifications/settings) */}
               <div
-                onClick={() => setShowFavoriteCourtsModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 14px',
-                  borderRadius: '14px',
-                  background: '#F9FAFB',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  border: '1px solid transparent',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#F0FDF4'
-                  e.currentTarget.style.borderColor = '#86EFAC'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#F9FAFB'
-                  e.currentTarget.style.borderColor = 'transparent'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '10px',
-                      background: '#DCFCE7',
-                      color: '#15803D',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>
-                      favorite
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
-                    Sân yêu thích
-                  </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803D' }}>
-                    5 địa điểm
-                  </span>
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#9CA3AF' }}>
-                    chevron_right
-                  </span>
-                </div>
-              </div>
-
-              {/* 3. Cài đặt thông báo */}
-              <div
-                onClick={() => setShowNotificationModal(true)}
+                onClick={handleOpenNotificationModal}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1673,22 +1638,28 @@ export default function Profile() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
+                <button
+                  type="button"
+                  onClick={() => navigate('/assessment')}
+                  title="Làm khảo sát câu hỏi theo môn để tính điểm Elo khởi đầu"
                   style={{
                     background: '#DCFCE7',
                     border: '1px solid #86EFAC',
                     borderRadius: '20px',
-                    padding: '5px 12px',
+                    padding: '6px 12px',
                     fontSize: '11px',
                     fontWeight: 800,
                     color: '#15803D',
                     letterSpacing: '0.5px',
                     textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
                   }}
                 >
-                  ĐÁNH GIÁ KỸ NĂNG
-                </span>
+                  ĐÁNH GIÁ KỸ NĂNG (ELO)
+                </button>
                 <button
+                  type="button"
                   onClick={handleOpenAddSportModal}
                   style={{
                     display: 'flex',
@@ -1748,156 +1719,168 @@ export default function Profile() {
                   fontWeight: 500,
                 }}
               >
-                Tự đánh giá trình độ giúp SportNexus đề xuất đối thủ &amp; kèo ghép trận cân bằng nhất.
+                Trình độ hiển thị và điểm Elo được lấy từ bài Khảo sát toàn diện theo môn (không tự chỉnh sửa thủ công; muốn thay đổi trình độ cần làm lại khảo sát sau 90 ngày).
               </p>
             </div>
 
-            {/* DANH SÁCH 4 MÔN THỂ THAO */}
+            {/* DANH SÁCH MÔN THỂ THAO TỪ API GET /api/auth/me/sports & GET /api/v1/ratings/me */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {sportsData.map((sport) => {
-                const isTennis = sport.id === 'tennis'
-                return (
-                  <div
-                    key={sport.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '16px 20px',
-                      borderRadius: '18px',
-                      background: '#FFFFFF',
-                      border: isTennis
-                        ? '1.5px dashed #86EFAC'
-                        : '1px solid rgba(45, 95, 63, 0.12)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#15803D'
-                      e.currentTarget.style.transform = 'translateY(-1px)'
-                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(21, 128, 61, 0.08)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = isTennis
-                        ? '#86EFAC'
-                        : 'rgba(45, 95, 63, 0.12)'
-                      e.currentTarget.style.transform = 'none'
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)'
-                    }}
-                  >
-                    {/* Left: Sport Icon + Name & Level */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <div
-                        style={{
-                          width: '46px',
-                          height: '46px',
-                          borderRadius: '14px',
-                          background: sport.bgColor,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '22px',
-                          flexShrink: 0,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                        }}
-                      >
-                        {sport.icon}
-                      </div>
+              {sportsData.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '24px 16px',
+                    borderRadius: '18px',
+                    background: '#F9FAFB',
+                    border: '1.5px dashed #86EFAC',
+                    color: '#6B7280',
+                    fontSize: '13.5px',
+                  }}
+                >
+                  Bạn chưa thêm môn thể thao nào vào hồ sơ. Nhấn <strong>&quot;+ Thêm môn thể thao&quot;</strong> ở góc trên để bắt đầu.
+                </div>
+              ) : (
+                sportsData.map((sport) => {
+                  const elo = eloBySport[String(sport.sportCategoryId)]
+                  const assessed = assessmentBySport[String(sport.sportCategoryId)]
+                  const hasElo = Boolean(elo || assessed)
+                  const eloScore = elo?.rating ?? assessed?.assignedRating ?? null
+                  const displayLevel = assessed?.skillLevel
+                    ? skillLabel(assessed.skillLevel)
+                    : (elo?.rank || (hasElo ? `Elo ${eloScore}` : 'Chưa khảo sát'))
+                  const ratedMatchesCount = Number(elo?.ratedMatches) || 0
 
-                      <div>
-                        {/* Tên môn + Badge Trạng thái */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span
-                            style={{
-                              fontSize: '15.5px',
-                              fontWeight: 800,
-                              color: '#1C3524',
-                            }}
-                          >
-                            {sport.name}
-                          </span>
-                          {sport.ranked ? (
+                  return (
+                    <div
+                      key={sport.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        borderRadius: '18px',
+                        background: '#FFFFFF',
+                        border: '1px solid rgba(45, 95, 63, 0.12)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#15803D'
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(21, 128, 61, 0.08)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(45, 95, 63, 0.12)'
+                        e.currentTarget.style.transform = 'none'
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)'
+                      }}
+                    >
+                      {/* Left: Sport Icon + Name & Level */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div
+                          style={{
+                            width: '46px',
+                            height: '46px',
+                            borderRadius: '14px',
+                            background: sport.bgColor,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '22px',
+                            flexShrink: 0,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                          }}
+                        >
+                          {sport.icon}
+                        </div>
+
+                        <div>
+                          {/* Tên môn + Badge Trạng thái từ API Elo / Khảo sát */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                             <span
                               style={{
-                                background: '#DCFCE7',
-                                color: '#15803D',
-                                border: '1px solid #86EFAC',
-                                borderRadius: '12px',
-                                padding: '2px 8px',
-                                fontSize: '11px',
+                                fontSize: '15.5px',
                                 fontWeight: 800,
+                                color: '#1C3524',
                               }}
                             >
-                              Đã xác nhận
+                              {sport.name}
                             </span>
-                          ) : (
-                            <span
-                              style={{
-                                background: '#F3F4F6',
-                                color: '#6B7280',
-                                border: '1px solid #E5E7EB',
-                                borderRadius: '12px',
-                                padding: '2px 8px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                              }}
-                            >
-                              Chưa xếp hạng
-                            </span>
-                          )}
-                        </div>
+                            {hasElo ? (
+                              <span
+                                style={{
+                                  background: '#DCFCE7',
+                                  color: '#15803D',
+                                  border: '1px solid #86EFAC',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Elo {eloScore}{elo?.rank ? ` · ${elo.rank}` : ''}
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  background: '#FEF3C7',
+                                  color: '#B45309',
+                                  border: '1px solid #FDE68A',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Chưa khảo sát Elo
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Subtext: Trình độ & Số trận đã chơi */}
-                        <div style={{ fontSize: '13px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span>
-                            {sport.field}: <strong style={{ color: sport.ranked ? '#1F2937' : '#9CA3AF' }}>{sport.level}</strong>
-                          </span>
-                          <span style={{ color: '#D1D5DB' }}>•</span>
-                          <span style={{ background: '#F3F4F6', color: '#374151', padding: '1px 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>
-                            {sport.matches !== undefined ? sport.matches : 0} trận đã chơi
-                          </span>
+                          {/* Subtext: Trình độ từ Khảo sát/Elo & Số trận tính Elo từ BE */}
+                          <div style={{ fontSize: '13px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span>
+                              {sport.field}: <strong style={{ color: hasElo ? '#1F2937' : '#6B7280' }}>{displayLevel}</strong>
+                            </span>
+                            <span style={{ color: '#D1D5DB' }}>•</span>
+                            <span style={{ background: '#F3F4F6', color: '#374151', padding: '1px 8px', borderRadius: '8px', fontSize: '12px', fontWeight: 600 }}>
+                              {ratedMatchesCount} trận tính Elo
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Right: Action buttons (Cập nhật & Xóa môn) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        onClick={() => handleOpenSkillModal(sport)}
-                        style={{
-                          background: isTennis ? 'linear-gradient(135deg, #15803D 0%, #166534 100%)' : '#FFFFFF',
-                          color: isTennis ? '#FFFFFF' : '#15803D',
-                          border: isTennis ? 'none' : '1px solid #86EFAC',
-                          borderRadius: '12px',
-                          padding: '8px 16px',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          boxShadow: isTennis ? '0 3px 10px rgba(21, 128, 61, 0.25)' : 'none',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (isTennis) {
-                            e.currentTarget.style.transform = 'scale(1.02)'
-                          } else {
+                      {/* Right: Action buttons (Khảo sát Elo & Xóa môn — cho phép xóa cả môn cuối cùng) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/assessment?sportId=${encodeURIComponent(sport.sportCategoryId)}`)}
+                          title="Trình độ được xác định từ bài khảo sát toàn diện (làm lại sau 90 ngày)"
+                          style={{
+                            background: '#FFFFFF',
+                            color: '#15803D',
+                            border: '1px solid #86EFAC',
+                            borderRadius: '12px',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
                             e.currentTarget.style.background = '#DCFCE7'
                             e.currentTarget.style.borderColor = '#15803D'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (isTennis) {
-                            e.currentTarget.style.transform = 'scale(1)'
-                          } else {
+                          }}
+                          onMouseLeave={(e) => {
                             e.currentTarget.style.background = '#FFFFFF'
                             e.currentTarget.style.borderColor = '#86EFAC'
-                          }
-                        }}
-                      >
-                        {isTennis && !sport.ranked ? 'Đánh giá ngay' : 'Cập nhật trình độ'}
-                      </button>
+                          }}
+                        >
+                          {hasElo ? 'Khảo sát lại (90 ngày)' : 'Làm khảo sát Elo'}
+                        </button>
 
-                      {sportsData.length > 1 && (
                         <button
+                          type="button"
                           onClick={() => handleDeleteSport(sport)}
                           title={`Xóa môn ${sport.name} khỏi danh sách kỹ năng`}
                           style={{
@@ -1925,45 +1908,11 @@ export default function Profile() {
                         >
                           <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-
-              {/* Nút thêm môn thể thao dạng Card viền nét đứt */}
-              <button
-                onClick={handleOpenAddSportModal}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  padding: '16px 20px',
-                  borderRadius: '18px',
-                  background: '#F9FAFB',
-                  border: '2px dashed #86EFAC',
-                  color: '#15803D',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  width: '100%',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#F0FDF4'
-                  e.currentTarget.style.borderColor = '#15803D'
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#F9FAFB'
-                  e.currentTarget.style.borderColor = '#86EFAC'
-                  e.currentTarget.style.transform = 'none'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>add_circle</span>
-                <span>+ Thêm môn thể thao mới &amp; Tự đánh giá trình độ ban đầu</span>
-              </button>
+                  )
+                })
+              )}
             </div>
           </div>
 
@@ -2311,270 +2260,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* 2. MODAL CẬP NHẬT TRÌNH ĐỘ */}
-      {showSkillModal && selectedSportToEdit && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(0, 0, 0, 0.45)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: '24px',
-              maxWidth: '480px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              border: '1px solid rgba(45, 95, 63, 0.15)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '16px',
-                borderBottom: '1px solid #E5E7EB',
-                paddingBottom: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '22px' }}>{selectedSportToEdit.icon}</span>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Cập nhật trình độ người chơi: {selectedSportToEdit.name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowSkillModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#6B7280',
-                }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                  Trình độ người chơi
-                </label>
-                <select
-                  value={skillForm.level}
-                  onChange={(e) => setSkillForm({ ...skillForm, level: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid #D1D5DB',
-                    fontSize: '14px',
-                    outline: 'none',
-                    background: '#FFFFFF',
-                  }}
-                >
-                  {getSkillLevelOptions(selectedSportToEdit?.id, selectedSportToEdit?.name).map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-
-
-
-
-
-
-                </select>
-                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  Thiết lập trình độ thực tế giúp hệ thống tự động ghép kèo cân bằng, đúng thực lực.
-                </p>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                  Số trận đã chơi ({selectedSportToEdit.name})
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSkillForm((prev) => ({
-                      ...prev,
-                      matches: Math.max(0, (parseInt(prev.matches, 10) || 0) - 1),
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
-                  >
-                    -
-                  </button>
-
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={skillForm.matches === undefined ? '' : skillForm.matches}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '')
-                      setSkillForm((prev) => ({
-                        ...prev,
-                        matches: val === '' ? '' : parseInt(val, 10),
-                      }))
-                    }}
-                    onBlur={() => {
-                      if (skillForm.matches === '' || isNaN(skillForm.matches)) {
-                        setSkillForm((prev) => ({ ...prev, matches: 0 }))
-                      }
-                    }}
-                    placeholder="0"
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '1.5px solid #15803D',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#15803D',
-                      outline: 'none',
-                      background: '#F0FDF4',
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setSkillForm((prev) => ({
-                      ...prev,
-                      matches: (parseInt(prev.matches, 10) || 0) + 1,
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
-                  >
-                    +
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#6B7280', marginRight: '4px' }}>Cộng nhanh:</span>
-                  {[1, 5, 10].map((inc) => (
-                    <button
-                      key={inc}
-                      type="button"
-                      onClick={() => setSkillForm((prev) => ({
-                        ...prev,
-                        matches: (parseInt(prev.matches, 10) || 0) + inc,
-                      }))}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        border: '1px solid #BBF7D0',
-                        background: '#DCFCE7',
-                        color: '#15803D',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      +{inc}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setSkillForm((prev) => ({ ...prev, matches: 0 }))}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '8px',
-                      border: '1px solid #E5E7EB',
-                      background: '#F9FAFB',
-                      color: '#6B7280',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      marginLeft: 'auto',
-                    }}
-                  >
-                    Đặt về 0
-                  </button>
-                </div>
-                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  💡 Bạn có thể nhập trực tiếp số trận từ bàn phím hoặc dùng các nút tăng/giảm ở hai bên.
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
-              <button
-                onClick={() => setShowSkillModal(false)}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: '12px',
-                  border: '1px solid #D1D5DB',
-                  background: '#FFFFFF',
-                  color: '#4B5563',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleSaveSkill}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #15803D 0%, #166534 100%)',
-                  color: '#FFFFFF',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Xác nhận lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2B. MODAL THÊM MÔN THỂ THAO & TỰ ĐÁNH GIÁ TRÌNH ĐỘ BAN ĐẦU */}
+      {/* 2. MODAL THÊM MÔN THỂ THAO TỪ DANH MỤC API */}
       {showAddSportModal && (
         <div
           style={{
@@ -2631,10 +2317,10 @@ export default function Profile() {
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                    Thêm môn thể thao &amp; Tự đánh giá
+                    Thêm môn thể thao
                   </h3>
                   <p style={{ margin: 0, fontSize: '12px', color: '#6B7280' }}>
-                    Thiết lập trình độ ban đầu để ghép kèo chính xác
+                    Danh sách môn lấy trực tiếp từ danh mục hệ thống SportNexus
                   </p>
                 </div>
               </div>
@@ -2654,22 +2340,19 @@ export default function Profile() {
 
             {/* Form Fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Chọn môn thể thao */}
+              {/* Chọn môn thể thao từ danh mục hệ thống */}
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
-                  1. Chọn môn thể thao
+                  Chọn môn thể thao
                 </label>
                 <select
-                  value={newSportForm.sportKey}
-                  onChange={(e) => {
-                    const selected = PRESET_SPORTS_CATALOG.find(p => p.key === e.target.value)
+                  value={newSportForm.sportCategoryId}
+                  onChange={(e) =>
                     setNewSportForm({
                       ...newSportForm,
-                      sportKey: e.target.value,
-                      customName: selected?.key !== 'other' ? selected?.name || '' : '',
-                      customIcon: selected?.icon || '🎯',
+                      sportCategoryId: e.target.value,
                     })
-                  }}
+                  }
                   style={{
                     width: '100%',
                     padding: '11px 14px',
@@ -2681,242 +2364,27 @@ export default function Profile() {
                     fontWeight: 600,
                   }}
                 >
-                  {PRESET_SPORTS_CATALOG.map((p) => {
+                  {sportCategories.length === 0 && (
+                    <option value="">Đang tải danh mục môn thể thao...</option>
+                  )}
+                  {sportCategories.map((cat) => {
+                    const catId = String(cat.id ?? cat.sportCategoryId ?? '')
+                    const catName = cat.name || cat.sportCategoryName || 'Môn thể thao'
+                    const visual = getSportVisual(catName)
                     const alreadyHas = sportsData.some(
-                      (s) => s.id === p.key || s.name.toLowerCase() === p.name.toLowerCase()
+                      (s) =>
+                        String(s.sportCategoryId ?? s.id) === catId ||
+                        (s.name || '').toLowerCase() === catName.toLowerCase(),
                     )
                     return (
-                      <option key={p.key} value={p.key} disabled={alreadyHas && p.key !== 'other'}>
-                        {p.icon} {p.name} {alreadyHas && p.key !== 'other' ? '(Đã có trong hồ sơ)' : ''}
+                      <option key={catId} value={catId} disabled={alreadyHas}>
+                        {visual.icon} {catName} {alreadyHas ? '(Đã có trong hồ sơ)' : ''}
                       </option>
                     )
                   })}
                 </select>
-              </div>
-
-              {/* Nếu chọn "other", cho phép tự nhập tên & icon */}
-              {newSportForm.sportKey === 'other' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
-                      Biểu tượng
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={2}
-                      value={newSportForm.customIcon}
-                      onChange={(e) => setNewSportForm({ ...newSportForm, customIcon: e.target.value })}
-                      placeholder="🎯"
-                      style={{
-                        width: '100%',
-                        textAlign: 'center',
-                        padding: '10px',
-                        borderRadius: '12px',
-                        border: '1px solid #D1D5DB',
-                        fontSize: '18px',
-                        outline: 'none',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
-                      Tên môn thể thao tùy chỉnh *
-                    </label>
-                    <input
-                      type="text"
-                      value={newSportForm.customName}
-                      onChange={(e) => setNewSportForm({ ...newSportForm, customName: e.target.value })}
-                      placeholder="Ví dụ: Cầu mây, Leo núi, Bi lắc..."
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '12px',
-                        border: '1px solid #D1D5DB',
-                        fontSize: '14px',
-                        outline: 'none',
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Tự đánh giá trình độ ban đầu */}
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
-                  2. Tự đánh giá trình độ ban đầu của bạn
-                </label>
-                <select
-                  value={newSportForm.level}
-                  onChange={(e) => setNewSportForm({ ...newSportForm, level: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid #D1D5DB',
-                    fontSize: '14px',
-                    outline: 'none',
-                    background: '#FFFFFF',
-                    fontWeight: 600,
-                  }}
-                >
-                  {getSkillLevelOptions(
-                    newSportForm.sportKey,
-                    newSportForm.sportKey === 'other'
-                      ? newSportForm.customName
-                      : (PRESET_SPORTS_CATALOG.find((p) => p.key === newSportForm.sportKey)?.name || '')
-                  ).map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-
-
-
-
-
-
-                </select>
-                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6B7280', lineHeight: 1.4 }}>
-                  💡 Trình độ tự đánh giá ban đầu này sẽ hiển thị trên thẻ hồ sơ của bạn và làm mốc ghép kèo. Bạn có thể tự cập nhật lại bất kỳ khi nào trình độ được nâng cao.
-                </p>
-              </div>
-
-              {/* Số trận thi đấu trước đây (Tùy chọn) */}
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
-                  3. Số trận đã chơi / kinh nghiệm giao lưu (Tùy chọn)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setNewSportForm((prev) => ({
-                      ...prev,
-                      matches: Math.max(0, (parseInt(prev.matches, 10) || 0) - 1),
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
-                  >
-                    -
-                  </button>
-
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={newSportForm.matches === undefined ? '' : newSportForm.matches}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '')
-                      setNewSportForm((prev) => ({
-                        ...prev,
-                        matches: val === '' ? '' : parseInt(val, 10),
-                      }))
-                    }}
-                    onBlur={() => {
-                      if (newSportForm.matches === '' || isNaN(newSportForm.matches)) {
-                        setNewSportForm((prev) => ({ ...prev, matches: 0 }))
-                      }
-                    }}
-                    placeholder="0"
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: '1.5px solid #15803D',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#15803D',
-                      outline: 'none',
-                      background: '#F0FDF4',
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setNewSportForm((prev) => ({
-                      ...prev,
-                      matches: (parseInt(prev.matches, 10) || 0) + 1,
-                    }))}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '12px',
-                      border: '1px solid #D1D5DB',
-                      background: '#F9FAFB',
-                      color: '#374151',
-                      fontSize: '18px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#E5E7EB' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
-                  >
-                    +
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#6B7280', marginRight: '4px' }}>Cộng nhanh:</span>
-                  {[1, 5, 10].map((inc) => (
-                    <button
-                      key={inc}
-                      type="button"
-                      onClick={() => setNewSportForm((prev) => ({
-                        ...prev,
-                        matches: (parseInt(prev.matches, 10) || 0) + inc,
-                      }))}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        border: '1px solid #BBF7D0',
-                        background: '#DCFCE7',
-                        color: '#15803D',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      +{inc}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setNewSportForm((prev) => ({ ...prev, matches: 0 }))}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '8px',
-                      border: '1px solid #E5E7EB',
-                      background: '#F9FAFB',
-                      color: '#6B7280',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      marginLeft: 'auto',
-                    }}
-                  >
-                    Đặt về 0
-                  </button>
-                </div>
-                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  💡 Bạn có thể nhập trực tiếp số trận từ bàn phím hoặc dùng các nút tăng/giảm ở hai bên.
+                <p style={{ margin: '10px 0 0 0', fontSize: '12px', color: '#6B7280', lineHeight: 1.45 }}>
+                  💡 Trình độ và điểm Elo hiển thị trên hồ sơ được xác định từ bài <strong>Khảo sát toàn diện theo môn</strong> (không tự sửa thủ công; có thể làm lại khảo sát sau 90 ngày).
                 </p>
               </div>
             </div>
@@ -2950,7 +2418,7 @@ export default function Profile() {
                   boxShadow: '0 4px 12px rgba(21, 128, 61, 0.3)',
                 }}
               >
-                Thêm môn thể thao &amp; Lưu trình độ
+                Thêm môn thể thao
               </button>
             </div>
           </div>
@@ -2988,67 +2456,70 @@ export default function Profile() {
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'space-between',
                 marginBottom: '16px',
                 borderBottom: '1px solid #E5E7EB',
                 paddingBottom: '12px',
-                flexWrap: 'wrap',
-                gap: '10px',
+                gap: '12px',
               }}
             >
-              <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Trung tâm Đánh Giá ({reviewTab === 'fairplay' ? fairPlayHistory.length : myFacilityReviews.length})
-                </h3>
-                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                    Trung tâm Đánh Giá ({reviewTab === 'fairplay' ? fairPlayHistory.length : myFacilityReviews.length})
+                  </h3>
+                  {reviewTab === 'fairplay' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAllReviewsModal(false)
+                        navigate('/post-match-rating')
+                      }}
+                      style={{
+                        background: '#15803D',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '10px',
+                        padding: '5px 12px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                        rate_review
+                      </span>
+                      Viết đánh giá
+                    </button>
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
                   {reviewTab === 'fairplay'
                     ? 'Lịch sử cộng / trừ điểm Fair Play của bạn (đánh giá, đến muộn, vắng mặt, huỷ muộn, hồi điểm)'
                     : 'Các nhận xét & đánh giá chất lượng cơ sở sân đấu bạn đã trải nghiệm'}
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {reviewTab === 'fairplay' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAllReviewsModal(false)
-                      navigate('/post-match-rating')
-                    }}
-                    style={{
-                      background: '#15803D',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                      rate_review
-                    </span>
-                    Viết đánh giá
-                  </button>
-                )}
-
-                <button
-                  onClick={() => setShowAllReviewsModal(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#6B7280',
-                  }}
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setShowAllReviewsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6B7280',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Đóng"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
 
             {/* TAB CHUYỂN ĐỔI: Đánh giá người chơi vs Đánh giá sân đấu */}
@@ -3517,10 +2988,10 @@ export default function Profile() {
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                  Lịch sử thi đấu ({profile.matchesPlayed} trận)
+                  Lịch sử đặt sân ({myBookings.length} đơn)
                 </h3>
                 <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
-                  Ghi nhận tự động từ Check-in QR &amp; Ghép trận SportNexus
+                  Danh sách các đơn đặt sân của bạn • Đã check-in: {profile.matchesPlayed} trận
                 </p>
               </div>
               <button
@@ -3613,77 +3084,9 @@ export default function Profile() {
                   </div>
                 ))
               ) : (
-                [
-                  {
-                    id: 1,
-                    sport: 'Cầu lông',
-                    opponent: 'Lê Nam & Tuấn Kiệt',
-                    court: 'Sân Q7 (Sân số 3)',
-                    score: '21 - 18, 21 - 15',
-                    result: 'Thắng',
-                    date: 'Hôm qua, 18:30',
-                  },
-                  {
-                    id: 2,
-                    sport: 'Pickleball',
-                    opponent: 'Trần Hùng & Bảo Long',
-                    court: 'Sân Nam Sài Gòn (Sân 2)',
-                    score: '11 - 8, 11 - 9',
-                    result: 'Thắng',
-                    date: '03/10/2026, 19:00',
-                  },
-                  {
-                    id: 3,
-                    sport: 'Cầu lông',
-                    opponent: 'Đặng Tuấn (Khá)',
-                    court: 'Sân Tân Phong Q7',
-                    score: '19 - 21, 20 - 22',
-                    result: 'Thua',
-                    date: '28/09/2026, 20:00',
-                  },
-                ].map((m) => (
-                  <div
-                    key={m.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '14px 16px',
-                      borderRadius: '16px',
-                      background: '#F9FAFB',
-                      border: '1px solid #E5E7EB',
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span
-                          style={{
-                            background: m.result === 'Thắng' ? '#DCFCE7' : '#FEE2E2',
-                            color: m.result === 'Thắng' ? '#15803D' : '#DC2626',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            padding: '2px 8px',
-                            borderRadius: '8px',
-                          }}
-                        >
-                          {m.result}
-                        </span>
-                        <strong style={{ fontSize: '14px', color: '#1F2937' }}>
-                          {m.sport}: {m.opponent}
-                        </strong>
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '4px' }}>
-                        {m.court} • {m.date}
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#1C3524' }}>
-                        {m.score}
-                      </div>
-                    </div>
-                  </div>
-                ))
+                <div style={{ textAlign: 'center', padding: '24px', background: '#F9FAFB', borderRadius: '16px', fontSize: '13.5px', color: '#6B7280' }}>
+                  Bạn chưa có đơn đặt sân nào.
+                </div>
               )}
             </div>
 
@@ -3708,138 +3111,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* 5. MODAL SÂN YÊU THÍCH */}
-      {showFavoriteCourtsModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(0, 0, 0, 0.45)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            style={{
-              background: '#FFFFFF',
-              borderRadius: '24px',
-              maxWidth: '600px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              border: '1px solid rgba(45, 95, 63, 0.15)',
-              maxHeight: '85vh',
-              overflowY: 'auto',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '16px',
-                borderBottom: '1px solid #E5E7EB',
-                paddingBottom: '12px',
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                Danh sách sân yêu thích (5 địa điểm)
-              </h3>
-              <button
-                onClick={() => setShowFavoriteCourtsModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: '#6B7280',
-                }}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {favoriteCourts.length === 0 && (
-                <p style={{ margin: 0, color: '#6B7280', fontSize: '14px' }}>Bạn chưa lưu sân yêu thích nào.</p>
-              )}
-              {favoriteCourts.map((c, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 16px',
-                    borderRadius: '16px',
-                    background: '#FAFCFA',
-                    border: '1px solid rgba(45, 95, 63, 0.12)',
-                  }}
-                >
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '14.5px', fontWeight: 800, color: '#1F2937' }}>
-                      {c.name}
-                    </h4>
-                    <p style={{ margin: '3px 0', fontSize: '12px', color: '#6B7280' }}>
-                      {c.address}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: '#15803D', fontWeight: 600 }}>
-                      <span>🏸 {c.sport}</span>
-                      <span>•</span>
-                      <span>⭐ {c.rating}</span>
-                      <span>•</span>
-                      <span>{c.courtsCount}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setShowFavoriteCourtsModal(false)
-                      navigate('/court-finder')
-                    }}
-                    style={{
-                      background: '#15803D',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '7px 14px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    Đặt sân
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: '20px', textAlign: 'center' }}>
-              <button
-                onClick={() => setShowFavoriteCourtsModal(false)}
-                style={{
-                  padding: '9px 24px',
-                  borderRadius: '12px',
-                  background: '#6B7280',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. MODAL CÀI ĐẶT THÔNG BÁO */}
+      {/* 6. MODAL CÀI ĐẶT THÔNG BÁO (GET/PUT /api/v1/notifications/settings) */}
       {showNotificationModal && (
         <div
           style={{
@@ -3858,11 +3130,13 @@ export default function Profile() {
             style={{
               background: '#FFFFFF',
               borderRadius: '24px',
-              maxWidth: '480px',
+              maxWidth: '520px',
               width: '100%',
               padding: '24px',
               boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
               border: '1px solid rgba(45, 95, 63, 0.15)',
+              maxHeight: '85vh',
+              overflowY: 'auto',
             }}
           >
             <div
@@ -3875,9 +3149,33 @@ export default function Profile() {
                 paddingBottom: '12px',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
-                Cài đặt thông báo SportNexus
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background: '#DCFCE7',
+                    color: '#15803D',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                    notifications
+                  </span>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#1C3524' }}>
+                    Cài đặt thông báo SportNexus
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#6B7280' }}>
+                    Đồng bộ trực tiếp với hệ thống thông báo SportNexus
+                  </p>
+                </div>
+              </div>
+
               <button
                 onClick={() => setShowNotificationModal(false)}
                 style={{
@@ -3891,64 +3189,116 @@ export default function Profile() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {[
-                { title: 'Kèo ghép trận LFG phù hợp trình độ', desc: 'Nhận thông báo khi có kèo cùng quận & rank ngang bằng' },
-                { title: 'Nhắc lịch đặt sân & Check-in QR', desc: 'Báo trước 60 phút và 15 phút trước giờ bóng lăn' },
-                { title: 'Biến động số dư ví Escrow', desc: 'Thông báo khi nạp tiền, hoàn tiền cọc, giải ngân cọc sân' },
-                { title: 'Đánh giá & Xếp hạng sau trận', desc: 'Nhận thông báo khi đối thủ hoặc đồng đội chấm điểm' },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 0',
-                    borderBottom: '1px solid #F3F4F6',
-                  }}
-                >
-                  <div style={{ maxWidth: '320px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#1F2937' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>
-                      {item.desc}
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    defaultChecked
+            {loadingNotifSettings ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#6B7280' }}>
+                <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '28px' }}>
+                  sync
+                </span>
+                <p style={{ marginTop: '8px', fontSize: '13px' }}>Đang tải cài đặt thông báo...</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ margin: '0 0 4px', fontSize: '13px', color: '#4B5563' }}>
+                  Chọn các loại thông báo bạn muốn nhận qua hệ thống:
+                </p>
+
+                {NOTIFICATION_TYPES_CATALOG.map((item) => {
+                  const isEnabled = !disabledNotifTypes.includes(item.code)
+                  return (
+                    <label
+                      key={item.code}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                        padding: '12px 14px',
+                        borderRadius: '14px',
+                        border: '1px solid',
+                        borderColor: isEnabled ? '#BBF7D0' : '#E5E7EB',
+                        background: isEnabled ? '#F0FDF4' : '#F9FAFB',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isEnabled}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setDisabledNotifTypes(disabledNotifTypes.filter((t) => t !== item.code))
+                          } else {
+                            setDisabledNotifTypes([...disabledNotifTypes, item.code])
+                          }
+                        }}
+                        style={{
+                          marginTop: '3px',
+                          width: '18px',
+                          height: '18px',
+                          accentColor: '#15803D',
+                          cursor: 'pointer',
+                        }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13.5px', fontWeight: 700, color: isEnabled ? '#1C3524' : '#9CA3AF' }}>
+                          {item.label}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px', lineHeight: 1.4 }}>
+                          {item.desc}
+                        </div>
+                      </div>
+                    </label>
+                  )
+                })}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationModal(false)}
                     style={{
-                      width: '18px',
-                      height: '18px',
-                      accentColor: '#15803D',
+                      padding: '9px 16px',
+                      borderRadius: '10px',
+                      border: '1px solid #D1D5DB',
+                      background: '#FFFFFF',
+                      color: '#4B5563',
+                      fontWeight: 600,
+                      fontSize: '13px',
                       cursor: 'pointer',
                     }}
-                  />
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingNotifSettings}
+                    onClick={handleSaveNotificationSettings}
+                    style={{
+                      padding: '9px 20px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: savingNotifSettings ? '#9CA3AF' : '#15803D',
+                      color: '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      cursor: savingNotifSettings ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {savingNotifSettings ? (
+                      <>
+                        <span className="material-symbols-outlined" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>
+                          sync
+                        </span>
+                        Đang lưu...
+                      </>
+                    ) : (
+                      'Lưu cấu hình'
+                    )}
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <button
-                onClick={() => {
-                  setShowNotificationModal(false)
-                  triggerToast('✅ Đã lưu cài đặt thông báo!')
-                }}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: '#15803D',
-                  color: '#FFFFFF',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Lưu cấu hình
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4090,29 +3440,31 @@ export default function Profile() {
                 <div style={{ padding: '14px', background: '#F0FDF4', borderRadius: '14px', border: '1px solid #DCFCE7' }}>
                   <div style={{ fontWeight: 800, color: '#15803D', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>call</span>
-                    Hotline khẩn cấp 24/7
+                    Hotline Hỗ Trợ Kỹ Thuật &amp; Sự Cố Sân
                   </div>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#111827', margin: '4px 0' }}>1900 8899</div>
-                  <div style={{ fontSize: '12px', color: '#6B7280' }}>Hỗ trợ trực tiếp sự cố cọc sân, tranh chấp slot giờ chơi hoặc xác thực vé check-in khẩn cấp.</div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#111827', margin: '4px 0' }}>0981 838 889</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                    Thời gian tiếp nhận: 07:00 – 23:00 tất cả các ngày trong tuần. Hỗ trợ giải quyết tranh chấp slot, sự cố thanh toán cọc hoặc trục trặc vé QR.
+                  </div>
                 </div>
 
                 <div style={{ padding: '14px', background: '#EFF6FF', borderRadius: '14px', border: '1px solid #DBEAFE' }}>
                   <div style={{ fontWeight: 800, color: '#2563EB', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>smart_toy</span>
-                    Trợ lý AI SportNexus Concierge
+                    Trợ lý AI SportNexus Concierge (24/7)
                   </div>
                   <div style={{ fontSize: '12.5px', color: '#4B5563' }}>
-                    Nhấn nút biểu tượng robot ở góc dưới cùng bên phải màn hình để nhận tư vấn ghép trận, chính sách hoàn hủy cọc và tìm sân tự động.
+                    Nhấn biểu tượng trợ lý AI ở góc màn hình để được hỗ trợ tức thì về quy tắc ghép trận, chính sách hoàn hủy cọc và vị trí sân trống gần nhất.
                   </div>
                 </div>
 
                 <div style={{ padding: '14px', background: '#FAF5FF', borderRadius: '14px', border: '1px solid #F3E8FF' }}>
                   <div style={{ fontWeight: 800, color: '#7E22CE', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>mail</span>
-                    Email tiếp nhận tranh chấp &amp; hợp tác
+                    Email Tiếp Nhận Khiếu Nại &amp; Hợp Tác
                   </div>
                   <div style={{ fontSize: '13px', color: '#1F2937', fontWeight: 600 }}>support@sportnexus.vn</div>
-                  <div style={{ fontSize: '12px', color: '#6B7280' }}>Phản hồi văn bản chính thức trong vòng 4 - 8 giờ làm việc.</div>
+                  <div style={{ fontSize: '12px', color: '#6B7280' }}>Phản hồi văn bản chính thức từ Ban Quản Trị trong vòng 4 – 8 giờ làm việc.</div>
                 </div>
               </div>
             )}
@@ -4537,7 +3889,7 @@ export default function Profile() {
               </button>
             </div>
 
-            {/* Sub-tabs điều hướng */}
+            {/* Sub-tabs điều hướng: Chỉ hiển thị Đặt MK mới khi chưa có mật khẩu (tài khoản MXH), ngược lại chỉ hiện Đổi mật khẩu */}
             <div
               style={{
                 display: 'flex',
@@ -4550,10 +3902,11 @@ export default function Profile() {
               }}
             >
               {[
-                { id: 'password', label: 'Đổi mật khẩu', icon: 'lock' },
+                ...(profile.hasPassword !== false
+                  ? [{ id: 'password', label: 'Đổi mật khẩu', icon: 'lock' }]
+                  : [{ id: 'set_pwd', label: 'Đặt MK mới', icon: 'key' }]),
                 { id: 'phone', label: 'Số điện thoại', icon: 'call' },
                 { id: 'email', label: 'Email OTP', icon: 'mark_email_read' },
-                { id: 'set_pwd', label: 'Đặt MK mới', icon: 'key' },
                 { id: 'delete', label: 'Xóa tài khoản', icon: 'delete_forever', danger: true },
               ].map((tab) => (
                 <button
@@ -4595,20 +3948,27 @@ export default function Profile() {
                   </label>
                   <input
                     type="password"
-                    required
                     value={passwordForm.oldPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                    onChange={(e) => {
+                      setPasswordForm({ ...passwordForm, oldPassword: e.target.value })
+                      if (passwordErrors.oldPassword) setPasswordErrors((prev) => ({ ...prev, oldPassword: null }))
+                    }}
                     placeholder="Nhập mật khẩu hiện tại"
                     style={{
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #D1D5DB',
+                      border: `1px solid ${passwordErrors.oldPassword ? '#EF4444' : '#D1D5DB'}`,
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
+                  {passwordErrors.oldPassword && (
+                    <p style={{ color: '#DC2626', fontSize: '12px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                      {passwordErrors.oldPassword}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4617,21 +3977,27 @@ export default function Profile() {
                   </label>
                   <input
                     type="password"
-                    required
-                    minLength={6}
                     value={passwordForm.newPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                    placeholder="Nhập mật khẩu mới"
+                    onChange={(e) => {
+                      setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+                      if (passwordErrors.newPassword) setPasswordErrors((prev) => ({ ...prev, newPassword: null }))
+                    }}
+                    placeholder="Nhập mật khẩu mới (6 - 64 ký tự)"
                     style={{
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #D1D5DB',
+                      border: `1px solid ${passwordErrors.newPassword ? '#EF4444' : '#D1D5DB'}`,
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
+                  {passwordErrors.newPassword && (
+                    <p style={{ color: '#DC2626', fontSize: '12px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                      {passwordErrors.newPassword}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4640,21 +4006,34 @@ export default function Profile() {
                   </label>
                   <input
                     type="password"
-                    required
                     value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    onChange={(e) => {
+                      setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+                      if (passwordErrors.confirmPassword) setPasswordErrors((prev) => ({ ...prev, confirmPassword: null }))
+                    }}
                     placeholder="Nhập lại mật khẩu mới"
                     style={{
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #D1D5DB',
+                      border: `1px solid ${passwordErrors.confirmPassword ? '#EF4444' : '#D1D5DB'}`,
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
+                  {passwordErrors.confirmPassword && (
+                    <p style={{ color: '#DC2626', fontSize: '12px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                      {passwordErrors.confirmPassword}
+                    </p>
+                  )}
                 </div>
+
+                {passwordErrors.general && (
+                  <p style={{ color: '#DC2626', fontSize: '12px', margin: '2px 0 0 0', fontWeight: 600 }}>
+                    ⚠️ {passwordErrors.general}
+                  </p>
+                )}
 
                 <button
                   type="submit"
@@ -4861,25 +4240,31 @@ export default function Profile() {
                 </p>
                 <div>
                   <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
-                    Mật khẩu mới:
+                    Mật khẩu mới (tối thiểu 6 ký tự):
                   </label>
                   <input
                     type="password"
-                    required
-                    minLength={6}
                     value={setPasswordFormData.newPassword}
-                    onChange={(e) => setSetPasswordFormData({ ...setPasswordFormData, newPassword: e.target.value })}
-                    placeholder="Nhập mật khẩu mới"
+                    onChange={(e) => {
+                      setSetPasswordFormData({ ...setPasswordFormData, newPassword: e.target.value })
+                      if (setPwdErrors.newPassword) setSetPwdErrors((prev) => ({ ...prev, newPassword: null }))
+                    }}
+                    placeholder="Nhập mật khẩu mới (6 - 64 ký tự)"
                     style={{
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #D1D5DB',
+                      border: `1px solid ${setPwdErrors.newPassword ? '#EF4444' : '#D1D5DB'}`,
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
+                  {setPwdErrors.newPassword && (
+                    <p style={{ color: '#DC2626', fontSize: '12px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                      {setPwdErrors.newPassword}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#374151', marginBottom: '6px' }}>
@@ -4887,35 +4272,51 @@ export default function Profile() {
                   </label>
                   <input
                     type="password"
-                    required
                     value={setPasswordFormData.confirmPassword}
-                    onChange={(e) => setSetPasswordFormData({ ...setPasswordFormData, confirmPassword: e.target.value })}
-                    placeholder="Xác nhận mật khẩu"
+                    onChange={(e) => {
+                      setSetPasswordFormData({ ...setPasswordFormData, confirmPassword: e.target.value })
+                      if (setPwdErrors.confirmPassword) setSetPwdErrors((prev) => ({ ...prev, confirmPassword: null }))
+                    }}
+                    placeholder="Xác nhận lại mật khẩu mới"
                     style={{
                       width: '100%',
                       padding: '9px 12px',
                       borderRadius: '10px',
-                      border: '1px solid #D1D5DB',
+                      border: `1px solid ${setPwdErrors.confirmPassword ? '#EF4444' : '#D1D5DB'}`,
                       fontSize: '13px',
                       outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
+                  {setPwdErrors.confirmPassword && (
+                    <p style={{ color: '#DC2626', fontSize: '12px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                      {setPwdErrors.confirmPassword}
+                    </p>
+                  )}
                 </div>
+
+                {setPwdErrors.general && (
+                  <p style={{ color: '#DC2626', fontSize: '12px', margin: '2px 0 0 0', fontWeight: 600 }}>
+                    ⚠️ {setPwdErrors.general}
+                  </p>
+                )}
+
                 <button
                   type="submit"
+                  disabled={submittingSetPassword}
                   style={{
                     padding: '10px',
                     borderRadius: '10px',
                     border: 'none',
-                    background: '#15803D',
+                    background: submittingSetPassword ? '#9CA3AF' : '#15803D',
                     color: '#FFFFFF',
                     fontWeight: 700,
                     fontSize: '13px',
-                    cursor: 'pointer',
+                    cursor: submittingSetPassword ? 'not-allowed' : 'pointer',
+                    marginTop: '4px',
                   }}
                 >
-                  Thiết lập mật khẩu
+                  {submittingSetPassword ? 'Đang thiết lập...' : 'Thiết lập mật khẩu'}
                 </button>
               </form>
             )}
