@@ -4,10 +4,11 @@ import StatusBadge from '../components/StatusBadge.jsx'
 import { UserAvatar } from '../Users/UserDetails.jsx'
 import TournamentBracket from './TournamentBracket.jsx'
 import { getBracket, getParticipants, getTournament } from '../../api/admin/tournamentApi.js'
-import { statusLabels, sportLabels, categoryTypeLabels, formatLabels, matchLabels, money, number, date, isClosed, statusBadge } from './tournamentData.js'
+import { statusLabels, sportLabels, categoryTypeLabels, formatLabels, matchLabels, money, number, date, isClosed, statusBadge, isPostponed } from './tournamentData.js'
 
 // status (giai đoạn: OPEN…) và isLocked (admin khóa) là 2 field riêng; khi bị khóa thì "Đã khóa" là trạng thái chính.
-export function TournamentStatus({ status, locked }) {
+export function TournamentStatus({ status, locked, lockReason }) {
+  if (isPostponed(locked, lockReason)) return <StatusBadge status="Pending" label="Tạm hoãn" />
   if (locked) return <StatusBadge status="Cancelled" label="Đã khóa" />
   return <StatusBadge status={statusBadge(status)} label={statusLabels[status] || status || '—'} />
 }
@@ -52,7 +53,7 @@ export default function TournamentDetails({ tournament: base, onClose, onAction 
   const act = type => onAction(type, { tournament })
   const roster = list => <ul className={`tournaments-roster ${list.length < lists.participants.length ? 'compact' : ''}`}>{list.map(player => <li key={player.id}><div className="tournaments-roster-item"><UserAvatar user={player} /><span><strong>{player.name}</strong><small>{[player.seed != null && `Hạt giống ${player.seed}`, player.phone].filter(Boolean).join(' · ') || 'Người tham gia'}</small></span><i>{player.checkedIn ? 'Đã check-in' : player.paid ? 'Đã thanh toán' : 'Chưa thanh toán'}</i></div></li>)}</ul>
 
-  return <aside className="tournaments-details" aria-label="Chi tiết giải đấu"><header><div><p><span className="tournaments-id" title={tournament.id}>#{tournament.id.slice(0, 8).toUpperCase()}</span><TournamentStatus status={tournament.status} locked={tournament.locked} /></p><h2>{tournament.name}</h2><small><MapPin size={11} />{tournament.facility || 'Chưa rõ cơ sở'}{tournament.starts && ` · ${date(tournament.starts)}${tournament.ends ? ` – ${date(tournament.ends)}` : ''}`}</small></div><button aria-label="Đóng chi tiết giải đấu" onClick={onClose}><X size={17} /></button></header>
+  return <aside className="tournaments-details" aria-label="Chi tiết giải đấu"><header><div><p><span className="tournaments-id" title={tournament.id}>#{tournament.id.slice(0, 8).toUpperCase()}</span><TournamentStatus status={tournament.status} locked={tournament.locked} lockReason={tournament.lockReason} /></p><h2>{tournament.name}</h2><small><MapPin size={11} />{tournament.facility || 'Chưa rõ cơ sở'}{tournament.starts && ` · ${date(tournament.starts)}${tournament.ends ? ` – ${date(tournament.ends)}` : ''}`}</small></div><button aria-label="Đóng chi tiết giải đấu" onClick={onClose}><X size={17} /></button></header>
     <div className="tournaments-detail-body">
       {children.length > 1 && <label className="tournaments-reason">Hạng mục<select value={activeChild?.id || ''} onChange={event => setChildId(event.target.value)}><option value="">Toàn giải</option>{children.map(child => <option key={child.id} value={child.id}>{child.name}{categoryTypeLabels[child.categoryType] ? ` (${categoryTypeLabels[child.categoryType]})` : ''}</option>)}</select></label>}
       <section className="tournaments-registration"><h3>Số lượng đăng ký {tournament.deadline && <small>Hạn: {date(tournament.deadline)}</small>}</h3><RegistrationProgress tournament={activeChild || tournament} /><dl><div><dt>Phí tham gia</dt><dd>{money((activeChild || tournament).entryFee)}</dd></div><div><dt>Giải thưởng (BTC tự trao)</dt><dd>{money(tournament.prize)}</dd></div><div><dt>Ban tổ chức</dt><dd>{tournament.organizer || '—'}</dd></div><div><dt>Môn thể thao</dt><dd>{sportLabels[tournament.sport] || tournament.sport || '—'}</dd></div>{tournament.format && <div><dt>Thể thức</dt><dd>{formatLabels[tournament.format] || tournament.format}{categoryTypeLabels[tournament.categoryType] ? ` · ${categoryTypeLabels[tournament.categoryType]}` : ''}</dd></div>}{tournament.prizePaid > 0 && <div><dt>Đã trả thưởng</dt><dd>{money(tournament.prizePaid)}</dd></div>}</dl></section>
