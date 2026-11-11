@@ -34,21 +34,13 @@ export function SportProvider({ children }) {
         return [key]
       }
 
-      // Nếu chỉ đang chọn 1 môn:
-      if (prev.length === 1 && prev.includes(key)) {
-        // Click lại chính môn đó: chuyển sang hiển thị tất cả các môn
-        return ALL_SPORTS_KEYS
-      }
-
-      // Nếu đang chọn nhiều môn hoặc môn khác:
+      // Nếu đang chọn môn này: bỏ chọn môn đó và giữ nguyên trạng thái (chỉ nút 'Tất cả' mới chọn hết)
       if (prev.includes(key)) {
-        const remaining = prev.filter((k) => k !== key)
-        return remaining.length > 0 ? remaining : ALL_SPORTS_KEYS
-      } else {
-        const next = [...prev, key]
-        return next.length === SPORTS_LIST.length ? ALL_SPORTS_KEYS : next
+        return prev.filter((k) => k !== key)
       }
 
+      // Nếu chưa chọn: thêm môn vào danh sách lọc
+      return [...prev, key]
     })
   }
 

@@ -24,6 +24,8 @@ function SportFilter() {
   const { selectedSports, toggleSport, selectAllSports, isSportActive, isAllActive, SPORTS_LIST } = useSport()
   const status = isAllActive
     ? `Tất cả ${SPORTS_LIST.length} môn`
+    : selectedSports.length === 0
+    ? 'Chưa chọn môn nào'
     : selectedSports.length === 1
     ? `Chỉ ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}`
     : `${selectedSports.length} môn đang chọn`

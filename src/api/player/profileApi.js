@@ -136,7 +136,7 @@ export const getMySports = async () => {
   const list = Array.isArray(data) ? data : pick(data, 'sports', 'items') || []
   return list.map(toMySport)
 }
-// skillLevel BE nhận: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL. Giao diện hiển thị nhãn tiếng Việt.
+// skillLevel BE nhận đúng 4 enum: BEGINNER | INTERMEDIATE | ADVANCED | PROFESSIONAL. Giao diện hiển thị nhãn tiếng Việt.
 export const SKILL_LABELS = {
   BEGINNER: 'Mới tập chơi',
   INTERMEDIATE: 'Trung bình - Khá',
@@ -145,13 +145,11 @@ export const SKILL_LABELS = {
 }
 export const skillLabel = value => SKILL_LABELS[String(value || '').toUpperCase()] || value || ''
 export function toSkillEnum(label) {
-  const text = String(label || '').toLowerCase()
-  if (SKILL_LABELS[String(label || '').toUpperCase()]) return String(label).toUpperCase()
-  if (text.includes('chuyên nghiệp') || text.includes('thi đấu giải')) return 'PROFESSIONAL'
-  if (text.includes('bán chuyên') || text.includes('nâng cao') || text.includes('khá - đánh') || text.includes('chắc tay')) return 'ADVANCED'
-  if (text.includes('trung bình')) return 'INTERMEDIATE'
-  if (text.includes('mới')) return 'BEGINNER'
-  return null
+  const raw = String(label || '').trim()
+  const upper = raw.toUpperCase()
+  if (SKILL_LABELS[upper]) return upper
+  const entry = Object.entries(SKILL_LABELS).find(([, text]) => text.toLowerCase() === raw.toLowerCase())
+  return entry ? entry[0] : 'BEGINNER'
 }
 
 // UpdateUserSportsRequest: { sports: [{ sportCategoryId, skillLevel }] } (ghi đè toàn bộ, tối đa 10 môn)

@@ -48,7 +48,7 @@ export async function uploadImage(file, purpose = 'general') {
     const data = await post(`/api/v1/uploads/images?purpose=${encodeURIComponent(purpose)}`, form, {
       headers: { 'Content-Type': undefined },
     })
-    return data?.url || ''
+    return (typeof data === 'string' ? data : (data?.url || data?.imageUrl || data?.data?.url)) || ''
   } catch (err) {
     if (!err?.status || err?.status >= 500) {
       return compressToDataUrl(file)

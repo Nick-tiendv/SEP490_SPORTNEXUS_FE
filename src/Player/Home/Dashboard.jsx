@@ -882,7 +882,6 @@ function Dashboard() {
 
   const {
     selectedSports,
-    toggleSport,
     selectAllSports,
     selectOnlySport,
     isSportActive,
@@ -1033,146 +1032,14 @@ function Dashboard() {
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
               {isAllActive
-                ? 'Đang xem toàn bộ sân & kèo cho tất cả các môn: Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis. Đặt sân & bảo chứng Escrow minh bạch.'
+                ? 'Đang xem toàn bộ sân & kèo cho tất cả các môn thể thao. Bạn có thể lọc môn ở thanh bên (Sidebar).'
+                : selectedSports.length === 0
+                ? 'Chưa chọn môn nào. Sử dụng bộ lọc ở thanh bên (Sidebar) để chọn môn thể thao.'
                 : selectedSports.length === 1
-                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}. Nhấp thêm môn khác để xem kết hợp.`
-                : `${selectedSports.length} môn đang được lọc hiển thị. Nhấp để chuyển đổi môn thể thao.`}
+                ? `Đang hiển thị chuyên biệt cho ${SPORTS_LIST.find((s) => s.key === selectedSports[0])?.label || ''}. Sử dụng bộ lọc ở thanh bên (Sidebar) để thay đổi.`
+                : `${selectedSports.length} môn đang được lọc hiển thị. Sử dụng bộ lọc ở thanh bên (Sidebar) để thay đổi.`}
             </p>
           </div>
-
-          {/* Quick Sport Selector Buttons */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: '#F0FDF4',
-              padding: '6px 8px',
-              borderRadius: '16px',
-              border: '1.5px solid rgba(45, 95, 63, 0.14)',
-              flexWrap: 'wrap',
-            }}
-          >
-            {SPORTS_LIST.map((s) => {
-              const isActive = isSportActive(s.key)
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => toggleSport(s.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 14px',
-                    borderRadius: '12px',
-                    border: isActive ? '1.5px solid #2D5F3F' : '1.5px solid transparent',
-                    background: isActive
-                      ? 'linear-gradient(135deg, #2D5F3F 0%, #15803D 100%)'
-                      : 'rgba(255, 255, 255, 0.9)',
-                    color: isActive ? '#fff' : '#374151',
-                    fontSize: '12.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: isActive ? '0 4px 12px rgba(45, 95, 63, 0.22)' : 'none',
-                    transition: 'all 0.2s',
-                  }}
-                  title={
-                    isAllActive
-                      ? `Click để chỉ xem riêng ${s.label}`
-                      : isActive
-                      ? `Đang chọn ${s.label} (Click để hủy chọn)`
-                      : `Click để chọn thêm ${s.label}`
-                  }
-                >
-                  <span style={{ fontSize: '16px' }}>{s.emoji}</span>
-                  <span>{s.label}</span>
-                  {isActive && (
-                    <span
-                      style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        background: '#86EFAC',
-                        boxShadow: '0 0 6px #86EFAC',
-                      }}
-                    />
-                  )}
-                </button>
-              )
-            })}
-
-            {/* View All Button */}
-            <button
-              type="button"
-              onClick={selectAllSports}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '8px 14px',
-                borderRadius: '12px',
-                border: isAllActive ? '1.5px solid #10B981' : '1.5px dashed #A7F3D0',
-                background: isAllActive ? '#DCFCE7' : 'transparent',
-                color: isAllActive ? '#15803D' : '#059669',
-                fontSize: '12.5px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-              title="Xem toàn bộ 5 môn thể thao"
-            >
-              <span>✨</span>
-              <span>Tất cả 5 môn</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Summary Banner */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '6px 12px',
-            padding: '10px 14px',
-            background: 'linear-gradient(90deg, #F0FDF4 0%, #F9FCF9 100%)',
-            borderRadius: '12px',
-            border: '1px solid #E5E7EB',
-            fontSize: '12px',
-            color: '#374151',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
-              filter_list
-            </span>
-            <span>
-              Bộ lọc hiện tại:{' '}
-              <strong style={{ color: '#1C3524' }}>
-                {isAllActive
-                  ? 'Toàn bộ 5 môn thể thao (Cầu Lông, Pickleball, Bóng Đá, Bóng Rổ, Tennis)'
-                  : selectedSports.length === 0
-                  ? 'Chưa chọn môn nào'
-                  : selectedSports.length === 1
-                  ? `Chỉ hiển thị ${SPORTS_LIST.find(s => s.key === selectedSports[0])?.label || ''}`
-                  : `Đang chọn ${selectedSports.length} môn (${selectedSports.map(k => SPORTS_LIST.find(s => s.key === k)?.label).filter(Boolean).join(', ')})`}
-              </strong>
-            </span>
-            <span style={{ color: '#9CA3AF' }}>•</span>
-            <span>
-              {filteredUpcomingMatches.length} trận sắp tới • {filteredLfgMatches.length} kèo ghép • {filteredCourts.length} sân trống
-            </span>
-          </div>
-
-          <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>
-            {isAllActive
-              ? '💡 Nhấn vào 1 môn để lọc riêng'
-              : selectedSports.length === 0
-              ? '💡 Bấm vào môn thể thao phía trên để chọn'
-              : '💡 Bấm lại môn đã chọn để hủy, hoặc bấm Tất cả 5 môn'}
-          </span>
         </div>
       </section>
 
