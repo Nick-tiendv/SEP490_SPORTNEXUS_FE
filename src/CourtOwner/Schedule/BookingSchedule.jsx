@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { cancelOwnerBooking, checkInBooking, createWalkInBooking, getCancellationReasons, getFacilitySlots, updateSlotStatus } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
+import TimeInput24 from '../../components/common/TimeInput24.jsx'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 // Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
@@ -53,6 +54,34 @@ const CELL_STYLES = {
   reserved: { bg: '#F5F3FF', chip: '#8B5CF6', label: 'Giữ cho giải' },
 }
 
+const toMinutes = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m }
+// Giờ kết thúc của ca (ca kết thúc lúc nửa đêm ghi 24:00)
+const endClockVN = (slot) => { const clock = toClockVN(slot.endTime); return clock === '00:00' ? '24:00' : clock }
+
+// Khách vãng lai nhập "từ giờ – đến giờ": quy về các ca trống liên tiếp của 1 sân.
+// Đơn vẫn gắn với ca có sẵn (BE nhận courtSlotIds) nên khoảng giờ phải khớp mốc bắt đầu / kết thúc ca.
+function slotsForRange(court, from, to) {
+  if (!court) return { error: 'Vui lòng chọn sân.' }
+  if (!from || !to) return { error: 'Vui lòng nhập giờ bắt đầu và giờ kết thúc.' }
+  if (toMinutes(to) <= toMinutes(from)) return { error: 'Giờ kết thúc phải sau giờ bắt đầu.' }
+  const list = [...court.slots.values()].sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+  const inRange = list.filter((slot) => toMinutes(toClockVN(slot.startTime)) >= toMinutes(from) && toMinutes(endClockVN(slot)) <= toMinutes(to))
+  if (!inRange.length) return { error: `${court.name} không có ca nào nằm trọn trong ${from} – ${to}.` }
+  const first = toClockVN(inRange[0].startTime)
+  const last = endClockVN(inRange[inRange.length - 1])
+  if (first !== from || last !== to) {
+    return { error: `Khoảng giờ phải khớp mốc ca của sân. Khoảng gần nhất có ca: ${first} – ${last}.` }
+  }
+  for (let i = 1; i < inRange.length; i++) {
+    if (new Date(inRange[i].startTime).getTime() !== new Date(inRange[i - 1].endTime).getTime()) {
+      return { error: `Từ ${endClockVN(inRange[i - 1])} đến ${toClockVN(inRange[i].startTime)} sân chưa có ca.` }
+    }
+  }
+  const taken = inRange.find((slot) => cellState(slot) !== 'available')
+  if (taken) return { error: `Ca ${toClockVN(taken.startTime)} – ${endClockVN(taken)} không còn trống.` }
+  return { items: inRange.map((slot) => ({ court, slot })) }
+}
+
 const BOOKING_STATUS_LABEL = {
   checked_in: 'ĐÃ CHECK-IN (ĐANG CHƠI)',
   paid: 'ĐÃ THANH TOÁN (CHỜ CHECK-IN)',
@@ -86,6 +115,8 @@ export default function ViewCourtBookingSchedule() {
   const [cancelReasonText, setCancelReasonText] = useState('')
   const [lockAfterCancel, setLockAfterCancel] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Nhập giờ thủ công cho khách vãng lai
+  const [manual, setManual] = useState({ open: false, courtId: '', from: '', to: '', error: '' })
 
   const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
@@ -188,6 +219,15 @@ export default function ViewCourtBookingSchedule() {
     setWalkinSlots(1)
     setWalkinNote('')
     setWalkinAutoCheckIn(false)
+  }
+
+  const openManualWalkin = (e) => {
+    e.preventDefault()
+    const court = filteredCourts.find((c) => c.id === manual.courtId)
+    const result = slotsForRange(court, manual.from, manual.to)
+    if (result.error) { setManual((prev) => ({ ...prev, error: result.error })); return }
+    setManual((prev) => ({ ...prev, error: '' }))
+    openWalkin({ items: result.items })
   }
 
   const openMultiWalkin = () => {
@@ -477,7 +517,57 @@ export default function ViewCourtBookingSchedule() {
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{multiMode ? 'close' : 'library_add_check'}</span>
             {multiMode ? 'Thoát chọn nhiều ca' : 'Chọn nhiều ca'}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setManual((prev) => ({ ...prev, open: !prev.open, error: '' }))}
+            title="Nhập giờ bắt đầu – kết thúc để nhận khách vãng lai"
+            aria-expanded={manual.open}
+            style={{
+              ...dateButtonStyle,
+              gap: '6px',
+              background: manual.open ? '#10B981' : '#FFFFFF',
+              borderColor: manual.open ? '#10B981' : '#CBD5E1',
+              color: manual.open ? '#FFFFFF' : '#0F172A',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>schedule</span>
+            Nhập giờ thủ công
+          </button>
         </div>
+
+        {manual.open && (
+          <form
+            onSubmit={openManualWalkin}
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '12px', padding: '14px 16px', background: '#F8FAFC', border: '1px solid #CBD5E1', borderRadius: '12px' }}
+          >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>
+              Sân
+              <select
+                value={manual.courtId}
+                onChange={(e) => setManual((prev) => ({ ...prev, courtId: e.target.value, error: '' }))}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '13px', minWidth: '180px', background: '#FFFFFF' }}
+              >
+                <option value="">— Chọn sân —</option>
+                {filteredCourts.filter((court) => court.status === 'ACTIVE').map((court) => (
+                  <option key={court.id} value={court.id}>{court.name} ({court.sport})</option>
+                ))}
+              </select>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>
+              Từ giờ
+              <TimeInput24 label="Từ giờ" allowEmpty value={manual.from} onChange={(v) => setManual((prev) => ({ ...prev, from: v, error: '' }))} selectClassName="" selectStyle={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '13px', background: '#FFFFFF' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>
+              Đến giờ
+              <TimeInput24 label="Đến giờ" allowEmpty value={manual.to} onChange={(v) => setManual((prev) => ({ ...prev, to: v, error: '' }))} selectClassName="" selectStyle={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '13px', background: '#FFFFFF' }} />
+            </div>
+            <button type="submit" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busy}>Tìm ca &amp; nhận khách</button>
+            <p style={{ flexBasis: '100%', margin: 0, fontSize: '12px', color: manual.error ? '#B91C1C' : '#475569' }} role={manual.error ? 'alert' : undefined}>
+              {manual.error || `Ngày ${formatDateVN(selectedDate)}. Hệ thống ghép các ca trống liên tiếp của sân trong khoảng giờ này thành 1 đơn.`}
+            </p>
+          </form>
+        )}
 
         {/* Legend */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', fontSize: '12px', fontWeight: 600 }}>
