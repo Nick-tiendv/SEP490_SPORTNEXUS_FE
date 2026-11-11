@@ -217,6 +217,36 @@
 .sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) strong { color: #fff; }
 .sn-admin :is(.bookings-kpis .revenue, .payments-kpis .volume) > div > svg { background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
 
+/* ---------- 3b. Thẻ tóm tắt chỉ để xem ----------
+   Chỉ thẻ ở Tổng quan (a.admin-stat-card--link) bấm sang trang chi tiết: nổi khối, có hiệu ứng rê chuột.
+   Thẻ ở các trang khác chỉ để xem nên dùng kiểu phẳng: không bóng, không vòng trang trí, không hiệu ứng rê chuột,
+   icon viền nhạt thay cho khối gradient, để người dùng không nghĩ là bấm được. */
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume),
+.sn-admin article.admin-stat-card {
+  background: var(--sn-gray-50, #f8fafc);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--admin-border-color);
+  box-shadow: none;
+  cursor: default;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article,
+.sn-admin article.admin-stat-card { transition: none; }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article::after,
+.sn-admin article.admin-stat-card::after { display: none; }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover,
+.sn-admin article.admin-stat-card:hover { transform: none; }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume):hover,
+.sn-admin article.admin-stat-card:hover { box-shadow: none; border-color: var(--admin-border-color); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume) > div > svg,
+.sn-admin article.admin-stat-card .admin-stat-icon {
+  background: transparent;
+  color: var(--kpi-tone, var(--sn-green-600));
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover > div > svg,
+.sn-admin article.admin-stat-card:hover .admin-stat-icon { transform: none; }
+
 /* ---------- 4. Filter toolbars ---------- */
 .sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar) {
   padding: var(--sp-4) var(--sp-5);
