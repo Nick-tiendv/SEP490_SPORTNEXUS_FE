@@ -2422,3 +2422,23 @@
   box-shadow: 0 6px 16px rgba(37, 85, 16, 0.35);
   transform: translateY(-1px);
 }
+
+/* Danh sách cụm sân hợp bộ lọc nằm dưới bản đồ (cột phải): xếp lưới nhiều cột */
+.mb-court-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.mb-court-grid > .mb-court { margin: 0; }
+
+/* Ô chọn giờ (dropdown 24h) cùng kiểu ô giá */
+.mb-time-select {
+  flex: 1; min-width: 0; width: 100%;
+  border: none; outline: none; background: transparent;
+  font: inherit; font-size: 14px; font-weight: 700; color: var(--mb-ink);
+  text-align: right; text-align-last: right; font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
