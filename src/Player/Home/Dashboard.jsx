@@ -740,6 +740,23 @@ export function SportCourtDiagram({ sport, width = 58, height = 32, style = {}, 
 }
 
 // Dữ liệu trận đấu kế tiếp của cả 5 môn thể thao
+// Thanh tiêu đề mục: có nền trắng mờ để chữ không chìm vào ảnh nền
+const SECTION_HEADER_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: '8px 12px',
+  marginBottom: '14px',
+  padding: '10px 14px',
+  background: 'rgba(255, 255, 255, 0.9)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  borderRadius: '12px',
+  border: '1px solid rgba(255, 255, 255, 0.8)',
+  boxShadow: '0 2px 10px rgba(45, 95, 63, 0.05)',
+}
+
 const SPORT_META = {
   badminton: { name: 'Cầu Lông', emoji: '🏸', bg: '#EAF7EE', color: '#15803D', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop' },
   pickleball: { name: 'Pickleball', emoji: '🏓', bg: '#ECFDF5', color: '#047857', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop' },
@@ -992,7 +1009,7 @@ function Dashboard() {
 
 
   return (
-    <div className="snx-page">
+    <div className="snx-page" style={{ overflowX: 'hidden' }}>
       {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
       <SplitInvites />
 
@@ -1147,6 +1164,8 @@ function Dashboard() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '6px 12px',
             padding: '10px 14px',
             background: 'linear-gradient(90deg, #F0FDF4 0%, #F9FCF9 100%)',
             borderRadius: '12px',
@@ -1155,7 +1174,7 @@ function Dashboard() {
             color: '#374151',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
               filter_list
             </span>
@@ -1191,7 +1210,7 @@ function Dashboard() {
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
           gap: '16px',
           marginBottom: '32px',
         }}
@@ -1208,6 +1227,7 @@ function Dashboard() {
               padding: '20px 18px',
               textDecoration: 'none',
               display: 'block',
+              minWidth: 0,
               border: '1px solid rgba(255, 255, 255, 0.8)',
               boxShadow: '0 4px 18px rgba(45, 95, 63, 0.05)',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1277,14 +1297,7 @@ function Dashboard() {
 
       {/* ===================== SECTION 3: UPCOMING MATCHES ===================== */}
       <section style={{ marginBottom: '32px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '14px',
-          }}
-        >
+        <div style={SECTION_HEADER_STYLE}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
@@ -1558,21 +1571,14 @@ function Dashboard() {
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))',
           gap: '24px',
           marginBottom: '36px',
         }}
       >
         {/* LFG Column */}
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '14px',
-            }}
-          >
+        <div style={{ minWidth: 0 }}>
+          <div style={SECTION_HEADER_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
                 groups
@@ -1744,15 +1750,8 @@ function Dashboard() {
         </div>
 
         {/* Suggested Courts Column */}
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '14px',
-            }}
-          >
+        <div style={{ minWidth: 0 }}>
+          <div style={SECTION_HEADER_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
                 stadium
