@@ -50,6 +50,13 @@ export async function getPublicSports() {
   return (Array.isArray(list) ? list : []).map((sport) => ({ id: String(sport.id), name: sport.name || '' }))
 }
 
+// ---------- Kiểm tra SĐT đã có tài khoản chưa: GET /api/auth/check-phone?phone= → { exists } ----------
+// Không cần đăng nhập, BE giới hạn 20 lần / phút / IP. SĐT sai định dạng → 400.
+export async function checkPhone(phone) {
+  const body = validateResponse((await apiClient.get('/api/auth/check-phone', { params: { phone }, skipAuth: true })).data)
+  return Boolean(body.data?.exists)
+}
+
 // ---------- OTP số điện thoại: POST /api/auth/send-otp, /api/auth/verify-otp (type: REGISTER | FORGOT_PASSWORD) ----------
 // send-otp trả { phone, type, expiresInSeconds, devOtp } (devOtp chỉ có ở môi trường dev của BE)
 export async function sendOtp(phone, type = 'REGISTER') {

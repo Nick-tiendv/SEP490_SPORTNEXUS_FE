@@ -2,28 +2,38 @@ import './auth-pages.css'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { forgotPassword } from '../api/auth/authApi.js'
+import { checkPhone, forgotPassword } from '../api/auth/authApi.js'
 import { isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
+
+const PHONE_VN = /^(0|\+84|84)(3|5|7|8|9)[0-9]{8}$/
 
 function ForgotPassword() {
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  // POST /api/auth/forgot-password: BE kiểm tra số điện thoại có tài khoản (luồng cũ: BE tạo mã OTP).
-  // Có cấu hình Firebase → gửi SMS mã OTP thật qua Firebase (giống app).
+  // 1. GET /api/auth/check-phone: SĐT phải có tài khoản mới gửi mã (không tốn SMS cho số chưa đăng ký).
+  // 2. Có cấu hình Firebase → Firebase gửi SMS thật; bước đặt mật khẩu gửi firebaseIdToken.
+  //    Chưa cấu hình → luồng cũ POST /api/auth/forgot-password (BE tạo mã OTP).
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const phone = email.trim()
+    const phone = email.trim().replace(/[\s.-]/g, '')
     if (!phone || loading) return
+    if (!PHONE_VN.test(phone)) { setError('Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).'); return }
+    setError('')
     setLoading(true)
     try {
-      await forgotPassword(phone)
+      if (!(await checkPhone(phone))) {
+        setError('Số điện thoại này chưa đăng ký tài khoản SportNexus.')
+        return
+      }
       if (isFirebasePhoneEnabled) await sendPhoneCode(phone)
+      else await forgotPassword(phone)
       toast.success('Đã gửi mã xác thực. Vui lòng kiểm tra tin nhắn.')
       navigate('/verify-account', { state: { phone } })
-    } catch (error) {
-      toast.error(error?.message || 'Không gửi được mã xác thực. Vui lòng thử lại.')
+    } catch (err) {
+      toast.error(err?.message || 'Không gửi được mã xác thực. Vui lòng thử lại.')
     } finally {
       setLoading(false)
     }
@@ -116,11 +126,20 @@ function ForgotPassword() {
                   <input
                     type="tel"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setError('') }}
+                    aria-invalid={!!error}
+                    aria-describedby="forgot-phone-error"
+                    placeholder="0912 345 678"
                     className="w-full pl-12 pr-4 py-3.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:border-[#4A7C3E] focus:ring-2 focus:ring-[#A8E6CF]/20 transition-all"
                     required
                   />
                 </div>
+                {error && (
+                  <p id="forgot-phone-error" role="alert" className="mt-2 text-sm text-red-600">
+                    {error}
+                    {error.includes('chưa đăng ký') && <> <Link to="/register" className="font-semibold underline">Đăng ký ngay</Link></>}
+                  </p>
+                )}
               </div>
 
               {/* Info Box */}
@@ -143,7 +162,7 @@ function ForgotPassword() {
                 disabled={loading}
                 className="w-full bg-[#4A7C3E] hover:bg-[#3d6634] disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]"
               >
-                {loading ? 'Đang gửi…' : 'Gửi mã xác thực'}
+                {loading ? 'Đang kiểm tra…' : 'Gửi mã xác thực'}
               </button>
 
               {/* Back to Login Link */}

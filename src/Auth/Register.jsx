@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import './auth-pages.css'
 
 import { toast } from 'sonner'
-import { getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
+import { checkPhone, getPublicSports, registerUser, sendOtp } from '../api/auth/authApi.js'
 import SocialLoginButtons from './SocialLoginButtons.jsx'
 import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from './firebasePhone.js'
 
@@ -156,6 +156,15 @@ function Register() {
     }
   }
 
+  // Rời ô SĐT: kiểm tra trước SĐT đã có tài khoản chưa (lỗi mạng / 429 thì bỏ qua, BE vẫn kiểm tra khi đăng ký)
+  const handlePhoneBlur = async () => {
+    const value = phone.trim()
+    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(value)) return
+    try {
+      if (await checkPhone(value)) setErrors((prev) => ({ ...prev, phone: 'Số điện thoại này đã được sử dụng. Vui lòng đăng nhập hoặc dùng "Quên mật khẩu".' }))
+    } catch { /* bỏ qua */ }
+  }
+
   const handleSendOtp = async () => {
     if (!phone.trim()) { toast.error('Vui lòng nhập số điện thoại trước.'); return }
     if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(phone.replace(/[\s.-]/g, ''))) {
@@ -164,6 +173,11 @@ function Register() {
     }
     setOtpBusy(true)
     try {
+      // GET /api/auth/check-phone: SĐT đã có tài khoản → báo ngay, không gửi SMS
+      if (await checkPhone(phone.trim())) {
+        setErrors((prev) => ({ ...prev, phone: 'Số điện thoại này đã được sử dụng. Vui lòng đăng nhập hoặc dùng "Quên mật khẩu".' }))
+        return
+      }
       let devOtp = null
       // Có cấu hình Firebase → gửi SMS thật qua Firebase (giống app). Chưa có → luồng send-otp cũ của BE.
       if (isFirebasePhoneEnabled) await sendPhoneCode(phone.trim())
@@ -344,7 +358,8 @@ function Register() {
                       id="phone"
                       name="phone"
                       value={phone}
-                      onChange={(event) => setPhone(event.target.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, ''))}
+                      onChange={(event) => { setPhone(event.target.value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '')); setErrors((prev) => (prev.phone ? { ...prev, phone: undefined } : prev)) }}
+                      onBlur={handlePhoneBlur}
                       autoComplete="tel"
                       inputMode="numeric"
                       maxLength={12}
