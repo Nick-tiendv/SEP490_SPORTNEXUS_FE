@@ -95,7 +95,8 @@ function ProfileDialog({ user, onClose }) {
 
 export default function RatingManagement() {
   const [tab, setTab] = useState('assessments')
-  const [evidenceStatus, setEvidenceStatus] = useState('PENDING')
+  // Mặc định xem mọi bài khảo sát; Admin tự lọc 'Chờ duyệt' khi cần duyệt bằng chứng
+  const [evidenceStatus, setEvidenceStatus] = useState('ALL')
   const [reload, setReload] = useState(0)
   const [assessments, setAssessments] = useState({ key: null, items: [], error: '' })
   const [flagged, setFlagged] = useState({ key: null, items: [], error: '' })
@@ -133,7 +134,7 @@ export default function RatingManagement() {
 
     {tab === 'assessments' && <section className="lfg-table-panel"><header><h2>Khảo sát toàn diện <span>{assessments.items.length}</span></h2></header>
       {assessments.error && <div className="users-notice" role="alert"><span>{assessments.error}</span></div>}
-      <div className="lfg-table-scroll"><table><thead><tr>{['Người chơi', 'Môn', 'Elo', 'Câu trả lời mâu thuẫn', 'Bằng chứng', 'Trạng thái', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+      <div className="lfg-table-scroll"><table><thead><tr>{['Người chơi', 'Môn', 'Elo', 'Câu trả lời mâu thuẫn', 'Bằng chứng', 'Trạng thái bằng chứng', ''].map(h => <th key={h} title={h === 'Trạng thái bằng chứng' ? 'Tự động khi người chơi nộp khảo sát; Admin chỉ Duyệt / Từ chối bài đang chờ duyệt' : undefined}>{h}</th>)}</tr></thead>
         <tbody style={loadingAssessments ? { opacity: 0.5 } : undefined}>{assessments.items.map(a => { const [tone, label] = EVIDENCE[a.evidenceStatus] || ['Pending', a.evidenceStatus]; return <tr key={a.id}>
           <td><strong>{a.fullName || '—'}</strong><small>{dateTime(a.createdAt)}</small></td>
           <td>{a.sportName}</td>
