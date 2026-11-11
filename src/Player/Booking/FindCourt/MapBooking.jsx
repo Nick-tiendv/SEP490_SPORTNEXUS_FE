@@ -428,7 +428,7 @@ function buildSlots(court, isToday = true, basePrice = null) {
 
 function MapBooking() {
   const navigate = useNavigate()
-  const { isSportActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
+  const { isSportActive, isAllActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
 
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
@@ -555,14 +555,16 @@ function MapBooking() {
       if (!court.lat || !court.lng) continue
       const { province, district } = areaOfCourt(court)
       if (!province) continue
-      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], districts: new Map() }
+      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], courts: [], districts: new Map() }
       p.ids.add(String(court.id))
       p.points.push([court.lat, court.lng])
+      p.courts.push(court)
       if (district) {
         const value = `${district}, ${province}`
-        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [] }
+        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [], courts: [] }
         d.ids.add(String(court.id))
         d.points.push([court.lat, court.lng])
+        d.courts.push(court)
         p.districts.set(value, d)
       }
       provinces.set(province, p)
@@ -777,6 +779,18 @@ function MapBooking() {
     }
     return isSportActive(c.sport)
   }, [isSportActive])
+
+  // Mỗi nút khu vực: số cơ sở có môn đang chọn + số cơ sở theo từng môn (hiện ở tooltip)
+  const areaChipStats = useMemo(() => {
+    const stats = new Map()
+    for (const chip of areaChips.all) {
+      const bySport = SPORTS_LIST
+        .map((s) => ({ ...s, count: chip.courts.filter((c) => (c.sports?.length ? c.sports : [c.sport]).includes(s.key)).length }))
+        .filter((s) => s.count > 0)
+      stats.set(chip.value, { matched: chip.courts.filter(courtMatchesSport).length, bySport })
+    }
+    return stats
+  }, [areaChips, courtMatchesSport, SPORTS_LIST])
 
   // Lọc theo tầm giá: nhập tự do hoặc chọn "Mọi mức giá"
   const courtMatchesPrice = useCallback((court) => {
@@ -1419,22 +1433,27 @@ function MapBooking() {
                 )}
               </div>
             </div>
-            {/* Gợi ý khu vực từ các cơ sở đang có: tỉnh / thành (đậm) rồi các quận có sân, kèm số cơ sở */}
+            {/* Gợi ý khu vực từ các cơ sở đang có: tỉnh / thành (đậm) rồi các quận có sân.
+                Số trong ngoặc = số cơ sở có môn đang chọn; khu vực không có môn đang chọn bị làm mờ. */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
               {areaChips.all.map((chip) => {
                 const active = selectedAreaChip?.value === chip.value
                 const isProvince = !chip.province
+                const { matched = 0, bySport = [] } = areaChipStats.get(chip.value) || {}
+                const name = chip.province ? `${chip.label}, ${chip.province}` : chip.label
+                const breakdown = bySport.map((s) => `${s.emoji} ${s.label}: ${s.count}`).join(' • ')
+                const stateClass = matched === 0 ? 'is-empty' : !isAllActive ? 'has-match' : ''
                 return (
                   <button
                     key={chip.value}
                     type="button"
-                    className="mb-origin-chip"
+                    className={`mb-origin-chip ${stateClass}`}
                     aria-pressed={active}
-                    title={chip.province ? `${chip.label}, ${chip.province}` : chip.label}
-                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : isProvince ? { fontWeight: 800 } : undefined}
+                    title={`${name}\n${matched} cơ sở có môn đang chọn${breakdown ? `\n${breakdown}` : ''}`}
+                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F', opacity: 1 } : isProvince ? { fontWeight: 800 } : undefined}
                     onClick={() => { setCustomOrigin(active ? '' : chip.value); setAreaOffFor('') }}
                   >
-                    {chip.label} ({chip.ids.size})
+                    {chip.label} ({matched})
                   </button>
                 )
               })}

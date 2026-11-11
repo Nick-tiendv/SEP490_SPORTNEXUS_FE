@@ -1199,6 +1199,16 @@
   background: #e2e8f0;
   color: #0f172a;
 }
+/* Khu vực có sân của môn đang lọc */
+.mb-origin-chip.has-match {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #166534;
+}
+/* Khu vực không có sân của môn đang chọn */
+.mb-origin-chip.is-empty {
+  opacity: 0.45;
+}
 .mb-origin-confirm-btn {
   padding: 5px 12px;
   border-radius: 6px;
