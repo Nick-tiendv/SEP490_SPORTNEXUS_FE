@@ -316,7 +316,26 @@ const calculateRoute = (court, origin) => {
   }
 }
 
-const formatHours = (h) => `${String(h).replace('.', ',')} giờ`
+// Thời lượng ca tính từ giờ bắt đầu / kết thúc thật (giờ, có thể lẻ: 0.25 = 15 phút)
+const slotHours = (startIso, endIso) => {
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
+  return ms > 0 ? ms / 3600000 : 0
+}
+const splitHours = (h) => {
+  const total = Math.round((Number(h) || 0) * 60)
+  return { hh: Math.floor(total / 60), mm: total % 60 }
+}
+// "2 giờ", "30 phút", "1 giờ 30 phút"
+const formatHours = (h) => {
+  const { hh, mm } = splitHours(h)
+  return [hh && `${hh} giờ`, mm && `${mm} phút`].filter(Boolean).join(' ') || '0 phút'
+}
+// Dạng gọn cho ô lưới: "2h", "30p", "1h30"
+const shortHours = (h) => {
+  const { hh, mm } = splitHours(h)
+  if (!hh) return `${mm}p`
+  return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`
+}
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 const SLOT_TEMPLATE_FUTURE = [
@@ -340,7 +359,7 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
     return sorted.map((s) => ({
       ...s,
       slotIds: [s.id],
-      durationHours: 2,
+      durationHours: slotHours(s.startTime, s.endTime),
       rawSlots: [s],
       formattedStart: vnClock(s.startTime) || '',
       formattedEnd: vnClock(s.endTime) || '',
@@ -370,7 +389,7 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
       status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
       isBookable: isAvail,
       isPast,
-      durationHours: 2,
+      durationHours: slotHours(slotA.startTime, slotB.endTime),
       rawSlots: [slotA, slotB],
       formattedStart: vnClock(slotA.startTime) || '',
       formattedEnd: vnClock(slotB.endTime) || '',
@@ -1067,7 +1086,7 @@ function MapBooking() {
           slotIds: s.slotIds || [s.id],
           start,
           end,
-          hours: 2,
+          hours: s.durationHours,
           price: s.price,
           status: isAvail ? 'available' : 'booked',
           note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
@@ -1078,6 +1097,14 @@ function MapBooking() {
     }
     return buildSlots(selectedCourt, selectedDateInfo.isToday, currentSubCourtPrice)
   }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice, fromTime, toTime])
+
+  // Nhãn độ dài ca trên tiêu đề lưới: theo ca thật; các ca dài khác nhau thì không ghi 1 con số chung
+  const slotDurationLabel = useMemo(() => {
+    const durations = new Set(slots.map((s) => Math.round((Number(s.hours) || 0) * 60)).filter((m) => m > 0))
+    if (durations.size === 0) return ''
+    if (durations.size > 1) return 'Độ dài ca khác nhau'
+    return `${formatHours([...durations][0] / 60)} / ca`
+  }, [slots])
 
   const firstAvailableSlotId = slots.find((s) => s.status === 'available')?.id || null
   const isPickedSlotValid = slots.some((s) => s.id === selectedSlotId && s.status === 'available')
@@ -1805,9 +1832,11 @@ function MapBooking() {
               <div>
                 <h2>
                   Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}{' '}
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
-                    2 tiếng / ca
-                  </span>
+                  {slotDurationLabel && (
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
+                      {slotDurationLabel}
+                    </span>
+                  )}
                 </h2>
                 <p className="mb-slots-sub-desc">
                   Xem lịch trống và đặt sân theo ngày: <strong>{selectedDateInfo.fullLabel}</strong>
@@ -1928,7 +1957,7 @@ function MapBooking() {
                         {isSelected ? (
                           <span className="material-symbols-outlined mb-slot-check-ic">check</span>
                         ) : (
-                          <span className="mb-slot-chip-avail">Trống • 2h</span>
+                          <span className="mb-slot-chip-avail">Trống • {shortHours(slot.hours)}</span>
                         )}
                       </div>
                       <div className="mb-slot-compact-sub">
@@ -2124,7 +2153,7 @@ function MapBooking() {
                     Chi Tiết Khung Giờ: {detailSlot.start} - {detailSlot.end}
                   </h3>
                   <p className="mb-slot-modal-sub">
-                    {selectedCourt.name} • {String(detailSlot.hours).replace('.', ',')} giờ thi đấu
+                    {selectedCourt.name} • {formatHours(detailSlot.hours)} thi đấu
                   </p>
                 </div>
               </div>
