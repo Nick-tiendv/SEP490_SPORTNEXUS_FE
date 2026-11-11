@@ -1601,7 +1601,7 @@ function CommunityFeed() {
               onChange={(e) => setDistanceFilter(e.target.value)}
               className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
-              <option value="all">Khoảng cách: Toàn TP</option>
+              <option value="all">Mọi khoảng cách</option>
               <option value="5km">Dưới 5 km</option>
               <option value="10km">Dưới 10 km</option>
               <option value="district">Cùng quận/huyện</option>
@@ -4040,7 +4040,7 @@ function CommunityFeed() {
                     </div>
                   </div>
 
-                  {/* Chiều: 12:00 - 17:00 (YÊU CẦU MỚI) */}
+                  {/* Chiều: 12:00 - 17:00 */}
                   <div
                     onClick={() => toggleTimeSlot('afternoon')}
                     className={`relative p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
@@ -4060,10 +4060,7 @@ function CommunityFeed() {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-bold text-[13px] text-[#111827]">Chiều</h4>
-                        <span className="px-1.5 py-0.2 rounded bg-[#FEF3C7] text-[#D97706] text-[9.5px] font-extrabold uppercase">Mới</span>
-                      </div>
+                      <h4 className="font-bold text-[13px] text-[#111827]">Chiều</h4>
                       <p className="font-extrabold text-[12px] text-[#3B6817] mt-0.5">12:00 - 17:00</p>
                       <p className="text-[10.5px] text-gray-500 mt-1 leading-snug">
                         Giao lưu xả stress giữa giờ, rèn kỹ thuật &amp; sân vắng thoáng
@@ -4203,7 +4200,7 @@ function CommunityFeed() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { key: 'all', label: 'Toàn TP.HCM' },
+                      { key: 'all', label: 'Mọi khoảng cách' },
                       { key: '3km', label: 'Dưới 3 km' },
                       { key: '5km', label: 'Dưới 5 km' },
                       { key: '10km', label: 'Dưới 10 km' },
