@@ -17,6 +17,18 @@ import {
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { statusBadge, toTimeSpan } from '../shared.js'
+import { VN_ADMIN_UNITS } from '../../data/vnAdministrativeUnits.js'
+import TimeInput24 from '../../components/common/TimeInput24.jsx'
+
+// So khớp tên tỉnh bỏ dấu và tiền tố ("TP. HCM", "Hồ Chí Minh" → "Thành phố Hồ Chí Minh")
+const normalizeArea = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd')
+  .toLowerCase().replace(/^\s*(thanh pho|tinh|tp\.?)\s*/, '').replace(/[^a-z0-9]/g, '')
+const PROVINCE_ALIAS = { hcm: 'Thành phố Hồ Chí Minh', tphcm: 'Thành phố Hồ Chí Minh', saigon: 'Thành phố Hồ Chí Minh' }
+const canonicalProvince = (value) => {
+  const key = normalizeArea(value)
+  if (!key) return ''
+  return VN_ADMIN_UNITS.find((p) => normalizeArea(p.name) === key)?.name || PROVINCE_ALIAS[key] || value
+}
 
 const MAX_IMAGES = 10
 const APPROVAL = {
@@ -34,7 +46,7 @@ const EMPTY_FORM = {
   openTime: '06:00', closeTime: '22:00', description: '', rules: '', autoGenerateSlots: true,
 }
 const formFromFacility = (f) => ({
-  name: f.name || '', address: f.address || '', province: f.province || '', district: f.district || '',
+  name: f.name || '', address: f.address || '', province: canonicalProvince(f.province), district: f.district || '',
   latitude: f.latitude ?? '', longitude: f.longitude ?? '', phone: f.phone || '',
   openTime: String(f.openTime || '').slice(0, 5), closeTime: String(f.closeTime || '').slice(0, 5),
   description: f.description || '', rules: f.rules || '', autoGenerateSlots: !!f.autoGenerateSlots,
@@ -56,6 +68,10 @@ const toPayload = (form) => ({
 
 function FacilityForm({ form, setForm }) {
   const field = (key) => ({ value: form[key], onChange: (e) => setForm({ ...form, [key]: e.target.value }) })
+  // Tỉnh / phường chọn từ danh mục; giá trị cũ không có trong danh mục vẫn hiện để không mất dữ liệu
+  const provinceUnit = VN_ADMIN_UNITS.find((p) => p.name === form.province) || null
+  const legacyProvince = Boolean(form.province) && !provinceUnit
+  const legacyDistrict = Boolean(form.district) && !(provinceUnit?.wards || []).includes(form.district)
   const useMyLocation = () => {
     if (!navigator.geolocation) { toast.error('Trình duyệt không hỗ trợ định vị.'); return }
     navigator.geolocation.getCurrentPosition(
@@ -68,8 +84,20 @@ function FacilityForm({ form, setForm }) {
       <label className="snx-field">Tên cơ sở *<input className="snx-input" maxLength={200} required {...field('name')} /></label>
       <label className="snx-field">Địa chỉ *<input className="snx-input" maxLength={500} required {...field('address')} /></label>
       <div className="snx-form-grid">
-        <label className="snx-field">Tỉnh / Thành phố<input className="snx-input" {...field('province')} /></label>
-        <label className="snx-field">Quận / Huyện<input className="snx-input" {...field('district')} /></label>
+        <label className="snx-field">Tỉnh / Thành phố
+          <select className="snx-select" value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value, district: '' })}>
+            <option value="">— Chọn tỉnh / thành phố —</option>
+            {legacyProvince && <option value={form.province}>{form.province} (dữ liệu cũ)</option>}
+            {VN_ADMIN_UNITS.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+          </select>
+        </label>
+        <label className="snx-field">Phường / Xã
+          <select className="snx-select" value={form.district} disabled={!provinceUnit && !form.district} onChange={(e) => setForm({ ...form, district: e.target.value })}>
+            <option value="">{provinceUnit ? '— Chọn phường / xã —' : 'Chọn tỉnh / thành phố trước'}</option>
+            {legacyDistrict && <option value={form.district}>{form.district} (dữ liệu cũ)</option>}
+            {(provinceUnit?.wards || []).map((w) => <option key={w} value={w}>{w}</option>)}
+          </select>
+        </label>
         <label className="snx-field">Số điện thoại<input className="snx-input" type="tel" {...field('phone')} /></label>
       </div>
       <div className="snx-form-grid">
@@ -78,8 +106,8 @@ function FacilityForm({ form, setForm }) {
         <div className="snx-field" style={{ justifyContent: 'flex-end' }}><button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={useMyLocation}><span className="material-symbols-outlined" style={{ fontSize: 18 }}>my_location</span>Lấy vị trí hiện tại</button></div>
       </div>
       <div className="snx-form-grid">
-        <label className="snx-field">Giờ mở cửa<input className="snx-input" type="time" {...field('openTime')} /></label>
-        <label className="snx-field">Giờ đóng cửa<input className="snx-input" type="time" {...field('closeTime')} /></label>
+        <div className="snx-field">Giờ mở cửa<TimeInput24 label="Giờ mở cửa" allowEmpty value={form.openTime} onChange={(v) => setForm({ ...form, openTime: v })} /></div>
+        <div className="snx-field">Giờ đóng cửa<TimeInput24 label="Giờ đóng cửa" allowEmpty value={form.closeTime} onChange={(v) => setForm({ ...form, closeTime: v })} /></div>
       </div>
       <label className="snx-field">Giới thiệu<textarea className="snx-textarea" rows={3} maxLength={2000} {...field('description')} /></label>
       <label className="snx-field">Nội quy sân<textarea className="snx-textarea" rows={2} maxLength={2000} {...field('rules')} /></label>

@@ -6,6 +6,7 @@ import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import CourtFormModal from './CourtFormModal.jsx'
+import TimeInput24 from '../../components/common/TimeInput24.jsx'
 
 // Màu & icon theo môn (scoringRule của master-data/sports).
 const SPORT_STYLES = {
@@ -1349,19 +1350,12 @@ export default function CourtManage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '8px' }}>
                 Giờ mở cửa cơ sở
               </label>
-              <input
-                type="time"
+              <TimeInput24
+                label="Giờ mở cửa cơ sở"
                 value={gridConfig.openingTime}
-                onChange={(e) => setGridConfig((prev) => ({ ...prev, openingTime: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  color: '#0F172A',
-                }}
+                onChange={(v) => setGridConfig((prev) => ({ ...prev, openingTime: v }))}
+                selectClassName=""
+                selectStyle={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '16px', fontWeight: 700, color: '#0F172A', background: '#fff' }}
               />
               <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Bắt đầu nhận ca đặt sân đầu tiên
@@ -1373,19 +1367,12 @@ export default function CourtManage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '8px' }}>
                 Giờ đóng cửa cơ sở
               </label>
-              <input
-                type="time"
+              <TimeInput24
+                label="Giờ đóng cửa cơ sở"
                 value={gridConfig.closingTime}
-                onChange={(e) => setGridConfig((prev) => ({ ...prev, closingTime: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  color: '#0F172A',
-                }}
+                onChange={(v) => setGridConfig((prev) => ({ ...prev, closingTime: v }))}
+                selectClassName=""
+                selectStyle={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '16px', fontWeight: 700, color: '#0F172A', background: '#fff' }}
               />
               <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
                 Ca chơi cuối cùng kết thúc

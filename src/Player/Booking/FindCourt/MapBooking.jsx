@@ -316,7 +316,26 @@ const calculateRoute = (court, origin) => {
   }
 }
 
-const formatHours = (h) => `${String(h).replace('.', ',')} giờ`
+// Thời lượng ca tính từ giờ bắt đầu / kết thúc thật (giờ, có thể lẻ: 0.25 = 15 phút)
+const slotHours = (startIso, endIso) => {
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
+  return ms > 0 ? ms / 3600000 : 0
+}
+const splitHours = (h) => {
+  const total = Math.round((Number(h) || 0) * 60)
+  return { hh: Math.floor(total / 60), mm: total % 60 }
+}
+// "2 giờ", "30 phút", "1 giờ 30 phút"
+const formatHours = (h) => {
+  const { hh, mm } = splitHours(h)
+  return [hh && `${hh} giờ`, mm && `${mm} phút`].filter(Boolean).join(' ') || '0 phút'
+}
+// Dạng gọn cho ô lưới: "2h", "30p", "1h30"
+const shortHours = (h) => {
+  const { hh, mm } = splitHours(h)
+  if (!hh) return `${mm}p`
+  return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`
+}
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 const SLOT_TEMPLATE_FUTURE = [
@@ -340,7 +359,7 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
     return sorted.map((s) => ({
       ...s,
       slotIds: [s.id],
-      durationHours: 2,
+      durationHours: slotHours(s.startTime, s.endTime),
       rawSlots: [s],
       formattedStart: vnClock(s.startTime) || '',
       formattedEnd: vnClock(s.endTime) || '',
@@ -370,7 +389,7 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
       status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
       isBookable: isAvail,
       isPast,
-      durationHours: 2,
+      durationHours: slotHours(slotA.startTime, slotB.endTime),
       rawSlots: [slotA, slotB],
       formattedStart: vnClock(slotA.startTime) || '',
       formattedEnd: vnClock(slotB.endTime) || '',
@@ -428,7 +447,7 @@ function buildSlots(court, isToday = true, basePrice = null) {
 
 function MapBooking() {
   const navigate = useNavigate()
-  const { isSportActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
+  const { isSportActive, isAllActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
 
   // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
@@ -555,14 +574,16 @@ function MapBooking() {
       if (!court.lat || !court.lng) continue
       const { province, district } = areaOfCourt(court)
       if (!province) continue
-      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], districts: new Map() }
+      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], courts: [], districts: new Map() }
       p.ids.add(String(court.id))
       p.points.push([court.lat, court.lng])
+      p.courts.push(court)
       if (district) {
         const value = `${district}, ${province}`
-        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [] }
+        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [], courts: [] }
         d.ids.add(String(court.id))
         d.points.push([court.lat, court.lng])
+        d.courts.push(court)
         p.districts.set(value, d)
       }
       provinces.set(province, p)
@@ -777,6 +798,18 @@ function MapBooking() {
     }
     return isSportActive(c.sport)
   }, [isSportActive])
+
+  // Mỗi nút khu vực: số cơ sở có môn đang chọn + số cơ sở theo từng môn (hiện ở tooltip)
+  const areaChipStats = useMemo(() => {
+    const stats = new Map()
+    for (const chip of areaChips.all) {
+      const bySport = SPORTS_LIST
+        .map((s) => ({ ...s, count: chip.courts.filter((c) => (c.sports?.length ? c.sports : [c.sport]).includes(s.key)).length }))
+        .filter((s) => s.count > 0)
+      stats.set(chip.value, { matched: chip.courts.filter(courtMatchesSport).length, bySport })
+    }
+    return stats
+  }, [areaChips, courtMatchesSport, SPORTS_LIST])
 
   // Lọc theo tầm giá: nhập tự do hoặc chọn "Mọi mức giá"
   const courtMatchesPrice = useCallback((court) => {
@@ -1053,7 +1086,7 @@ function MapBooking() {
           slotIds: s.slotIds || [s.id],
           start,
           end,
-          hours: 2,
+          hours: s.durationHours,
           price: s.price,
           status: isAvail ? 'available' : 'booked',
           note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
@@ -1064,6 +1097,14 @@ function MapBooking() {
     }
     return buildSlots(selectedCourt, selectedDateInfo.isToday, currentSubCourtPrice)
   }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice, fromTime, toTime])
+
+  // Nhãn độ dài ca trên tiêu đề lưới: theo ca thật; các ca dài khác nhau thì không ghi 1 con số chung
+  const slotDurationLabel = useMemo(() => {
+    const durations = new Set(slots.map((s) => Math.round((Number(s.hours) || 0) * 60)).filter((m) => m > 0))
+    if (durations.size === 0) return ''
+    if (durations.size > 1) return 'Độ dài ca khác nhau'
+    return `${formatHours([...durations][0] / 60)} / ca`
+  }, [slots])
 
   const firstAvailableSlotId = slots.find((s) => s.status === 'available')?.id || null
   const isPickedSlotValid = slots.some((s) => s.id === selectedSlotId && s.status === 'available')
@@ -1419,22 +1460,27 @@ function MapBooking() {
                 )}
               </div>
             </div>
-            {/* Gợi ý khu vực từ các cơ sở đang có: tỉnh / thành (đậm) rồi các quận có sân, kèm số cơ sở */}
+            {/* Gợi ý khu vực từ các cơ sở đang có: tỉnh / thành (đậm) rồi các quận có sân.
+                Số trong ngoặc = số cơ sở có môn đang chọn; khu vực không có môn đang chọn bị làm mờ. */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
               {areaChips.all.map((chip) => {
                 const active = selectedAreaChip?.value === chip.value
                 const isProvince = !chip.province
+                const { matched = 0, bySport = [] } = areaChipStats.get(chip.value) || {}
+                const name = chip.province ? `${chip.label}, ${chip.province}` : chip.label
+                const breakdown = bySport.map((s) => `${s.emoji} ${s.label}: ${s.count}`).join(' • ')
+                const stateClass = matched === 0 ? 'is-empty' : !isAllActive ? 'has-match' : ''
                 return (
                   <button
                     key={chip.value}
                     type="button"
-                    className="mb-origin-chip"
+                    className={`mb-origin-chip ${stateClass}`}
                     aria-pressed={active}
-                    title={chip.province ? `${chip.label}, ${chip.province}` : chip.label}
-                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : isProvince ? { fontWeight: 800 } : undefined}
+                    title={`${name}\n${matched} cơ sở có môn đang chọn${breakdown ? `\n${breakdown}` : ''}`}
+                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F', opacity: 1 } : isProvince ? { fontWeight: 800 } : undefined}
                     onClick={() => { setCustomOrigin(active ? '' : chip.value); setAreaOffFor('') }}
                   >
-                    {chip.label} ({chip.ids.size})
+                    {chip.label} ({matched})
                   </button>
                 )
               })}
@@ -1786,9 +1832,11 @@ function MapBooking() {
               <div>
                 <h2>
                   Lưới Lịch Sân Trực Quan: {selectedCourt ? selectedCourt.name : '—'}{' '}
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
-                    2 tiếng / ca
-                  </span>
+                  {slotDurationLabel && (
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#047857', background: '#ecfdf5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', marginLeft: '6px', verticalAlign: 'middle' }}>
+                      {slotDurationLabel}
+                    </span>
+                  )}
                 </h2>
                 <p className="mb-slots-sub-desc">
                   Xem lịch trống và đặt sân theo ngày: <strong>{selectedDateInfo.fullLabel}</strong>
@@ -1909,7 +1957,7 @@ function MapBooking() {
                         {isSelected ? (
                           <span className="material-symbols-outlined mb-slot-check-ic">check</span>
                         ) : (
-                          <span className="mb-slot-chip-avail">Trống • 2h</span>
+                          <span className="mb-slot-chip-avail">Trống • {shortHours(slot.hours)}</span>
                         )}
                       </div>
                       <div className="mb-slot-compact-sub">
@@ -2105,7 +2153,7 @@ function MapBooking() {
                     Chi Tiết Khung Giờ: {detailSlot.start} - {detailSlot.end}
                   </h3>
                   <p className="mb-slot-modal-sub">
-                    {selectedCourt.name} • {String(detailSlot.hours).replace('.', ',')} giờ thi đấu
+                    {selectedCourt.name} • {formatHours(detailSlot.hours)} thi đấu
                   </p>
                 </div>
               </div>

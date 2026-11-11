@@ -24,8 +24,6 @@ import {
   voteLfgCancelRequest,
   lfgSkillLabel,
 } from '../../api/player/lfgApi.js'
-import * as communityApi from '../../api/player/communityApi.js'
-import { ReportModal } from '../../components/common/ReportModal.jsx'
 import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
@@ -39,7 +37,9 @@ import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getBookingQrTicket } from '../../api/player/bookingApi.js'
 import { vnClock } from '../../utils/vnTime.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
-import { getMySports, readLocalAvatar } from '../../api/player/profileApi.js'
+import { getMySports } from '../../api/player/profileApi.js'
+import { getOnboarding } from '../../api/player/ratingApi.js'
+import { reverseGeocode } from '../../utils/geolocation.js'
 import {
   SPORT_CATALOG,
   normalizeSportKey,
@@ -51,6 +51,7 @@ import {
   buildPersonalizedLfgSuggestions,
   calculateDistanceFromRegisteredAddress,
   getDistanceRangeInfo,
+  haversineKm,
 } from './lfgSuggestionEngine.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
@@ -294,23 +295,6 @@ function CommunityFeed() {
   }, [])
   const [isSubmittingCancelReq, setIsSubmittingCancelReq] = useState(false)
 
-  // Bảng tin cộng đồng (14 API /api/v1/community/*)
-  const [communityPosts, setCommunityPosts] = useState([])
-  const [isLoadingCommunity, setIsLoadingCommunity] = useState(false)
-  const [communitySubTab, setCommunitySubTab] = useState('all') // 'all' | 'my'
-  const [newPostContent, setNewPostContent] = useState('')
-  const [newPostImage, setNewPostImage] = useState(null)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
-  const [isSubmittingPost, setIsSubmittingPost] = useState(false)
-  const [commentsByPostId, setCommentsByPostId] = useState({})
-  const [openCommentsPostId, setOpenCommentsPostId] = useState(null)
-  const [commentInputs, setCommentInputs] = useState({})
-  const [commentRangesByPostId, setCommentRangesByPostId] = useState({})
-  const [editingCommentState, setEditingCommentState] = useState(null) // { postId, commentId, content, createdAt }
-  const [communityReportTarget, setCommunityReportTarget] = useState(null)
-  const [editingPost, setEditingPost] = useState(null)
-
-
   // Sports filter state: 'all' | 'pickleball' | 'badminton'
   const [activeSportFilter, setActiveSportFilter] = useState('all')
   const [profileSports, setProfileSports] = useState(() => loadProfileRegisteredSports())
@@ -404,50 +388,42 @@ function CommunityFeed() {
     return () => { cancelled = true }
   }, [lfgReload, selectedFormat])
 
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (chưa khai thì hiện 'Chưa đặt khu vực')
-  const [userProfileLocation, setUserProfileLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.location) return parsed.location
-      }
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'Chưa đặt khu vực'
-  })
+  // Vị trí ghép trận lấy từ khảo sát người chơi (GET /api/auth/me/onboarding): tọa độ + bán kính sẵn sàng đi,
+  // tên khu vực tra từ tọa độ. Chưa khảo sát vị trí thì hiện 'Chưa đặt khu vực'.
+  const [playerArea, setPlayerArea] = useState({ coords: null, radiusKm: null, name: '' })
+  useEffect(() => {
+    let cancelled = false
+    getOnboarding()
+      .then((o) => {
+        if (cancelled || o?.latitude == null || o?.longitude == null) return
+        const coords = { lat: Number(o.latitude), lng: Number(o.longitude) }
+        setPlayerArea({ coords, radiusKm: Number(o.radiusKm) || null, name: '' })
+        reverseGeocode(coords.lat, coords.lng).then((name) => {
+          if (!cancelled && name) setPlayerArea((prev) => ({ ...prev, name }))
+        })
+      })
+      .catch((err) => console.warn('LFG: Không tải được khảo sát người chơi:', err))
+    return () => { cancelled = true }
+  }, [])
+  const userProfileLocation = playerArea.name
+    || (playerArea.coords ? `${playerArea.coords.lat.toFixed(4)}, ${playerArea.coords.lng.toFixed(4)}` : '')
+  const userLocationLabel = userProfileLocation || 'Chưa đặt khu vực'
+  // Khoảng cách thật (km) từ vị trí khảo sát tới kèo; thiếu tọa độ thì null
+  const realDistanceKm = (m) => (playerArea.coords && m?.lat != null && m?.lng != null
+    ? Math.round(haversineKm(playerArea.coords.lat, playerArea.coords.lng, Number(m.lat), Number(m.lng)) * 10) / 10
+    : null)
 
   // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
   useEffect(() => {
-    const handleProfileUpdate = (e) => {
-      const loc = e.detail?.location
-      if (loc) setUserProfileLocation(loc)
-      else {
-        try {
-          const saved = localStorage.getItem('player_profile_data')
-          if (saved) {
-            const parsed = JSON.parse(saved)
-            if (parsed.location) setUserProfileLocation(parsed.location)
-          }
-        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-      }
-    }
     const handleStorage = (e) => {
       if ((e.key === 'player_sports_data' || e.key === 'player_registered_sports') && e.newValue) {
         setProfileSports(loadProfileRegisteredSports())
       }
-      if (e.key === 'player_profile_data' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue)
-          if (parsed.location) setUserProfileLocation(parsed.location)
-        } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-      }
     }
     const handleSportsUpdate = () => setProfileSports(loadProfileRegisteredSports())
-    window.addEventListener('player-profile-updated', handleProfileUpdate)
     window.addEventListener('player-sports-updated', handleSportsUpdate)
     window.addEventListener('storage', handleStorage)
     return () => {
-      window.removeEventListener('player-profile-updated', handleProfileUpdate)
       window.removeEventListener('player-sports-updated', handleSportsUpdate)
       window.removeEventListener('storage', handleStorage)
     }
@@ -462,6 +438,12 @@ function CommunityFeed() {
     if (normU.includes('binh thanh') && (normM.includes('binh thanh') || normM.includes('dinh bo linh'))) return true
     if (normU.includes('quan 7') && (normM.includes('quan 7') || normM.includes('huynh tan phat'))) return true
     return false
+  }
+  // Kèo gần người chơi: có tọa độ thì so với bán kính trong khảo sát (mặc định 5 km), không thì so theo tên khu vực
+  const isNearMe = (m) => {
+    const km = realDistanceKm(m)
+    if (km != null) return km <= (playerArea.radiusKm || 5)
+    return isMatchNearUser(m?.location, userProfileLocation)
   }
 
   // New match form state
@@ -536,231 +518,6 @@ function CommunityFeed() {
       loadMyCards()
     } else if (newTab === 'joined') {
       loadJoinedCards()
-    } else if (newTab === 'community_posts') {
-      loadCommunityPosts(communitySubTab)
-    }
-  }
-
-  // Tải danh sách bài viết trên Bảng tin cộng đồng (GET /api/v1/community/posts hoặc /my-posts)
-  const loadCommunityPosts = async (subTab = communitySubTab) => {
-    setIsLoadingCommunity(true)
-    try {
-      let res
-      if (subTab === 'my') {
-        res = await communityApi.getMyCommunityPosts()
-      } else {
-        res = await communityApi.getCommunityPosts()
-      }
-      const items = res?.items || (Array.isArray(res) ? res : [])
-      setCommunityPosts(items)
-    } catch (err) {
-      console.warn('[CommunityFeed] Không thể tải bài viết cộng đồng:', err)
-      setCommunityPosts([])
-      toast.error(err?.message || 'Không tải được bài viết cộng đồng.')
-    } finally {
-      setIsLoadingCommunity(false)
-    }
-  }
-
-  // Upload ảnh bài viết: POST /api/v1/community/posts/images
-  const handleUploadPostImage = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setIsUploadingImage(true)
-    try {
-      const res = await communityApi.uploadPostImage(file)
-      const url = res?.url || (typeof res === 'string' ? res : null)
-      if (url) setNewPostImage(url)
-    } catch (err) {
-      toast.error(err?.message || 'Không tải được ảnh, vui lòng thử lại.')
-    } finally {
-      setIsUploadingImage(false)
-    }
-  }
-
-  // Đăng bài viết mới: POST /api/v1/community/posts
-  const handleCreateCommunityPost = async (e) => {
-    if (e) e.preventDefault()
-    if (!newPostContent.trim()) {
-      toast.warning('Vui lòng nhập nội dung bài viết!')
-      return
-    }
-    setIsSubmittingPost(true)
-    try {
-      await communityApi.createCommunityPost({
-        content: newPostContent.trim(),
-        mediaUrls: newPostImage ? [newPostImage] : [],
-      })
-      setNewPostContent('')
-      setNewPostImage(null)
-      setToastMessage({
-        title: 'Đăng Bài Thành Công',
-        desc: 'Bài viết của bạn đã được xuất bản trên Bảng tin cộng đồng!',
-        type: 'success',
-      })
-      loadCommunityPosts(communitySubTab)
-    } catch (err) {
-      console.warn('[CommunityFeed] Lỗi khi đăng bài:', err)
-      setToastMessage({
-        title: 'Đã xuất bản (Mô phỏng)',
-        desc: 'Bài viết đã được hiển thị trên bảng tin.',
-        type: 'success',
-      })
-      const myAvatar = currentUser.avatarUrl || readLocalAvatar() || ''
-      const localPost = {
-        id: `local-${Date.now()}`,
-        authorName: currentUser.name || 'Bạn',
-        authorAvatarUrl: myAvatar,
-        authorAvatar: myAvatar,
-        sportBadge: 'GIAO LƯU',
-        createdAt: new Date().toISOString(),
-        content: newPostContent.trim(),
-        mediaUrls: newPostImage ? [newPostImage] : [],
-        likeCount: 0,
-        isLikedByMe: false,
-        isLiked: false,
-        commentCount: 0,
-        isMine: true,
-        isOwn: true,
-      }
-      setCommunityPosts([localPost, ...communityPosts])
-      setNewPostContent('')
-      setNewPostImage(null)
-    } finally {
-      setIsSubmittingPost(false)
-    }
-  }
-
-  // Thích / Bỏ thích bài viết: POST / DELETE /api/v1/community/posts/{postId}/like
-  const handleToggleLikePost = async (postId, currentlyLiked) => {
-    setCommunityPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const nextLiked = !currentlyLiked
-          return {
-            ...p,
-            isLiked: nextLiked,
-            isLikedByMe: nextLiked,
-            likeCount: nextLiked ? (p.likeCount || 0) + 1 : Math.max(0, (p.likeCount || 0) - 1),
-          }
-        }
-        return p
-      })
-    )
-    try {
-      if (currentlyLiked) {
-        await communityApi.unlikeCommunityPost(postId)
-      } else {
-        await communityApi.likeCommunityPost(postId)
-      }
-    } catch (err) {
-      toast.error(err?.message || 'Không thích / bỏ thích được bài viết.')
-    }
-  }
-
-  // Mở/Đóng và tải bình luận: GET /api/v1/community/posts/{postId}/comments
-  const handleToggleComments = async (postId) => {
-    if (openCommentsPostId === postId) {
-      setOpenCommentsPostId(null)
-      return
-    }
-    setOpenCommentsPostId(postId)
-    try {
-      const res = await communityApi.getPostComments(postId)
-      const list = res?.items || (Array.isArray(res) ? res : [])
-      setCommentsByPostId((prev) => ({ ...prev, [postId]: list }))
-    } catch (err) {
-      toast.error(err?.message || 'Không tải được bình luận.')
-    }
-  }
-
-  // Thêm bình luận: POST /api/v1/community/posts/{postId}/comments
-  const handleAddPostComment = async (postId) => {
-    const text = commentInputs[postId]?.trim()
-    if (!text) return
-    try {
-      await communityApi.createPostComment(postId, { content: text })
-      setCommentInputs((prev) => ({ ...prev, [postId]: '' }))
-      const res = await communityApi.getPostComments(postId)
-      const list = res?.items || (Array.isArray(res) ? res : [])
-      setCommentsByPostId((prev) => ({ ...prev, [postId]: list }))
-      setCommunityPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p))
-      )
-    } catch (err) {
-      console.warn('[CommunityFeed] Lỗi gửi bình luận:', err)
-      toast.error(err?.message || 'Không gửi được bình luận.')
-    }
-  }
-
-  // Chỉnh sửa bình luận (giới hạn trong 15 phút kể từ lúc đăng)
-  const handleSaveEditComment = async () => {
-    if (!editingCommentState) return
-    const { postId, commentId, content, createdAt } = editingCommentState
-    if (!content.trim()) {
-      toast.error('Nội dung bình luận không được để trống.')
-      return
-    }
-    try {
-      await communityApi.updatePostComment(commentId, content.trim(), createdAt)
-      const res = await communityApi.getPostComments(postId)
-      const list = res?.items || (Array.isArray(res) ? res : [])
-      setCommentsByPostId((prev) => ({ ...prev, [postId]: list }))
-      setEditingCommentState(null)
-      toast.success('Đã cập nhật bình luận.')
-    } catch (err) {
-      toast.error(err?.message || 'Không thể sửa bình luận.')
-    }
-  }
-
-  // Xóa bình luận: DELETE /api/v1/community/comments/{commentId}
-  const handleDeleteComment = async (postId, commentId) => {
-    if (!(await confirmDialog('Bạn có chắc muốn xóa bình luận này?'))) return
-    try {
-      await communityApi.deletePostComment(commentId)
-      setCommentsByPostId((prev) => ({
-        ...prev,
-        [postId]: (prev[postId] || []).filter((c) => c.id !== commentId),
-      }))
-      setCommunityPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, commentCount: Math.max(0, (p.commentCount || 0) - 1) } : p))
-      )
-    } catch (err) {
-      toast.error(err?.message || 'Không xóa được bình luận.')
-    }
-  }
-
-  // Xóa bài viết: DELETE /api/v1/community/posts/{postId}
-  const handleDeleteCommunityPost = async (postId) => {
-    if (!(await confirmDialog('Bạn có chắc chắn muốn xóa bài viết này không?'))) return
-    try {
-      await communityApi.deleteCommunityPost(postId)
-      setCommunityPosts((prev) => prev.filter((p) => p.id !== postId))
-      setToastMessage({
-        title: 'Đã Xóa Bài Viết',
-        desc: 'Bài viết đã được xóa khỏi bảng tin cộng đồng.',
-        type: 'success',
-      })
-    } catch (err) {
-      toast.error(err?.message || 'Không xóa được bài viết.')
-    }
-  }
-
-  // Chỉnh sửa bài viết: PUT /api/v1/community/posts/{postId}
-  const handleSaveEditPost = async (postId, content) => {
-    try {
-      await communityApi.updateCommunityPost(postId, { content })
-      setCommunityPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, content } : p))
-      )
-      setEditingPost(null)
-      setToastMessage({
-        title: 'Cập Nhật Thành Công',
-        desc: 'Nội dung bài viết đã được lưu.',
-        type: 'success',
-      })
-    } catch (err) {
-      toast.error(err?.message || 'Không cập nhật được bài viết.')
     }
   }
 
@@ -874,7 +631,6 @@ function CommunityFeed() {
       fetchMyCards('all')
       fetchJoinedCards()
     }
-    loadCommunityPosts('all')
     getMySports()
       .then((serverSports) => setProfileSports(loadProfileRegisteredSports(serverSports)))
       .catch(() => setProfileSports(loadProfileRegisteredSports()))
@@ -1254,7 +1010,6 @@ function CommunityFeed() {
     learnedDesires,
     facilities: facilitiesList,
     matches,
-    communityPosts,
     activeFilters: {
       sport: activeSportFilter === 'all' ? 'profile_matched' : activeSportFilter,
       timeSlots: selectedTimeSlots,
@@ -1300,7 +1055,7 @@ function CommunityFeed() {
 
   const filteredMatches = matches
     .map((m) => {
-      const distanceKm = calculateDistanceFromRegisteredAddress({
+      const distanceKm = realDistanceKm(m) ?? calculateDistanceFromRegisteredAddress({
         targetAddress: m.location || m.facilityAddress || m.title || '',
         registeredAddress: userProfileLocation,
         targetLat: m.lat ?? null,
@@ -1354,8 +1109,8 @@ function CommunityFeed() {
       return true
     })
     .sort((a, b) => {
-      const aNear = isMatchNearUser(a.location, userProfileLocation) ? 1 : 0
-      const bNear = isMatchNearUser(b.location, userProfileLocation) ? 1 : 0
+      const aNear = isNearMe(a) ? 1 : 0
+      const bNear = isNearMe(b) ? 1 : 0
       return bNear - aNear
     })
 
@@ -1378,7 +1133,7 @@ function CommunityFeed() {
         <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF3C7] text-[#92400E] font-bold text-[11px] border border-[#FDE68A]">
             <span className="material-symbols-outlined text-[13px] text-[#D97706]">location_on</span>
-            <span>Vị trí ghép: {userProfileLocation}</span>
+            <span>Vị trí ghép: {userLocationLabel}</span>
           </div>
           {!isLoadingLfgs && !lfgListError && (
             <span className="text-gray-500 font-medium text-[12px]">{matches.length} kèo đang mở</span>
@@ -1462,24 +1217,6 @@ function CommunityFeed() {
             )}
           </button>
 
-          {/* Bảng tin cộng đồng đã tách thành trang riêng /feed (mục "Cộng đồng" trên sidebar) */}
-          <button
-            onClick={() => handleTabChange('community_posts')}
-            className={`flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
-              activeMainTab === 'community_posts'
-                ? 'bg-[#3B6817] text-white shadow-md shadow-[#3B6817]/25'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200/80'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[20px]">dynamic_feed</span>
-            <span>Bảng tin Cộng đồng</span>
-            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-            {communityPosts.length > 0 && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeMainTab === 'community_posts' ? 'bg-white text-[#3B6817]' : 'bg-[#EAF7EE] text-[#15803D]'}`}>
-                {communityPosts.length}
-              </span>
-            )}
-          </button>
         </div>
 
         {/* Filter Bar Chips (Hiển thị khi ở Tab Sàn Ghép Trận) */}
@@ -1600,7 +1337,7 @@ function CommunityFeed() {
               onChange={(e) => setDistanceFilter(e.target.value)}
               className="appearance-none bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2 pr-8 rounded-xl border border-gray-200 cursor-pointer focus:outline-none whitespace-nowrap"
             >
-              <option value="all">Khoảng cách: Toàn TP</option>
+              <option value="all">Mọi khoảng cách</option>
               <option value="5km">Dưới 5 km</option>
               <option value="10km">Dưới 10 km</option>
               <option value="district">Cùng quận/huyện</option>
@@ -1746,10 +1483,10 @@ function CommunityFeed() {
                           >
                             {match.slotTag}
                           </span>
-                          {isMatchNearUser(match.location, userProfileLocation) && (
+                          {isNearMe(match) && (
                             <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                               <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
-                              Gần bạn ({userProfileLocation})
+                              {realDistanceKm(match) != null ? `Gần bạn (~${realDistanceKm(match)} km)` : `Gần bạn (${userProfileLocation})`}
                             </span>
                           )}
                         </div>
@@ -2353,473 +2090,10 @@ function CommunityFeed() {
               </div>
             )}
 
-            {/* TAB 4: BẢNG TIN CỘNG ĐỒNG (14 API /api/v1/community/*) */}
-            {activeMainTab === 'community_posts' && (
-              <div className="flex flex-col gap-5">
-                {/* Community Header Banner */}
-                <div className="bg-gradient-to-r from-[#1C3524] to-[#2D5F3F] rounded-2xl p-5 text-white shadow-md flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="material-symbols-outlined text-[#34D399] text-[22px]">dynamic_feed</span>
-                      <h2 className="text-lg font-black tracking-tight">Bảng Tin Thể Thao Cộng Đồng</h2>
-                    </div>
-                    <p className="text-xs text-[#A7F3D0] max-w-xl">
-                      Không gian chia sẻ kinh nghiệm, tìm bạn giao lưu và cập nhật những trận đấu sôi động nhất trên SportNexus.
-                    </p>
-                  </div>
-
-                  {/* Subtabs Filter: Tất cả vs Bài của tôi */}
-                  <div className="flex items-center gap-1.5 bg-black/25 p-1 rounded-xl backdrop-blur-sm">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCommunitySubTab('all')
-                        loadCommunityPosts('all')
-                      }}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        communitySubTab === 'all'
-                          ? 'bg-white text-[#1C3524] shadow-sm'
-                          : 'text-white/80 hover:text-white'
-                      }`}
-                    >
-                      Tất Cả Bài Viết
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCommunitySubTab('my')
-                        loadCommunityPosts('my')
-                      }}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        communitySubTab === 'my'
-                          ? 'bg-white text-[#1C3524] shadow-sm'
-                          : 'text-white/80 hover:text-white'
-                      }`}
-                    >
-                      Bài Viết Của Tôi
-                    </button>
-                  </div>
-                </div>
-
-                {/* Create Post Card (POST /api/v1/community/posts & /posts/images) */}
-                <div className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-3">
-                  <div className="flex items-start gap-3">
-                    {(currentUser.avatarUrl || readLocalAvatar()) ? (
-                      <img
-                        src={currentUser.avatarUrl || readLocalAvatar()}
-                        alt={currentUser.name || 'Avatar'}
-                        className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-[#3B6817] text-white font-bold text-xs flex items-center justify-center shrink-0">
-                        {initialsOf(currentUser.name)}
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <textarea
-                        value={newPostContent}
-                        onChange={(e) => setNewPostContent(e.target.value)}
-                        placeholder="Bạn đang muốn chia sẻ điều gì về buổi tập hoặc tìm bạn cùng sân hôm nay?..."
-                        rows={3}
-                        className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#3B6817] focus:ring-1 focus:ring-[#3B6817] resize-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Image Attachment Preview */}
-                  {newPostImage && (
-                    <div className="relative inline-block self-start ml-13">
-                      <img
-                        src={newPostImage}
-                        alt="Đính kèm"
-                        className="w-28 h-28 object-cover rounded-xl border border-gray-200 shadow-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setNewPostImage(null)}
-                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center text-xs font-bold shadow-md cursor-pointer hover:bg-red-700"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between border-t border-gray-100 pt-3 flex-wrap gap-2">
-                    {/* Attach Image button */}
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-[#3B6817] cursor-pointer px-3 py-1.5 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all">
-                      <span className="material-symbols-outlined text-[18px] text-[#3B6817]">image</span>
-                      <span>{isUploadingImage ? 'Đang tải ảnh lên...' : 'Đính kèm ảnh'}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleUploadPostImage}
-                        disabled={isUploadingImage}
-                      />
-                    </label>
-
-                    {/* Publish Post Button */}
-                    <button
-                      type="button"
-                      disabled={isSubmittingPost || !newPostContent.trim()}
-                      onClick={handleCreateCommunityPost}
-                      className="px-5 py-2 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md shadow-[#3B6817]/25 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">send</span>
-                      <span>{isSubmittingPost ? 'Đang đăng...' : 'Đăng Bài Viết'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Posts Feed Stream (sắp xếp bài viết mới nhất lên đầu trang dựa theo thời gian thực) */}
-                {isLoadingCommunity ? (
-                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-[#3B6817] animate-spin">progress_activity</span>
-                    <p className="text-sm font-bold text-gray-700">Đang tải bảng tin cộng đồng...</p>
-                  </div>
-                ) : communityPosts.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center flex flex-col items-center justify-center gap-3">
-                    <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
-                      <span className="material-symbols-outlined text-3xl">chat_bubble_outline</span>
-                    </div>
-                    <p className="font-black text-gray-800 text-base">Chưa có bài viết nào</p>
-                    <p className="text-xs text-gray-500 max-w-md">
-                      Hãy là người đầu tiên chia sẻ khoảnh khắc thể thao lên cộng đồng SportNexus!
-                    </p>
-                  </div>
-                ) : (
-                  communityPosts
-                    .slice()
-                    .sort((a, b) => communityApi.parseCommunityTimeMs(b.createdAt) - communityApi.parseCommunityTimeMs(a.createdAt))
-                    .map((post) => {
-                      const postId = post.id || post.postId
-                      const isCommentsOpen = openCommentsPostId === postId
-                      const rawComments = commentsByPostId[postId] || []
-                      const activeCmtRange = commentRangesByPostId[postId] || 'newest'
-                      const sortedNewestCmts = rawComments
-                        .slice()
-                        .sort((a, b) => communityApi.parseCommunityTimeMs(b.createdAt) - communityApi.parseCommunityTimeMs(a.createdAt))
-                      const comments =
-                        activeCmtRange === 'all'
-                          ? sortedNewestCmts
-                          : activeCmtRange === 'relevant'
-                          ? rawComments.slice().sort((a, b) => {
-                              const sa = (Number(a.likeCount) || 0) + ((a.replies || []).length || 0) * 2
-                              const sb = (Number(b.likeCount) || 0) + ((b.replies || []).length || 0) * 2
-                              if (sb !== sa) return sb - sa
-                              return communityApi.parseCommunityTimeMs(b.createdAt) - communityApi.parseCommunityTimeMs(a.createdAt)
-                            })
-                          : sortedNewestCmts.slice(0, 5)
-
-                      const isMyPost = Boolean(post.isMine || post.isOwn || communitySubTab === 'my')
-                      const postAvatar = isMyPost
-                        ? currentUser.avatarUrl || readLocalAvatar() || post.authorAvatarUrl || post.authorAvatar
-                        : post.authorAvatarUrl || post.authorAvatar
-                      const likedPost = Boolean(post.isLikedByMe ?? post.isLiked)
-
-                      return (
-                        <div
-                          key={postId}
-                          className="bg-white rounded-2xl border border-gray-200/90 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-all"
-                        >
-                          {/* Post Header */}
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              {postAvatar ? (
-                                <img
-                                  src={postAvatar}
-                                  alt={post.authorName || 'Tác giả'}
-                                  className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-[#3B6817] text-white font-bold text-xs flex items-center justify-center shrink-0">
-                                  {initialsOf(post.authorName || 'SN')}
-                                </div>
-                              )}
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm text-[#111827]">{post.authorName || 'Vận động viên SportNexus'}</span>
-                                  {(post.sportName || post.sportBadge) && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#EAF7EE] text-[#15803D]">
-                                      {post.sportName || post.sportBadge}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-[11px] text-gray-400 block">
-                                  {post.createdAt ? new Date(post.createdAt).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : 'Vừa xong'}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Post Action Menu (if own post: Edit & Delete) */}
-                            {isMyPost && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingPost(post)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                                  title="Sửa bài viết"
-                                >
-                                  <span className="material-symbols-outlined text-[17px]">edit</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteCommunityPost(postId)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-700 hover:bg-red-50 transition-colors"
-                                  title="Xóa bài viết"
-                                >
-                                  <span className="material-symbols-outlined text-[17px]">delete</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Post Content */}
-                          <p className="text-xs sm:text-sm text-gray-800 whitespace-pre-line leading-relaxed">
-                            {post.content}
-                          </p>
-
-                          {/* Post Media (Images) */}
-                          {post.mediaUrls && post.mediaUrls.length > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
-                              {post.mediaUrls.map((imgUrl, i) => (
-                                <img
-                                  key={i}
-                                  src={imgUrl}
-                                  alt="Ảnh đính kèm"
-                                  className="w-full h-56 object-cover rounded-xl border border-gray-100"
-                                />
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Like, Comment & Far-right Report Bar */}
-                          <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-600">
-                            <div className="flex items-center gap-4">
-                              <button
-                                type="button"
-                                onClick={() => handleToggleLikePost(postId, likedPost)}
-                                className={`flex items-center gap-1.5 font-bold transition-colors cursor-pointer ${
-                                  likedPost ? 'text-red-600' : 'text-gray-500 hover:text-red-500'
-                                }`}
-                              >
-                                <span className={`material-symbols-outlined text-[19px] ${likedPost ? 'font-fill' : ''}`}>
-                                  favorite
-                                </span>
-                                <span>{post.likeCount || 0} Thích</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleToggleComments(postId)}
-                                className="flex items-center gap-1.5 font-bold text-gray-500 hover:text-[#3B6817] transition-colors cursor-pointer"
-                              >
-                                <span className="material-symbols-outlined text-[19px]">chat_bubble_outline</span>
-                                <span>{post.commentCount || rawComments.length || 0} Bình luận</span>
-                              </button>
-                            </div>
-
-                            {/* Nút Báo cáo nằm bên phải ngoài cùng */}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCommunityReportTarget({
-                                  targetType: 'COMMUNITY_POST',
-                                  targetId: postId,
-                                  targetUserId: post.authorId || null,
-                                  targetName: `Bài viết của ${post.authorName || 'người chơi'}`,
-                                })
-                              }
-                              className="snx-btn snx-btn--danger snx-btn--sm"
-                              title="Báo cáo bài viết vi phạm tiêu chuẩn cộng đồng"
-                            >
-                              <span className="material-symbols-outlined">flag</span>
-                              <span>Báo cáo</span>
-                            </button>
-                          </div>
-
-                          {/* Comments Drawer */}
-                          {isCommentsOpen && (
-                            <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3 border border-gray-200/80 mt-1">
-                              <div className="snx-comment-range">
-                                <span className="snx-comment-range-label">
-                                  Loại bình luận ({rawComments.length}):
-                                </span>
-                                <div className="snx-comment-range-tabs">
-                                  {[
-                                    { key: 'newest', label: 'Mới nhất' },
-                                    { key: 'relevant', label: 'Phù hợp nhất' },
-                                    { key: 'all', label: `Tất cả (${rawComments.length})` },
-                                  ].map((r) => (
-                                    <button
-                                      key={r.key}
-                                      type="button"
-                                      className={`snx-comment-range-btn ${activeCmtRange === r.key ? 'active' : ''}`}
-                                      onClick={() =>
-                                        setCommentRangesByPostId((prev) => ({ ...prev, [postId]: r.key }))
-                                      }
-                                    >
-                                      {r.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {comments.length === 0 ? (
-                                <p className="text-xs text-gray-400 italic">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
-                              ) : (
-                                <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-                                  {comments.map((cmt) => {
-                                    const cmtName = cmt.userName || cmt.authorName || 'Thành viên'
-                                    const isOwnCmt = Boolean(cmt.isMine || cmt.isOwn)
-                                    const cmtAvatar = isOwnCmt
-                                      ? currentUser.avatarUrl || readLocalAvatar() || cmt.userAvatarUrl || cmt.authorAvatar
-                                      : cmt.userAvatarUrl || cmt.authorAvatar
-                                    const createdMs = communityApi.parseCommunityTimeMs(cmt.createdAt)
-                                    const elapsedMs = createdMs ? Math.max(0, nowMs - createdMs) : Infinity
-                                    const canEditCmt = isOwnCmt && elapsedMs <= communityApi.COMMENT_EDIT_WINDOW_MS
-                                    const editedTs = communityApi.parseCommunityTimeMs(cmt.editedAt || (cmt.updatedAt !== cmt.createdAt ? cmt.updatedAt : null))
-                                    const editedMinutes = editedTs ? Math.floor(Math.max(0, nowMs - editedTs) / 60000) : null
-                                    const editedStatus =
-                                      editedTs
-                                        ? editedMinutes < 1
-                                          ? 'đã sửa vừa xong'
-                                          : editedMinutes < 60
-                                          ? `đã sửa ${editedMinutes} phút trước`
-                                          : `đã sửa ${Math.floor(editedMinutes / 60)} giờ trước`
-                                        : ''
-
-                                    return (
-                                      <div key={cmt.id} className="bg-white p-2.5 rounded-lg border border-gray-200/60 flex flex-col gap-1.5">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                                            {cmtAvatar ? (
-                                              <img
-                                                src={cmtAvatar}
-                                                alt={cmtName}
-                                                className="w-6 h-6 rounded-full object-cover shrink-0"
-                                              />
-                                            ) : (
-                                              <div className="w-6 h-6 rounded-full bg-[#3B6817] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                                                {initialsOf(cmtName)}
-                                              </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-bold text-[11px] text-[#111827]">{cmtName}</span>
-                                                {editedStatus && (
-                                                  <span className="snx-comment-edited">{editedStatus}</span>
-                                                )}
-                                              </div>
-                                              {editingCommentState?.commentId === cmt.id ? (
-                                                <div className="flex items-center gap-1.5 mt-1">
-                                                  <input
-                                                    type="text"
-                                                    value={editingCommentState.content}
-                                                    onChange={(e) =>
-                                                      setEditingCommentState((prev) => ({
-                                                        ...prev,
-                                                        content: e.target.value,
-                                                      }))
-                                                    }
-                                                    className="flex-1 text-xs border border-gray-300 rounded px-2 py-1"
-                                                  />
-                                                  <button
-                                                    type="button"
-                                                    onClick={handleSaveEditComment}
-                                                    className="px-2 py-1 rounded bg-[#3B6817] text-white text-[11px] font-bold"
-                                                  >
-                                                    Lưu
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => setEditingCommentState(null)}
-                                                    className="px-2 py-1 rounded bg-gray-100 text-gray-600 text-[11px]"
-                                                  >
-                                                    Hủy
-                                                  </button>
-                                                </div>
-                                              ) : (
-                                                <p className="text-xs text-gray-700 mt-0.5">{cmt.content}</p>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                        <div className="snx-comment-actions" style={{ margin: '2px 0 0 32px' }}>
-                                          {isOwnCmt && canEditCmt && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                setEditingCommentState({
-                                                  postId,
-                                                  commentId: cmt.id,
-                                                  content: cmt.content,
-                                                  createdAt: cmt.createdAt,
-                                                })
-                                              }
-                                            >
-                                              Sửa
-                                            </button>
-                                          )}
-                                          {isOwnCmt && (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleDeleteComment(postId, cmt.id)}
-                                            >
-                                              Xóa
-                                            </button>
-                                          )}
-                                          <button
-                                            type="button"
-                                            className="snx-comment-report-btn"
-                                            onClick={() =>
-                                              setCommunityReportTarget({
-                                                targetType: 'POST_COMMENT',
-                                                targetId: cmt.id,
-                                                targetUserId: cmt.userId || cmt.authorId || null,
-                                                targetName: `Bình luận của ${cmtName}`,
-                                              })
-                                            }
-                                          >
-                                            <span className="material-symbols-outlined">flag</span>
-                                            Báo cáo
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
-
-                              {/* Add Comment Input */}
-                              <div className="flex items-center gap-2 mt-1">
-                                <input
-                                  type="text"
-                                  value={commentInputs[postId] || ''}
-                                  onChange={(e) => setCommentInputs((prev) => ({ ...prev, [postId]: e.target.value }))}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleAddPostComment(postId)}
-                                  className="flex-1 text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#3B6817]"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddPostComment(postId)}
-                                  className="px-3 py-2 rounded-lg bg-[#3B6817] hover:bg-[#315613] text-white text-xs font-bold shrink-0"
-                                >
-                                  Gửi
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                )}
-              </div>
-            )}
           </div>
 
           {/* ================= RIGHT COLUMN: SIDEBAR CARDS ================= */}
-          <div className="lg:col-span-4 flex flex-col gap-5">
+          <div className="lg:col-span-4 flex flex-col gap-5 min-w-0">
             {/* Card 1: HỒ SƠ GHÉP TRẬN CÁ NHÂN (PROMINENT & HIGHLIGHTED) */}
             <div className="relative rounded-3xl bg-gradient-to-br from-white via-[#F7FCF8] to-[#EEF9F0] border-2 border-[#86EFAC] p-5 sm:p-6 shadow-[0_12px_36px_rgba(45,95,63,0.14)] hover:shadow-[0_16px_44px_rgba(45,95,63,0.2)] transition-all overflow-hidden group">
               {/* Top Glowing Color Accent Line */}
@@ -2831,8 +2105,8 @@ function CommunityFeed() {
               </div>
 
               {/* Header Badge */}
-              <div className="flex items-center justify-between mb-4 relative z-10 gap-2">
-                <div className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <div className="flex flex-wrap items-center justify-between mb-4 relative z-10 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px]">badge</span>
                   <span className="text-[11px] font-black uppercase tracking-wider text-[#1F2937]">
                     Hồ Sơ Ghép Trận Cá Nhân
@@ -2857,7 +2131,7 @@ function CommunityFeed() {
 
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight whitespace-nowrap">
+                    <h4 className="font-black text-[17px] text-[#0F172A] leading-tight break-words min-w-0">
                       {currentUser.name || 'Bạn'}
                     </h4>
                     <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
@@ -2865,9 +2139,21 @@ function CommunityFeed() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 mt-1 text-[12px] text-gray-700 font-bold whitespace-nowrap">
+                  <div className="flex items-start gap-1.5 mt-1 text-[12px] text-gray-700 font-bold">
                     <span className="material-symbols-outlined text-[15px] text-[#15803D] shrink-0">location_on</span>
-                    <span>Vị trí thi đấu: <strong className="text-[#15803D]">{userProfileLocation}</strong></span>
+                    <span className="min-w-0 break-words">
+                      Vị trí thi đấu:{' '}
+                      {userProfileLocation ? (
+                        <strong className="text-[#15803D]">
+                          {userProfileLocation}
+                          {playerArea.radiusKm ? ` (bán kính ${playerArea.radiusKm} km)` : ''}
+                        </strong>
+                      ) : (
+                        <button type="button" onClick={() => navigate('/onboarding')} className="text-[#B45309] underline cursor-pointer">
+                          Chưa đặt khu vực – cập nhật khảo sát
+                        </button>
+                      )}
+                    </span>
                   </div>
 
                   {standing.fairPlay && (
@@ -2888,7 +2174,7 @@ function CommunityFeed() {
 
               {/* Fair Play Score Highlight Box */}
               <div className="mb-4 p-3.5 rounded-2xl bg-white border border-[#D1EBD0] shadow-2xs relative z-10">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-800 whitespace-nowrap shrink-0">
                     <span className="material-symbols-outlined text-[17px] text-red-500">
                       flag
@@ -2909,7 +2195,7 @@ function CommunityFeed() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium whitespace-nowrap">
+                <div className="flex flex-wrap items-center justify-between gap-1 mt-2 pt-1.5 border-t border-gray-100 text-[10.5px] text-gray-500 font-medium">
                   <span className="flex items-center gap-1 text-[#15803D] shrink-0">
                     <span className="material-symbols-outlined text-[13px]">verified</span>
                     Tối thiểu để nhận kèo: {standing.fairPlay?.minClaimScore ?? '—'}
@@ -2920,8 +2206,8 @@ function CommunityFeed() {
 
               {/* 2 Stats Mini Cards */}
               <div className="grid grid-cols-2 gap-3 relative z-10">
-                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
+                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between min-w-0">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
                     Trận giải tính Elo:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
@@ -2930,13 +2216,13 @@ function CommunityFeed() {
                       verified_user
                     </span>
                   </div>
-                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1 whitespace-nowrap">
+                  <span className="text-[11px] text-[#15803D] font-extrabold block mt-1">
                     {standing.personal.length ? `Elo ${standing.personal.length} môn` : 'Chưa có Elo môn nào'}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between">
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1 whitespace-nowrap">
+                <div className="p-3 rounded-2xl bg-white border border-[#DCEBDC] hover:border-[#86EFAC] transition-colors shadow-2xs flex flex-col justify-between min-w-0">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mb-1">
                     Đánh giá cộng đồng:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
@@ -2945,14 +2231,14 @@ function CommunityFeed() {
                       star
                     </span>
                   </div>
-                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1 whitespace-nowrap">
+                  <span className="text-[10.5px] text-gray-500 font-semibold block mt-1">
                     {standing.fairPlay?.ratingCount ? `${standing.fairPlay.ratingCount} lượt đánh giá` : 'Chưa có đánh giá'}
                   </span>
                 </div>
               </div>
 
               {/* Quick Profile Footer Action */}
-              <div className="mt-3.5 pt-3 border-t border-[#DCEBDC] flex items-center justify-between text-[11px] font-bold relative z-10">
+              <div className="mt-3.5 pt-3 border-t border-[#DCEBDC] flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold relative z-10">
                 <span className="text-gray-500">Elo & khảo sát trình độ:</span>
                 <button type="button" onClick={() => navigate('/assessment')} className="inline-flex items-center gap-1 text-[#15803D] bg-[#EAF7EE] px-2 py-0.5 rounded-full cursor-pointer">
                   Xem chi tiết
@@ -4027,7 +3313,7 @@ function CommunityFeed() {
                     </div>
                   </div>
 
-                  {/* Chiều: 12:00 - 17:00 (YÊU CẦU MỚI) */}
+                  {/* Chiều: 12:00 - 17:00 */}
                   <div
                     onClick={() => toggleTimeSlot('afternoon')}
                     className={`relative p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
@@ -4047,10 +3333,7 @@ function CommunityFeed() {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-bold text-[13px] text-[#111827]">Chiều</h4>
-                        <span className="px-1.5 py-0.2 rounded bg-[#FEF3C7] text-[#D97706] text-[9.5px] font-extrabold uppercase">Mới</span>
-                      </div>
+                      <h4 className="font-bold text-[13px] text-[#111827]">Chiều</h4>
                       <p className="font-extrabold text-[12px] text-[#3B6817] mt-0.5">12:00 - 17:00</p>
                       <p className="text-[10.5px] text-gray-500 mt-1 leading-snug">
                         Giao lưu xả stress giữa giờ, rèn kỹ thuật &amp; sân vắng thoáng
@@ -4190,7 +3473,7 @@ function CommunityFeed() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { key: 'all', label: 'Toàn TP.HCM' },
+                      { key: 'all', label: 'Mọi khoảng cách' },
                       { key: '3km', label: 'Dưới 3 km' },
                       { key: '5km', label: 'Dưới 5 km' },
                       { key: '10km', label: 'Dưới 10 km' },
@@ -4606,68 +3889,6 @@ function CommunityFeed() {
         </div>
       )}
 
-      {/* ===================== MODAL: CHỈNH SỬA BÀI VIẾT (PUT /api/v1/community/posts/{postId}) ===================== */}
-      {editingPost && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => setEditingPost(null)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-base font-black text-gray-900">Chỉnh Sửa Bài Viết</h3>
-              <button
-                type="button"
-                onClick={() => setEditingPost(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <textarea
-              rows={4}
-              defaultValue={editingPost.content}
-              id="editPostTextarea"
-              className="w-full text-xs sm:text-sm text-gray-800 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-[#3B6817] resize-none"
-            />
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setEditingPost(null)}
-                className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
-              >
-                Hủy Bỏ
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const val = document.getElementById('editPostTextarea')?.value
-                  if (val) handleSaveEditPost(editingPost.id, val)
-                }}
-                className="px-5 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold text-xs shadow-md"
-              >
-                Lưu Thay Đổi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Báo cáo bài viết / bình luận cộng đồng */}
-      {communityReportTarget && (
-        <ReportModal
-          open={Boolean(communityReportTarget)}
-          onClose={() => setCommunityReportTarget(null)}
-          targetType={communityReportTarget.targetType}
-          targetId={communityReportTarget.targetId}
-          targetUserId={communityReportTarget.targetUserId}
-          targetName={communityReportTarget.targetName}
-        />
-      )}
     </div>
   )
 }

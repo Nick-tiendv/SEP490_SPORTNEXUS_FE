@@ -615,7 +615,31 @@ function CreateMatch() {
       }
     }
 
-    // Tạo mới: Gọi API BE: POST /api/v1/lfgs
+    // Tạo mới: BE đặt ca và trừ 100% tiền sân ngay khi gọi POST /api/v1/lfgs,
+    // nên phải cho chủ kèo xem trước số tiền và xác nhận (modal bên dưới gọi confirmCreateLfg).
+    setSubmitting(false)
+    setPaymentConfirm({ open: true, wallet: null, walletError: '' })
+    getWallet()
+      .then((w) => {
+        setWalletBalance(w.balance)
+        setPaymentConfirm((prev) => (prev.open ? { ...prev, wallet: w } : prev))
+      })
+      .catch((err) => setPaymentConfirm((prev) => (prev.open ? { ...prev, walletError: err?.message || 'Không tải được số dư ví.' } : prev)))
+  }
+
+  // Modal xác nhận thanh toán trước khi tạo kèo
+  const [paymentConfirm, setPaymentConfirm] = useState({ open: false, wallet: null, walletError: '' })
+  const closePaymentConfirm = () => { if (!submitting) setPaymentConfirm({ open: false, wallet: null, walletError: '' }) }
+
+  const confirmCreateLfg = async () => {
+    setSubmitting(true)
+    setCreateError(null)
+    const skillTag =
+      skillLevel === 'beginner'
+        ? 'BEGINNER'
+        : skillLevel === 'pro'
+        ? 'ADVANCED'
+        : 'INTERMEDIATE'
     try {
       await createLfg({
         courtSlotId,
@@ -631,6 +655,7 @@ function CreateMatch() {
       console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
       setCreateError(apiErr?.message || 'Không thể tạo kèo ghép trên hệ thống.')
       setSubmitting(false)
+      setPaymentConfirm({ open: false, wallet: null, walletError: '' })
       return
     }
 
@@ -1889,6 +1914,112 @@ function CreateMatch() {
         </div>
 
       </div>
+
+      {/* Modal xác nhận thanh toán: BE đặt ca và trừ 100% tiền sân từ ví ngay khi tạo kèo */}
+      {paymentConfirm.open && (() => {
+        const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(n) || 0))} đ`
+        const players = (Number(slotsNeeded) || 3) + 1
+        const wallet = paymentConfirm.wallet
+        const available = wallet ? Number(wallet.availableBalance ?? wallet.balance) : null
+        const after = available != null ? available - courtFee : null
+        const notEnough = after != null && after < 0
+        const dateLabel = currentDateStr
+          ? new Date(`${currentDateStr}T00:00:00`).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+          : '—'
+        const rows = [
+          ['Cơ sở', selectedFacility?.name || '—'],
+          ['Sân', selectedSubCourt?.name || '—'],
+          ['Ngày', dateLabel],
+          ['Giờ chơi', preferredTimeRange || '—'],
+          ['Số ca', `${slotCount} ca`],
+        ]
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closePaymentConfirm}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="lfg-pay-title"
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-[#15803D]">account_balance_wallet</span>
+                <h3 id="lfg-pay-title" className="font-black text-[17px] text-[#0F172A]">Xác nhận đặt sân &amp; thanh toán</h3>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Khi xác nhận, hệ thống đặt ca sân và trừ 100% tiền sân từ ví của bạn. Người tham gia sẽ trả lại phần của họ khi nhận suất.
+              </p>
+
+              <dl className="text-[13px] divide-y divide-gray-100 border border-gray-100 rounded-xl px-3.5 mb-3">
+                {rows.map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-3 py-2">
+                    <dt className="text-gray-500 shrink-0">{k}</dt>
+                    <dd className="font-bold text-[#111827] text-right break-words min-w-0">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <dl className="text-[13px] divide-y divide-gray-100 border border-gray-100 rounded-xl px-3.5 mb-3">
+                <div className="flex justify-between gap-3 py-2">
+                  <dt className="text-gray-500">Tổng tiền sân (trừ ngay)</dt>
+                  <dd className="font-black text-[#B91C1C]">{vnd(courtFee)}</dd>
+                </div>
+                <div className="flex justify-between gap-3 py-2">
+                  <dt className="text-gray-500">Phần mỗi người (dự kiến)</dt>
+                  <dd className="font-bold text-[#111827] text-right">
+                    ≈ {vnd(courtFee / players)}
+                    <span className="block text-[10.5px] font-medium text-gray-500">chia đều cho {players} người (gồm bạn)</span>
+                  </dd>
+                </div>
+              </dl>
+
+              <dl className="text-[13px] divide-y divide-gray-100 border border-gray-100 rounded-xl px-3.5 mb-3">
+                <div className="flex justify-between gap-3 py-2">
+                  <dt className="text-gray-500">Số dư ví hiện tại</dt>
+                  <dd className="font-bold text-[#111827]">
+                    {available != null ? vnd(available) : paymentConfirm.walletError ? '—' : 'Đang tải...'}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3 py-2">
+                  <dt className="text-gray-500">Số dư sau khi trừ</dt>
+                  <dd className={`font-black ${notEnough ? 'text-[#B91C1C]' : 'text-[#15803D]'}`}>{after != null ? vnd(after) : '—'}</dd>
+                </div>
+              </dl>
+
+              {paymentConfirm.walletError && (
+                <p role="alert" className="text-xs text-red-600 mb-3">{paymentConfirm.walletError}</p>
+              )}
+              {notEnough && (
+                <p role="alert" className="text-xs text-red-600 mb-3">
+                  Số dư ví không đủ để trả tiền sân. Vui lòng nạp thêm {vnd(-after)}.
+                </p>
+              )}
+              <p className="text-[10.5px] text-gray-500 mb-4">
+                Phần mỗi người là ước tính; số tiền chính xác do hệ thống tính và hiển thị trên kèo sau khi tạo.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closePaymentConfirm}
+                  disabled={submitting}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-60 cursor-pointer"
+                >
+                  Quay lại
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmCreateLfg}
+                  disabled={submitting || available == null || notEnough}
+                  className="px-4 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-sm font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {submitting ? 'Đang xử lý...' : 'Xác nhận & thanh toán'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

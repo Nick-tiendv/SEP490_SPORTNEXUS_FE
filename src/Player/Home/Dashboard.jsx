@@ -740,6 +740,23 @@ export function SportCourtDiagram({ sport, width = 58, height = 32, style = {}, 
 }
 
 // Dữ liệu trận đấu kế tiếp của cả 5 môn thể thao
+// Thanh tiêu đề mục: có nền trắng mờ để chữ không chìm vào ảnh nền
+const SECTION_HEADER_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: '8px 12px',
+  marginBottom: '14px',
+  padding: '10px 14px',
+  background: 'rgba(255, 255, 255, 0.9)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  borderRadius: '12px',
+  border: '1px solid rgba(255, 255, 255, 0.8)',
+  boxShadow: '0 2px 10px rgba(45, 95, 63, 0.05)',
+}
+
 const SPORT_META = {
   badminton: { name: 'Cầu Lông', emoji: '🏸', bg: '#EAF7EE', color: '#15803D', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop' },
   pickleball: { name: 'Pickleball', emoji: '🏓', bg: '#ECFDF5', color: '#047857', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop' },
@@ -755,6 +772,45 @@ const sportKeyOf = (name = '') => {
   if (n.includes('tennis') || n.includes('quần vợt')) return 'tennis'
   return 'badminton'
 }
+// Chuyển 1 cơ sở thành thẻ "Gợi ý sân". Nhận cả 2 dạng dữ liệu của BE:
+// - FacilityResponse (GET /facilities): có courts[] (categoryName, defaultPrice), images/imageItems
+// - FacilitySearchItemResponse (GET /facilities/search): có sports[], minPrice, courtCount, thumbnailUrl
+const toSuggestedCourt = (fac) => {
+  const sportNames = Array.isArray(fac.sports) && fac.sports.length > 0
+    ? fac.sports.map((s) => s?.name)
+    : (fac.courts || []).map((c) => c.categoryName)
+  const sports = Array.from(new Set(sportNames.filter(Boolean).map(sportKeyOf)))
+  const sport = sports[0] || null
+
+  const courtPrices = (fac.courts || []).map((c) => Number(c.defaultPrice)).filter((n) => n > 0)
+  const minPrice = Number(fac.minPrice) > 0 ? Number(fac.minPrice) : (courtPrices.length ? Math.min(...courtPrices) : 0)
+  const courtCount = fac.courtCount ?? fac.courts?.length ?? 0
+
+  const thumb = fac.thumbnailUrl
+    || fac.imageItems?.find((img) => img.isThumbnail)?.url
+    || fac.images?.[0]
+    || SPORT_META[sport]?.img
+    || '/sports-bg.jpg'
+
+  return {
+    id: fac.id,
+    sport,
+    sports,
+    sportEmoji: SPORT_META[sport]?.emoji || '🏟️',
+    slot: fac.openTime && fac.closeTime
+      ? `Mở ${String(fac.openTime).slice(0, 5)} - ${String(fac.closeTime).slice(0, 5)}`
+      : 'Chưa cập nhật giờ mở cửa',
+    dist: fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || '',
+    name: fac.name,
+    surface: fac.description || '',
+    price: `${minPrice ? `Từ ${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${courtCount} sân`,
+    rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
+    img: thumb,
+    isFromApi: true,
+    rawFacility: fac,
+  }
+}
+
 const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
 const whenText = (start, end) => {
   if (!start) return '—'
@@ -865,44 +921,7 @@ function Dashboard() {
       try {
         const raw = await getFacilities()
         if (isMounted && Array.isArray(raw) && raw.length > 0) {
-          const transformed = raw.map((fac) => {
-            const firstCourt = fac.courts?.[0]
-            const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
-              ? 'badminton'
-              : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
-              ? 'pickleball'
-              : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
-              ? 'football'
-              : firstCourt?.categoryName?.toLowerCase().includes('bóng rổ')
-              ? 'basketball'
-              : firstCourt?.categoryName?.toLowerCase().includes('tennis')
-              ? 'tennis'
-              : 'badminton'
-
-            const emoji =
-              sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : sportKey === 'football' ? '⚽' : sportKey === 'basketball' ? '🏀' : '🎾'
-            const prices = (fac.courts || []).map((c) => Number(c.defaultPrice)).filter((n) => n > 0)
-            const minPrice = prices.length ? Math.min(...prices) : 0
-            const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || SPORT_META[sportKey]?.img
-            const distArea = fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || ''
-
-            return {
-              id: fac.id,
-              sport: sportKey,
-              sports: Array.from(new Set((fac.courts || []).map((c) => c.categoryName?.toLowerCase().includes('cầu lông') ? 'badminton' : c.categoryName?.toLowerCase().includes('pickleball') ? 'pickleball' : c.categoryName?.toLowerCase().includes('bóng đá') ? 'football' : c.categoryName?.toLowerCase().includes('tennis') ? 'tennis' : 'badminton'))),
-              sportEmoji: emoji,
-              slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
-              dist: distArea,
-              name: fac.name,
-              surface: fac.description || '',
-              price: `${minPrice ? `${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${fac.courts?.length || 0} sân`,
-              rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
-              img: thumb,
-              isFromApi: true,
-              rawFacility: fac,
-            }
-          })
-          setApiSuggestedCourts(transformed)
+          setApiSuggestedCourts(raw.map(toSuggestedCourt))
         }
       } catch (err) {
         console.warn('Dashboard: Không thể kết nối API /api/v1/facilities:', err)
@@ -922,42 +941,9 @@ function Dashboard() {
         PageSize: 12,
       })
       const results = searchRes?.items || (Array.isArray(searchRes) ? searchRes : [])
-      if (Array.isArray(results) && results.length > 0) {
-        const transformed = results.map((fac) => {
-          const firstCourt = fac.courts?.[0]
-          const sportKey = firstCourt?.categoryName?.toLowerCase().includes('cầu lông')
-            ? 'badminton'
-            : firstCourt?.categoryName?.toLowerCase().includes('pickleball')
-            ? 'pickleball'
-            : firstCourt?.categoryName?.toLowerCase().includes('bóng đá')
-            ? 'football'
-            : firstCourt?.categoryName?.toLowerCase().includes('tennis')
-            ? 'tennis'
-            : 'badminton'
-          const emoji = sportKey === 'badminton' ? '🏸' : sportKey === 'pickleball' ? '🏓' : '⚽'
-          const minPrice = fac.courts?.length ? Math.min(...fac.courts.map((c) => c.defaultPrice || 120000)) : 120000
-          const thumb = fac.imageItems?.find((img) => img.isThumbnail)?.url || fac.images?.[0] || 'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
-          return {
-            id: fac.id,
-            sport: sportKey,
-            sports: [sportKey],
-            sportEmoji: emoji,
-            slot: `Mở ${fac.openTime?.slice(0, 5) || '06:00'} - ${fac.closeTime?.slice(0, 5) || '22:00'}`,
-            dist: fac.address?.includes('Thủ Đức') ? 'Thủ Đức' : 'TP. HCM',
-            name: fac.name,
-            surface: fac.description || 'Sân đạt chuẩn thi đấu',
-            price: `${minPrice.toLocaleString('vi-VN')} đ/h • ${fac.courts?.length || 3} sân`,
-            rating: `${fac.averageRating > 0 ? fac.averageRating : 4.9} ★`,
-            img: thumb,
-            isFromApi: true,
-            rawFacility: fac,
-          }
-        })
-        setApiSuggestedCourts(transformed)
-      } else {
-        // Nếu không có kết quả tìm kiếm, gọi lại danh sách mặc định
-        const all = await getFacilities()
-        if (Array.isArray(all)) setApiSuggestedCourts(all)
+      setApiSuggestedCourts(Array.isArray(results) ? results.map(toSuggestedCourt) : [])
+      if (!Array.isArray(results) || results.length === 0) {
+        toast.info('Không tìm thấy cơ sở phù hợp với từ khóa.')
       }
     } catch (err) {
       toast.error(err?.message || 'Không tìm được cơ sở, vui lòng thử lại.')
@@ -987,12 +973,13 @@ function Dashboard() {
     if (Array.isArray(c.sports) && c.sports.length > 0) {
       return c.sports.some((s) => isSportActive(s))
     }
-    return isSportActive(c.sport)
+    // Cơ sở chưa có sân con / chưa có môn: chỉ hiện khi xem tất cả môn
+    return isAllActive
   })
 
 
   return (
-    <div className="snx-page">
+    <div className="snx-page" style={{ overflowX: 'hidden' }}>
       {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
       <SplitInvites />
 
@@ -1147,6 +1134,8 @@ function Dashboard() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '6px 12px',
             padding: '10px 14px',
             background: 'linear-gradient(90deg, #F0FDF4 0%, #F9FCF9 100%)',
             borderRadius: '12px',
@@ -1155,7 +1144,7 @@ function Dashboard() {
             color: '#374151',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
             <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#15803D' }}>
               filter_list
             </span>
@@ -1191,7 +1180,7 @@ function Dashboard() {
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
           gap: '16px',
           marginBottom: '32px',
         }}
@@ -1208,6 +1197,7 @@ function Dashboard() {
               padding: '20px 18px',
               textDecoration: 'none',
               display: 'block',
+              minWidth: 0,
               border: '1px solid rgba(255, 255, 255, 0.8)',
               boxShadow: '0 4px 18px rgba(45, 95, 63, 0.05)',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1277,14 +1267,7 @@ function Dashboard() {
 
       {/* ===================== SECTION 3: UPCOMING MATCHES ===================== */}
       <section style={{ marginBottom: '32px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '14px',
-          }}
-        >
+        <div style={SECTION_HEADER_STYLE}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
@@ -1558,21 +1541,14 @@ function Dashboard() {
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))',
           gap: '24px',
           marginBottom: '36px',
         }}
       >
         {/* LFG Column */}
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '14px',
-            }}
-          >
+        <div style={{ minWidth: 0 }}>
+          <div style={SECTION_HEADER_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
                 groups
@@ -1744,15 +1720,8 @@ function Dashboard() {
         </div>
 
         {/* Suggested Courts Column */}
-        <div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '14px',
-            }}
-          >
+        <div style={{ minWidth: 0 }}>
+          <div style={SECTION_HEADER_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#15803D' }}>
                 stadium
@@ -1985,7 +1954,7 @@ function Dashboard() {
                       >
                         {c.slot}
                       </span>
-                      <span style={{ fontSize: '11px', color: '#6B7280' }}>• {c.dist}</span>
+                      {c.dist && <span style={{ fontSize: '11px', color: '#6B7280' }}>• {c.dist}</span>}
                     </div>
                     <p
                       style={{
