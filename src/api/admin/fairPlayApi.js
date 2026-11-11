@@ -89,7 +89,14 @@ export async function getFairPlayStatistics() {
   const keys = ['minClaimScore', 'averageScore', 'totalUsers', 'belowThresholdUsers', 'claimBannedUsers', 'totalRatings', 'hiddenRatings', 'ratingsLast30Days']
   return { ...Object.fromEntries(keys.map(key => [key, toNumber(data[key])])), distribution: Object.entries(data.scoreDistribution || {}).map(([range, count]) => ({ range, count: toNumber(count) ?? 0 })) }
 }
+// { minClaimScore, checkInOpenBeforeMinutes } (mở check-in trước giờ chơi bao nhiêu phút, 0 - 180, mặc định 30)
 export async function getFairPlaySettings() {
-  return { minClaimScore: toNumber(unwrap((await apiClient.get('/api/v1/admin/fair-play/settings')).data)?.minClaimScore) }
+  const data = unwrap((await apiClient.get('/api/v1/admin/fair-play/settings')).data)
+  return { minClaimScore: toNumber(data?.minClaimScore), checkInOpenBeforeMinutes: toNumber(data?.checkInOpenBeforeMinutes) }
 }
 export const updateFairPlaySettings = async minClaimScore => unwrap((await apiClient.put('/api/v1/admin/fair-play/settings', { minClaimScore })).data)
+// PUT bắt buộc có minClaimScore: gửi lại ngưỡng đang áp dụng để không bị đổi theo
+export async function updateCheckInOpenBefore(checkInOpenBeforeMinutes) {
+  const { minClaimScore } = await getFairPlaySettings()
+  return unwrap((await apiClient.put('/api/v1/admin/fair-play/settings', { minClaimScore, checkInOpenBeforeMinutes })).data)
+}

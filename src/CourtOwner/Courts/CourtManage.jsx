@@ -80,6 +80,8 @@ const toMinutes = clock => {
 }
 const fromMinutes = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 const roundPrice = value => Math.round(value / 10000) * 10000
+// Thời lượng 1 ca chủ sân chọn cho từng sân (BE: bội số 15 phút, 15 - 480)
+const SLOT_MINUTE_OPTIONS = [30, 45, 60, 90, 120, 150, 180, 240]
 
 function toCourt(raw) {
   return {
@@ -94,6 +96,9 @@ function toCourt(raw) {
     surfaceType: raw.surfaceType ?? null,
     maxPlayers: raw.maxPlayers ?? null,
     teamSize: raw.teamSize ?? null,
+    // null = theo thời lượng mặc định của môn
+    slotMinutes: raw.slotMinutes ?? null,
+    effectiveSlotMinutes: Number(raw.effectiveSlotMinutes) || 120,
   }
 }
 
@@ -122,6 +127,8 @@ const courtPayload = (court, changes) => ({
   surfaceType: court.surfaceType,
   maxPlayers: court.maxPlayers,
   teamSize: court.teamSize,
+  // null = giữ nguyên thời lượng ca; 0 = về theo môn
+  slotMinutes: court.slotMinutes,
   ...changes,
 })
 
@@ -149,7 +156,9 @@ export default function CourtManage() {
   // Giá chỉnh tay theo khu: { [categoryId]: { basePrice, peakPrice } }
   const [zonePrices, setZonePrices] = useState({})
   const [pricingRules, setPricingRules] = useState(DEFAULT_PRICING_RULES)
-  const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00', slotDuration: 120, bufferTime: 0 })
+  const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00' })
+  // Sân đang xem mô phỏng lưới giờ (theo thời lượng ca của sân đó)
+  const [previewCourtId, setPreviewCourtId] = useState(null)
 
   // Bộ mô phỏng tính giá động trực quan
   const [simZoneId, setSimZoneId] = useState('')
@@ -222,6 +231,21 @@ export default function CourtManage() {
       setCourts(prev => prev.map(item => (item.id === court.id ? { ...item, status: nextStatus } : item)))
       syncLayout()
       showToast(`Đã ${nextStatus === 'ACTIVE' ? 'mở lại' : 'tạm ngưng'} ${court.name}!`)
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // Đổi thời lượng ca của 1 sân: PUT court { slotMinutes } ("" = về theo môn → gửi 0)
+  const handleChangeSlotMinutes = async (court, value) => {
+    setBusyId(court.id)
+    setPreviewCourtId(court.id)
+    try {
+      await updateCourt(facilityId, court.id, courtPayload(court, { slotMinutes: value === '' ? 0 : Number(value) }))
+      await reloadCourts()
+      showToast(`Đã đổi thời lượng ca ${court.name}: ${value === '' ? 'theo môn' : `${value} phút`}. Áp dụng cho ca sinh từ bây giờ.`)
     } catch (error) {
       showToast(error.message, 'error')
     } finally {
@@ -358,16 +382,17 @@ export default function CourtManage() {
 
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
 
-  // Các ca trong ngày theo giờ mở/đóng cửa, thời lượng slot và thời gian đệm
+  // Các ca trong ngày theo giờ mở/đóng cửa và thời lượng ca của sân đang xem
+  const previewCourt = courts.find((c) => c.id === previewCourtId) || courts[0] || null
+  const previewMinutes = previewCourt?.effectiveSlotMinutes || 120
   const gridSlots = useMemo(() => {
     const slots = []
     const end = toMinutes(gridConfig.closingTime)
-    const step = gridConfig.slotDuration + gridConfig.bufferTime
-    for (let start = toMinutes(gridConfig.openingTime); start + gridConfig.slotDuration <= end && slots.length < 48; start += step) {
+    for (let start = toMinutes(gridConfig.openingTime); start + previewMinutes <= end && slots.length < 96; start += previewMinutes) {
       slots.push(start)
     }
     return slots
-  }, [gridConfig])
+  }, [gridConfig, previewMinutes])
 
   // Tổng số sân trong cụm
   const totalCourts = courts.length
@@ -1340,7 +1365,7 @@ export default function CourtManage() {
               Cấu hình khung giờ hoạt động & lưới thời gian (Time Grid Slots)
             </h2>
             <p style={{ margin: 0, color: '#1E293B', fontSize: '14px', fontWeight: 600 }}>
-              Thiết lập khung giờ mở cửa, đóng cửa, bước nhảy thời lượng đặt sân và thời gian đệm vệ sinh sân giữa các ca.
+              Thiết lập giờ mở cửa, đóng cửa của cơ sở và thời lượng mỗi ca cho từng sân.
             </p>
           </div>
 
@@ -1379,71 +1404,41 @@ export default function CourtManage() {
               </span>
             </div>
 
-            {/* Bước nhảy khung giờ */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                  Thời Lượng Mỗi Slot (Bước Nhảy)
-                </label>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#047857', background: '#ECFDF5', padding: '2px 8px', borderRadius: '6px', border: '1px solid #A7F3D0' }}>
-                  Cố định 2 tiếng
-                </span>
-              </div>
-              <select
-                value={gridConfig.slotDuration}
-                disabled
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  color: '#0F172A',
-                  background: '#F1F5F9',
-                  cursor: 'not-allowed',
-                }}
-              >
-                <option value={120}>120 phút / slot (2 tiếng - Quy chuẩn toàn hệ thống)</option>
-              </select>
-              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, marginTop: '6px', display: 'block' }}>
-                Theo quy chuẩn toàn hệ thống SportNexus, khung giờ chơi cố định là <strong>2 tiếng / ca</strong> (không hỗ trợ setup 1 tiếng) để đảm bảo đồng bộ lịch đặt sân và ghép trận LFG.
-              </span>
-            </div>
-
-            {/* Thời gian đệm vệ sinh */}
-            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '8px' }}>
-                Thời gian đệm vệ sinh / lau sân
+            {/* Thời lượng ca theo từng sân (PUT court slotMinutes; ca đã sinh giữ nguyên) */}
+            <div style={{ background: '#F8FAFC', padding: '16px', borderRadius: '12px', border: '1px solid #CBD5E1', gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#0F172A', marginBottom: '4px' }}>
+                Thời lượng mỗi ca theo từng sân
               </label>
-              <select
-                value={gridConfig.bufferTime}
-                onChange={(e) => setGridConfig((prev) => ({ ...prev, bufferTime: Number(e.target.value) }))}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  color: '#0F172A',
-                }}
-              >
-                <option value={0}>0 phút (Nối ca liền mạch)</option>
-                <option value={5}>5 phút nghỉ giữa các ca</option>
-                <option value={10}>10 phút lau sàn BWF & nhặt bóng</option>
-                <option value={15}>15 phút</option>
-              </select>
-              <span style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700, marginTop: '6px', display: 'block' }}>
-                Tránh chồng chéo người chơi đến ca sau
+              <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, display: 'block', marginBottom: '10px' }}>
+                Áp dụng cho các ca sinh sau khi đổi (sinh ca hàng loạt và tự sinh hằng ngày). Ca đã sinh giữ nguyên: xóa ca trống ở trang Ca sân rồi sinh lại nếu muốn đổi.
+                Người chơi đặt nhiều ca liền nhau trên cùng sân sẽ được gộp thành 1 đơn, 1 mã QR.
               </span>
+              {courts.length === 0 && <span style={{ fontSize: '13px', color: '#64748B' }}>Cơ sở chưa có sân.</span>}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
+                {courts.map((court) => (
+                  <label key={court.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                    {court.name} <span style={{ fontWeight: 600, color: '#64748B' }}>{court.categoryName}</span>
+                    <select
+                      value={court.slotMinutes == null ? '' : String(court.slotMinutes)}
+                      disabled={busyId === court.id}
+                      onChange={(e) => handleChangeSlotMinutes(court, e.target.value)}
+                      onFocus={() => setPreviewCourtId(court.id)}
+                      style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '14px', fontWeight: 700, color: '#0F172A' }}
+                    >
+                      <option value="">Theo môn ({court.effectiveSlotMinutes} phút)</option>
+                      {court.slotMinutes != null && !SLOT_MINUTE_OPTIONS.includes(court.slotMinutes) && <option value={String(court.slotMinutes)}>{court.slotMinutes} phút</option>}
+                      {SLOT_MINUTE_OPTIONS.map((m) => <option key={m} value={String(m)}>{m} phút</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Time Grid Preview */}
           <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '24px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginBottom: '14px' }}>
-              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày ({gridConfig.openingTime} - {gridConfig.closingTime}) • Khung giờ 2 tiếng / ca
+              Mô Phỏng Trực Quan Lưới Thời Gian Trong Ngày ({gridConfig.openingTime} - {gridConfig.closingTime}) • {previewCourt ? `${previewCourt.name}: ` : ''}{previewMinutes} phút / ca
             </h3>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -1451,7 +1446,7 @@ export default function CourtManage() {
                 const hour = Math.floor(start / 60)
                 const isPeak = hour >= 17 && hour <= 22
                 const isOffpeak = hour >= 9 && hour <= 14
-                const end = start + gridConfig.slotDuration
+                const end = start + previewMinutes
                 return (
                   <div
                     key={start}

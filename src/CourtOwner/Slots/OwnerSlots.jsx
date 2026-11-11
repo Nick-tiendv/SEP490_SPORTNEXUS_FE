@@ -52,7 +52,7 @@ function CourtPicker({ courts, value, onChange, allLabel = 'Tất cả sân' }) 
 
 function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
   const today = toDateKey()
-  const [form, setForm] = useState({ courtIds: [], dateFrom: today, dateTo: addDays(today, 6), openTime: '', closeTime: '', durationMinutes: 60, price: '' })
+  const [form, setForm] = useState({ courtIds: [], dateFrom: today, dateTo: addDays(today, 6), openTime: '', closeTime: '', durationMinutes: '', price: '' })
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
@@ -66,7 +66,8 @@ function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
       dateTo: form.dateTo,
       openTime: toTimeSpan(form.openTime),
       closeTime: toTimeSpan(form.closeTime),
-      durationMinutes: Number(form.durationMinutes) || 60,
+      // Bỏ trống = thời lượng ca chủ sân chọn cho từng sân (trang Sân & giá), chưa chọn thì theo môn
+      durationMinutes: form.durationMinutes === '' ? null : Number(form.durationMinutes),
       price: form.price === '' ? null : Number(form.price),
       priceRules: [],
     }
@@ -95,7 +96,7 @@ function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
   return (
     <form className="snx-card" onSubmit={submit}>
       <h2 className="snx-card-title">Sinh ca hàng loạt</h2>
-      <p className="snx-card-subtitle">Bỏ trống giờ = theo giờ mở cửa của cơ sở. Bỏ trống giá = giá mặc định của từng sân.</p>
+      <p className="snx-card-subtitle">Bỏ trống giờ = theo giờ mở cửa của cơ sở. Bỏ trống thời lượng = theo từng sân (trang Sân &amp; giá). Bỏ trống giá = giá mặc định của từng sân.</p>
       <div className="snx-stack" style={{ gap: 12, marginTop: 12 }}>
         <CourtPicker courts={courts} allLabel={allLabel} value={form.courtIds.filter((id) => courts.some((c) => String(c.id) === id))} onChange={(courtIds) => setForm({ ...form, courtIds })} />
         <div className="snx-form-grid">
@@ -103,7 +104,7 @@ function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
           <label className="snx-field">Đến ngày<input className="snx-input" type="date" min={form.dateFrom} value={form.dateTo} onChange={set('dateTo')} /></label>
           <label className="snx-field">Giờ mở<input className="snx-input" type="time" value={form.openTime} onChange={set('openTime')} /></label>
           <label className="snx-field">Giờ đóng<input className="snx-input" type="time" value={form.closeTime} onChange={set('closeTime')} /></label>
-          <label className="snx-field">Mỗi ca (phút)<input className="snx-input" type="number" min={15} max={480} step={15} value={form.durationMinutes} onChange={set('durationMinutes')} /></label>
+          <label className="snx-field">Mỗi ca (phút)<input className="snx-input" type="number" min={15} max={480} step={15} placeholder="Theo sân" value={form.durationMinutes} onChange={set('durationMinutes')} /></label>
           <label className="snx-field">Giá mỗi ca (đ)<input className="snx-input" type="number" min={0} step={1000} placeholder="Giá mặc định" value={form.price} onChange={set('price')} /></label>
         </div>
         <div className="snx-row"><span className="snx-spacer" /><button type="submit" className="snx-btn snx-btn--primary" disabled={busy || !courts.length}>{busy ? 'Đang sinh…' : 'Sinh ca'}</button></div>

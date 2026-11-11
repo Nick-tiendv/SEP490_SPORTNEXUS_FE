@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
 import { SKILL_VERDICTS, submitSkillFeedback } from '../../api/player/ratingApi.js'
 import ReportModal from '../../components/common/ReportModal.jsx'
+import MyGivenRatings from './MyGivenRatings.jsx'
 import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
@@ -550,7 +551,35 @@ function PostMatchRating() {
           </span>
           Đánh Giá Chất Lượng Cơ Sở Sân Đấu
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveRatingTab('given')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '12px',
+            background: activeRatingTab === 'given' ? '#15803D' : '#ffffff',
+            color: activeRatingTab === 'given' ? '#ffffff' : '#4B5563',
+            border: activeRatingTab === 'given' ? 'none' : '1px solid #E2E8F0',
+            fontWeight: 800,
+            fontSize: '13.5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+            boxShadow: activeRatingTab === 'given' ? '0 4px 12px rgba(21, 128, 61, 0.25)' : 'none',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+            history
+          </span>
+          Đánh Giá Tôi Đã Viết
+        </button>
       </div>
+
+      {/* ===================== TAB 3: ĐÁNH GIÁ FAIR PLAY TÔI ĐÃ VIẾT ===================== */}
+      {activeRatingTab === 'given' && <MyGivenRatings />}
 
       {/* ===================== TAB 1: ĐÁNH GIÁ NGƯỜI CHƠI (FAIR PLAY) ===================== */}
       {activeRatingTab === 'player' && (

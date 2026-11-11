@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getPublicSports as getSportCategories } from '../../api/auth/authApi.js'
@@ -41,26 +41,59 @@ function AssessmentResult({ result }) {
 }
 
 // Lịch sử các lần làm khảo sát môn đang chọn (điểm / Elo của lần cũ giữ nguyên dù bộ câu hỏi đã đổi)
+// Chi tiết 1 lần làm: câu hỏi, đáp án đã chọn, điểm gốc từng câu (answers của BE)
+function AssessmentAnswers({ assessment }) {
+  const answers = assessment.answers || []
+  if (answers.length === 0) return <p className="snx-muted" style={{ margin: 0 }}>Lần làm này chưa có chi tiết câu trả lời.</p>
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {answers.some((a) => !a.isSnapshot) && (
+        <p className="snx-muted" style={{ margin: 0, fontSize: 12 }}>Bài làm cũ: nội dung câu hỏi / đáp án hiển thị theo bộ câu hỏi hiện tại, có thể khác lúc làm.</p>
+      )}
+      <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>
+        {answers.map((a) => (
+          <li key={a.code} style={{ fontSize: 13 }}>
+            <span>{a.question || a.code}</span>
+            {': '}<strong>{a.answer ?? a.value ?? '—'}</strong>
+            {a.points != null && <span className="snx-muted"> ({a.points}{a.maxPoints != null ? `/${a.maxPoints}` : ''} điểm)</span>}
+          </li>
+        ))}
+      </ol>
+      {assessment.flags?.length > 0 && <p className="snx-muted" style={{ margin: 0, fontSize: 12 }}>Bị trừ điểm do câu trả lời mâu thuẫn: {assessment.flags.join('; ')}</p>}
+    </div>
+  )
+}
+
 function AssessmentHistory({ sportId }) {
   const history = useApi(() => getMyAssessmentHistory(sportId), [sportId], { initialData: [] })
+  const [openId, setOpenId] = useState(null)
   if (history.loading || history.error || history.data.length === 0) return null
   return (
     <div className="snx-card" style={{ padding: 16 }}>
       <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Lịch sử khảo sát ({history.data.length})</h3>
       <div className="snx-table-wrap">
         <table className="snx-table">
-          <thead><tr><th>Ngày làm</th><th>Điểm</th><th>Elo khởi đầu</th><th>Bằng chứng</th><th>Phiên bản câu hỏi</th></tr></thead>
+          <thead><tr><th>Ngày làm</th><th>Điểm</th><th>Elo khởi đầu</th><th>Bằng chứng</th><th>Phiên bản câu hỏi</th><th>Chi tiết</th></tr></thead>
           <tbody>
             {history.data.map((a) => {
               const [label, tone] = EVIDENCE_STATUS[a.evidenceStatus] || [a.evidenceStatus || '—', 'gray']
+              const open = openId === a.id
               return (
-                <tr key={a.id}>
-                  <td>{dateVN(a.createdAt)}</td>
-                  <td>{a.score}/100</td>
-                  <td>{a.assignedRating}{a.computedRating > a.assignedRating ? ` (điểm quy ra ${a.computedRating})` : ''}</td>
-                  <td>{a.evidenceStatus && a.evidenceStatus !== 'NONE' ? <span className={`snx-badge snx-badge--${tone}`}>{label}</span> : '—'}</td>
-                  <td>{a.formVersion ?? '—'}</td>
-                </tr>
+                <Fragment key={a.id}>
+                  <tr>
+                    <td>{dateVN(a.createdAt)}</td>
+                    <td>{a.score}/100</td>
+                    <td>{a.assignedRating}{a.computedRating > a.assignedRating ? ` (điểm quy ra ${a.computedRating})` : ''}</td>
+                    <td>{a.evidenceStatus && a.evidenceStatus !== 'NONE' ? <span className={`snx-badge snx-badge--${tone}`}>{label}</span> : '—'}</td>
+                    <td>{a.formVersion ? a.formVersion : 'Bản cũ'}</td>
+                    <td>
+                      <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" aria-expanded={open} onClick={() => setOpenId(open ? null : a.id)}>
+                        {open ? 'Ẩn' : 'Xem chi tiết'}
+                      </button>
+                    </td>
+                  </tr>
+                  {open && <tr><td colSpan={6}><AssessmentAnswers assessment={a} /></td></tr>}
+                </Fragment>
               )
             })}
           </tbody>

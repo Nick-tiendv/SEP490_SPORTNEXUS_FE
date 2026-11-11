@@ -31,6 +31,22 @@ export async function getPendingFairPlayRatings() {
 }
 
 /**
+ * Đánh giá Fair Play tôi đã chấm cho người khác (mới nhất trước)
+ * GET /api/v1/fair-play/my-given-ratings?page=&pageSize=
+ * @returns {Promise<{ items: Array, totalItems: number }>} item: revieweeName, revieweeAvatarUrl, facilityName, courtName, sportName,
+ *   startTime, endTime, contextType (BOOKING | LFG), score, comment, isHidden, hiddenReason, createdAt
+ */
+export async function getMyGivenRatings(page = 1, pageSize = 10) {
+  try {
+    const response = await apiClient.get('/api/v1/fair-play/my-given-ratings', { params: { page, pageSize } })
+    const data = response.data?.data ?? response.data
+    return { items: Array.isArray(data?.items) ? data.items : [], totalItems: Number(data?.totalItems) || 0 }
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
+/**
  * Kiểm tra điều kiện được phép đánh giá cơ sở (đã chơi tại sân)
  * GET /api/v1/facility-reviews/eligibility/{facilityId}
  * @param {string} facilityId
