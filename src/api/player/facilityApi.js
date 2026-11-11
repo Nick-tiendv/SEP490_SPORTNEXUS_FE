@@ -130,6 +130,9 @@ export function transformFacilityToCourt(fac) {
     address: fac.address,
     mapQuery: fac.address,
     district: districtKey,
+    // Tỉnh / quận gốc từ BE (có thể trống): dùng để gợi ý khu vực ở trang tìm sân
+    provinceName: fac.province || '',
+    districtName: fac.district || '',
     lat: Number(fac.latitude) || 10.8490,
     lng: Number(fac.longitude) || 106.7537,
     latitude: Number(fac.latitude) || 10.8490,

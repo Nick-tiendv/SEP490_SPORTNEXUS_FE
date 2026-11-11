@@ -125,15 +125,50 @@ const LEGACY_AREA_COORDS = [
 const AREA_RADIUS_KM = 3
 // Sai số GPS tối đa còn dùng làm điểm xuất phát (vị trí đoán theo IP / Wi-Fi thường > 1 km)
 const GPS_TRUST_METERS = 1000
-// Khu vực chọn nhanh ở ô "Khu vực"
-const QUICK_AREAS = ['Quận 1', 'Quận 2', 'Quận 3', 'Quận 7', 'Bình Thạnh', 'Gò Vấp', 'Tân Bình', 'Thủ Đức']
+// Lọc khung giờ: giờ tròn 05:00 → 23:00 (lịch sân chia theo giờ) và các buổi chọn nhanh
+const HOUR_OPTIONS = Array.from({ length: 19 }, (_, i) => `${String(i + 5).padStart(2, '0')}:00`)
+const TIME_PRESETS = [
+  { label: 'Sáng', from: '05:00', to: '11:00' },
+  { label: 'Chiều', from: '11:00', to: '17:00' },
+  { label: 'Tối', from: '17:00', to: '23:00' },
+]
 
+// Số nút quận gợi ý tối đa ở ô "Khu vực" (nút tỉnh / thành luôn hiện đủ)
+const MAX_DISTRICT_CHIPS = 10
+
+const hasWord = (norm, word) => new RegExp(`(^|[^a-z0-9])${word}($|[^a-z0-9])`).test(norm)
+
+// Tọa độ ước lượng cho tên khu vực quen thuộc ở TP.HCM khi chưa tra được địa chỉ.
+// Chỉ trả khi văn bản nhắc đích danh khu vực đó; khu vực khác (vd Hà Nội) trả null, không đoán bừa về Thủ Đức.
 const localOriginCoords = (text = '') => {
   const norm = normalizeText(text)
-  const legacy = LEGACY_AREA_COORDS.find((area) => area.match.some((m) => new RegExp(`(^|[^a-z0-9])${m}($|[^a-z0-9])`).test(norm)))
+  const legacy = LEGACY_AREA_COORDS.find((area) => area.match.some((m) => hasWord(norm, m)))
   if (legacy) return { lat: legacy.lat, lng: legacy.lng }
-  const district = DISTRICT_COORDS[detectDistrictKey(text)] || DISTRICT_COORDS.thuduc
-  return { lat: district.lat, lng: district.lng }
+  const district = Object.values(DISTRICT_COORDS).find((d) => hasWord(norm, normalizeText(d.name).replace(/^tp\.\s*/, '')))
+  return district ? { lat: district.lat, lng: district.lng } : null
+}
+
+// Gộp các cách ghi tỉnh / thành (BE có dữ liệu ghi khác nhau, vd "TP.HCM", "Hồ Chí Minh")
+const PROVINCE_ALIASES = [
+  { label: 'TP. Hồ Chí Minh', test: /ho chi|hcm|sai gon/ },
+  { label: 'Hà Nội', test: /ha noi/ },
+  { label: 'Đà Nẵng', test: /da nang/ },
+]
+// Tỉnh / quận của cơ sở: ưu tiên trường của BE, thiếu thì lấy từ địa chỉ "…, Quận, Tỉnh"
+const areaOfCourt = (court) => {
+  const parts = String(court.address || '').split(',').map((p) => p.trim()).filter(Boolean)
+  const lastPart = parts[parts.length - 1] || ''
+  const known = [court.provinceName, lastPart].map((p) => p && PROVINCE_ALIASES.find((a) => a.test.test(normalizeText(p)))?.label).find(Boolean)
+  const province = known || court.provinceName || lastPart
+  const district = String(court.districtName || (parts.length >= 3 ? parts[parts.length - 2] : '')).trim()
+  return { province, district: normalizeText(district) === normalizeText(province) ? '' : district }
+}
+// Khung bao quanh các điểm (nới rộng một chút để ghim không nằm sát mép)
+const boundsOfPoints = (points) => {
+  const lats = points.map((p) => p[0])
+  const lngs = points.map((p) => p[1])
+  const pad = 0.01
+  return [[Math.min(...lats) - pad, Math.min(...lngs) - pad], [Math.max(...lats) + pad, Math.max(...lngs) + pad]]
 }
 
 // Tính khoảng cách sân linh hoạt theo vị trí người chơi và tọa độ vệ tinh GPS trực tiếp từ Google Maps
@@ -512,27 +547,70 @@ function MapBooking() {
     return userProfileLocation || 'Thủ Đức'
   }, [customOrigin, userProfileLocation])
 
-  // Tọa độ của vị trí người dùng tự nhập (tra địa chỉ, chờ ngừng gõ 600ms)
+  // Khu vực gợi ý lấy từ chính các cơ sở trong hệ thống (mọi tỉnh / thành, kể cả Hà Nội):
+  // nút tỉnh / thành trước, sau đó các quận có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
+  const areaChips = useMemo(() => {
+    const provinces = new Map()
+    for (const court of apiFacilities) {
+      if (!court.lat || !court.lng) continue
+      const { province, district } = areaOfCourt(court)
+      if (!province) continue
+      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], districts: new Map() }
+      p.ids.add(String(court.id))
+      p.points.push([court.lat, court.lng])
+      if (district) {
+        const value = `${district}, ${province}`
+        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [] }
+        d.ids.add(String(court.id))
+        d.points.push([court.lat, court.lng])
+        p.districts.set(value, d)
+      }
+      provinces.set(province, p)
+    }
+    const provinceList = [...provinces.values()].sort((a, b) => b.ids.size - a.ids.size)
+    const districtList = provinceList
+      .flatMap((p) => [...p.districts.values()])
+      .sort((a, b) => b.ids.size - a.ids.size)
+      .slice(0, MAX_DISTRICT_CHIPS)
+    return { provinces: provinceList, districts: districtList, all: [...provinceList, ...districtList] }
+  }, [apiFacilities])
+  const selectedAreaChip = useMemo(() => {
+    const text = normalizeText(customOrigin.trim())
+    return text ? areaChips.all.find((chip) => normalizeText(chip.value) === text) || null : null
+  }, [areaChips, customOrigin])
+
+  // Tọa độ của vị trí người dùng tự nhập (tra địa chỉ, chờ ngừng gõ 600ms); chọn nút khu vực thì không cần tra
   const [customGeo, setCustomGeo] = useState({ key: '', coords: null })
   useEffect(() => {
     const text = customOrigin.trim()
-    if (!text) return undefined
+    if (!text || selectedAreaChip) return undefined
     let cancelled = false
     const timer = setTimeout(() => {
       geocodeAddress(text).then((coords) => { if (!cancelled) setCustomGeo({ key: text, coords }) })
     }, 600)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [customOrigin])
+  }, [customOrigin, selectedAreaChip])
 
   // Điểm xuất phát dùng cho ghim bản đồ, khoảng cách và chỉ đường:
   // vị trí tự nhập (tọa độ tra được, chưa có thì ước theo khu vực) > GPS thiết bị > khu vực trong hồ sơ.
+  const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
   const originPoint = useMemo(() => {
     const text = customOrigin.trim()
-    if (text) return (customGeo.key === text && customGeo.coords) || localOriginCoords(text)
+    // Nút khu vực: tâm của các cơ sở trong khu vực
+    if (selectedAreaChip) {
+      const pts = selectedAreaChip.points
+      return { lat: pts.reduce((sum, p) => sum + p[0], 0) / pts.length, lng: pts.reduce((sum, p) => sum + p[1], 0) / pts.length }
+    }
+    const typed = text ? (customGeo.key === text && customGeo.coords) || localOriginCoords(text) : null
+    if (typed) return typed
     // Chỉ tin GPS khi đủ chính xác: máy tính không có GPS thường bị đoán theo IP, lệch hàng chục km
-    if (gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS) return gpsCoords
-    return localOriginCoords(userProfileLocation || 'Thủ Đức')
-  }, [customOrigin, customGeo, gpsCoords, userProfileLocation])
+    if (trustedGps) return trustedGps
+    return localOriginCoords(userProfileLocation || '') || { lat: DISTRICT_COORDS.thuduc.lat, lng: DISTRICT_COORDS.thuduc.lng }
+  }, [customOrigin, customGeo, trustedGps, userProfileLocation, selectedAreaChip])
+  // Tên điểm xuất phát hiển thị: khớp với tọa độ đang dùng để tính khoảng cách
+  const originLabel = customOrigin.trim()
+    ? selectedAreaChip?.label && selectedAreaChip.province ? `${selectedAreaChip.label}, ${selectedAreaChip.province}` : customOrigin.trim()
+    : trustedGps ? 'Vị trí hiện tại của bạn' : userProfileLocation || 'Thủ Đức'
 
   // Khu vực người dùng nhập ở ô "Vị trí" (quận 1, quận 2, Thủ Đức…) → chỉ hiện sân trong khu vực đó.
   // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể / chưa tra được → bán kính quanh điểm đó.
@@ -540,15 +618,22 @@ function MapBooking() {
   const searchArea = useMemo(() => {
     const label = customOrigin.trim()
     if (!label || areaOffFor === label) return null
+    // Nút khu vực: lọc đúng các cơ sở thuộc khu vực theo dữ liệu, khung bản đồ bao quanh các cơ sở đó
+    if (selectedAreaChip) {
+      return { label: originLabel, ids: selectedAreaChip.ids, bounds: boundsOfPoints(selectedAreaChip.points) }
+    }
+    const typedPoint = (customGeo.key === label && customGeo.coords) || localOriginCoords(label)
+    if (!typedPoint) return null // chưa tra được địa chỉ: chưa lọc
     const bounds = customGeo.key === label ? customGeo.coords?.bounds : null
     // Ranh giới ≥ ~1 km mới là khu vực; nhỏ hơn là một địa chỉ cụ thể
     if (bounds && (bounds.north - bounds.south > 0.009 || bounds.east - bounds.west > 0.009)) {
       return { label, bounds: [[bounds.south, bounds.west], [bounds.north, bounds.east]] }
     }
-    return { label, center: { lat: originPoint.lat, lng: originPoint.lng }, radiusKm: AREA_RADIUS_KM }
-  }, [customOrigin, customGeo, areaOffFor, originPoint])
+    return { label, center: { lat: typedPoint.lat, lng: typedPoint.lng }, radiusKm: AREA_RADIUS_KM }
+  }, [customOrigin, customGeo, areaOffFor, selectedAreaChip, originLabel])
   const inSearchArea = useCallback((court) => {
     if (!searchArea) return true
+    if (searchArea.ids) return searchArea.ids.has(String(court.id))
     if (!court.lat || !court.lng) return false
     if (searchArea.center) return haversineDistanceKm(searchArea.center.lat, searchArea.center.lng, court.lat, court.lng) <= searchArea.radiusKm
     const [[south, west], [north, east]] = searchArea.bounds
@@ -1334,19 +1419,22 @@ function MapBooking() {
                 )}
               </div>
             </div>
+            {/* Gợi ý khu vực từ các cơ sở đang có: tỉnh / thành (đậm) rồi các quận có sân, kèm số cơ sở */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-              {QUICK_AREAS.map((area) => {
-                const active = normalizeText(customOrigin.trim()) === normalizeText(area)
+              {areaChips.all.map((chip) => {
+                const active = selectedAreaChip?.value === chip.value
+                const isProvince = !chip.province
                 return (
                   <button
-                    key={area}
+                    key={chip.value}
                     type="button"
                     className="mb-origin-chip"
                     aria-pressed={active}
-                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : undefined}
-                    onClick={() => { setCustomOrigin(active ? '' : area); setAreaOffFor('') }}
+                    title={chip.province ? `${chip.label}, ${chip.province}` : chip.label}
+                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : isProvince ? { fontWeight: 800 } : undefined}
+                    onClick={() => { setCustomOrigin(active ? '' : chip.value); setAreaOffFor('') }}
                   >
-                    {area}
+                    {chip.label} ({chip.ids.size})
                   </button>
                 )
               })}
@@ -1437,23 +1525,120 @@ function MapBooking() {
                 {hasTimeFilter ? `${fromTime || '00:00'} – ${toTime || '24:00'}` : 'Mọi khung giờ'}
               </span>
             </div>
+            {/* Chọn nhanh buổi trong ngày */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {TIME_PRESETS.map((preset) => {
+                const active = fromTime === preset.from && toTime === preset.to
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className="mb-origin-chip"
+                    aria-pressed={active}
+                    style={active ? { background: '#2D5F3F', color: '#fff', borderColor: '#2D5F3F' } : undefined}
+                    onClick={() => { setFromTime(active ? '' : preset.from); setToTime(active ? '' : preset.to) }}
+                  >
+                    {preset.label} ({preset.from.slice(0, 2)}h–{preset.to.slice(0, 2)}h)
+                  </button>
+                )
+              })}
+              {hasTimeFilter && (
+                <button type="button" className="mb-origin-chip" onClick={() => { setFromTime(''); setToTime('') }}>Bỏ lọc giờ</button>
+              )}
+            </div>
+            {/* Giờ tròn theo lịch sân (dropdown 24h, không dùng ô time của trình duyệt vì khó chọn phút / AM-PM) */}
             <div className="mb-price-inputs">
               <label className="mb-price-field" htmlFor="mb-from-time">
                 <small>Từ</small>
-                <input id="mb-from-time" type="time" step="1800" value={fromTime} onChange={(e) => setFromTime(e.target.value)} aria-label="Giờ bắt đầu" />
+                <select id="mb-from-time" className="mb-time-select" value={fromTime} onChange={(e) => { const v = e.target.value; setFromTime(v); if (v && toTime && toTime <= v) setToTime('') }} aria-label="Giờ bắt đầu">
+                  <option value="">--:--</option>
+                  {HOUR_OPTIONS.slice(0, -1).map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
               </label>
               <label className="mb-price-field" htmlFor="mb-to-time">
                 <small>Đến</small>
-                <input id="mb-to-time" type="time" step="1800" value={toTime} onChange={(e) => setToTime(e.target.value)} aria-label="Giờ kết thúc" />
+                <select id="mb-to-time" className="mb-time-select" value={toTime} onChange={(e) => setToTime(e.target.value)} aria-label="Giờ kết thúc">
+                  <option value="">--:--</option>
+                  {HOUR_OPTIONS.slice(1).filter((h) => !fromTime || h > fromTime).map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
               </label>
             </div>
             {timeFilterError && <p role="alert" style={{ color: '#dc2626', fontSize: 12, margin: '6px 0 0' }}>{timeFilterError}</p>}
           </section>
 
-          {/* Court list */}
+        </div>
+
+        {/* ===================== RIGHT COLUMN ===================== */}
+        <div className="mb-col">
+          {/* Map */}
+          {/* Real Interactive Google Map */}
+          <section className="mb-card mb-map-section" aria-label="Bản đồ sân">
+            <InteractiveCourtMap
+              courts={filteredCourts}
+              selectedCourt={selectedCourt}
+              onSelectCourt={handleSelectCourt}
+              effectiveOrigin={originLabel}
+              originCoords={originPoint}
+              searchArea={searchArea}
+              isEditingOrigin={isEditingOrigin}
+              setIsEditingOrigin={setIsEditingOrigin}
+              customOrigin={customOrigin}
+              setCustomOrigin={setCustomOrigin}
+              userProfileLocation={userProfileLocation}
+              mapType={mapType}
+              setMapType={setMapType}
+            />
+
+            {/* Thanh thông tin lộ trình & chỉ đường Google Maps gọn gàng, tách biệt bên dưới bản đồ */}
+            {selectedCourt && (() => {
+              const routeInfo = calculateRoute(selectedCourt, effectiveOrigin)
+              const originForDirections = customOrigin.trim() ? customOrigin.trim() : trustedGps
+                ? `${gpsCoords.lat},${gpsCoords.lng}`
+                : effectiveOrigin
+
+              return (
+                <div className="mb-map-footer-route">
+                  <div className="mb-route-left">
+                    <div className="mb-route-icon-box">
+                      <span className="material-symbols-outlined">two_wheeler</span>
+                    </div>
+                    <div className="mb-route-text-box">
+                      <div className="mb-route-headline">
+                        <strong>{routeInfo.eta}</strong>
+                        <span className="mb-route-pill">~{selectedCourt.distance} km</span>
+                      </div>
+                      <div className="mb-route-sub">
+                        Từ <strong>{originLabel}</strong> đến <strong>{selectedCourt.name}</strong> ({selectedCourt.address})
+                      </div>
+                    </div>
+                  </div>
+
+                  <a
+                    id="mb-directions"
+                    className="mb-btn mb-btn--primary mb-route-btn"
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+                      originForDirections
+                    )}&destination=${encodeURIComponent(
+                      selectedCourt.lat && selectedCourt.lng
+                        ? `${selectedCourt.lat},${selectedCourt.lng}`
+                        : selectedCourt.mapQuery
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Mở ứng dụng Google Maps chính thức để chỉ đường từng bước"
+                  >
+                    <span>Chỉ Đường Google Maps</span>
+                    <span className="material-symbols-outlined">open_in_new</span>
+                  </a>
+                </div>
+              )
+            })()}
+          </section>
+
+          {/* Danh sách cụm sân hợp bộ lọc: ngay dưới bản đồ để thấy kết quả lọc liền */}
           <div className="mb-section-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h2>Cụm Sân Gần Bạn</h2>
+              <h2>Cụm Sân Phù Hợp Bộ Lọc</h2>
               {apiStatus === 'connected' && (
                 <span
                   style={{
@@ -1484,7 +1669,7 @@ function MapBooking() {
                 Đang xem sân trong khu vực <strong>{searchArea.label}</strong>
                 {searchArea.center && ` (bán kính ${searchArea.radiusKm} km)`}
               </span>
-              <button type="button" className="mb-origin-chip" onClick={() => setAreaOffFor(searchArea.label)}>Xem tất cả</button>
+              <button type="button" className="mb-origin-chip" onClick={() => setAreaOffFor(customOrigin.trim())}>Xem tất cả</button>
             </div>
           )}
 
@@ -1504,6 +1689,8 @@ function MapBooking() {
             </div>
           ) : null}
 
+          {filteredCourts.length > 0 && (
+          <div className="mb-court-grid">
           {filteredCourts.map((court, i) => {
             const active = court.id === selectedCourt?.id
             const sport = sportOf(court.sport)
@@ -1590,75 +1777,8 @@ function MapBooking() {
               </article>
             )
           })}
-        </div>
-
-        {/* ===================== RIGHT COLUMN ===================== */}
-        <div className="mb-col">
-          {/* Map */}
-          {/* Real Interactive Google Map */}
-          <section className="mb-card mb-map-section" aria-label="Bản đồ sân">
-            <InteractiveCourtMap
-              courts={filteredCourts}
-              selectedCourt={selectedCourt}
-              onSelectCourt={handleSelectCourt}
-              effectiveOrigin={effectiveOrigin}
-              originCoords={originPoint}
-              searchArea={searchArea}
-              isEditingOrigin={isEditingOrigin}
-              setIsEditingOrigin={setIsEditingOrigin}
-              customOrigin={customOrigin}
-              setCustomOrigin={setCustomOrigin}
-              userProfileLocation={userProfileLocation}
-              mapType={mapType}
-              setMapType={setMapType}
-            />
-
-            {/* Thanh thông tin lộ trình & chỉ đường Google Maps gọn gàng, tách biệt bên dưới bản đồ */}
-            {selectedCourt && (() => {
-              const routeInfo = calculateRoute(selectedCourt, effectiveOrigin)
-              const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
-              const originForDirections = customOrigin.trim() ? customOrigin.trim() : trustedGps
-                ? `${gpsCoords.lat},${gpsCoords.lng}`
-                : effectiveOrigin
-
-              return (
-                <div className="mb-map-footer-route">
-                  <div className="mb-route-left">
-                    <div className="mb-route-icon-box">
-                      <span className="material-symbols-outlined">two_wheeler</span>
-                    </div>
-                    <div className="mb-route-text-box">
-                      <div className="mb-route-headline">
-                        <strong>{routeInfo.eta}</strong>
-                        <span className="mb-route-pill">~{selectedCourt.distance} km</span>
-                      </div>
-                      <div className="mb-route-sub">
-                        Từ <strong>{effectiveOrigin}</strong> đến <strong>{selectedCourt.name}</strong> ({selectedCourt.address})
-                      </div>
-                    </div>
-                  </div>
-
-                  <a
-                    id="mb-directions"
-                    className="mb-btn mb-btn--primary mb-route-btn"
-                    href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-                      originForDirections
-                    )}&destination=${encodeURIComponent(
-                      selectedCourt.lat && selectedCourt.lng
-                        ? `${selectedCourt.lat},${selectedCourt.lng}`
-                        : selectedCourt.mapQuery
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Mở ứng dụng Google Maps chính thức để chỉ đường từng bước"
-                  >
-                    <span>Chỉ Đường Google Maps</span>
-                    <span className="material-symbols-outlined">open_in_new</span>
-                  </a>
-                </div>
-              )
-            })()}
-          </section>
+          </div>
+          )}
 
           {/* Slot grid */}
           <section className="mb-card" aria-label="Lịch sân">
