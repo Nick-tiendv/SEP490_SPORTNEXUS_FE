@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import { confirmDialog } from '../../components/common/confirm.js'
@@ -93,6 +93,12 @@ export default function OwnerShop() {
   const products = useApi(() => getShopProducts(facilityId, true), [facilityId], { enabled: !!facilityId, initialData: [] })
   const orders = useApi(() => getFacilityShopOrders(facilityId, status), [facilityId, status], { enabled: !!facilityId, initialData: [] })
   const pendingCount = (orders.data || []).filter((o) => String(o.status).toUpperCase() === 'PENDING').length
+  // Tự tải lại đơn mỗi 30 giây khi đang mở trang (đơn mới / đơn đổi trạng thái hiện ra không cần bấm Làm mới)
+  const refreshOrders = orders.refresh
+  useEffect(() => {
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') refreshOrders() }, 30000)
+    return () => clearInterval(timer)
+  }, [refreshOrders])
 
   const act = async (action, success, after) => {
     try {
