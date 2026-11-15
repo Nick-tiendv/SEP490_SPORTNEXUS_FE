@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { getTileLayerConfig } from '../../../utils/mapTiles.js'
 
 /**
  * InteractiveCourtMap
- * Bản đồ tương tác sử dụng tile Google Maps (Roadmap & Satellite Hybrid),
+ * Bản đồ tương tác sử dụng OpenStreetMap / MapTiler / Mapbox (hoặc Esri World Imagery cho lớp vệ tinh),
  * gắn pin tọa độ thực của tất cả các cụm sân và vị trí người chơi.
  */
 export default function InteractiveCourtMap({
@@ -17,7 +18,7 @@ export default function InteractiveCourtMap({
   customOrigin = '',
   setCustomOrigin,
   userProfileLocation = 'Thủ Đức',
-  mapType = 'm', // 'm' = Roadmap, 'k' = Satellite
+  mapType = 'm', // 'm' = Đường phố, 'k' = Vệ tinh
   setMapType,
 }) {
   const mapContainerRef = useRef(null)
@@ -25,6 +26,7 @@ export default function InteractiveCourtMap({
   const markersRef = useRef({})
   const userMarkerRef = useRef(null)
   const tileLayerRef = useRef(null)
+  const appliedMapTypeRef = useRef(null)
   const [isLeafletReady, setIsLeafletReady] = useState(() => typeof window !== 'undefined' && Boolean(window.L))
 
   // Kiểm tra Leaflet có sẵn trên window (từ CDN)
@@ -54,23 +56,15 @@ export default function InteractiveCourtMap({
       center: [initLat, initLng],
       zoom: 15,
       zoomControl: false, // Tự tạo nút zoom gọn gàng hoặc dùng custom
-      attributionControl: false,
+      attributionControl: true,
     })
 
-    // URL Google Maps Tiles chính thức
-    // lyrs=m : Roadmap chuẩn Google Maps
-    // lyrs=y : Hybrid vệ tinh + đường phố & tên đường
-    const tileUrl =
-      mapType === 'k'
-        ? 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
-        : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
-
-    const tileLayer = L.tileLayer(tileUrl, {
-      maxZoom: 20,
-      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    }).addTo(map)
+    // Dùng nguồn tile hợp lệ từ getTileLayerConfig (OpenStreetMap / Esri / MapTiler / Mapbox)
+    const { url, options } = getTileLayerConfig(mapType)
+    const tileLayer = L.tileLayer(url, options).addTo(map)
 
     tileLayerRef.current = tileLayer
+    appliedMapTypeRef.current = mapType
     mapInstanceRef.current = map
 
     // Đảm bảo Leaflet đo chính xác kích thước container và nạp đầy đủ 100% các ô gạch tile
@@ -98,6 +92,8 @@ export default function InteractiveCourtMap({
       if (resizeObserver) resizeObserver.disconnect()
       map.remove()
       mapInstanceRef.current = null
+      tileLayerRef.current = null
+      appliedMapTypeRef.current = null
       markersRef.current = {}
       userMarkerRef.current = null
     }
@@ -108,6 +104,7 @@ export default function InteractiveCourtMap({
   // Cập nhật Tile Layer khi đổi giữa Bản đồ thường & Vệ tinh
   useEffect(() => {
     if (!mapInstanceRef.current || !window.L) return
+    if (appliedMapTypeRef.current === mapType && tileLayerRef.current) return
     const L = window.L
     const map = mapInstanceRef.current
 
@@ -115,18 +112,12 @@ export default function InteractiveCourtMap({
       map.removeLayer(tileLayerRef.current)
     }
 
-    const tileUrl =
-      mapType === 'k'
-        ? 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
-        : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
-
-    tileLayerRef.current = L.tileLayer(tileUrl, {
-      maxZoom: 20,
-      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    }).addTo(map)
+    const { url, options } = getTileLayerConfig(mapType)
+    tileLayerRef.current = L.tileLayer(url, options).addTo(map)
+    appliedMapTypeRef.current = mapType
 
     map.invalidateSize()
-  }, [mapType])
+  }, [isLeafletReady, mapType])
 
   // Vẽ các Marker sân thể thao lên bản đồ
   useEffect(() => {
@@ -277,7 +268,7 @@ export default function InteractiveCourtMap({
       {!isLeafletReady && (
         <div className="sn-map-fallback">
           <span className="material-symbols-outlined sn-spin-ic">refresh</span>
-          Đang tải Google Maps tương tác...
+          Đang tải bản đồ tương tác...
         </div>
       )}
 
@@ -360,7 +351,7 @@ export default function InteractiveCourtMap({
             type="button"
             className={`sn-type-btn ${mapType === 'm' ? 'is-active' : ''}`}
             onClick={() => setMapType('m')}
-            title="Xem bản đồ đường phố Google Maps"
+            title="Xem bản đồ đường phố"
           >
             Bản Đồ
           </button>
@@ -368,7 +359,7 @@ export default function InteractiveCourtMap({
             type="button"
             className={`sn-type-btn ${mapType === 'k' ? 'is-active' : ''}`}
             onClick={() => setMapType('k')}
-            title="Xem ảnh vệ tinh Google Maps"
+            title="Xem ảnh vệ tinh"
           >
             Vệ Tinh
           </button>

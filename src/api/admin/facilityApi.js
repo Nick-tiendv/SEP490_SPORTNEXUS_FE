@@ -38,11 +38,15 @@ export function toAdminFacility(input) {
   const deleted = pick(raw, 'isDeleted') === true
   const rawStatus = String(pick(raw, 'status', 'facilityStatus') ?? '')
   const thumbnail = pick(raw, 'thumbnailUrl', 'coverImageUrl', 'imageUrl')
-  const images = asArray(pick(raw, 'imageUrls', 'images', 'photos')).map(item => (typeof item === 'string' ? item : pick(item, 'url', 'imageUrl'))).filter(Boolean)
+  const images = asArray(pick(raw, 'imageUrls', 'images', 'photos'))
+    .map(item => (typeof item === 'string' ? item : pick(item, 'url', 'imageUrl')))
+    .filter(Boolean)
   return {
     id: String(pick(raw, 'id', 'facilityId') ?? ''),
     name: pick(raw, 'name', 'facilityName') || '—',
     address: pick(raw, 'address', 'fullAddress', 'location') || '',
+    province: pick(raw, 'province', 'provinceName', 'city') || '',
+    district: pick(raw, 'district', 'districtName', 'ward') || '',
     description: pick(raw, 'description') || '',
     phone: pick(raw, 'phone') || '',
     latitude: toNumber(pick(raw, 'latitude', 'lat')),
@@ -67,7 +71,9 @@ export function toAdminFacility(input) {
     reviews: toNumber(pick(raw, 'reviewCount', 'totalReviews', 'ratingCount')),
     reports: toNumber(pick(raw, 'reportCount', 'openReportCount', 'totalReports')),
     images: [...new Set([thumbnail, ...images].filter(Boolean))],
-    amenities: asArray(pick(raw, 'amenities')).map(item => ({ id: String(pick(item, 'id', 'amenityId') ?? ''), name: nameOf(item) })).filter(item => item.name),
+    amenities: asArray(pick(raw, 'amenities'))
+      .map(item => ({ id: String(pick(item, 'id', 'amenityId') ?? ''), name: nameOf(item) }))
+      .filter(item => item.name),
     amenityIds: asArray(pick(raw, 'amenityIds')).map(String),
     opens: toClock(pick(raw, 'openTime', 'openingTime')),
     closes: toClock(pick(raw, 'closeTime', 'closingTime')),
@@ -107,19 +113,31 @@ export async function getFacilityCourts(facilityId) {
 
 export const approveFacility = async id => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/approve`)).data)
 export const rejectFacility = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/reject`, { reason })).data)
-export const lockFacility = async (id, { reason, cancelUpcomingBookings }) => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/lock`, { reason, cancelUpcomingBookings: !!cancelUpcomingBookings })).data)
+export const lockFacility = async (id, { reason, cancelUpcomingBookings }) =>
+  unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/lock`, { reason, cancelUpcomingBookings: !!cancelUpcomingBookings })).data)
 export const unlockFacility = async id => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/unlock`)).data)
 
 // PUT /api/v1/facilities/{id} (UpdateFacilityRequest): field nào null thì BE giữ nguyên.
-export async function updateFacility(id, { name, address, latitude, longitude, amenityIds, imageUrls }) {
-  return unwrap((await apiClient.put(`/api/v1/facilities/${path(id)}`, {
-    name: name ?? null, address: address ?? null, latitude: latitude ?? null, longitude: longitude ?? null,
-    status: null, amenityIds: amenityIds ?? null, imageUrls: imageUrls ?? null,
-  })).data)
+export async function updateFacility(id, { name, address, province, district, latitude, longitude, amenityIds, imageUrls }) {
+  return unwrap(
+    (
+      await apiClient.put(`/api/v1/facilities/${path(id)}`, {
+        name: name ?? null,
+        address: address ?? null,
+        province: province ?? null,
+        district: district ?? null,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        status: null,
+        amenityIds: amenityIds ?? null,
+        imageUrls: imageUrls ?? null,
+      })
+    ).data,
+  )
 }
 async function masterData(url) {
-  return toList(unwrap((await apiClient.get(url)).data)).items
-    .map(item => ({ id: String(pick(item, 'id', 'sportId', 'amenityId', 'categoryId') ?? ''), name: nameOf(item) }))
+  return toList(unwrap((await apiClient.get(url)).data))
+    .items.map(item => ({ id: String(pick(item, 'id', 'sportId', 'amenityId', 'categoryId') ?? ''), name: nameOf(item) }))
     .filter(item => item.id && item.name)
 }
 export const getSportOptions = () => masterData('/api/v1/master-data/sports')
