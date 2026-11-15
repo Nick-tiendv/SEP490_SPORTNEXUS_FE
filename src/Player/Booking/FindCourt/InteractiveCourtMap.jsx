@@ -10,14 +10,14 @@ export default function InteractiveCourtMap({
   courts = [],
   selectedCourt = null,
   onSelectCourt,
-  effectiveOrigin = 'Thủ Đức',
+  effectiveOrigin = '',
   originCoords = null,
   searchArea = null, // { label, bounds: [[s, w], [n, e]] } | { label, center: { lat, lng }, radiusKm }
   isEditingOrigin = false,
   setIsEditingOrigin,
   customOrigin = '',
   setCustomOrigin,
-  userProfileLocation = 'Thủ Đức',
+  userProfileLocation = '',
   mapType = 'm', // 'm' = Đường phố, 'k' = Vệ tinh
   setMapType,
 }) {
@@ -48,13 +48,15 @@ export default function InteractiveCourtMap({
 
     const L = window.L
 
-    // Tọa độ khởi tạo: ưu tiên selectedCourt hoặc TP.HCM
-    const initLat = selectedCourt?.lat || originCoords?.lat || 10.8498
-    const initLng = selectedCourt?.lng || originCoords?.lng || 106.7725
+    // Tọa độ khởi tạo: ưu tiên sân đang chọn, vị trí người chơi, sân đầu tiên có tọa độ, hoặc trung tâm Việt Nam
+    const firstCourtWithCoords = courts.find((c) => c?.lat != null && c?.lng != null)
+    const initLat = selectedCourt?.lat ?? originCoords?.lat ?? firstCourtWithCoords?.lat ?? 16.0471
+    const initLng = selectedCourt?.lng ?? originCoords?.lng ?? firstCourtWithCoords?.lng ?? 108.2068
+    const hasPointFocus = Boolean(selectedCourt?.lat ?? originCoords?.lat ?? firstCourtWithCoords?.lat)
 
     const map = L.map(mapContainerRef.current, {
       center: [initLat, initLng],
-      zoom: 15,
+      zoom: hasPointFocus ? 14 : 6,
       zoomControl: false, // Tự tạo nút zoom gọn gàng hoặc dùng custom
       attributionControl: true,
     })
@@ -164,7 +166,7 @@ export default function InteractiveCourtMap({
           <div class="sn-popup-addr">${court.address}</div>
           <div class="sn-popup-footer">
             <span class="sn-popup-price">${court.price.toLocaleString('vi-VN')} đ/giờ</span>
-            <span class="sn-popup-dist">Cách ~${court.distance} km</span>
+            ${court.distance != null ? `<span class="sn-popup-dist">Cách ~${court.distance} km</span>` : ''}
           </div>
         </div>
       `
@@ -180,13 +182,15 @@ export default function InteractiveCourtMap({
 
   // Vẽ Marker vị trí người chơi (Blue Radar Dot)
   useEffect(() => {
-    if (!mapInstanceRef.current || !window.L || !originCoords || !originCoords.lat || !originCoords.lng) return
+    if (!mapInstanceRef.current || !window.L) return
     const L = window.L
     const map = mapInstanceRef.current
 
     if (userMarkerRef.current) {
       map.removeLayer(userMarkerRef.current)
+      userMarkerRef.current = null
     }
+    if (!originCoords || originCoords.lat == null || originCoords.lng == null) return
 
     const userHtml = `
       <div class="sn-user-pin" title="Vị trí xuất phát của bạn">
@@ -202,7 +206,7 @@ export default function InteractiveCourtMap({
     })
 
     const userMarker = L.marker([originCoords.lat, originCoords.lng], { icon: userIcon }).addTo(map)
-    userMarker.bindPopup(`<strong>Vị trí của bạn</strong><br/>${effectiveOrigin}`, { offset: [0, -10] })
+    userMarker.bindPopup(`<strong>Vị trí của bạn</strong>${effectiveOrigin ? `<br/>${effectiveOrigin}` : ''}`, { offset: [0, -10] })
     userMarkerRef.current = userMarker
   }, [originCoords, effectiveOrigin])
 
@@ -277,7 +281,7 @@ export default function InteractiveCourtMap({
         <div className="sn-origin-pill">
           <span className="material-symbols-outlined sn-origin-ic">near_me</span>
           <span className="sn-origin-text">
-            Vị trí: <strong>{effectiveOrigin}</strong>
+            Vị trí: <strong>{effectiveOrigin || 'Chưa xác định'}</strong>
           </span>
           <button
             type="button"
@@ -302,6 +306,7 @@ export default function InteractiveCourtMap({
               <input
                 type="text"
                 className="mb-origin-input"
+                placeholder="Tên đường, phường, tỉnh..."
                 value={customOrigin}
                 onChange={(e) => setCustomOrigin(e.target.value)}
                 onKeyDown={(e) => {
@@ -329,7 +334,7 @@ export default function InteractiveCourtMap({
                   setIsEditingOrigin(false)
                 }}
               >
-                Dùng {userProfileLocation}
+                {userProfileLocation ? `Dùng ${userProfileLocation}` : 'Đặt lại mặc định'}
               </button>
               <button
                 type="button"

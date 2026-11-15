@@ -157,25 +157,27 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
 
 const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-// Gom cơ sở thật (GET /api/v1/facilities/search) theo quận để chọn khu vực
-const groupByDistrict = (facilities, userLoc = 'Thủ Đức') => {
+// Gom cơ sở thật (GET /api/v1/facilities/search) theo khu vực để chọn sân ghép trận
+const groupByDistrict = (facilities, userOrigin = '') => {
   const map = {}
   facilities.forEach((f) => {
     const name = f.district || f.province || 'Khác'
     const key = normalize(name).replace(/[^a-z0-9]/g, '') || 'khac'
     if (!map[key]) map[key] = { name, label: name, courts: [] }
+    const computedDist =
+      f.distanceKm != null
+        ? Number(f.distanceKm)
+        : calculateDistanceFromRegisteredAddress(
+            f.address || f.name || name,
+            userOrigin,
+            f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null
+          )
     map[key].courts.push({
       id: f.id,
       name: f.name,
       address: f.address || '',
-      distance:
-        f.distanceKm != null
-          ? `${Number(f.distanceKm).toFixed(1)} km`
-          : `${calculateDistanceFromRegisteredAddress(f.address || f.name || name, userLoc, f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null)} km`,
-      distanceKm:
-        f.distanceKm != null
-          ? Number(f.distanceKm)
-          : calculateDistanceFromRegisteredAddress(f.address || f.name || name, userLoc, f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null),
+      distance: computedDist != null ? `${computedDist.toFixed(1)} km` : '',
+      distanceKm: computedDist,
       courtCount: `${f.courtCount || 0} sân`,
       price: f.minPrice ? `${Math.round(f.minPrice / 1000)}k/h` : '—',
       rating: f.averageRating,
@@ -185,7 +187,7 @@ const groupByDistrict = (facilities, userLoc = 'Thủ Đức') => {
     })
   })
   Object.values(map).forEach((d) => {
-    d.courts.sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99))
+    d.courts.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
   })
   return map
 }
@@ -197,7 +199,7 @@ function CreateMatch() {
   // State management
   const [sport, setSport] = useState(() => loadProfileRegisteredSports()[0]?.sportKey || 'badminton') // Khởi tạo theo môn trong Profile
   const [radius, setRadius] = useState(8.5)
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
+  // Vị trí người chơi lấy từ Hồ sơ cá nhân (không gán cứng tỉnh/quận mặc định)
   const [userProfileLocation] = useState(() => {
     try {
       const saved = localStorage.getItem('player_profile_data')
@@ -206,19 +208,51 @@ function CreateMatch() {
         if (parsed.location) return parsed.location
       }
     } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'Thủ Đức'
+    return ''
+  })
+  const [userOriginCoords, setUserOriginCoords] = useState(() => {
+    try {
+      const saved = localStorage.getItem('player_profile_data')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.latitude != null && parsed.longitude != null) {
+          return { lat: Number(parsed.latitude), lng: Number(parsed.longitude) }
+        }
+      }
+    } catch { /* bỏ qua */ }
+    return null
   })
 
-  // Cơ sở thật theo quận
+  // Cơ sở thật theo khu vực
   const [districtData, setDistrictData] = useState({})
   useEffect(() => {
-    searchFacilities({ pageSize: 100 })
-      .then((res) => setDistrictData(groupByDistrict(res.items || [], userProfileLocation)))
-      .catch(() => toast.error('Không tải được danh sách cơ sở.'))
+    let active = true
+    Promise.all([
+      searchFacilities({ pageSize: 100 }),
+      import('../../api/player/ratingApi.js').then((m) => m.getOnboarding().catch(() => null)).catch(() => null),
+    ])
+      .then(([res, onboarding]) => {
+        if (!active) return
+        const coords =
+          onboarding?.latitude != null && onboarding?.longitude != null
+            ? { lat: Number(onboarding.latitude), lng: Number(onboarding.longitude) }
+            : userOriginCoords
+        if (coords) setUserOriginCoords(coords)
+        setDistrictData(groupByDistrict(res.items || [], coords || userProfileLocation))
+      })
+      .catch(() => active && toast.error('Không tải được danh sách cơ sở.'))
+    return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const districtKeys = Object.keys(districtData)
-  const userDistrictKey = districtKeys.find((k) => normalize(userProfileLocation).includes(k) || k.includes(normalize(userProfileLocation).replace(/[^a-z0-9]/g, ''))) || districtKeys[0]
+  const userDistrictKey =
+    (userProfileLocation &&
+      districtKeys.find(
+        (k) =>
+          normalize(userProfileLocation).includes(k) ||
+          k.includes(normalize(userProfileLocation).replace(/[^a-z0-9]/g, ''))
+      )) ||
+    districtKeys[0]
   const [pickedDistrict, setSelectedDistrict] = useState(null)
   const selectedDistrict = pickedDistrict && districtData[pickedDistrict] ? pickedDistrict : userDistrictKey
   const [districtSearchQuery, setDistrictSearchQuery] = useState('')
@@ -362,18 +396,25 @@ function CreateMatch() {
     return sportMatched
   }, [facilities, sport])
 
-  // Sắp xếp ưu tiên cơ sở tại quận đang chọn
+  // Sắp xếp ưu tiên cơ sở tại khu vực đang chọn rồi theo khoảng cách thực (nếu có tọa độ)
   const sortedFacilities = useMemo(() => {
     return [...filteredFacilities].sort((a, b) => {
       const aInDist = a.district === selectedDistrict ? 1 : 0
       const bInDist = b.district === selectedDistrict ? 1 : 0
       if (aInDist !== bInDist) return bInDist - aInDist
-      const aDistKm = calculateDistanceFromRegisteredAddress(a.location || a.address || a.name, userProfileLocation, a.coords)
-      const bDistKm = calculateDistanceFromRegisteredAddress(b.location || b.address || b.name, userProfileLocation, b.coords)
-      if (aDistKm !== bDistKm) return aDistKm - bDistKm
-      return 0
+      const aDistKm = calculateDistanceFromRegisteredAddress(
+        a.location || a.address || a.name,
+        userOriginCoords || userProfileLocation,
+        a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null
+      )
+      const bDistKm = calculateDistanceFromRegisteredAddress(
+        b.location || b.address || b.name,
+        userOriginCoords || userProfileLocation,
+        b.lat != null && b.lng != null ? { lat: b.lat, lng: b.lng } : null
+      )
+      return (aDistKm ?? Infinity) - (bDistKm ?? Infinity)
     })
-  }, [filteredFacilities, selectedDistrict, userProfileLocation])
+  }, [filteredFacilities, selectedDistrict, userOriginCoords, userProfileLocation])
 
   // Cơ sở đang chọn
   const selectedFacility = useMemo(() => {
@@ -523,13 +564,12 @@ function CreateMatch() {
   const currentCourt =
     currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
 
-  // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở
-  // Lọc khu vực theo tên quận hoặc tên / địa chỉ cơ sở & sắp xếp từ gần địa chỉ đăng ký nhất đến xa nhất
+  // Lọc khu vực theo tên khu vực hoặc tên / địa chỉ cơ sở & sắp xếp theo khoảng cách thực (nếu có tọa độ)
   const filteredDistricts = Object.entries(districtData)
     .sort(([, a], [, b]) => {
-      const distA = a.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(a.name, userProfileLocation)
-      const distB = b.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(b.name, userProfileLocation)
-      return distA - distB
+      const distA = a.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(a.name, userOriginCoords || userProfileLocation)
+      const distB = b.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(b.name, userOriginCoords || userProfileLocation)
+      return (distA ?? Infinity) - (distB ?? Infinity)
     })
     .filter(([, item]) => {
     if (!districtSearchQuery.trim()) return true
@@ -844,7 +884,7 @@ function CreateMatch() {
                       <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">
                         search_insights
                       </span>
-                      Tìm kiếm khu vực sân (quận, địa bàn):
+                      Tìm kiếm khu vực sân (tên đường, phường, tỉnh):
                     </span>
                     {/* Active Selected Area Pill */}
                     <div className="flex items-center gap-2 flex-wrap">
@@ -852,10 +892,12 @@ function CreateMatch() {
                         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
                         Đang chọn: {currentDistrictData.name} ({currentDistrictData.courts.length} sân)
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-[#15803D] font-extrabold bg-[#DCFCE7] border border-[#86EFAC] px-2 py-0.5 rounded-lg">
-                        <span className="material-symbols-outlined text-[13px] text-[#16A34A]">person_pin_circle</span>
-                        Đồng bộ hồ sơ: {userProfileLocation}
-                      </span>
+                      {userProfileLocation && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-[#15803D] font-extrabold bg-[#DCFCE7] border border-[#86EFAC] px-2 py-0.5 rounded-lg">
+                          <span className="material-symbols-outlined text-[13px] text-[#16A34A]">person_pin_circle</span>
+                          Đồng bộ hồ sơ: {userProfileLocation}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -867,6 +909,7 @@ function CreateMatch() {
                       </span>
                       <input
                         type="text"
+                        placeholder="Tên đường, phường, tỉnh..."
                         value={districtSearchQuery}
                         onChange={(e) => {
                           setDistrictSearchQuery(e.target.value)
@@ -977,7 +1020,7 @@ function CreateMatch() {
                               </span>
                               Không tìm thấy khu vực phù hợp với &quot;{districtSearchQuery}&quot;
                               <p className="text-[11px] text-gray-400 mt-1">
-                                Hãy thử tìm theo tên quận (VD: Quận 7, Bình Thạnh, Phú Nhuận...)
+                                Hãy thử tìm theo tên đường, phường, tỉnh hoặc tên sân...
                               </p>
                             </div>
                           )}

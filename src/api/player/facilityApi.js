@@ -58,31 +58,27 @@ export function categoryToSportKey(cat = '') {
 }
 
 /**
- * Xác định quận/huyện từ chuỗi địa chỉ
+ * Chuẩn hóa khóa khu vực (phường/xã hoặc tỉnh/thành) từ chuỗi địa chỉ — không hardcode danh sách quận TP.HCM
  */
 export function detectDistrictFromAddress(loc = '') {
-  const norm = String(loc)
+  const parts = String(loc || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length < 2) return ''
+  const rawArea = parts.length >= 3 ? parts[parts.length - 2] : parts[0]
+  return rawArea
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/gi, 'd')
     .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
 
-  if (norm.includes('thu duc') || norm.includes('thao dien') || norm.includes('quan 2') || norm.includes('q2') || norm.includes('quan 9') || norm.includes('q9') || norm.includes('linh chieu') || norm.includes('vo van ngan') || norm.includes('tang nhon phu') || norm.includes('sala')) return 'thuduc'
-  if (norm.includes('binh thanh') || norm.includes('dinh bo linh') || norm.includes('dien bien phu') || norm.includes('hang xanh')) return 'binhthanh'
-  if (norm.includes('quan 7') || norm.includes('q7') || norm.includes('phu my hung') || norm.includes('nguyen luong bang') || norm.includes('huynh tan phat') || norm.includes('tan phu, quan 7') || norm.includes('tan phu, q7')) return 'q7'
-  if (norm.includes('quan 1') || norm.includes('q1') || norm.includes('nguyen hue') || norm.includes('ben nghe') || norm.includes('ben thanh') || norm.includes('tao dan')) return 'q1'
-  if (norm.includes('quan 3') || norm.includes('q3') || norm.includes('ho xuan huong') || norm.includes('vo thi sau')) return 'q3'
-  if (norm.includes('quan 5') || norm.includes('q5')) return 'q5'
-  if (norm.includes('quan 10') || norm.includes('q10') || norm.includes('lan anh') || norm.includes('3 thang 2')) return 'q10'
-  if (norm.includes('phu nhuan') || norm.includes('rach mieu')) return 'phunhuan'
-  if (norm.includes('tan binh') || norm.includes('hoang hoa tham')) return 'tanbinh'
-  if (norm.includes('quan 8') || norm.includes('q8')) return 'quan8'
-  if (norm.includes('tan phu') || norm.includes('celadon')) return 'tanphu'
-  if (norm.includes('go vap') || norm.includes('quang trung')) return 'govap'
-  if (norm.includes('quan 11') || norm.includes('q11') || norm.includes('phu tho')) return 'q11'
-  if (norm.includes('quan 12') || norm.includes('q12')) return 'q12'
-  if (norm.includes('binh tan')) return 'binhtan'
-  return 'thuduc'
+const parseCoordOrNull = (val) => {
+  if (val === null || val === undefined || val === '') return null
+  const num = Number(val)
+  return Number.isFinite(num) ? num : null
 }
 
 /**
@@ -113,13 +109,17 @@ export function transformFacilityToCourt(fac) {
   const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : (childCourts[0]?.defaultPrice || 100000)
 
   const streetPart = fac.address?.split(',')?.[0]?.trim() || fac.name
-  const districtKey = detectDistrictFromAddress(fac.address)
+  const districtKey = fac.district
+    ? detectDistrictFromAddress(`, ${fac.district}, ${fac.province || ''}`)
+    : detectDistrictFromAddress(fac.address)
 
   const openStr = fac.openTime ? fac.openTime.slice(0, 5) : '06:00'
   const closeStr = fac.closeTime ? fac.closeTime.slice(0, 5) : '22:00'
 
   const amenitiesList = Array.isArray(fac.amenities) ? fac.amenities : []
   const amenitiesSummary = amenitiesList.map((a) => a.name).slice(0, 3).join(' • ') || 'Đèn ban đêm • Bãi giữ xe'
+  const lat = parseCoordOrNull(fac.latitude ?? fac.lat)
+  const lng = parseCoordOrNull(fac.longitude ?? fac.lng)
 
   return {
     id: fac.id,
@@ -130,13 +130,13 @@ export function transformFacilityToCourt(fac) {
     address: fac.address,
     mapQuery: fac.address,
     district: districtKey,
-    // Tỉnh / quận gốc từ BE (có thể trống): dùng để gợi ý khu vực ở trang tìm sân
+    // Tỉnh / phường gốc từ BE (có thể trống): dùng để gợi ý khu vực ở trang tìm sân
     provinceName: fac.province || '',
     districtName: fac.district || '',
-    lat: Number(fac.latitude) || 10.8490,
-    lng: Number(fac.longitude) || 106.7537,
-    latitude: Number(fac.latitude) || 10.8490,
-    longitude: Number(fac.longitude) || 106.7537,
+    lat,
+    lng,
+    latitude: lat,
+    longitude: lng,
     rating: fac.averageRating > 0 ? fac.averageRating : 4.9,
     reviewCount: fac.reviewCount || 128,
     price: minPrice,

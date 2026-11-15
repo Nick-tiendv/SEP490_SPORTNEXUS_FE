@@ -1632,7 +1632,7 @@ function Dashboard() {
               </span>
               <input
                 type="text"
-                placeholder="Tìm cụm sân theo tên, địa chỉ hoặc quận huyện (vd: Tre Xanh, Thủ Đức, Quận 7)..."
+                placeholder="Tên đường, phường, tỉnh..."
                 value={courtSearchKeyword}
                 onChange={(e) => setCourtSearchKeyword(e.target.value)}
                 style={{

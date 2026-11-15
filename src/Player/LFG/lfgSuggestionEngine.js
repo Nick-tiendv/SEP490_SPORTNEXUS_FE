@@ -170,151 +170,28 @@ export function detectSkillInText(text = '') {
 }
 
 // ============================================================================
-// HỆ THỐNG ĐỊA LÝ & KHOẢNG CÁCH (TỪ ĐỊA CHỈ ĐĂNG KÝ ĐẾN SÂN / KÈO / BÀI VIẾT)
+// HỆ THỐNG ĐỊA LÝ & KHOẢNG CÁCH (TÍNH THEO TỌA ĐỘ THỰC, KHÔNG HARDCODE QUẬN)
 // ============================================================================
-export const DISTRICT_INFO = {
-  thuduc: {
-    key: 'thuduc',
-    name: 'TP. Thủ Đức',
-    lat: 10.8490,
-    lng: 106.7537,
-    aliases: ['thu duc', 'thao dien', 'quan 2', 'q2', 'q.2', 'quan 9', 'q9', 'q.9', 'linh chieu', 'vo van ngan', 'tang nhon phu', 'le van viet', 'binh trieu', 'hiepbinh', 'hiep phu', 'linh tay', 'linh dong', 'linh trung', 'sala', 'an phu', 'cat lai'],
-  },
-  binhthanh: {
-    key: 'binhthanh',
-    name: 'Quận Bình Thạnh',
-    lat: 10.8105,
-    lng: 106.6975,
-    aliases: ['binh thanh', 'q.bt', 'dinh bo linh', 'dien bien phu', 'hang xanh', 'bach dang', 'thanh da', 'chu van an', 'ung van khiem', 'xo viet nghe tinh', ' no trang long', 'nguyen huu canh'],
-  },
-  q7: {
-    key: 'q7',
-    name: 'Quận 7',
-    lat: 10.7340,
-    lng: 106.7215,
-    aliases: ['quan 7', 'q7', 'q.7', 'phu my hung', 'tan thuan', 'huynh tan phat', 'nguyen van linh', 'nguyen luong bang', 'nguyen thi thap', 'tre xanh', 'long vien', 'tan phong', 'tan quy', 'him lam'],
-  },
-  q1: {
-    key: 'q1',
-    name: 'Quận 1',
-    lat: 10.7756,
-    lng: 106.7004,
-    aliases: ['quan 1', 'q1', 'q.1', 'ben thanh', 'ben nghe', 'tao dan', 'nguyen hue', 'nguyen thi minh khai', 'huyen tran cong chua', 'lao dong', 'da kao'],
-  },
-  q3: {
-    key: 'q3',
-    name: 'Quận 3',
-    lat: 10.7788,
-    lng: 106.6852,
-    aliases: ['quan 3', 'q3', 'q.3', 'ho xuan huong', 'vo thi sau', 'nam ky khoi nghia', 'ky dong', 'nguyen dinh chieu'],
-  },
-  q5: {
-    key: 'q5',
-    name: 'Quận 5',
-    lat: 10.7538,
-    lng: 106.6621,
-    aliases: ['quan 5', 'q5', 'q.5', 'tinh vo', 'dai the gioi', 'nguyen trai', 'tran hung dao', '안 dong', 'cholon'],
-  },
-  q10: {
-    key: 'q10',
-    name: 'Quận 10',
-    lat: 10.7715,
-    lng: 106.6672,
-    aliases: ['quan 10', 'q10', 'q.10', 'ky hoa', '3 thang 2', 'ba thang hai', 'to hien thanh', 'lan anh', 'cach mang thang 8', 'bac hai', 'thanh thai', 'su van hanh'],
-  },
-  q11: {
-    key: 'q11',
-    name: 'Quận 11',
-    lat: 10.7652,
-    lng: 106.6578,
-    aliases: ['quan 11', 'q11', 'q.11', 'phu tho', 'ly thuong kiet', 'lac long quan', 'dam sen', 'hoa binh', 'binh thoi'],
-  },
-  q12: {
-    key: 'q12',
-    name: 'Quận 12',
-    lat: 10.8524,
-    lng: 106.6542,
-    aliases: ['quan 12', 'q12', 'q.12', 'thoi an', 'le van khuong', 'cau vong', 'nguyen van qua', 'tan chanh hiep'],
-  },
-  phunhuan: {
-    key: 'phunhuan',
-    name: 'Quận Phú Nhuận',
-    lat: 10.7992,
-    lng: 106.6803,
-    aliases: ['phu nhuan', 'q.pn', 'rach mieu', 'phan xich long', 'hoa phuong', 'hoang dieu', 'nguyen van troi', 'hoang van thu'],
-  },
-  tanbinh: {
-    key: 'tanbinh',
-    name: 'Quận Tân Bình',
-    lat: 10.8015,
-    lng: 106.6534,
-    aliases: ['tan binh', 'q.tb', 'hoang hoa tham', 'ga truc thang', 'cong hoa', 'viettel', 'tan son', 'truong chinh', 'pho quang', 'bau cat'],
-  },
-  quan8: {
-    key: 'quan8',
-    name: 'Quận 8',
-    lat: 10.7242,
-    lng: 106.6286,
-    aliases: ['quan 8', 'q8', 'q.8', 'chanh hung', 'bong sao', 'pham hung', 'ta quang buu', 'dong dieu', 'cao lo'],
-  },
-  tanphu: {
-    key: 'tanphu',
-    name: 'Quận Tân Phú',
-    lat: 10.7901,
-    lng: 106.6281,
-    aliases: ['tan phu', 'q.tp', 'celadon', 'bo bao tan thang', 'luy ban bich', 'thien van', 'thoai ngoc hau', 'tan ky tan quy'],
-  },
-  govap: {
-    key: 'govap',
-    name: 'Quận Gò Vấp',
-    lat: 10.8388,
-    lng: 106.6653,
-    aliases: ['go vap', 'q.gv', 'quang trung', 'phan van tri', 'nguyen oanh', 'khang an', 'ben cat', 'an hoi', 'pham van chieu', 'le duc tho'],
-  },
-  binhtan: {
-    key: 'binhtan',
-    name: 'Quận Bình Tân',
-    lat: 10.7825,
-    lng: 106.6085,
-    aliases: ['binh tan', 'q.btn', 'le trong tan', 'binh hung hoa', 'ten lua', 'aeon binh tan'],
-  },
+const parseCoord = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
 }
 
-const DISTRICT_DISTANCE_MATRIX = {
-  thuduc: { thuduc: 1.2, binhthanh: 4.2, q1: 7.5, phunhuan: 7.8, q3: 8.5, govap: 8.8, tanbinh: 9.5, q10: 10.2, q7: 11.8, q5: 11.5, q11: 12.2, q12: 12.8, quan8: 13.2, tanphu: 13.8, binhtan: 15.2 },
-  binhthanh: { binhthanh: 1.1, phunhuan: 2.6, q1: 3.4, q3: 3.9, govap: 4.1, thuduc: 4.2, tanbinh: 4.6, q10: 5.8, q5: 6.4, q11: 7.1, q7: 7.5, q12: 8.0, tanphu: 8.4, quan8: 8.9, binhtan: 10.2 },
-  q7: { q7: 1.1, quan8: 4.3, q1: 5.4, q5: 6.2, q3: 6.8, binhthanh: 7.5, q10: 7.9, tanbinh: 9.1, phunhuan: 9.3, q11: 9.5, binhtan: 10.5, tanphu: 11.0, thuduc: 11.8, govap: 12.4, q12: 14.0 },
-  q1: { q1: 1.0, q3: 2.0, binhthanh: 3.4, q5: 3.5, phunhuan: 3.8, q10: 4.0, tanbinh: 5.0, q7: 5.4, q11: 5.5, quan8: 6.0, govap: 7.0, thuduc: 7.5, tanphu: 8.0, binhtan: 9.0, q12: 11.0 },
-  q3: { q3: 1.0, q1: 2.0, q10: 2.4, phunhuan: 2.5, q5: 3.0, binhthanh: 3.9, tanbinh: 4.0, q11: 4.1, quan8: 5.5, govap: 6.0, tanphu: 6.5, q7: 6.8, binhtan: 7.5, thuduc: 8.5, q12: 9.5 },
-  q5: { q5: 1.0, q10: 2.0, q11: 2.5, q3: 3.0, quan8: 3.0, q1: 3.5, tanbinh: 4.5, phunhuan: 5.0, tanphu: 5.0, binhtan: 5.5, q7: 6.2, binhthanh: 6.4, govap: 8.0, q12: 10.0, thuduc: 11.5 },
-  q10: { q10: 1.0, q5: 2.0, q3: 2.4, q11: 2.5, tanbinh: 3.5, q1: 4.0, quan8: 4.0, phunhuan: 4.5, tanphu: 5.0, binhthanh: 5.8, govap: 6.5, binhtan: 6.5, q7: 7.9, q12: 8.5, thuduc: 10.2 },
-  phunhuan: { phunhuan: 1.0, q3: 2.5, binhthanh: 2.6, tanbinh: 3.0, govap: 3.5, q1: 3.8, q10: 4.5, q5: 5.0, q11: 5.5, tanphu: 6.0, quan8: 7.5, thuduc: 7.8, q12: 8.0, binhtan: 8.5, q7: 9.3 },
-  tanbinh: { tanbinh: 1.0, phunhuan: 3.0, tanphu: 3.0, q10: 3.5, govap: 3.5, q11: 3.8, q3: 4.0, q5: 4.5, binhthanh: 4.6, q1: 5.0, binhtan: 5.0, q12: 6.0, quan8: 6.5, q7: 9.1, thuduc: 9.5 },
-  quan8: { quan8: 1.1, q5: 3.0, q10: 4.0, q7: 4.3, q11: 5.0, q3: 5.5, q1: 6.0, binhtan: 6.0, tanbinh: 6.5, tanphu: 7.0, phunhuan: 7.5, binhthanh: 8.9, govap: 11.0, q12: 12.0, thuduc: 13.2 },
-  tanphu: { tanphu: 1.1, tanbinh: 3.0, binhtan: 3.5, q11: 4.5, q10: 5.0, q5: 5.0, govap: 6.0, phunhuan: 6.0, q3: 6.5, q12: 6.5, quan8: 7.0, q1: 8.0, binhthanh: 8.4, q7: 11.0, thuduc: 13.8 },
-  govap: { govap: 1.1, tanbinh: 3.5, phunhuan: 3.5, binhthanh: 4.1, q12: 4.5, q3: 6.0, tanphu: 6.0, q10: 6.5, q1: 7.0, q11: 7.5, binhtan: 7.5, q5: 8.0, thuduc: 8.8, quan8: 11.0, q7: 12.4 },
-  q11: { q11: 1.0, q10: 2.5, q5: 2.5, tanbinh: 3.8, q3: 4.1, tanphu: 4.5, binhtan: 4.5, quan8: 5.0, q1: 5.5, phunhuan: 5.5, binhthanh: 7.1, govap: 7.5, q12: 7.5, q7: 9.5, thuduc: 12.2 },
-  q12: { q12: 1.2, govap: 4.5, tanbinh: 6.0, tanphu: 6.5, q11: 7.5, binhthanh: 8.0, binhtan: 8.0, q10: 8.5, q3: 9.5, q5: 10.0, q1: 11.0, quan8: 12.0, thuduc: 12.8, q7: 14.0 },
-  binhtan: { binhtan: 1.2, tanphu: 3.5, q11: 4.5, tanbinh: 5.0, q5: 5.5, quan8: 6.0, q10: 6.5, q3: 7.5, govap: 7.5, q12: 8.0, q1: 9.0, binhthanh: 10.2, q7: 10.5, thuduc: 15.2 },
-}
-
-export function detectDistrictKey(addressOrText = '') {
-  const norm = normalizeVi(addressOrText)
-  if (!norm) return null
-  for (const [key, info] of Object.entries(DISTRICT_INFO)) {
-    if (info.aliases.some((alias) => norm.includes(normalizeVi(alias)))) {
-      return key
-    }
-  }
-  return null
+const extractCoords = (obj) => {
+  if (!obj || typeof obj !== 'object') return null
+  const lat = parseCoord(obj.lat ?? obj.latitude)
+  const lng = parseCoord(obj.lng ?? obj.longitude)
+  if (lat == null || lng == null || (Math.abs(lat) < 1 && Math.abs(lng) < 1)) return null
+  return { lat, lng }
 }
 
 export function haversineKm(lat1, lng1, lat2, lng2) {
-  const nLat1 = Number(lat1)
-  const nLng1 = Number(lng1)
-  const nLat2 = Number(lat2)
-  const nLng2 = Number(lng2)
-  if (!Number.isFinite(nLat1) || !Number.isFinite(nLng1) || !Number.isFinite(nLat2) || !Number.isFinite(nLng2)) {
+  const nLat1 = parseCoord(lat1)
+  const nLng1 = parseCoord(lng1)
+  const nLat2 = parseCoord(lat2)
+  const nLng2 = parseCoord(lng2)
+  if (nLat1 == null || nLng1 == null || nLat2 == null || nLng2 == null) {
     return null
   }
   if (Math.abs(nLat1) < 1 || Math.abs(nLat2) < 1) return null
@@ -331,75 +208,32 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
   return Math.round(R * c * 10) / 10
 }
 
-// Tính khoảng cách (km) từ địa chỉ đăng ký của người chơi đến một địa điểm (Sàn / Kèo / Bài viết)
-export function calculateDistanceFromRegisteredAddress(arg1 = {}, arg2 = 'TP. Thủ Đức', arg3 = null) {
-  let registeredAddress
-  let targetAddress
+// Tính khoảng cách (km) theo tọa độ GPS thực giữa người chơi và địa điểm mục tiêu;
+// trả null nếu thiếu tọa độ thực của một trong hai phía (không tự suy đoán khoảng cách giả).
+export function calculateDistanceFromRegisteredAddress(arg1 = {}, arg2 = '', arg3 = null) {
+  let userLat
+  let userLng
   let targetLat = null
   let targetLng = null
-  let itemSeed
 
   if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {
-    registeredAddress = arg1.registeredAddress || 'TP. Thủ Đức'
-    targetAddress = arg1.targetAddress || ''
-    targetLat = arg1.targetLat ?? null
-    targetLng = arg1.targetLng ?? null
-    itemSeed = arg1.itemSeed || ''
+    const u = extractCoords(arg1.userCoords)
+    const t = extractCoords(arg1.targetCoords)
+    userLat = parseCoord(arg1.userLat ?? arg1.originLat ?? u?.lat)
+    userLng = parseCoord(arg1.userLng ?? arg1.originLng ?? u?.lng)
+    targetLat = parseCoord(arg1.targetLat ?? arg1.lat ?? arg1.latitude ?? t?.lat)
+    targetLng = parseCoord(arg1.targetLng ?? arg1.lng ?? arg1.longitude ?? t?.lng)
   } else {
-    targetAddress = String(arg1 || '')
-    registeredAddress = String(arg2 || 'TP. Thủ Đức')
+    const u = extractCoords(arg2)
+    userLat = u?.lat ?? null
+    userLng = u?.lng ?? null
     if (arg3 && typeof arg3 === 'object') {
-      targetLat = arg3.lat ?? arg3.targetLat ?? null
-      targetLng = arg3.lng ?? arg3.targetLng ?? null
-    }
-    itemSeed = targetAddress
-  }
-  const userDistrictKey = detectDistrictKey(registeredAddress) || 'thuduc'
-  const userDistrict = DISTRICT_INFO[userDistrictKey] || DISTRICT_INFO.thuduc
-  const targetDistrictKey = detectDistrictKey(targetAddress)
-
-  // Deterministic small offset (0.0 - 0.7 km) để các địa điểm cùng quận có khoảng cách thực tế phân bổ tự nhiên
-  const seedStr = String(itemSeed || targetAddress || '')
-  let hash = 0
-  for (let i = 0; i < seedStr.length; i++) {
-    hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000
-  }
-  const microOffset = Math.round(((hash % 7) * 0.12) * 10) / 10
-
-  // 1. Nếu địa chỉ mục tiêu trùng khớp trực tiếp đường/phường với địa chỉ người chơi đăng ký
-  const normUser = normalizeVi(registeredAddress)
-  const normTarget = normalizeVi(targetAddress)
-  const userTokens = normUser.split(/[,.-]/).map((s) => s.trim()).filter((s) => s.length >= 4)
-  const hasExactStreetOrWardMatch =
-    userTokens.length > 0 &&
-    userTokens.some((tok) => tok !== normalizeVi(userDistrict.name) && tok !== 'thu duc' && normTarget.includes(tok))
-
-  if (hasExactStreetOrWardMatch) {
-    return Math.max(0.4, Math.round((0.6 + microOffset * 0.7) * 10) / 10)
-  }
-
-  // 2. Nếu có tọa độ GPS thực của sân khác tọa độ mặc định của Thủ Đức
-  const isDefaultFallbackCoord =
-    targetLat != null &&
-    targetLng != null &&
-    Math.abs(Number(targetLat) - 10.849) < 0.0005 &&
-    Math.abs(Number(targetLng) - 106.7537) < 0.0005
-
-  if (targetLat != null && targetLng != null && !isDefaultFallbackCoord) {
-    const gpsDist = haversineKm(userDistrict.lat, userDistrict.lng, targetLat, targetLng)
-    if (gpsDist != null && gpsDist > 0.1 && gpsDist < 50) {
-      return Math.max(0.5, Math.round((gpsDist + microOffset * 0.3) * 10) / 10)
+      targetLat = parseCoord(arg3.lat ?? arg3.latitude ?? arg3.targetLat)
+      targetLng = parseCoord(arg3.lng ?? arg3.longitude ?? arg3.targetLng)
     }
   }
 
-  // 3. Nếu xác định được Quận/Huyện của mục tiêu -> tra ma trận khoảng cách giữa các Quận
-  if (targetDistrictKey) {
-    const baseDist = DISTRICT_DISTANCE_MATRIX[userDistrictKey]?.[targetDistrictKey] ?? 6.5
-    return Math.max(0.5, Math.round((baseDist + microOffset) * 10) / 10)
-  }
-
-  // 4. Nếu không rõ quận nhưng có tên khu vực chung
-  return Math.round((4.5 + microOffset) * 10) / 10
+  return haversineKm(userLat, userLng, targetLat, targetLng)
 }
 
 // Phân tầng Range khoảng cách từ trên xuống dưới (Gần nhất -> Xa nhất)
@@ -454,8 +288,36 @@ export const DISTANCE_RANGES = [
   },
 ]
 
-export function getDistanceRangeInfo(distanceKm = 0) {
-  const d = Number(distanceKm) || 0
+export function getDistanceRangeInfo(distanceKm = null) {
+  if (distanceKm === null || distanceKm === undefined || distanceKm === '') {
+    return {
+      id: 'range_unknown',
+      key: 'unknown',
+      tier: 99,
+      minKm: null,
+      maxKm: Infinity,
+      title: 'Chưa xác định khoảng cách',
+      shortTitle: 'Chưa rõ khoảng cách',
+      desc: 'Cập nhật vị trí khảo sát hoặc chọn cơ sở có tọa độ để tính khoảng cách chính xác',
+      badgeClass: 'bg-gray-50 text-gray-600 border-gray-200',
+      headerClass: 'from-slate-600 to-slate-700',
+    }
+  }
+  const d = Number(distanceKm)
+  if (!Number.isFinite(d)) {
+    return {
+      id: 'range_unknown',
+      key: 'unknown',
+      tier: 99,
+      minKm: null,
+      maxKm: Infinity,
+      title: 'Chưa xác định khoảng cách',
+      shortTitle: 'Chưa rõ khoảng cách',
+      desc: 'Cập nhật vị trí khảo sát hoặc chọn cơ sở có tọa độ để tính khoảng cách chính xác',
+      badgeClass: 'bg-gray-50 text-gray-600 border-gray-200',
+      headerClass: 'from-slate-600 to-slate-700',
+    }
+  }
   return (
     DISTANCE_RANGES.find((r) => d >= r.minKm && d <= r.maxKm) ||
     DISTANCE_RANGES[DISTANCE_RANGES.length - 1]
@@ -675,17 +537,18 @@ export function recordNewPlayerDesire({
     changed = true
   }
 
-  // 4. Phát hiện khu vực / quận mong muốn trong tìm kiếm
-  const detectedDistrict = districtKey || detectDistrictKey(keyword)
-  if (detectedDistrict && DISTRICT_INFO[detectedDistrict]) {
-    const existingDist = current.districts.find((d) => d.key === detectedDistrict)
+  // 4. Lưu khu vực tìm kiếm nếu người dùng chọn/truyền khu vực cụ thể (không tự gán cứng danh sách quận TP.HCM)
+  const rawDistrict = typeof districtKey === 'string' ? districtKey.trim() : ''
+  if (rawDistrict) {
+    const distSlug = normalizeVi(rawDistrict).replace(/[^a-z0-9]/g, '') || rawDistrict
+    const existingDist = current.districts.find((d) => d.key === distSlug)
     if (existingDist) {
       existingDist.count = (existingDist.count || 1) + 1
       existingDist.updatedAt = nowIso
     } else {
       current.districts.unshift({
-        key: detectedDistrict,
-        label: DISTRICT_INFO[detectedDistrict].name,
+        key: distSlug,
+        label: rawDistrict,
         addedAt: nowIso,
         updatedAt: nowIso,
         count: 1,
@@ -755,7 +618,8 @@ export function clearAllLearnedDesires() {
 // ============================================================================
 export function buildPersonalizedLfgSuggestions({
   profileSports = [],
-  userProfileLocation = 'TP. Thủ Đức',
+  userProfileLocation = '',
+  userCoords = null,
   habits = {},
   learnedDesires = { sports: [], timeSlots: [], skillLevels: [], districts: [], keywords: [] },
   includeLearnedDesires = true,
@@ -809,7 +673,6 @@ export function buildPersonalizedLfgSuggestions({
   const normKeyword = normalizeVi(activeFilters.keyword)
   const keywordTimeSlot = detectTimeSlotInText(activeFilters.keyword)
   const keywordSkill = detectSkillInText(activeFilters.keyword)
-  const keywordDistrict = detectDistrictKey(activeFilters.keyword)
 
   // Lọc bỏ các từ chỉ môn/khung giờ/trình độ để lấy từ khóa tìm kiếm nội dung/địa điểm còn lại
   const remainingKeywordTokens = normKeyword
@@ -817,15 +680,25 @@ export function buildPersonalizedLfgSuggestions({
     .filter((tok) => tok.length >= 2)
     .filter((tok) => !['keo', 'ghep', 'san', 'tim', 'choi', 'giao', 'luu', 'ca', 'buoi', 'trinh', 'do'].includes(tok))
 
+  const resolvedUserCoords = extractCoords(userCoords)
+
   const matchesRangeFilter = (distanceKm) => {
-    if (activeFilters.maxDistanceKm != null && distanceKm > Number(activeFilters.maxDistanceKm)) {
-      return false
+    if (activeFilters.maxDistanceKm != null) {
+      if (distanceKm == null || distanceKm > Number(activeFilters.maxDistanceKm)) return false
     }
     if (!activeFilters.distanceRangeKey || activeFilters.distanceRangeKey === 'all') {
       return true
     }
+    if (distanceKm == null) return false
     const rangeInfo = getDistanceRangeInfo(distanceKm)
     return rangeInfo.key === activeFilters.distanceRangeKey
+  }
+
+  const compareByDistanceAndRelevance = (a, b) => {
+    const ad = a.distanceKm ?? Infinity
+    const bd = b.distanceKm ?? Infinity
+    if (ad !== bd) return ad - bd
+    return (b.relevanceScore || 0) - (a.relevanceScore || 0)
   }
 
   // ----------------------------------------------------------------------------
@@ -863,6 +736,7 @@ export function buildPersonalizedLfgSuggestions({
       const address = fac.address || fac.street || ''
       const distanceKm = calculateDistanceFromRegisteredAddress({
         registeredAddress: userProfileLocation,
+        userCoords: resolvedUserCoords,
         targetAddress: `${fac.name || ''} ${address}`,
         targetLat: fac.lat ?? fac.latitude,
         targetLng: fac.lng ?? fac.longitude,
@@ -874,14 +748,12 @@ export function buildPersonalizedLfgSuggestions({
       // Kiểm tra từ khóa tìm kiếm mong muốn (nếu người chơi đang nhập từ khóa)
       if (normKeyword) {
         const searchable = normalizeVi(
-          `${fac.name || ''} ${address} ${matchedSports.map((k) => SPORT_CATALOG[k]?.name).join(' ')} ${fac.description || ''}`
+          `${fac.name || ''} ${address} ${fac.provinceName || fac.province || ''} ${fac.districtName || fac.district || ''} ${matchedSports.map((k) => SPORT_CATALOG[k]?.name).join(' ')} ${fac.description || ''}`
         )
-        if (keywordDistrict) {
-          const facDist = detectDistrictKey(`${fac.name || ''} ${address}`)
-          if (facDist !== keywordDistrict && !searchable.includes(normKeyword)) return null
-        } else if (
+        if (
           remainingKeywordTokens.length > 0 &&
           keywordSports.length === 0 &&
+          !searchable.includes(normKeyword) &&
           !remainingKeywordTokens.some((tok) => searchable.includes(tok))
         ) {
           return null
@@ -931,7 +803,7 @@ export function buildPersonalizedLfgSuggestions({
       return {
         id: fac.id || fac.facilityId,
         name: fac.name,
-        address: address || 'TP. Hồ Chí Minh',
+        address: address || fac.provinceName || fac.province || '',
         image:
           fac.image ||
           fac.imageItems?.find((i) => i.isThumbnail)?.url ||
@@ -948,18 +820,14 @@ export function buildPersonalizedLfgSuggestions({
         closeTime: fac.closeTime?.slice(0, 5) || '22:00',
         openMatchesCount: openMatchesAtVenue.length,
         distanceKm,
-        etaMinutes: Math.max(3, Math.round(distanceKm * 2.5)),
+        etaMinutes: distanceKm != null ? Math.max(3, Math.round(distanceKm * 2.5)) : null,
         rangeInfo,
         reasons,
         relevanceScore,
       }
     })
     .filter(Boolean)
-    .sort((a, b) => {
-      // Sắp xếp từ trên xuống dưới theo khoảng cách: nơi gần địa chỉ đăng ký nhất -> nơi xa nhất
-      if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm
-      return b.relevanceScore - a.relevanceScore
-    })
+    .sort(compareByDistanceAndRelevance)
 
   // ----------------------------------------------------------------------------
   // HẠNG MỤC 2: SUGGEST KÈO GHÉP (LFG MATCHES)
@@ -990,12 +858,13 @@ export function buildPersonalizedLfgSuggestions({
         return null
       }
 
-      // Tính khoảng cách từ địa chỉ đã đăng ký đến sân của kèo
+      // Tính khoảng cách từ tọa độ người chơi đến sân của kèo
       const distanceKm = calculateDistanceFromRegisteredAddress({
         registeredAddress: userProfileLocation,
+        userCoords: resolvedUserCoords,
         targetAddress: m.location || m.title || '',
-        targetLat: m.lat ?? null,
-        targetLng: m.lng ?? null,
+        targetLat: m.lat ?? m.latitude ?? null,
+        targetLng: m.lng ?? m.longitude ?? null,
         itemSeed: m.id || m.title,
       })
 
@@ -1006,13 +875,10 @@ export function buildPersonalizedLfgSuggestions({
         const searchable = normalizeVi(
           `${m.title || ''} ${m.location || ''} ${m.groupDesc || ''} ${m.sportBadge || ''} ${m.levelTag || ''}`
         )
-        if (keywordDistrict) {
-          const mDist = detectDistrictKey(m.location || m.title || '')
-          if (mDist !== keywordDistrict && !searchable.includes(normKeyword)) return null
-        } else if (
+        if (
           remainingKeywordTokens.length > 0 &&
           keywordSports.length === 0 &&
-          ! keywordTimeSlot &&
+          !keywordTimeSlot &&
           !keywordSkill &&
           !remainingKeywordTokens.some((tok) => searchable.includes(tok))
         ) {
@@ -1077,18 +943,14 @@ export function buildPersonalizedLfgSuggestions({
         ...m,
         sport: mSport,
         distanceKm,
-        etaMinutes: Math.max(3, Math.round(distanceKm * 2.5)),
+        etaMinutes: distanceKm != null ? Math.max(3, Math.round(distanceKm * 2.5)) : null,
         rangeInfo,
         reasons,
         relevanceScore,
       }
     })
     .filter(Boolean)
-    .sort((a, b) => {
-      // Sắp xếp từ trên xuống dưới theo khoảng cách: nơi gần địa chỉ đăng ký nhất -> nơi xa nhất
-      if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm
-      return b.relevanceScore - a.relevanceScore
-    })
+    .sort(compareByDistanceAndRelevance)
 
   // ----------------------------------------------------------------------------
   // HẠNG MỤC 3: SUGGEST BẢNG TIN CỘNG ĐỒNG (COMMUNITY POSTS)
@@ -1130,9 +992,10 @@ export function buildPersonalizedLfgSuggestions({
 
       const distanceKm = calculateDistanceFromRegisteredAddress({
         registeredAddress: userProfileLocation,
+        userCoords: resolvedUserCoords,
         targetAddress: postLocationText,
-        targetLat: post.sharedLfg?.latitude ?? null,
-        targetLng: post.sharedLfg?.longitude ?? null,
+        targetLat: post.sharedLfg?.latitude ?? post.latitude ?? post.lat ?? null,
+        targetLng: post.sharedLfg?.longitude ?? post.longitude ?? post.lng ?? null,
         itemSeed: post.id || post.postId || post.content?.slice(0, 24),
       })
 
@@ -1181,10 +1044,13 @@ export function buildPersonalizedLfgSuggestions({
       }
 
       const rangeInfo = getDistanceRangeInfo(distanceKm)
-      const detectedDistKey = detectDistrictKey(postLocationText)
-      const areaLabel = detectedDistKey
-        ? DISTRICT_INFO[detectedDistKey]?.name
-        : post.sharedLfg?.facilityName || userProfileLocation
+      const areaLabel =
+        post.location ||
+        post.sharedLfg?.facilityAddress ||
+        post.sharedLfg?.facilityName ||
+        post.sharedTournament?.facilityName ||
+        userProfileLocation ||
+        ''
 
       return {
         ...post,
@@ -1194,18 +1060,14 @@ export function buildPersonalizedLfgSuggestions({
         sportDisplayBadge: post.sportName || post.sportBadge || sportMeta.name,
         areaLabel,
         distanceKm,
-        etaMinutes: Math.max(3, Math.round(distanceKm * 2.5)),
+        etaMinutes: distanceKm != null ? Math.max(3, Math.round(distanceKm * 2.5)) : null,
         rangeInfo,
         reasons,
         relevanceScore,
       }
     })
     .filter(Boolean)
-    .sort((a, b) => {
-      // Sắp xếp từ trên xuống dưới theo khoảng cách: nơi gần địa chỉ đăng ký nhất -> nơi xa nhất
-      if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm
-      return b.relevanceScore - a.relevanceScore
-    })
+    .sort(compareByDistanceAndRelevance)
 
   // Gom nhóm theo Range từ trên xuống dưới (Range 1 -> Range 2 -> Range 3 -> Range 4)
   const groupByRange = (items) =>
