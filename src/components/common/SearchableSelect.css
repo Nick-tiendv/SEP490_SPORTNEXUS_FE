@@ -1,0 +1,267 @@
+/* =====================================================================
+   SearchableSelect & FacilityAddressFields
+   Dùng chung cho Chủ sân (.snx-*) và Admin (.sn-admin).
+   Độ ưu tiên selector đủ cao để không bị `.sn-admin button` / `.users-form input` ghi đè.
+   ===================================================================== */
+
+.snx-ss {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.snx-ss .snx-ss-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #cfd8d5;
+  border-radius: var(--snx-radius-md, 8px);
+  background: #fff;
+  color: var(--snx-text, #16201d);
+  font: 400 14px/1.35 var(--snx-font-sans, 'Inter', sans-serif);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.snx-ss .snx-ss-trigger:hover:not(:disabled) {
+  border-color: #9aa8a3;
+}
+
+.snx-ss .snx-ss-trigger:focus,
+.snx-ss .snx-ss-trigger:focus-visible,
+.snx-ss .snx-ss-trigger[aria-expanded='true'] {
+  outline: none;
+  border-color: var(--snx-green-500, #15803d);
+  box-shadow: 0 0 0 3px rgba(34, 160, 90, 0.18);
+}
+
+.snx-ss .snx-ss-trigger[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+.snx-ss .snx-ss-trigger[aria-invalid='true']:focus,
+.snx-ss .snx-ss-trigger[aria-invalid='true'][aria-expanded='true'] {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
+}
+
+.snx-ss .snx-ss-trigger:disabled {
+  background: #eef2f1;
+  color: #9aa8a3;
+  cursor: not-allowed;
+}
+
+.snx-ss-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snx-ss-value.is-placeholder {
+  color: #6b7a75;
+}
+
+.snx-ss-chevron {
+  flex-shrink: 0;
+  color: #6b7a75;
+  transition: transform 0.15s ease;
+}
+
+.snx-ss .snx-ss-trigger[aria-expanded='true'] .snx-ss-chevron {
+  transform: rotate(180deg);
+  color: var(--snx-green-600, #15803d);
+}
+
+.snx-ss-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cfd8d5;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 36px -10px rgba(15, 23, 42, 0.22);
+}
+
+.snx-ss-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2f1;
+  background: #f8faf9;
+}
+
+.snx-ss-search-icon {
+  flex-shrink: 0;
+  color: #6b7a75;
+}
+
+.snx-ss .snx-ss-search-box .snx-ss-search-input,
+.sn-admin .users-form .snx-ss .snx-ss-search-box .snx-ss-search-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #16201d;
+  font: 400 13.5px/1.3 var(--snx-font-sans, 'Inter', sans-serif);
+  box-shadow: none;
+  outline: none;
+}
+
+.snx-ss .snx-ss-search-box .snx-ss-search-input:focus,
+.sn-admin .users-form .snx-ss .snx-ss-search-box .snx-ss-search-input:focus {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+
+.snx-ss .snx-ss-search-clear {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e2e8e6;
+  color: #4f5d59;
+  cursor: pointer;
+}
+
+.snx-ss .snx-ss-search-clear:hover {
+  background: #cfd8d5;
+  color: #16201d;
+}
+
+.snx-ss-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #cfd8d5 transparent;
+}
+
+.snx-ss-list::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.snx-ss-list::-webkit-scrollbar-thumb {
+  background: #cfd8d5;
+  border-radius: 999px;
+}
+
+.snx-ss .snx-ss-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #16201d;
+  font: 400 13.5px/1.35 var(--snx-font-sans, 'Inter', sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+
+.snx-ss .snx-ss-option:hover,
+.snx-ss .snx-ss-option.is-active {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.snx-ss .snx-ss-option[aria-selected='true'] {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 600;
+}
+
+.snx-ss-check {
+  flex-shrink: 0;
+  color: #15803d;
+}
+
+.snx-ss-empty {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7a75;
+}
+
+/* ---------- Khối nhập địa chỉ chuẩn (Tỉnh -> Phường -> Số nhà/tên đường) ---------- */
+.snx-addr-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.snx-addr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.snx-addr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.snx-addr-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--snx-text-secondary, #374541);
+}
+
+.sn-admin .users-form .snx-addr-label {
+  font-weight: 500;
+  color: var(--admin-text-secondary, #4f5d59);
+}
+
+.snx-addr-hint {
+  font-size: 12px;
+  color: #b45309;
+  line-height: 1.4;
+}
+
+.snx-addr-preview {
+  padding: 8px 12px;
+  border: 1px dashed #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12.5px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .snx-addr-grid {
+    grid-template-columns: 1fr;
+  }
+}

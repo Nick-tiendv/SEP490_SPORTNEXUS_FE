@@ -717,6 +717,23 @@
   max-height: none !important;
 }
 
+.sn-map-canvas .leaflet-control-attribution {
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #475569;
+  border-top-left-radius: 6px;
+  max-width: calc(100% - 16px);
+}
+
+.sn-map-canvas .leaflet-control-attribution a {
+  color: #15803d;
+  font-weight: 600;
+}
+
 .sn-map-fallback {
   position: absolute;
   inset: 0;
@@ -858,10 +875,10 @@
   font-size: 18px !important;
 }
 
-/* Zoom controls góc dưới phải */
+/* Zoom controls góc dưới phải (đặt phía trên thanh ghi nguồn bản đồ để không bị đè chữ bản quyền) */
 .sn-map-ctrl-bottom-right {
   position: absolute;
-  bottom: 14px;
+  bottom: 34px;
   right: 12px;
   z-index: 1000;
   display: flex;
