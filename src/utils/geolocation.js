@@ -1,4 +1,11 @@
-import { geocodeViaService, reverseGeocodeViaService } from '../api/locationApi.js'
+import {
+  GEOCODE_DEBOUNCE_MS,
+  debouncedGeocodeViaService,
+  geocodeViaService,
+  reverseGeocodeViaService,
+} from '../api/locationApi.js'
+
+export { GEOCODE_DEBOUNCE_MS }
 
 // Lấy vị trí người dùng và tên khu vực (dùng được ở mọi tỉnh thành).
 //
@@ -48,6 +55,10 @@ export const formatAccuracy = accuracy => (Number(accuracy) >= 1000 ? `${(accura
 // Ủy quyền cho locationApi (ưu tiên proxy BE nếu cấu hình VITE_GEOCODE_PROXY_URL, mặc định Nominatim có rate-limit & cache).
 export async function geocodeAddress(text) {
   return geocodeViaService(text)
+}
+
+export function debouncedGeocodeAddress(text) {
+  return debouncedGeocodeViaService(text)
 }
 
 // Tên khu vực từ tọa độ (tiếng Việt): "Phường Bến Nghé, Quận 1, Thành phố Hồ Chí Minh".

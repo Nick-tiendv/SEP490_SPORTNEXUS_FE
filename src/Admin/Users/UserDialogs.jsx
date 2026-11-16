@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { createAccount, deleteAccount, findAccountsByPhone, toggleAccountStatus, updateAccount } from '../../api/admin/accountApi.js'
+import { checkPhone, registerAdmin, sendOtp, verifyOtp } from '../../api/auth/authApi.js'
 import { compactPhone, isVietnamPhone, phoneKey, roleLabel } from './usersData.js'
 
 export function DemoDialog({ title, onClose, children, closeLabel = "Đóng hộp thoại" }) {
@@ -51,8 +52,11 @@ export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'ng
     if (clean.phone && users.some(item => item.id !== user?.id && item.phone && phoneKey(item.phone) === phoneKey(clean.phone))) return setError('Số điện thoại này đã được sử dụng bởi một tài khoản khác.')
     setSubmitting(true); setError('')
     try {
+      const selectedRole = roles.find(role => String(role.id) === String(clean.roleId))
+      const isCreatingAdmin = !user && !fixedRoleId && /^admin/i.test(selectedRole?.name || '')
       const payload = { username: clean.username, fullName: clean.name, email: clean.email, phone: compactPhone(clean.phone), roleId: clean.roleId, password: clean.password }
       if (user) await updateAccount(user.id, payload)
+      else if (isCreatingAdmin) await registerAdmin({ username: clean.username, password: clean.password, fullName: clean.name, phone: compactPhone(clean.phone) || null, email: clean.email, role: selectedRole.name })
       else await createAccount(payload)
       onDone(user ? `Đã cập nhật tài khoản ${clean.name}.` : `Đã tạo tài khoản ${clean.name}.`)
     } catch (err) {
@@ -132,6 +136,94 @@ export function PhoneLookupDialog({ onClose, onOpen }) {
         <button type="button" className="users-button" onClick={() => onOpen(account.id)}>Xem chi tiết</button>
       </li>)}</ul> : <p>Không tìm thấy tài khoản nào với số điện thoại này.</p>)}
       <footer><button type="button" className="users-button" onClick={onClose}>Đóng</button><button className="users-button primary" disabled={state.loading}>{state.loading ? 'Đang tra cứu…' : 'Tra cứu'}</button></footer>
+    </form>
+  </DemoDialog>
+}
+
+// Kiểm tra SĐT & Gửi / xác thực OTP: GET /api/auth/check-phone, POST /api/auth/send-otp, POST /api/auth/verify-otp.
+export function PhoneOtpDialog({ onClose }) {
+  const [phone, setPhone] = useState('')
+  const [type, setType] = useState('REGISTER')
+  const [otpCode, setOtpCode] = useState('')
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const [checkResult, setCheckResult] = useState(null)
+  const [otpSent, setOtpSent] = useState(null)
+  const [verifyResult, setVerifyResult] = useState('')
+
+  const validatePhone = () => {
+    const value = compactPhone(phone)
+    if (!value) { setError('Vui lòng nhập số điện thoại.'); return null }
+    if (!isVietnamPhone(value)) { setError('Số điện thoại không đúng định dạng Việt Nam (ví dụ: 0912345678 hoặc +84912345678).'); return null }
+    return value
+  }
+
+  const runCheck = async () => {
+    const value = validatePhone()
+    if (!value) return
+    setBusy('check'); setError(''); setCheckResult(null)
+    try {
+      const exists = await checkPhone(value)
+      setCheckResult({ phone: value, exists })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const runSendOtp = async () => {
+    const value = validatePhone()
+    if (!value) return
+    setBusy('send'); setError(''); setVerifyResult('')
+    try {
+      const data = await sendOtp(value, type)
+      setOtpSent({ phone: data?.phone || value, expiresInSeconds: data?.expiresInSeconds, devOtp: data?.devOtp || '' })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const runVerifyOtp = async event => {
+    event.preventDefault()
+    const value = validatePhone()
+    if (!value) return
+    const code = otpCode.trim()
+    if (!code) { setError('Vui lòng nhập mã OTP cần xác thực.'); return }
+    setBusy('verify'); setError(''); setVerifyResult('')
+    try {
+      const res = await verifyOtp({ phone: value, otpCode: code, type })
+      setVerifyResult(res?.message || 'Mã OTP hợp lệ và đã được xác thực.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return <DemoDialog title="Kiểm tra SĐT & Gửi OTP" onClose={busy ? noop : onClose}>
+    <form className="users-form" noValidate onSubmit={runVerifyOtp}>
+      <label>Số điện thoại<input type="tel" inputMode="tel" value={phone} onChange={event => { setPhone(event.target.value); setCheckResult(null); setOtpSent(null); setVerifyResult('') }} placeholder="0912345678" /></label>
+      <label>Mục đích OTP
+        <select value={type} onChange={event => { setType(event.target.value); setOtpSent(null); setVerifyResult('') }}>
+          <option value="REGISTER">Đăng ký tài khoản mới</option>
+          <option value="FORGOT_PASSWORD">Khôi phục mật khẩu</option>
+        </select>
+      </label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="users-button" onClick={runCheck} disabled={Boolean(busy)}>{busy === 'check' ? 'Đang kiểm tra…' : 'Kiểm tra SĐT'}</button>
+        <button type="button" className="users-button primary" onClick={runSendOtp} disabled={Boolean(busy)}>{busy === 'send' ? 'Đang gửi OTP…' : 'Gửi OTP'}</button>
+      </div>
+      {checkResult && <p className="users-demo-note" role="status">Số <strong>{checkResult.phone}</strong>: {checkResult.exists ? 'Đã có tài khoản trong hệ thống.' : 'Chưa có tài khoản trong hệ thống.'}</p>}
+      {otpSent && <div className="users-demo-note" role="status">
+        Đã gửi OTP tới <strong>{otpSent.phone}</strong>{otpSent.expiresInSeconds ? ` (hiệu lực ${otpSent.expiresInSeconds} giây)` : ''}.{otpSent.devOtp ? <> Mã thử nghiệm: <strong>{otpSent.devOtp}</strong></> : null}
+      </div>}
+      <label>Mã OTP xác thực<input type="text" inputMode="numeric" value={otpCode} onChange={event => setOtpCode(event.target.value)} placeholder="Nhập mã OTP đã nhận" maxLength={12} /></label>
+      {verifyResult && <p className="users-demo-note" role="status">{verifyResult}</p>}
+      {error && <p role="alert" className="users-form-error">{error}</p>}
+      <footer><button type="button" className="users-button" onClick={onClose} disabled={Boolean(busy)}>Đóng</button><button type="submit" className="users-button primary" disabled={Boolean(busy) || !otpCode.trim()}>{busy === 'verify' ? 'Đang xác thực…' : 'Xác thực OTP'}</button></footer>
     </form>
   </DemoDialog>
 }

@@ -75,7 +75,7 @@ const OwnerShop = lazy(() => import('./CourtOwner/Shop/OwnerShop.jsx'))
 // layout (sidebar, topbar) vẫn giữ nguyên trong lúc tải trang.
 function PageLoader() {
   return (
-    <div role="status" aria-live="polite" style={{ display: 'grid', placeItems: 'center', minHeight: '40vh', color: '#6b7a75', font: '500 14px Inter, sans-serif' }}>
+    <div role="status" aria-live="polite" style={{ display: 'grid', placeItems: 'center', minHeight: '40vh', color: '#6b7a75', fontSize: 14, fontWeight: 500, fontFamily: 'inherit' }}>
       <span className="material-symbols-outlined" style={{ fontSize: 32, animation: 'spin 1s linear infinite' }}>progress_activity</span>
       Đang tải trang…
     </div>

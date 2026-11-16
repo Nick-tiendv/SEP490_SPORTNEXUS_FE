@@ -13,6 +13,7 @@ import {
   getMyTeams,
   getTeam,
   getTeamInvitations,
+  getTeamMembers,
   getTeamTournaments,
   inviteToTeam,
   leaveTeam,
@@ -122,8 +123,10 @@ function CreateTeamModal({ onClose, onCreated }) {
 
 function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
   const team = useApi(() => getTeam(teamId), [teamId])
+  const membersApi = useApi(() => getTeamMembers(teamId), [teamId], { initialData: [] })
   const history = useApi(() => getTeamTournaments(teamId), [teamId], { initialData: [] })
   const t = team.data
+  const members = membersApi.data?.length ? membersApi.data : (t?.members || [])
   const isCaptain = t && t.captainId === String(meId)
   const sent = useApi(() => getTeamInvitations(teamId), [teamId], { initialData: [], enabled: Boolean(isCaptain) })
   const [edit, setEdit] = useState(null)
@@ -131,7 +134,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
   const logoRef = useRef(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
-  const refresh = () => { team.refresh(); sent.refresh(); onChanged() }
+  const refresh = () => { team.refresh(); membersApi.refresh(); sent.refresh(); onChanged() }
   const act = async (action, success, closeAfter) => {
     if (await run(action, success)) { if (closeAfter) { onChanged(); onClose() } else refresh() }
   }
@@ -192,9 +195,9 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
             )}
 
             <section>
-              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Thành viên</h3>
+              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Thành viên ({members.length})</h3>
               <div className="snx-list">
-                {t.members.map((m) => (
+                {members.map((m) => (
                   <div key={m.accountId} className="snx-list-item">
                     <Avatar name={m.fullName} url={m.avatarUrl} />
                     <div style={{ flex: 1, minWidth: 0 }}>

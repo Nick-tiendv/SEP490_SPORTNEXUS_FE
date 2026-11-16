@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import {
   generateCourtSlots,
   generateFacilitySlots,
   getCourts,
+  getFacilityAvailability,
   getFacilitySlotsRange,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
@@ -18,10 +19,10 @@ import NoFacilityState from '../NoFacilityState.jsx'
 import { WEEK_DAYS, addDays, formatDate, formatTime, formatVND, statusBadge, toDateKey, toTimeSpan } from '../shared.js'
 
 const BULK_ACTIONS = [
-  { value: 'LOCK', label: 'Khóa ca trống', hint: 'Nghỉ lễ, bảo trì: khách không đặt được.' },
-  { value: 'UNLOCK', label: 'Mở lại ca đã khóa', hint: 'Trả các ca đã khóa về trạng thái trống.' },
-  { value: 'SET_PRICE', label: 'Đổi giá', hint: 'Giờ vàng, cuối tuần: chỉ áp dụng cho ca chưa có khách.' },
-  { value: 'DELETE', label: 'Xóa ca', hint: 'Xóa ca chưa bắt đầu và chưa có người đặt (vd sinh nhầm).' },
+  { value: 'LOCK', label: 'Khóa ca trống', icon: 'lock', tone: 'amber' },
+  { value: 'UNLOCK', label: 'Mở lại ca đã khóa', icon: 'lock_open', tone: 'green' },
+  { value: 'SET_PRICE', label: 'Đổi giá', icon: 'payments', tone: 'blue' },
+  { value: 'DELETE', label: 'Xóa ca', icon: 'delete', tone: 'red' },
 ]
 
 // Môn của sân: CourtResponse.categoryName (lịch tuần trả sportName)
@@ -34,6 +35,132 @@ const targetCourtIds = (selected, courts, scoped) => {
   const visible = selected.filter((id) => courts.some((c) => String(c.id) === id))
   if (visible.length) return visible
   return scoped ? courts.map((c) => String(c.id)) : []
+}
+
+const DAY_FULL_LABELS = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7', 0: 'Chủ nhật' }
+const WEEK_DAY_OPTIONS = WEEK_DAYS.map((d) => ({ ...d, fullLabel: DAY_FULL_LABELS[d.value] || d.label }))
+const WEEK_DAY_INDEX = new Map(WEEK_DAY_OPTIONS.map((d, idx) => [d.value, idx]))
+
+const sliceWeekDayRange = (fromValue, toValue) => {
+  const fromIdx = WEEK_DAY_INDEX.get(fromValue) ?? 0
+  const toIdx = WEEK_DAY_INDEX.get(toValue) ?? (WEEK_DAY_OPTIONS.length - 1)
+  const picked = fromIdx <= toIdx
+    ? WEEK_DAY_OPTIONS.slice(fromIdx, toIdx + 1)
+    : [...WEEK_DAY_OPTIONS.slice(fromIdx), ...WEEK_DAY_OPTIONS.slice(0, toIdx + 1)]
+  return picked.length >= WEEK_DAY_OPTIONS.length ? [] : picked.map((d) => d.value)
+}
+
+const formatWeekDaysSummary = (days) => {
+  if (!days?.length || days.length >= WEEK_DAY_OPTIONS.length) return 'Mọi ngày'
+  const ordered = [...days].sort((a, b) => (WEEK_DAY_INDEX.get(a) ?? 9) - (WEEK_DAY_INDEX.get(b) ?? 9))
+  const contiguous = ordered.length >= 3 && ordered.every((v, i) => i === 0 || WEEK_DAY_INDEX.get(v) === WEEK_DAY_INDEX.get(ordered[i - 1]) + 1)
+  const shortOf = (v) => WEEK_DAY_OPTIONS.find((d) => d.value === v)?.label || ''
+  return contiguous ? `${shortOf(ordered[0])} – ${shortOf(ordered.at(-1))}` : ordered.map(shortOf).join(', ')
+}
+
+function WeekDaySelector({ label = 'Áp dụng các thứ', value = [], onChange }) {
+  const [open, setOpen] = useState(false)
+  const [rangeFrom, setRangeFrom] = useState(1)
+  const [rangeTo, setRangeTo] = useState(5)
+  const rootRef = useRef(null)
+  const isAll = !value?.length || value.length >= WEEK_DAY_OPTIONS.length
+  const summary = formatWeekDaysSummary(value)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    const onPointerDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onPointerDown)
+    }
+  }, [open])
+
+  const selectAll = () => { onChange([]); setOpen(false) }
+  const toggleDay = (dayValue) => {
+    const base = isAll ? WEEK_DAY_OPTIONS.map((d) => d.value) : value
+    const next = base.includes(dayValue) ? base.filter((x) => x !== dayValue) : [...base, dayValue]
+    onChange(next.length === 0 || next.length >= WEEK_DAY_OPTIONS.length ? [] : next)
+  }
+  const applyRange = (fromVal = rangeFrom, toVal = rangeTo) => {
+    onChange(sliceWeekDayRange(fromVal, toVal))
+  }
+
+  return (
+    <div className="snx-field snx-weekday" ref={rootRef}>
+      <span>{label}</span>
+      <div className="snx-weekday-bar">
+        <button
+          type="button"
+          className={`snx-btn snx-btn--sm snx-btn--green${isAll ? ' is-active' : ''}`}
+          aria-pressed={isAll}
+          onClick={selectAll}
+        >
+          <span className="material-symbols-outlined">{isAll ? 'done_all' : 'event_available'}</span>
+          Mọi ngày
+        </button>
+        <button
+          type="button"
+          className={`snx-btn snx-btn--sm ${isAll ? 'snx-btn--secondary' : 'snx-btn--blue is-active'}`}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="material-symbols-outlined">date_range</span>
+          <span>{isAll ? 'Chọn thứ trong tuần' : `Đang chọn: ${summary}`}</span>
+          <span className="material-symbols-outlined">{open ? 'expand_less' : 'expand_more'}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="snx-weekday-panel">
+          <div className="snx-weekday-range">
+            <span className="snx-weekday-range-title">Chọn nhanh theo khoảng thứ</span>
+            <div className="snx-weekday-range-controls">
+              <select
+                className="snx-select"
+                aria-label="Từ thứ"
+                value={rangeFrom}
+                onChange={(e) => setRangeFrom(Number(e.target.value))}
+              >
+                {WEEK_DAY_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.fullLabel}</option>)}
+              </select>
+              <span className="snx-muted snx-weekday-range-sep">→</span>
+              <select
+                className="snx-select"
+                aria-label="Đến thứ"
+                value={rangeTo}
+                onChange={(e) => setRangeTo(Number(e.target.value))}
+              >
+                {WEEK_DAY_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.fullLabel}</option>)}
+              </select>
+              <button type="button" className="snx-btn snx-btn--sm snx-btn--blue is-active snx-weekday-range-apply" onClick={() => applyRange()}>
+                Chọn khoảng
+              </button>
+            </div>
+            <div className="snx-row" style={{ gap: 6 }}>
+              <button type="button" className="snx-chip" onClick={() => { setRangeFrom(1); setRangeTo(5); applyRange(1, 5) }}>T2 – T6</button>
+              <button type="button" className="snx-chip" onClick={() => { setRangeFrom(6); setRangeTo(0); applyRange(6, 0) }}>Cuối tuần (T7 – CN)</button>
+            </div>
+          </div>
+          <div className="snx-weekday-list" role="group" aria-label="Danh sách các thứ trong tuần">
+            {WEEK_DAY_OPTIONS.map((d) => {
+              const checked = isAll || value.includes(d.value)
+              return (
+                <label key={d.value} className={`snx-weekday-option${checked ? ' is-selected' : ''}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleDay(d.value)} />
+                  <span>{d.fullLabel}</span>
+                  <span className="snx-weekday-short">{d.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CourtPicker({ courts, value, onChange, allLabel = 'Tất cả sân' }) {
@@ -53,38 +180,87 @@ function CourtPicker({ courts, value, onChange, allLabel = 'Tất cả sân' }) 
 function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
   const today = toDateKey()
   const [form, setForm] = useState({ courtIds: [], dateFrom: today, dateTo: addDays(today, 6), openTime: '', closeTime: '', durationMinutes: '', price: '' })
+  const [priceRules, setPriceRules] = useState([])
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
+
+  const addPriceRule = () => setPriceRules((prev) => [...prev, { daysOfWeek: [], startTime: '17:00', endTime: '22:00', price: '' }])
+  const updateRule = (idx, patch) => setPriceRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+  const removeRule = (idx) => setPriceRules((prev) => prev.filter((_, i) => i !== idx))
 
   const submit = async (event) => {
     event.preventDefault()
     if (form.dateTo < form.dateFrom) { toast.error('Ngày kết thúc phải sau ngày bắt đầu.'); return }
     if (form.openTime && form.closeTime && form.closeTime <= form.openTime) { toast.error('Giờ đóng phải sau giờ mở.'); return }
+    const duration = form.durationMinutes === '' ? null : Number(form.durationMinutes)
+    if (duration !== null && (!Number.isInteger(duration) || duration < 15 || duration > 480)) {
+      toast.error('Thời lượng mỗi ca phải là số nguyên từ 15 đến 480 phút.')
+      return
+    }
+    const basePrice = form.price === '' ? null : Number(form.price)
+    if (basePrice !== null && (!Number.isFinite(basePrice) || basePrice < 0)) {
+      toast.error('Giá mỗi ca không hợp lệ.')
+      return
+    }
+    const rulesPayload = []
+    for (let i = 0; i < priceRules.length; i += 1) {
+      const rule = priceRules[i]
+      if (!rule.startTime || !rule.endTime || rule.endTime <= rule.startTime) {
+        toast.error(`Khung giá riêng #${i + 1}: giờ kết thúc phải sau giờ bắt đầu.`)
+        return
+      }
+      const rulePrice = Number(rule.price)
+      if (!Number.isFinite(rulePrice) || rulePrice < 0 || rule.price === '') {
+        toast.error(`Khung giá riêng #${i + 1}: vui lòng nhập giá hợp lệ.`)
+        return
+      }
+      rulesPayload.push({
+        daysOfWeek: rule.daysOfWeek.length ? rule.daysOfWeek : null,
+        startTime: toTimeSpan(rule.startTime),
+        endTime: toTimeSpan(rule.endTime),
+        price: rulePrice,
+      })
+    }
+
     const body = {
       dateFrom: form.dateFrom,
       dateTo: form.dateTo,
       openTime: toTimeSpan(form.openTime),
       closeTime: toTimeSpan(form.closeTime),
       // Bỏ trống = thời lượng ca chủ sân chọn cho từng sân (trang Sân & giá), chưa chọn thì theo môn
-      durationMinutes: form.durationMinutes === '' ? null : Number(form.durationMinutes),
-      price: form.price === '' ? null : Number(form.price),
-      priceRules: [],
+      durationMinutes: duration,
+      price: basePrice,
+      priceRules: rulesPayload,
     }
     const ids = targetCourtIds(form.courtIds, courts, scoped)
     setBusy(true)
     try {
+      let rows = []
       if (ids.length === 1) {
         // 1 sân: POST /courts/{courtId}/slots/generate
         const r = await generateCourtSlots(ids[0], body)
         const name = courts.find((c) => String(c.id) === ids[0])?.name || 'Sân'
-        setResult([{ courtName: name, success: true, createdSlots: r?.createdSlots, updatedSlots: r?.updatedSlots, skippedSlots: r?.skippedSlots, pastSlots: r?.pastSlots }])
+        rows = [{
+          courtId: ids[0],
+          courtName: name,
+          success: true,
+          createdSlots: r?.createdSlots ?? 0,
+          updatedSlots: r?.updatedSlots ?? 0,
+          skippedSlots: r?.skippedSlots ?? 0,
+          pastSlots: r?.pastSlots ?? 0,
+        }]
       } else {
         // Nhiều sân / tất cả: POST /facilities/{id}/slots/generate (courtIds rỗng = mọi sân đang dùng)
         const r = await generateFacilitySlots(facilityId, { ...body, courtIds: ids.length ? ids : null })
-        setResult(Array.isArray(r) ? r : [])
+        rows = Array.isArray(r) ? r : Array.isArray(r?.results) ? r.results : []
       }
-      toast.success('Đã sinh ca.')
+      setResult(rows)
+      const failedCount = rows.filter((item) => item.success === false).length
+      const createdTotal = rows.reduce((sum, item) => sum + (Number(item.createdSlots) || 0), 0)
+      if (rows.length && failedCount === rows.length) toast.error('Không sinh được ca nào. Kiểm tra chi tiết bên dưới.')
+      else if (failedCount > 0) toast.warning(`Đã tạo ${createdTotal} ca mới (${failedCount} sân không thành công).`)
+      else toast.success(createdTotal ? `Đã sinh ${createdTotal} ca mới.` : 'Đã sinh ca.')
       onDone()
     } catch (error) {
       toast.error(error.message)
@@ -96,7 +272,6 @@ function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
   return (
     <form className="snx-card" onSubmit={submit}>
       <h2 className="snx-card-title">Sinh ca hàng loạt</h2>
-      <p className="snx-card-subtitle">Bỏ trống giờ = theo giờ mở cửa của cơ sở. Bỏ trống thời lượng = theo từng sân (trang Sân &amp; giá). Bỏ trống giá = giá mặc định của từng sân.</p>
       <div className="snx-stack" style={{ gap: 12, marginTop: 12 }}>
         <CourtPicker courts={courts} allLabel={allLabel} value={form.courtIds.filter((id) => courts.some((c) => String(c.id) === id))} onChange={(courtIds) => setForm({ ...form, courtIds })} />
         <div className="snx-form-grid">
@@ -106,6 +281,27 @@ function GenerateCard({ facilityId, courts, scoped, allLabel, onDone }) {
           <label className="snx-field">Giờ đóng<input className="snx-input" type="time" value={form.closeTime} onChange={set('closeTime')} /></label>
           <label className="snx-field">Mỗi ca (phút)<input className="snx-input" type="number" min={15} max={480} step={15} placeholder="Theo sân" value={form.durationMinutes} onChange={set('durationMinutes')} /></label>
           <label className="snx-field">Giá mỗi ca (đ)<input className="snx-input" type="number" min={0} step={1000} placeholder="Giá mặc định" value={form.price} onChange={set('price')} /></label>
+        </div>
+        <div className="snx-stack" style={{ gap: 8 }}>
+          <div className="snx-row">
+            <span className="snx-muted" style={{ fontSize: 13 }}>Khung giá riêng (giờ vàng / cuối tuần):</span>
+            <span className="snx-spacer" />
+            <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={addPriceRule}>+ Thêm khung giá</button>
+          </div>
+          {priceRules.map((rule, idx) => (
+            <div key={idx} className="snx-stack" style={{ gap: 8, padding: 10, borderRadius: 10, border: '1px solid var(--snx-border, #e2e8f0)' }}>
+              <div className="snx-form-grid">
+                <label className="snx-field">Từ giờ<input className="snx-input" type="time" value={rule.startTime} onChange={(e) => updateRule(idx, { startTime: e.target.value })} /></label>
+                <label className="snx-field">Đến giờ<input className="snx-input" type="time" value={rule.endTime} onChange={(e) => updateRule(idx, { endTime: e.target.value })} /></label>
+                <label className="snx-field">Giá (đ)<input className="snx-input" type="number" min={0} step={1000} placeholder="VD: 150000" value={rule.price} onChange={(e) => updateRule(idx, { price: e.target.value })} /></label>
+              </div>
+              <WeekDaySelector value={rule.daysOfWeek} onChange={(daysOfWeek) => updateRule(idx, { daysOfWeek })} />
+              <div className="snx-row">
+                <span className="snx-spacer" />
+                <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => removeRule(idx)}>Xóa</button>
+              </div>
+            </div>
+          ))}
         </div>
         <div className="snx-row"><span className="snx-spacer" /><button type="submit" className="snx-btn snx-btn--primary" disabled={busy || !courts.length}>{busy ? 'Đang sinh…' : 'Sinh ca'}</button></div>
         {result && (
@@ -133,7 +329,7 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
   const [form, setForm] = useState({ action: 'LOCK', courtIds: [], dateFrom: today, dateTo: today, startTime: '', endTime: '', daysOfWeek: [], price: '' })
   const [busy, setBusy] = useState(false)
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
-  const action = BULK_ACTIONS.find((a) => a.value === form.action)
+  const activeAction = BULK_ACTIONS.find((a) => a.value === form.action) || BULK_ACTIONS[0]
 
   const submit = async (event) => {
     event.preventDefault()
@@ -166,12 +362,25 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
   return (
     <form className="snx-card" onSubmit={submit}>
       <h2 className="snx-card-title">Thao tác hàng loạt</h2>
-      <p className="snx-card-subtitle">Ca đã có khách đặt luôn được giữ nguyên.</p>
       <div className="snx-stack" style={{ gap: 12, marginTop: 12 }}>
-        <div className="snx-tabs" role="tablist" aria-label="Thao tác">
-          {BULK_ACTIONS.map((a) => <button key={a.value} type="button" role="tab" aria-selected={form.action === a.value} className="snx-tab" onClick={() => setForm({ ...form, action: a.value })}>{a.label}</button>)}
+        <div className="snx-row" role="tablist" aria-label="Thao tác" style={{ gap: 8 }}>
+          {BULK_ACTIONS.map((a) => {
+            const selected = form.action === a.value
+            return (
+              <button
+                key={a.value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={`snx-btn snx-btn--sm snx-btn--${a.tone}${selected ? ' is-active' : ''}`}
+                onClick={() => setForm({ ...form, action: a.value })}
+              >
+                <span className="material-symbols-outlined">{a.icon}</span>
+                {a.label}
+              </button>
+            )
+          })}
         </div>
-        <p className="snx-muted" style={{ margin: 0 }}>{action.hint}</p>
         <CourtPicker courts={courts} allLabel={allLabel} value={form.courtIds.filter((id) => courts.some((c) => String(c.id) === id))} onChange={(courtIds) => setForm({ ...form, courtIds })} />
         <div className="snx-form-grid">
           <label className="snx-field">Từ ngày<input className="snx-input" type="date" min={today} value={form.dateFrom} onChange={set('dateFrom')} /></label>
@@ -180,15 +389,8 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
           <label className="snx-field">Đến giờ<input className="snx-input" type="time" value={form.endTime} onChange={set('endTime')} /></label>
           {form.action === 'SET_PRICE' && <label className="snx-field">Giá mới (đ)<input className="snx-input" type="number" min={1000} step={1000} value={form.price} onChange={set('price')} /></label>}
         </div>
-        <div className="snx-row">
-          <span className="snx-muted">Chỉ các thứ:</span>
-          {WEEK_DAYS.map((d) => {
-            const on = form.daysOfWeek.includes(d.value)
-            return <button key={d.value} type="button" className="snx-chip" aria-pressed={on} onClick={() => setForm({ ...form, daysOfWeek: on ? form.daysOfWeek.filter((x) => x !== d.value) : [...form.daysOfWeek, d.value] })}>{d.label}</button>
-          })}
-          {form.daysOfWeek.length === 0 && <span className="snx-muted">(mọi ngày)</span>}
-        </div>
-        <div className="snx-row"><span className="snx-spacer" /><button type="submit" className={`snx-btn ${form.action === 'DELETE' ? 'snx-btn--danger' : 'snx-btn--primary'}`} disabled={busy || !courts.length}>{busy ? 'Đang xử lý…' : 'Áp dụng'}</button></div>
+        <WeekDaySelector value={form.daysOfWeek} onChange={(daysOfWeek) => setForm({ ...form, daysOfWeek })} />
+        <div className="snx-row"><span className="snx-spacer" /><button type="submit" className={`snx-btn snx-btn--${activeAction.tone} is-active`} disabled={busy || !courts.length}><span className="material-symbols-outlined">{activeAction.icon}</span>{busy ? 'Đang xử lý…' : activeAction.label}</button></div>
       </div>
     </form>
   )
@@ -243,12 +445,15 @@ function DaySlotsModal({ day, court, onClose, onDeleted }) {
 
 export default function OwnerSlots() {
   const { facilityId, facility } = useOwnerContext()
-  const [from, setFrom] = useState(toDateKey())
+  const today = toDateKey()
+  const [from, setFrom] = useState(today)
   const to = addDays(from, 6)
   const [open, setOpen] = useState(null) // { dayIndex, courtId }
 
   const courts = useApi(() => getCourts(facilityId), [facilityId], { enabled: !!facilityId, initialData: [] })
   const range = useApi(() => getFacilitySlotsRange(facilityId, { from, to }), [facilityId, from], { enabled: !!facilityId })
+  const availability = useApi(() => getFacilityAvailability(facilityId, { date: today }), [facilityId, today], { enabled: !!facilityId })
+  const refreshAll = () => { range.refresh(); availability.refresh() }
   const r = range.data
   const days = r?.days || []
   const courtRows = days[0]?.courts?.map((c) => ({ courtId: c.courtId, courtName: c.courtName, sportName: c.sportName })) || (courts.data || []).map((c) => ({ courtId: c.id, courtName: c.name, sportName: sportOfCourt(c) }))
@@ -300,6 +505,12 @@ export default function OwnerSlots() {
           </div>
         )}
         {range.error && <div className="snx-alert snx-alert--error">{range.error}</div>}
+        {availability.data && (
+          <p className="snx-muted" style={{ margin: '0 0 8px', fontSize: 12.5 }}>
+            Khách tìm sân hôm nay đặt được: <strong>{availability.data.availableSlots ?? 0}</strong> ca trống trên{' '}
+            {(availability.data.courts || []).filter((c) => c.isBookable).length}/{(availability.data.courts || []).length} sân.
+          </p>
+        )}
         {r && activeSport && <p className="snx-muted" style={{ margin: '0 0 6px', fontSize: 12 }}>Số liệu dưới đây tính cho toàn cơ sở.</p>}
         {r && (
           <div className="snx-stats" style={{ marginBottom: 12 }}>
@@ -315,7 +526,7 @@ export default function OwnerSlots() {
         ) : (
           <div className="snx-table-wrap">
             <table className="snx-table">
-              <thead><tr><th>Sân</th>{days.map((d) => <th key={d.date}>{new Date(d.date).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}</th>)}</tr></thead>
+              <thead><tr><th>Sân</th>{days.map((d) => <th key={d.date}>{new Date(String(d.date).includes('T') ? d.date : `${d.date}T00:00:00`).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })}</th>)}</tr></thead>
               <tbody>
                 {visibleRows.map((row, rowIndex) => (
                   <Fragment key={row.courtId}>
@@ -350,11 +561,11 @@ export default function OwnerSlots() {
       </div>
 
       <div className="snx-grid snx-grid--2">
-        <GenerateCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={range.refresh} />
-        <BulkCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={range.refresh} />
+        <GenerateCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={refreshAll} />
+        <BulkCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={refreshAll} />
       </div>
 
-      {openDay && openCourt && <DaySlotsModal day={openDay} court={openCourt} onClose={() => setOpen(null)} onDeleted={range.refresh} />}
+      {openDay && openCourt && <DaySlotsModal day={openDay} court={openCourt} onClose={() => setOpen(null)} onDeleted={refreshAll} />}
     </div>
   )
 }

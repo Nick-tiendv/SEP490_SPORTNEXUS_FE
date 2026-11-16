@@ -8,6 +8,7 @@ import {
 } from '../../api/player/ratingApi.js'
 import { setNeedsOnboarding } from '../../utils/surveyGate.js'
 import { formatAccuracy, getCurrentLocation, isApproximate, reverseGeocode } from '../../utils/geolocation.js'
+import { clearBookingOrigin, readSavedBookingOrigin, saveBookingOrigin } from '../../utils/playerOrigin.js'
 import LocationPickerMap from '../../components/common/LocationPickerMap.jsx'
 
 // Khảo sát người chơi (PUT /api/auth/me/onboarding, thay toàn bộ).
@@ -135,13 +136,15 @@ export default function OnBoarding() {
     }
   }
 
-  // Tên khu vực của vị trí đang chọn (tra theo tọa độ, mọi tỉnh thành)
+  // Tên khu vực của vị trí đang chọn (tra theo tọa độ, debounce tránh gọi liên tiếp khi click/kéo ghim)
   const locationKey = location ? `${location.latitude},${location.longitude}` : ''
   useEffect(() => {
     if (!location) return undefined
     let cancelled = false
-    reverseGeocode(location.latitude, location.longitude).then(name => { if (!cancelled) setPlace({ key: `${location.latitude},${location.longitude}`, name }) })
-    return () => { cancelled = true }
+    const timer = setTimeout(() => {
+      reverseGeocode(location.latitude, location.longitude).then(name => { if (!cancelled) setPlace({ key: `${location.latitude},${location.longitude}`, name }) })
+    }, 400)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [location])
   const placeName = place.key === locationKey ? place.name : ''
 
@@ -165,6 +168,18 @@ export default function OnBoarding() {
         frequency: frequency || null,
       })
       setNeedsOnboarding(false)
+      if (readSavedBookingOrigin()?.source !== 'custom') {
+        if (location) {
+          saveBookingOrigin({
+            label: placeName || `${location.latitude}, ${location.longitude}`,
+            lat: location.latitude,
+            lng: location.longitude,
+            source: 'onboarding',
+          })
+        } else {
+          clearBookingOrigin()
+        }
+      }
       try {
         localStorage.setItem('player_sports_data', JSON.stringify(sports.map(s => ({ ...s, id: s.sportCategoryId, name: nameOf[s.sportCategoryId] || '', sportName: nameOf[s.sportCategoryId] || '', level: s.skillLevel }))))
       } catch { /* bỏ qua */ }

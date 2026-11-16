@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { createCourt, deleteCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
+import { createCourt, deleteCourt, getCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -18,60 +19,6 @@ const SPORT_STYLES = {
   BASKETBALL: { color: '#EF4444', icon: 'sports_basketball' },
 }
 const DEFAULT_SPORT_STYLE = { color: '#64748B', icon: 'sports' }
-// Giá cao điểm mặc định = giá chuẩn x hệ số này (BE chưa lưu giá cao điểm riêng).
-const PEAK_MULTIPLIER = 1.35
-
-// Quy tắc định giá động: chưa có API lưu riêng, sẽ áp dụng qua priceRules khi sinh slot.
-const DEFAULT_PRICING_RULES = [
-  {
-    id: 'rule-peak-evening',
-    name: 'Giờ cao điểm buổi tối (Peak Hours)',
-    type: 'time_window',
-    days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
-    timeRange: '17:00 - 22:00',
-    multiplier: 1.35,
-    active: true,
-    badge: 'Giờ vàng',
-    badgeColor: '#EF4444',
-    description: 'Áp dụng cho các ca tối đông khách trong tuần (tăng 35% so với giá cơ sở)',
-  },
-  {
-    id: 'rule-weekend',
-    name: 'Cuối tuần cao điểm (Weekend Premium)',
-    type: 'weekend',
-    days: ['Thứ 7', 'Chủ nhật'],
-    timeRange: '06:00 - 10:30 & 16:00 - 22:30',
-    multiplier: 1.45,
-    active: true,
-    badge: 'Cuối tuần',
-    badgeColor: '#F97316',
-    description: 'Lượng khách tập trung cao nhất tuần (tăng 45% hoặc định giá cố định)',
-  },
-  {
-    id: 'rule-offpeak',
-    name: 'Giờ vắng khách (Happy hours / giảm giá)',
-    type: 'discount',
-    days: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6'],
-    timeRange: '09:00 - 15:00',
-    multiplier: 0.8,
-    active: true,
-    badge: 'Giảm 20%',
-    badgeColor: '#10B981',
-    description: 'Kích cầu khung giờ trưa vắng khách cho học sinh, sinh viên, người làm việc tự do',
-  },
-  {
-    id: 'rule-lastminute',
-    name: 'Khuyến mãi đặt cận giờ (Flash Fill)',
-    type: 'last_minute',
-    days: ['Hàng ngày'],
-    timeRange: 'Trước giờ chơi 90 phút nếu sân còn trống',
-    multiplier: 0.75,
-    active: true,
-    badge: 'Flash 25%',
-    badgeColor: '#8B5CF6',
-    description: 'Tự động mở bán giảm 25% cho các slot trống chuẩn bị đến giờ chơi',
-  },
-]
 
 const toClock = value => (value && /^\d{1,2}:\d{2}/.test(value) ? value.slice(0, 5).padStart(5, '0') : '')
 const toMinutes = clock => {
@@ -79,7 +26,6 @@ const toMinutes = clock => {
   return h * 60 + m
 }
 const fromMinutes = total => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-const roundPrice = value => Math.round(value / 10000) * 10000
 // Thời lượng 1 ca chủ sân chọn cho từng sân (BE: bội số 15 phút, 15 - 480)
 const SLOT_MINUTE_OPTIONS = [30, 45, 60, 90, 120, 150, 180, 240]
 
@@ -153,17 +99,11 @@ export default function CourtManage() {
   // Hộp thoại thêm / sửa sân: null | { court (null = thêm mới), sportId, price }
   const [courtForm, setCourtForm] = useState(null)
 
-  // Giá chỉnh tay theo khu: { [categoryId]: { basePrice, peakPrice } }
+  // Giá chỉnh tay theo khu: { [categoryId]: { basePrice } }
   const [zonePrices, setZonePrices] = useState({})
-  const [pricingRules, setPricingRules] = useState(DEFAULT_PRICING_RULES)
   const [gridConfig, setGridConfig] = useState({ openingTime: '06:00', closingTime: '22:00' })
   // Sân đang xem mô phỏng lưới giờ (theo thời lượng ca của sân đó)
   const [previewCourtId, setPreviewCourtId] = useState(null)
-
-  // Bộ mô phỏng tính giá động trực quan
-  const [simZoneId, setSimZoneId] = useState('')
-  const [simDay, setSimDay] = useState('weekday') // 'weekday' | 'weekend'
-  const [simHour, setSimHour] = useState(18) // 18h tối
 
   const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg))
 
@@ -212,7 +152,6 @@ export default function CourtManage() {
         icon: style.icon,
         description: sport?.rulesDescription || '',
         basePrice,
-        peakPrice: zonePrices[categoryId]?.peakPrice ?? roundPrice(basePrice * PEAK_MULTIPLIER),
         courts: zoneCourts,
       }
     })
@@ -274,7 +213,20 @@ export default function CourtManage() {
     const sportZone = zones.find(zone => zone.id === sportId)
     setCourtForm({ court: null, sportId: sportId || sports[0]?.id || '', price: sportZone ? sportZone.basePrice : '' })
   }
-  const openEditCourtModal = (court) => setCourtForm({ court, sportId: court.categoryId, price: court.defaultPrice })
+  const openEditCourtModal = (court) => {
+    setCourtForm({ court, sportId: court.categoryId, price: court.defaultPrice, detailLoading: true })
+    getCourt(facilityId, court.id)
+      .then((detail) => {
+        if (!detail) return
+        setCourtForm((prev) => {
+          if (!prev?.court || String(prev.court.id) !== String(court.id)) return prev
+          return { ...prev, court: { ...prev.court, ...detail }, detailLoading: false }
+        })
+      })
+      .catch(() => {
+        setCourtForm((prev) => (prev ? { ...prev, detailLoading: false } : prev))
+      })
+  }
 
   // Thêm: POST /facilities/{facilityId}/courts · Sửa: PUT /facilities/{facilityId}/courts/{courtId}
   const handleSaveCourt = async (payload) => {
@@ -296,17 +248,12 @@ export default function CourtManage() {
     }
   }
 
-  // Toggle quy tắc định giá động (lưu cục bộ)
-  const handleToggleRule = (ruleId) => {
-    setPricingRules(prev => prev.map(rule => (rule.id === ruleId ? { ...rule, active: !rule.active } : rule)))
-  }
-
-  // Sửa giá của Khu trên giao diện
+  // Sửa giá chuẩn của Khu trên giao diện (lưu về defaultPrice khi rời ô nhập)
   const handleUpdateZonePrice = (zoneId, field, value) => {
     const zone = zones.find(item => item.id === zoneId)
     setZonePrices(prev => ({
       ...prev,
-      [zoneId]: { basePrice: zone.basePrice, peakPrice: zone.peakPrice, ...prev[zoneId], [field]: Number(value) || 0 },
+      [zoneId]: { basePrice: zone.basePrice, ...prev[zoneId], [field]: Number(value) || 0 },
     }))
   }
 
@@ -349,37 +296,6 @@ export default function CourtManage() {
     }
   }
 
-  const isRuleActive = id => pricingRules.find(rule => rule.id === id)?.active
-
-  // Tính giá mô phỏng theo giờ
-  const calculateSimulatedPrice = () => {
-    const zone = zones.find((z) => z.id === simZoneId) || zones[0]
-    if (!zone) return null
-    let base = zone.basePrice
-    let multiplier = 1.0
-    let appliedRule = 'Giá tiêu chuẩn (Giờ thường)'
-
-    if (simDay === 'weekend') {
-      if (isRuleActive('rule-weekend') && ((simHour >= 6 && simHour < 11) || (simHour >= 16 && simHour <= 22))) {
-        multiplier = 1.45
-        appliedRule = 'Quy tắc cuối tuần cao điểm (+45%)'
-      }
-    } else {
-      if (isRuleActive('rule-peak-evening') && simHour >= 17 && simHour <= 22) {
-        multiplier = 1.35
-        appliedRule = 'Quy tắc giờ cao điểm buổi tối (+35%)'
-      } else if (isRuleActive('rule-offpeak') && simHour >= 9 && simHour < 15) {
-        multiplier = 0.8
-        appliedRule = 'Quy tắc giờ vắng khách / happy hours (-20%)'
-      }
-    }
-
-    const finalPrice = Math.round(base * multiplier)
-    return { base, multiplier, finalPrice, appliedRule, zone }
-  }
-
-  const simResult = calculateSimulatedPrice()
-
   const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' Điểm'
 
   // Các ca trong ngày theo giờ mở/đóng cửa và thời lượng ca của sân đang xem
@@ -397,7 +313,6 @@ export default function CourtManage() {
   // Tổng số sân trong cụm
   const totalCourts = courts.length
   const activeCourts = courts.filter((c) => c.status === 'ACTIVE').length
-  const activeRuleCount = pricingRules.filter(rule => rule.active).length
 
   if (loading || loadError || !facility) {
     return (
@@ -681,16 +596,9 @@ export default function CourtManage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
                     <div>
-                      <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>Giờ chuẩn: </span>
+                      <span style={{ fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>Giá mặc định: </span>
                       <strong style={{ fontSize: '16px', color: '#0F172A', fontWeight: 700 }}>
                         {formatVND(selectedZone.basePrice)}/h
-                      </strong>
-                    </div>
-                    <span style={{ color: '#CBD5E1' }}>|</span>
-                    <div>
-                      <span style={{ fontSize: '13px', color: '#EF4444', fontWeight: 600 }}>Giờ cao điểm: </span>
-                      <strong style={{ fontSize: '16px', color: '#EF4444', fontWeight: 700 }}>
-                        {formatVND(selectedZone.peakPrice)}/h
                       </strong>
                     </div>
                   </div>
@@ -866,105 +774,52 @@ export default function CourtManage() {
         </div>
       )}
 
-      {/* TAB 2: ĐỊNH GIÁ ĐỘNG (DYNAMIC PRICING ENGINE) */}
+      {/* TAB 2: BẢNG GIÁ CƠ SỞ & ĐỊNH GIÁ CA SÂN */}
       {activeTab === 'pricing' && (
-        <>
-        <div className="snx-alert snx-alert--info" style={{ marginBottom: 16 }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>info</span>
-          <span>Giá chuẩn của từng khu được lưu vào sân. Các quy tắc giờ cao điểm bên dưới hiện chỉ để mô phỏng, chưa lưu lên hệ thống. Muốn áp giá thật theo khung giờ, dùng "Đổi giá" ở trang <a href="/owner/slots">Ca sân</a>.</span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 380px)', gap: '24px' }}>
-          {/* Rules list & base config */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Banner AI Engine */}
-            <div
-              style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-                borderRadius: '16px',
-                padding: '24px',
-                color: '#FFFFFF',
-                boxShadow: '0 4px 20px rgba(15, 23, 42, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span
-                    style={{
-                      background: 'rgba(16, 185, 129, 0.2)',
-                      border: '1px solid #10B981',
-                      color: '#34D399',
-                      padding: '3px 10px',
-                      borderRadius: '999px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      letterSpacing: '0.5px',
-                    }}
-                  >
-                    DYNAMIC PRICING ENGINE v2.4
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#94A3B8' }}>• Tự động tối ưu doanh thu</span>
-                </div>
-                <h2 style={{ fontSize: '22px', fontWeight: 600, margin: '0 0 6px 0' }}>
-                  Hệ thống định giá thông minh theo khung giờ
-                </h2>
-                <p style={{ margin: 0, color: '#94A3B8', fontSize: '13px', maxWidth: '580px' }}>
-                  Tự động điều chỉnh giá giờ cao điểm (Peak Hours), giảm giá giờ vắng khách (Off-peak Happy Hours) và kích cầu đặt sân cận giờ thông qua cơ chế Smart Escrow.
-                </p>
-              </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="snx-alert snx-alert--info">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>info</span>
+            <span>
+              Giá chuẩn của từng khu được lưu trực tiếp lên sân (<code>defaultPrice</code>). Hiện hệ thống chưa có API lưu quy tắc định giá động tự động — để áp dụng giá riêng cho giờ cao điểm / cuối tuần, vui lòng dùng chức năng &ldquo;Đổi giá&rdquo; ở trang{' '}
+              <Link to="/owner/slots">Ca sân</Link>.
+            </span>
+          </div>
 
-              <div
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '16px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#10B981',
-                  flexShrink: 0,
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '36px' }}>
-                  auto_graph
-                </span>
-              </div>
-            </div>
+          <div
+            style={{
+              background: 'rgba(255, 255, 255, 0.94)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              borderRadius: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.90)',
+              padding: '20px',
+              boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
+            }}
+          >
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0F172A', marginBottom: '14px' }}>
+              Bảng giá cơ sở theo từng cụm sân (Điểm/Giờ)
+            </h3>
 
-            {/* Base Rates table for each Zone */}
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.90)',
-                padding: '20px',
-                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
-              }}
-            >
-              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0F172A', marginBottom: '14px' }}>
-                Bảng giá cơ sở theo từng cụm sân (Điểm/Giờ)
-              </h3>
-
+            {zones.length === 0 ? (
+              <p style={{ margin: 0, color: '#475569', fontSize: '14px' }}>
+                Cơ sở chưa có sân nào. Hãy thêm sân ở tab &ldquo;Sân theo khu vực&rdquo;.
+              </p>
+            ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid #CBD5E1', background: '#F8FAFC' }}>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                        Khu vực & bộ môn
+                        Khu vực &amp; bộ môn
                       </th>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                        Giá giờ thường (Base Rate)
+                        Số sân
                       </th>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                        Giá giờ cao điểm (Peak Rate)
+                        Giá mặc định (Điểm/Giờ)
                       </th>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                        Chênh lệch
+                        Thao tác
                       </th>
                     </tr>
                   </thead>
@@ -997,6 +852,9 @@ export default function CourtManage() {
                             </div>
                           </div>
                         </td>
+                        <td style={{ padding: '14px 16px', fontSize: '13.5px', fontWeight: 600, color: '#334155' }}>
+                          {zone.courts.length} sân
+                        </td>
                         <td style={{ padding: '14px 16px' }}>
                           <input
                             type="number"
@@ -1006,7 +864,7 @@ export default function CourtManage() {
                             onBlur={() => handleSaveZoneBasePrice(zone)}
                             disabled={busyId === zone.id}
                             style={{
-                              width: '140px',
+                              width: '150px',
                               padding: '8px 12px',
                               borderRadius: '8px',
                               border: '1px solid #CBD5E1',
@@ -1017,344 +875,23 @@ export default function CourtManage() {
                           />
                         </td>
                         <td style={{ padding: '14px 16px' }}>
-                          <input
-                            type="number"
-                            step="10000"
-                            value={zone.peakPrice}
-                            onChange={(e) => handleUpdateZonePrice(zone.id, 'peakPrice', e.target.value)}
-                            style={{
-                              width: '140px',
-                              padding: '8px 12px',
-                              borderRadius: '8px',
-                              border: '1px solid #CBD5E1',
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              color: '#EF4444',
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '14px 16px' }}>
-                          <span
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              color: '#16A34A',
-                              background: '#DCFCE7',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                            }}
+                          <button
+                            type="button"
+                            className="snx-btn snx-btn--secondary snx-btn--sm"
+                            disabled={busyId === zone.id}
+                            onClick={() => handleSaveZoneBasePrice(zone)}
                           >
-                            +{zone.basePrice ? Math.round(((zone.peakPrice - zone.basePrice) / zone.basePrice) * 100) : 0}%
-                          </span>
+                            {busyId === zone.id ? 'Đang lưu...' : 'Lưu giá'}
+                          </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            {/* Dynamic Rules Configuration */}
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.90)',
-                padding: '20px',
-                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '16px',
-                }}
-              >
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0F172A', margin: 0 }}>
-                  Quy tắc định giá động đang áp dụng
-                </h3>
-                <span style={{ fontSize: '13px', color: '#047857', fontWeight: 600 }}>
-                  ● {activeRuleCount}/{pricingRules.length} quy tắc đang hoạt động
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {pricingRules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    style={{
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      background: rule.active ? '#FFFFFF' : '#F8FAFC',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '42px',
-                          height: '42px',
-                          borderRadius: '10px',
-                          background: `${rule.badgeColor}15`,
-                          color: rule.badgeColor,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-                          {rule.multiplier > 1 ? 'trending_up' : 'trending_down'}
-                        </span>
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 600, color: '#0F172A' }}>
-                            {rule.name}
-                          </span>
-                          <span
-                            style={{
-                              background: `${rule.badgeColor}20`,
-                              color: rule.badgeColor,
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              padding: '2px 8px',
-                              borderRadius: '6px',
-                            }}
-                          >
-                            {rule.badge}
-                          </span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '13.5px', color: '#1E293B', fontWeight: 600 }}>{rule.description}</p>
-                        <div style={{ display: 'flex', gap: '14px', marginTop: '6px', fontSize: '12px', color: '#334155', fontWeight: 600 }}>
-                          <span>
-                            <strong style={{ color: '#0F172A' }}>Khung giờ:</strong> {rule.timeRange}
-                          </span>
-                          <span>•</span>
-                          <span>
-                            <strong style={{ color: '#0F172A' }}>Ngày áp dụng:</strong> {rule.days.join(', ')}
-                          </span>
-                          <span>•</span>
-                          <span>
-                            <strong style={{ color: '#0F172A' }}>Hệ số:</strong>{' '}
-                            <span style={{ color: rule.multiplier >= 1 ? '#DC2626' : '#047857', fontWeight: 600 }}>
-                              {rule.multiplier}x
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Toggle Switch */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        onClick={() => handleToggleRule(rule.id)}
-                        style={{
-                          background: rule.active ? '#10B981' : '#CBD5E1',
-                          border: 'none',
-                          borderRadius: '999px',
-                          width: '48px',
-                          height: '26px',
-                          padding: '2px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          transition: 'background 0.2s',
-                          justifyContent: rule.active ? 'flex-end' : 'flex-start',
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '22px',
-                            height: '22px',
-                            borderRadius: '50%',
-                            background: '#FFFFFF',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                          }}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Realtime Pricing Simulator Widget */}
-          <div>
-            <div
-              style={{
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderRadius: '16px',
-                border: '1px solid rgba(255, 255, 255, 0.90)',
-                padding: '20px',
-                boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08)',
-                position: 'sticky',
-                top: '84px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <span className="material-symbols-outlined" style={{ color: '#047857', fontSize: '24px' }}>
-                  calculate
-                </span>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0F172A' }}>
-                  Trình mô phỏng giá thời gian thực
-                </h3>
-              </div>
-
-              {/* Select sport */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>
-                  Chọn bộ môn / khu vực
-                </label>
-                <select
-                  value={simResult?.zone.id || ''}
-                  onChange={(e) => setSimZoneId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    background: '#F8FAFC',
-                  }}
-                >
-                  {zones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>{zone.name} (Gốc: {formatVND(zone.basePrice)})</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Select Day Type */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>
-                  Ngày trong tuần
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <button
-                    onClick={() => setSimDay('weekday')}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: simDay === 'weekday' ? '2px solid #047857' : '1px solid #CBD5E1',
-                      background: simDay === 'weekday' ? '#ECFDF5' : '#FFFFFF',
-                      color: simDay === 'weekday' ? '#065F46' : '#1E293B',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Ngày thường (T2 - T6)
-                  </button>
-                  <button
-                    onClick={() => setSimDay('weekend')}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: simDay === 'weekend' ? '2px solid #F97316' : '1px solid #CBD5E1',
-                      background: simDay === 'weekend' ? '#FFF7ED' : '#FFFFFF',
-                      color: simDay === 'weekend' ? '#9A3412' : '#1E293B',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Cuối tuần (T7 - CN)
-                  </button>
-                </div>
-              </div>
-
-              {/* Slider for Hours */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: 600, color: '#0F172A' }}>
-                    Khung giờ thi đấu:
-                  </label>
-                  <strong style={{ fontSize: '14px', color: '#0F172A', fontWeight: 600 }}>
-                    {simHour.toString().padStart(2, '0')}:00 - {(simHour + 1).toString().padStart(2, '0')}:00
-                  </strong>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="23"
-                  value={simHour}
-                  onChange={(e) => setSimHour(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#047857', cursor: 'pointer' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#1E293B', fontWeight: 700, marginTop: '2px' }}>
-                  <span>05:00</span>
-                  <span>12:00</span>
-                  <span>18:00 (Peak)</span>
-                  <span>23:00</span>
-                </div>
-              </div>
-
-              {/* Simulator Calculation Result Card */}
-              {simResult && (
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  border: '1px solid #BBF7D0',
-                }}
-              >
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>
-                  Kết quả tính giá người chơi trả
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: 600, color: '#14532D', margin: '6px 0' }}>
-                  {formatVND(simResult.finalPrice)}
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: '#166534' }}> / giờ</span>
-                </div>
-
-                <div style={{ fontSize: '12px', color: '#166534', marginBottom: '8px', lineHeight: 1.4 }}>
-                  ⚡ Áp dụng: <strong>{simResult.appliedRule}</strong>
-                </div>
-
-                <div
-                  style={{
-                    paddingTop: '10px',
-                    borderTop: '1px dashed #86EFAC',
-                    fontSize: '12px',
-                    color: '#15803D',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span>Giá gốc ban đầu:</span>
-                  <span>{formatVND(simResult.base)}</span>
-                </div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: '#15803D',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginTop: '4px',
-                  }}
-                >
-                  <span>Hệ số điều chỉnh:</span>
-                  <span>{simResult.multiplier}x</span>
-                </div>
-              </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
-        </>
       )}
 
       {/* TAB 3: CẤU HÌNH LƯỚI THỜI GIAN (TIME GRID CONFIGURATION) */}
@@ -1443,9 +980,6 @@ export default function CourtManage() {
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {gridSlots.map((start) => {
-                const hour = Math.floor(start / 60)
-                const isPeak = hour >= 17 && hour <= 22
-                const isOffpeak = hour >= 9 && hour <= 14
                 const end = start + previewMinutes
                 return (
                   <div
@@ -1453,13 +987,13 @@ export default function CourtManage() {
                     style={{
                       padding: '10px 14px',
                       borderRadius: '10px',
-                      border: isPeak ? '1px solid #FCA5A5' : isOffpeak ? '1px solid #A7F3D0' : '1px solid #CBD5E1',
-                      background: isPeak ? '#FEF2F2' : isOffpeak ? '#ECFDF5' : '#FFFFFF',
+                      border: '1px solid #CBD5E1',
+                      background: '#FFFFFF',
                       textAlign: 'center',
                       minWidth: '105px',
                     }}
                   >
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: isPeak ? '#DC2626' : '#0F172A' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
                       {fromMinutes(start)} - {fromMinutes(end)}
                     </div>
                     <div
@@ -1467,10 +1001,10 @@ export default function CourtManage() {
                         fontSize: '10.5px',
                         fontWeight: 600,
                         marginTop: '4px',
-                        color: isPeak ? '#DC2626' : isOffpeak ? '#047857' : '#1E293B',
+                        color: '#1E293B',
                       }}
                     >
-                      {isPeak ? 'Giờ Vàng 🔥 (2h)' : isOffpeak ? 'Happy Hour (2h)' : 'Chuẩn (2h)'}
+                      Ca {previewMinutes >= 60 && previewMinutes % 60 === 0 ? `${previewMinutes / 60} giờ` : `${previewMinutes} phút`}
                     </div>
                   </div>
                 )

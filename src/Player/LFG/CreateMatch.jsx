@@ -10,9 +10,16 @@ import { getFacilities, transformFacilityToCourt } from '../../api/player/facili
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
 import { vnClock } from '../../utils/vnTime.js'
-import { getMySports } from '../../api/player/profileApi.js'
+import FacilityAreaMap from '../../components/common/FacilityAreaMap.jsx'
+import { reverseGeocode } from '../../utils/geolocation.js'
 import {
-  loadProfileRegisteredSports,
+  readProfileLocation,
+  readSavedBookingOrigin,
+  resolveEffectivePlayerOrigin,
+  subscribeBookingOrigin,
+} from '../../utils/playerOrigin.js'
+import {
+  normalizeSportKey,
   recordNewPlayerDesire,
   calculateDistanceFromRegisteredAddress,
 } from './lfgSuggestionEngine.js'
@@ -40,6 +47,27 @@ const SIDE_SIZE_OPTIONS = [
   { value: 1, label: 'Đơn 1 vs 1', hint: 'Chia phe A / B' },
   { value: 2, label: 'Đôi 2 vs 2', hint: 'Chia phe A / B' },
 ]
+
+const SKILL_LEVEL_CARDS = [
+  { key: 'intermediate', label: 'Trung bình - Khá', desc: 'Đánh chắc tay, giao lưu đều đặn' },
+  { key: 'beginner', label: 'Mới tập chơi', desc: 'Phong trào, vừa tập vừa giao lưu' },
+  { key: 'pro', label: 'Bán chuyên / Nâng cao', desc: 'Thi đấu cọ xát, kỹ chiến thuật tốt' },
+]
+
+const toCreateMatchSkillTag = (level) => {
+  if (level === 'beginner') return 'BEGINNER'
+  if (level === 'pro') return 'ADVANCED'
+  if (level === 'intermediate') return 'INTERMEDIATE'
+  return undefined
+}
+
+const fromCreateMatchSkillTag = (tag) => {
+  const upper = String(tag || '').trim().toUpperCase()
+  if (upper === 'BEGINNER') return 'beginner'
+  if (upper === 'ADVANCED' || upper === 'PROFESSIONAL') return 'pro'
+  if (upper === 'INTERMEDIATE') return 'intermediate'
+  return ''
+}
 
 function formatLocalDate(date) {
   const y = date.getFullYear()
@@ -86,7 +114,7 @@ function getLfgUpcomingDays(count = 21) {
 }
 
 // Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
   if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
 
   // Sắp xếp ca theo thứ tự thời gian tăng dần
@@ -196,35 +224,40 @@ function CreateMatch() {
   const currentUser = useCurrentUser()
   const navigate = useNavigate()
 
-  // State management
-  const [sport, setSport] = useState(() => loadProfileRegisteredSports()[0]?.sportKey || 'badminton') // Khởi tạo theo môn trong Profile
+  // State management (mặc định không chọn sẵn bộ môn hay tiêu chí ghép trận để người chơi tự chọn)
+  const [sport, setSport] = useState('')
   const [radius, setRadius] = useState(8.5)
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (không gán cứng tỉnh/quận mặc định)
-  const [userProfileLocation] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.location) return parsed.location
-      }
-    } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return ''
+  // Vị trí người chơi đồng bộ từ điểm xuất phát ở Đặt sân, hồ sơ cá nhân và khảo sát (không gán cứng tỉnh/quận mặc định)
+  const [bookingOrigin, setBookingOrigin] = useState(() => readSavedBookingOrigin())
+  const [profileOrigin, setProfileOrigin] = useState(() => readProfileLocation())
+  const [onboardingArea, setOnboardingArea] = useState({ coords: null, name: '' })
+  const [rawFacilitiesForDistricts, setRawFacilitiesForDistricts] = useState([])
+
+  useEffect(() => subscribeBookingOrigin(setBookingOrigin), [])
+
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === 'player_profile_data') setProfileOrigin(readProfileLocation())
+    }
+    const handleProfileUpdate = () => setProfileOrigin(readProfileLocation())
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
+
+  const resolvedOrigin = resolveEffectivePlayerOrigin({
+    bookingOrigin,
+    profileLocation: profileOrigin.location,
+    profileCoords: profileOrigin.coords,
+    onboarding: onboardingArea,
   })
-  const [userOriginCoords, setUserOriginCoords] = useState(() => {
-    try {
-      const saved = localStorage.getItem('player_profile_data')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.latitude != null && parsed.longitude != null) {
-          return { lat: Number(parsed.latitude), lng: Number(parsed.longitude) }
-        }
-      }
-    } catch { /* bỏ qua */ }
-    return null
-  })
+  const userProfileLocation = resolvedOrigin.label
+  const userOriginCoords = resolvedOrigin.coords
 
   // Cơ sở thật theo khu vực
-  const [districtData, setDistrictData] = useState({})
   useEffect(() => {
     let active = true
     Promise.all([
@@ -233,17 +266,23 @@ function CreateMatch() {
     ])
       .then(([res, onboarding]) => {
         if (!active) return
-        const coords =
-          onboarding?.latitude != null && onboarding?.longitude != null
-            ? { lat: Number(onboarding.latitude), lng: Number(onboarding.longitude) }
-            : userOriginCoords
-        if (coords) setUserOriginCoords(coords)
-        setDistrictData(groupByDistrict(res.items || [], coords || userProfileLocation))
+        setRawFacilitiesForDistricts(res.items || [])
+        if (onboarding?.latitude != null && onboarding?.longitude != null) {
+          const coords = { lat: Number(onboarding.latitude), lng: Number(onboarding.longitude) }
+          setOnboardingArea({ coords, name: '' })
+          reverseGeocode(coords.lat, coords.lng).then((name) => {
+            if (active && name) setOnboardingArea((prev) => ({ ...prev, name }))
+          })
+        }
       })
       .catch(() => active && toast.error('Không tải được danh sách cơ sở.'))
     return () => { active = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const districtData = useMemo(
+    () => groupByDistrict(rawFacilitiesForDistricts, userOriginCoords || userProfileLocation),
+    [rawFacilitiesForDistricts, userOriginCoords, userProfileLocation]
+  )
   const districtKeys = Object.keys(districtData)
   const userDistrictKey =
     (userProfileLocation &&
@@ -276,24 +315,24 @@ function CreateMatch() {
     return Number.isInteger(hours) ? hours : hours.toFixed(1)
   }, [preferredTimeRange])
 
-  // Thể thức (sideSize của BE): null = giao lưu không chia phe, 1 = đơn 1 vs 1, 2 = đôi 2 vs 2
-  const [sideSize, setSideSize] = useState(null)
+  // Thể thức (sideSize của BE): undefined = chưa chọn, null = giao lưu không chia phe, 1 = đơn 1 vs 1, 2 = đôi 2 vs 2
+  const [sideSize, setSideSize] = useState(undefined)
 
-  // Skill Level
-  const [skillLevel, setSkillLevel] = useState('intermediate') // 'intermediate', 'beginner', 'pro'
+  // Skill Level (chưa chọn sẵn để người chơi tự chọn)
+  const [skillLevel, setSkillLevel] = useState('') // '', 'intermediate', 'beginner', 'pro'
 
-  // Play Styles (checkboxes)
+  // Play Styles (checkboxes — không tự tick sẵn)
   const [playStyles, setPlayStyles] = useState({
-    fun: true,
-    fairplay: true,
+    fun: false,
+    fairplay: false,
     competitive: false,
   })
 
-  // Court Standards (checkboxes)
+  // Court Standards (checkboxes — không tự tick sẵn)
   const [courtStandards, setCourtStandards] = useState({
-    acCourt: true,
-    proBall: true,
-    splitBill: true,
+    acCourt: false,
+    proBall: false,
+    splitBill: false,
   })
 
   // Auto court lock checkbox
@@ -371,29 +410,20 @@ function CreateMatch() {
     }
   }, [location.state, facilitiesReload])
 
-  // Lọc cơ sở phù hợp theo môn và quận
-  // Đồng bộ môn thể thao từ Hồ sơ người chơi (GET /api/auth/me/sports) và ghi nhận khi người chơi đổi môn
-  useEffect(() => {
-    getMySports()
-      .then((serverSports) => {
-        const loaded = loadProfileRegisteredSports(serverSports)
-        if (loaded[0]?.sportKey) setSport(loaded[0].sportKey)
-      })
-      .catch(() => {})
-  }, [])
+  // Ghi nhận bộ môn người chơi chủ động chọn khi tạo kèo ghép trận
   useEffect(() => {
     if (sport) recordNewPlayerDesire({ sportKey: sport, source: 'Chọn môn khi tạo kèo ghép trận' })
   }, [sport])
 
   const filteredFacilities = useMemo(() => {
     if (!facilities.length) return []
-    const sportMatched = facilities.filter((f) => {
+    if (!sport) return facilities
+    return facilities.filter((f) => {
       if (Array.isArray(f.sports) && f.sports.length > 0) {
         return f.sports.includes(sport)
       }
       return f.sport === sport
     })
-    return sportMatched
   }, [facilities, sport])
 
   // Sắp xếp ưu tiên cơ sở tại khu vực đang chọn rồi theo khoảng cách thực (nếu có tọa độ)
@@ -463,7 +493,7 @@ function CreateMatch() {
   }, [currentDateStr, lfgUpcomingDays])
 
   // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
-  const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
+  const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 0
   const slotsKey = selectedSubCourt?.id ? `${selectedSubCourt.id}|${currentDateStr}|${defaultCourtPrice}` : null
   const courtSlots = slotsKey && slotsResult.key === slotsKey ? slotsResult.slots : []
   const isLoadingSlots = Boolean(slotsKey) && slotsResult.key !== slotsKey
@@ -523,6 +553,24 @@ function CreateMatch() {
   // Số ca DB gửi BE (ca 1 tiếng cũ được ghép 2 ca thành 1 khung trên giao diện)
   const dbSlotCount = consecutiveRun.slice(0, slotCount).reduce((n, s) => n + (s.slotIds?.length || 1), 0) || 1
 
+  // Chọn / bỏ chọn bộ môn thể thao (nếu cơ sở đang chọn không hỗ trợ môn mới thì xóa chọn sân/ca cũ)
+  const handleSelectSport = (sportKey) => {
+    const nextSport = sport === sportKey ? '' : sportKey
+    setSport(nextSport)
+    if (nextSport && selectedFacility) {
+      const supportsSport =
+        Array.isArray(selectedFacility.sports) && selectedFacility.sports.length > 0
+          ? selectedFacility.sports.includes(nextSport)
+          : selectedFacility.sport === nextSport
+      if (!supportsSport) {
+        setSelectedFacilityId(null)
+        setSelectedSubCourtId(null)
+        setCourtSlotId(null)
+        setCourtFee(0)
+      }
+    }
+  }
+
   // Tải dữ liệu kèo cũ khi ở chế độ chỉnh sửa: GET /api/v1/lfgs/{cardId}
   useEffect(() => {
     if (editCardId) {
@@ -533,7 +581,11 @@ function CreateMatch() {
             if (needed) setSlotsNeeded(Number(needed))
             if (res.pricePerPerson) setPricePerPerson(String(res.pricePerPerson))
             if (res.description) setDescription(res.description)
-            if (res.sideSize != null) setSideSize(Number(res.sideSize) || null)
+            setSideSize(res.sideSize != null && Number(res.sideSize) > 0 ? Number(res.sideSize) : null)
+            const mappedSkill = fromCreateMatchSkillTag(res.skillLevelTag)
+            if (mappedSkill) setSkillLevel(mappedSkill)
+            const mappedSport = normalizeSportKey(res.sportName || res.sportCategoryName || res.sport)
+            if (mappedSport) setSport(mappedSport)
             if (res.requireApproval !== undefined) setRequireApproval(Boolean(res.requireApproval))
           }
         })
@@ -563,6 +615,18 @@ function CreateMatch() {
   const currentDistrictData = districtData[selectedDistrict] || { name: 'Đang tải…', courts: [] }
   const currentCourt =
     currentDistrictData.courts.find((c) => c.id === pickedCourtId) || currentDistrictData.courts[0] || { name: '—', distance: '', courtCount: '', price: '' }
+  const mapFacilities = useMemo(() => {
+    const base = sortedFacilities.length > 0 ? sortedFacilities : currentDistrictData.courts
+    if (!selectedFacility) return base
+    return base.some((f) => f.id === selectedFacility.id) ? base : [selectedFacility, ...base]
+  }, [sortedFacilities, currentDistrictData.courts, selectedFacility])
+  const handleSelectFacility = (fac) => {
+    if (!fac?.id) return
+    const matched = facilities.find((f) => f.id === fac.id) || fac
+    setSelectedFacilityId(matched.id)
+    const firstCourt = matched.courts?.find((c) => c.status === 'ACTIVE') || matched.courts?.[0]
+    if (firstCourt) setSelectedSubCourtId(firstCourt.id)
+  }
 
   // Lọc khu vực theo tên khu vực hoặc tên / địa chỉ cơ sở & sắp xếp theo khoảng cách thực (nếu có tọa độ)
   const filteredDistricts = Object.entries(districtData)
@@ -597,6 +661,13 @@ function CreateMatch() {
     setSubmitting(true)
     setCreateError(null)
 
+    if (!isEditMode && !sport) {
+      setCreateError('Chưa chọn bộ môn thể thao. Vui lòng chọn bộ môn ở mục 01 trước khi tạo kèo.')
+      setSubmitting(false)
+      document.getElementById('section-sport')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
     if (!isEditMode && !courtSlotId) {
       setCreateError('Chưa chọn ca sân. Vui lòng chọn cơ sở và một ca trống ở mục 03 trước khi tạo kèo.')
       setSubmitting(false)
@@ -626,12 +697,7 @@ function CreateMatch() {
       return
     }
 
-    const skillTag =
-      skillLevel === 'beginner'
-        ? 'BEGINNER'
-        : skillLevel === 'pro'
-        ? 'ADVANCED'
-        : 'INTERMEDIATE'
+    const skillTag = toCreateMatchSkillTag(skillLevel)
 
     // Nếu đang sửa kèo: Gọi PUT /api/v1/lfgs/{cardId}
     if (isEditMode) {
@@ -674,12 +740,7 @@ function CreateMatch() {
   const confirmCreateLfg = async () => {
     setSubmitting(true)
     setCreateError(null)
-    const skillTag =
-      skillLevel === 'beginner'
-        ? 'BEGINNER'
-        : skillLevel === 'pro'
-        ? 'ADVANCED'
-        : 'INTERMEDIATE'
+    const skillTag = toCreateMatchSkillTag(skillLevel)
     try {
       await createLfg({
         courtSlotId,
@@ -761,7 +822,7 @@ function CreateMatch() {
             {/* ================= LEFT COLUMN: CONFIGURATION FORM ================= */}
             <div className="lg:col-span-8 flex flex-col gap-7">
               {/* 01. CHỌN BỘ MÔN THỂ THAO */}
-              <div>
+              <div id="section-sport">
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-[12px] font-black text-[#111827] uppercase tracking-wide">
                     01. CHỌN BỘ MÔN THỂ THAO
@@ -781,7 +842,7 @@ function CreateMatch() {
                   ].map((s) => (
                     <div
                       key={s.key}
-                      onClick={() => setSport(s.key)}
+                      onClick={() => handleSelectSport(s.key)}
                       className={`relative p-3 rounded-2xl cursor-pointer transition-all flex flex-col items-center text-center gap-2 ${
                         sport === s.key
                           ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/30 border-2 border-[#2D5F3F]'
@@ -1195,7 +1256,9 @@ function CreateMatch() {
                     </div>
                   )}
                   {facilitiesStatus === 'ready' && sortedFacilities.length === 0 && (
-                    <p className="text-xs text-gray-500 py-3">Hiện chưa có cơ sở nào trên hệ thống cho môn này.</p>
+                    <p className="text-xs text-gray-500 py-3">
+                      {sport ? 'Hiện chưa có cơ sở nào trên hệ thống cho môn này.' : 'Hiện chưa có cơ sở nào trên hệ thống.'}
+                    </p>
                   )}
                   {facilitiesStatus === 'ready' && sortedFacilities.length > 0 && !selectedFacility && (
                     <p className="text-xs text-amber-700 pb-2">Chọn một cơ sở bên dưới để xem sân con và ca trống.</p>
@@ -1229,7 +1292,9 @@ function CreateMatch() {
                           <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] w-full">
                             <span className="font-semibold text-gray-500">{facCourtsCount} sân đấu</span>
                             <span className="font-extrabold text-[#15803D]">
-                              từ {new Intl.NumberFormat('vi-VN').format(fac.price || 100000)} Điểm/h
+                              {Number(fac.price) > 0
+                                ? `từ ${new Intl.NumberFormat('vi-VN').format(fac.price)} Điểm/h`
+                                : 'Liên hệ'}
                             </span>
                           </div>
                         </button>
@@ -1272,7 +1337,9 @@ function CreateMatch() {
                                 isCourtSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                               }`}
                             >
-                              {new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice) || 100000)} Điểm/h
+                              {Number(court.defaultPrice) > 0
+                                ? `${new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice))} Điểm/h`
+                                : 'Chưa có giá'}
                             </span>
                           </button>
                         )
@@ -1440,7 +1507,10 @@ function CreateMatch() {
                         type="button"
                         disabled={isEditMode}
                         aria-pressed={sideSize === fmt.value}
-                        onClick={() => { setSideSize(fmt.value); if (fmt.value) setSlotsNeeded(fmt.value * 2 - 1) }}
+                        onClick={() => {
+                          setSideSize((prev) => (prev === fmt.value ? undefined : fmt.value))
+                          if (fmt.value && sideSize !== fmt.value) setSlotsNeeded(fmt.value * 2 - 1)
+                        }}
                         className={`p-2.5 rounded-xl border text-xs font-bold text-center flex flex-col items-center justify-center gap-0.5 transition-all ${isEditMode ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} ${
                           sideSize === fmt.value
                             ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
@@ -1459,65 +1529,28 @@ function CreateMatch() {
                 <div className="mb-4">
                   <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Trung bình Khá */}
-                    <div
-                      onClick={() => setSkillLevel('intermediate')}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        skillLevel === 'intermediate'
-                          ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-black text-xs">
-                        <span className="material-symbols-outlined text-[16px]">
-                          {skillLevel === 'intermediate' ? 'check_box' : 'check_box_outline_blank'}
-                        </span>
-                        <span>Trung bình - Khá</span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Đánh chắc tay, giao lưu đều đặn
-                      </p>
-                    </div>
-
-                    {/* Mới tập chơi */}
-                    <div
-                      onClick={() => setSkillLevel('beginner')}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        skillLevel === 'beginner'
-                          ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-black text-xs">
-                        <span className="material-symbols-outlined text-[16px]">
-                          {skillLevel === 'beginner' ? 'check_box' : 'check_box_outline_blank'}
-                        </span>
-                        <span>Mới tập chơi</span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Phong trào, vừa tập vừa giao lưu
-                      </p>
-                    </div>
-
-                    {/* Bán chuyên / Nâng cao */}
-                    <div
-                      onClick={() => setSkillLevel('pro')}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        skillLevel === 'pro'
-                          ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-black text-xs">
-                        <span className="material-symbols-outlined text-[16px]">
-                          {skillLevel === 'pro' ? 'check_box' : 'check_box_outline_blank'}
-                        </span>
-                        <span>Bán chuyên / Nâng cao</span>
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1 pl-5">
-                        Thi đấu cọ xát, kỹ chiến thuật tốt
-                      </p>
-                    </div>
+                    {SKILL_LEVEL_CARDS.map((card) => {
+                      const isSelected = skillLevel === card.key
+                      return (
+                        <div
+                          key={card.key}
+                          onClick={() => setSkillLevel((prev) => (prev === card.key ? '' : card.key))}
+                          className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-black text-xs">
+                            <span className="material-symbols-outlined text-[16px]">
+                              {isSelected ? 'check_box' : 'check_box_outline_blank'}
+                            </span>
+                            <span>{card.label}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1 pl-5">{card.desc}</p>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -1730,45 +1763,50 @@ function CreateMatch() {
                   </span>
                 </div>
 
-                {/* Dynamic Map Frame with Selected Location */}
-                <div className="relative rounded-2xl overflow-hidden h-56 bg-slate-100 border border-gray-200 shadow-inner group">
-                  <iframe
-                    title="Bản đồ cụm sân thể thao"
-                    className="w-full h-full border-0 pointer-events-auto"
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      selectedFacility?.latitude && selectedFacility?.longitude ? `${selectedFacility.latitude},${selectedFacility.longitude}` : (selectedFacility?.address || selectedFacility?.name || currentCourt.name) + ', TP Ho Chi Minh'
-                    )}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
-                    loading="lazy"
-                  />
+                {/* Dynamic Leaflet Map Frame with Selected Location */}
+                <div className="rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-inner">
+                  <div className="relative h-56 bg-slate-100">
+                    <FacilityAreaMap
+                      facilities={mapFacilities}
+                      selectedFacilityId={selectedFacility?.id ?? null}
+                      onSelectFacility={handleSelectFacility}
+                      userOriginCoords={userOriginCoords}
+                      radiusKm={radius}
+                      height={224}
+                    />
 
-                  {/* Radius Overlay Indicator */}
-                  <div className="absolute top-2.5 left-2.5 pointer-events-none">
-                    <span className="px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-md text-[10.5px] font-extrabold text-gray-800 shadow-xs border border-gray-200 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse"></span>
-                      {selectedFacility?.name || currentDistrictData.name} • {radius}km
-                    </span>
+                    {/* Radius Overlay Indicator */}
+                    <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none max-w-[65%]">
+                      <span className="px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur-md text-[10.5px] font-extrabold text-gray-800 shadow-xs border border-gray-200 flex items-center gap-1 truncate">
+                        <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse shrink-0"></span>
+                        <span className="truncate">{selectedFacility?.name || currentDistrictData.name} • {radius}km</span>
+                      </span>
+                    </div>
+
+                    {/* Top-right Status Pill */}
+                    <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
+                      <span className="px-2 py-0.5 rounded-lg bg-[#2D5F3F] text-white text-[10px] font-bold shadow-xs">
+                        Lưới Trực Tuyến
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Top-right Status Pill */}
-                  <div className="absolute top-2.5 right-2.5 pointer-events-none">
-                    <span className="px-2 py-0.5 rounded-lg bg-[#2D5F3F] text-white text-[10px] font-bold shadow-xs">
-                      Lưới Trực Tuyến
-                    </span>
-                  </div>
-
-                  {/* Bottom Court Card Floating Overlay */}
-                  <div className="absolute bottom-2.5 left-2.5 right-2.5 p-2.5 rounded-xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-md flex items-center justify-between pointer-events-auto">
+                  {/* Selected Court Summary Bar (below map so OSM attribution stays unobstructed) */}
+                  <div className="p-2.5 bg-white border-t border-gray-200 flex items-center justify-between gap-2">
                     <div className="min-w-0 pr-2">
                       <p className="font-extrabold text-xs text-[#111827] flex items-center gap-1 truncate">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shrink-0"></span>
                         <span className="truncate">{selectedFacility?.name || currentCourt.name}</span>
                       </p>
                       <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                        {selectedFacility?.address || currentCourt.address} • {selectedFacility?.courts?.length || currentCourt.courtCount} sân
+                        {selectedFacility?.address || currentCourt.address || 'Chưa chọn cơ sở'} •{' '}
+                        {selectedFacility ? `${selectedFacility.courts?.length || 0} sân` : currentCourt.courtCount || '0 sân'}
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-md bg-[#EAF7EE] text-[#15803D] font-black text-xs shrink-0">
-                      từ {new Intl.NumberFormat('vi-VN').format(selectedFacility?.price || 100000)} Điểm
+                      {Number(selectedFacility?.price) > 0
+                        ? `từ ${new Intl.NumberFormat('vi-VN').format(selectedFacility.price)} Điểm`
+                        : 'Chưa có giá'}
                     </span>
                   </div>
                 </div>
@@ -1821,7 +1859,10 @@ function CreateMatch() {
                       {currentUser.name || 'Bạn'} (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      {eloText(standing.best)} • <span className="text-[#15803D] font-bold">Fair Play {fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
+                      {sport
+                        ? `${eloText(standing.forSport(sport), { badminton: 'Cầu lông', pickleball: 'Pickleball', football: 'Bóng đá', basketball: 'Bóng rổ', tennis: 'Tennis' }[sport] || '')} • `
+                        : ''}
+                      <span className="text-[#15803D] font-bold">Fair Play {fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
                     </p>
                   </div>
                 </div>
@@ -1832,44 +1873,6 @@ function CreateMatch() {
                   </span>
                 </div>
               </div>
-
-              {/* Card 3: TỈ LỆ KHỚP KÈO DỰ BÁO */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
-                    TỈ LỆ KHỚP KÈO DỰ BÁO
-                  </span>
-                  <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
-                  <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng trình độ trực tuyến
-                  </p>
-                </div>
-
-                {/* Donut progress 88% */}
-                <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path
-                      className="text-gray-100"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-[#2D5F3F]"
-                      strokeDasharray="88, 100"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <span className="absolute text-xs font-black text-[#111827]">88%</span>
-                </div>
-              </div>
-
-
 
               {/* Card 4: Thông tin ca sân đã chọn / Nhắc nhở chọn ca */}
               {courtSlotId ? (

@@ -808,16 +808,16 @@ export function buildPersonalizedLfgSuggestions({
           fac.image ||
           fac.imageItems?.find((i) => i.isThumbnail)?.url ||
           fac.images?.[0] ||
-          'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=600&h=400&fit=crop',
+          '/sports-bg.jpg',
         matchedSports,
         primarySportKey,
         primarySportMeta,
-        price: Number(fac.price || fac.minPrice || 100000),
-        courtCount: fac.courtCount || fac.courts?.length || 4,
-        rating: fac.rating || fac.averageRating || 4.8,
-        reviewCount: fac.reviewCount || 36,
-        openTime: fac.openTime?.slice(0, 5) || '06:00',
-        closeTime: fac.closeTime?.slice(0, 5) || '22:00',
+        price: Number(fac.price || fac.minPrice || 0),
+        courtCount: fac.courtCount ?? fac.courts?.length ?? 0,
+        rating: fac.rating ?? (fac.averageRating > 0 ? fac.averageRating : null),
+        reviewCount: Number(fac.reviewCount) || 0,
+        openTime: fac.openTime ? fac.openTime.slice(0, 5) : '',
+        closeTime: fac.closeTime ? fac.closeTime.slice(0, 5) : '',
         openMatchesCount: openMatchesAtVenue.length,
         distanceKm,
         etaMinutes: distanceKm != null ? Math.max(3, Math.round(distanceKm * 2.5)) : null,

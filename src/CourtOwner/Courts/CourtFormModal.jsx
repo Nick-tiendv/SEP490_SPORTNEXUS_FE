@@ -95,6 +95,15 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" onClick={onClose} aria-label="Đóng"><span className="material-symbols-outlined">close</span></button>
         </div>
         <div className="snx-stack" style={{ gap: 12 }}>
+          {editing && (court.availableSlotsNext7Days != null || court.minUpcomingPrice != null || court.effectiveSlotMinutes != null) && (
+            <div className="snx-alert snx-alert--info" style={{ fontSize: 12.5 }}>
+              {[
+                court.availableSlotsNext7Days != null && `${court.availableSlotsNext7Days} ca trống 7 ngày tới`,
+                court.effectiveSlotMinutes != null && `Thời lượng áp dụng: ${court.effectiveSlotMinutes} phút`,
+                court.minUpcomingPrice != null && `Giá sắp tới: ${Number(court.minUpcomingPrice).toLocaleString('vi-VN')}–${Number(court.maxUpcomingPrice ?? court.minUpcomingPrice).toLocaleString('vi-VN')} Điểm`,
+              ].filter(Boolean).join(' • ')}
+            </div>
+          )}
           <div className="snx-form-grid">
             <label className="snx-field">Bộ môn *
               <select className="snx-select" value={form.categoryId} onChange={changeSport}>

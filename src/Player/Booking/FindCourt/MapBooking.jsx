@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
-import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getOnboarding } from '../../../api/player/ratingApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
-import { geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
+import { GEOCODE_DEBOUNCE_MS, geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
+import { clearBookingOrigin, readSavedBookingOrigin, saveBookingOrigin } from '../../../utils/playerOrigin.js'
 import { vnClock } from '../../../utils/vnTime.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -83,6 +84,7 @@ const areaOfCourt = (court) => {
 }
 // Khung bao quanh các điểm (nới rộng một chút để ghim không nằm sát mép)
 const boundsOfPoints = (points) => {
+  if (!points?.length) return null
   const lats = points.map((p) => p[0])
   const lngs = points.map((p) => p[1])
   const pad = 0.01
@@ -98,19 +100,7 @@ const getDistanceForCourt = (court, liveCoords = null) => {
   return d != null ? Math.max(0.2, d) : null
 }
 
-// Mẫu khung giờ — quy chuẩn hệ thống là 2 tiếng / ca (sân mở cửa 06:00 - 22:00)
-const SLOT_TEMPLATE = [
-  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'booked', note: 'Đã qua giờ' },
-  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
-]
-
-const formatVnd = (n) => `${n.toLocaleString('vi-VN')} Điểm`
-const roundTo10k = (n) => Math.round(n / 10000) * 10000
+const formatVnd = (n) => `${(Number(n) || 0).toLocaleString('vi-VN')} Điểm`
 
 const SPORT_SEARCH_TEXT = {
   badminton: 'cầu lông cau long badminton',
@@ -249,18 +239,8 @@ const shortHours = (h) => {
 }
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-const SLOT_TEMPLATE_FUTURE = [
-  { id: 's1', start: '06:00', end: '08:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's2', start: '08:00', end: '10:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's3', start: '10:00', end: '12:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's4', start: '14:00', end: '16:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's5', start: '16:00', end: '18:00', hours: 2, factor: 1, status: 'available' },
-  { id: 's6', start: '18:00', end: '20:00', hours: 2, factor: 1, status: 'booked', note: 'Đã có khách đặt' },
-  { id: 's7', start: '20:00', end: '22:00', hours: 2, factor: 1, status: 'available' },
-]
-
 // Ghép ca thành các khung giờ 2 tiếng chuẩn toàn hệ thống (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
   if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
 
   const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -342,20 +322,6 @@ function getUpcomingDays(count = 7) {
   return days
 }
 
-function buildSlots(court, isToday = true, basePrice = null) {
-  const template = isToday ? SLOT_TEMPLATE : SLOT_TEMPLATE_FUTURE
-  const courtPrice = Number(basePrice) > 0 ? Number(basePrice) : (Number(court?.price) || 100000)
-  return template.map((t) => {
-    const status = isToday ? (court?.overrides?.[t.id] || t.status) : t.status
-    return {
-      ...t,
-      status,
-      note: status === 'booked' ? t.note || 'Đã kín lịch' : null,
-      price: roundTo10k(courtPrice * (t.hours || 2)),
-    }
-  })
-}
-
 function MapBooking() {
   const navigate = useNavigate()
   const { isSportActive, isAllActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
@@ -372,6 +338,7 @@ function MapBooking() {
     return ''
   })
   const [onboardingArea, setOnboardingArea] = useState({ coords: null, name: '' })
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   useEffect(() => {
     let cancelled = false
     getOnboarding()
@@ -384,15 +351,22 @@ function MapBooking() {
         })
       })
       .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setOnboardingLoaded(true)
+      })
     return () => { cancelled = true }
   }, [])
 
-  // Điểm xuất phát tùy chỉnh (cho phép người chơi nhập vị trí cụ thể bất kỳ để chỉ đường)
-  const [customOrigin, setCustomOrigin] = useState('')
+  // Điểm xuất phát tùy chỉnh (được đồng bộ với Ghép trận LFG qua playerOrigin)
+  const [customOrigin, setCustomOrigin] = useState(() => {
+    const saved = readSavedBookingOrigin()
+    return saved?.source === 'custom' ? saved.customText || saved.label || '' : ''
+  })
   const [isEditingOrigin, setIsEditingOrigin] = useState(false)
 
   // Tọa độ GPS thiết bị người chơi (lấy ngầm để tính khoảng cách và định vị chính xác)
   const [gpsCoords, setGpsCoords] = useState(null)
+  const [gpsPlace, setGpsPlace] = useState({ key: '', name: '' })
 
   // Tìm kiếm & Lọc
   const [query, setQuery] = useState('')
@@ -441,8 +415,9 @@ function MapBooking() {
     }
   }, [upcomingDays, selectedDateStr, todayIsoDate])
 
-  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
+  // Lấy dữ liệu cơ sở và khu vực thực tế từ Backend API (/api/v1/facilities, /api/v1/facilities/locations)
   const [apiFacilities, setApiFacilities] = useState([])
+  const [apiLocations, setApiLocations] = useState([])
   const [apiStatus, setApiStatus] = useState('connecting')
   const isLoadingApi = apiStatus === 'connecting'
 
@@ -480,66 +455,112 @@ function MapBooking() {
     )
   }, [])
 
-  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến hồ sơ hoặc khảo sát
-  const effectiveOrigin = useMemo(() => {
-    if (customOrigin.trim()) return customOrigin.trim()
-    return userProfileLocation || onboardingArea.name || ''
-  }, [customOrigin, userProfileLocation, onboardingArea.name])
-
-  // Khu vực gợi ý lấy từ chính các cơ sở trong hệ thống (mọi tỉnh / thành, kể cả Hà Nội):
-  // nút tỉnh / thành trước, sau đó các phường có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
+  // Khu vực gợi ý kết hợp GET /api/v1/facilities/locations và các cơ sở đang hiển thị:
+  // nút tỉnh / thành trước, sau đó các phường/quận có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
   const areaChips = useMemo(() => {
     const provinces = new Map()
-    for (const court of apiFacilities) {
-      if (!court.lat || !court.lng) continue
-      const { province, district } = areaOfCourt(court)
-      if (!province) continue
-      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], courts: [], districts: new Map() }
-      p.ids.add(String(court.id))
-      p.points.push([court.lat, court.lng])
-      p.courts.push(court)
-      if (district) {
-        const value = `${district}, ${province}`
-        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [], courts: [] }
-        d.ids.add(String(court.id))
-        d.points.push([court.lat, court.lng])
-        d.courts.push(court)
-        p.districts.set(value, d)
-      }
-      provinces.set(province, p)
+    const canonProvince = (raw) => {
+      const cleaned = String(raw || '').trim()
+      if (!cleaned) return ''
+      return PROVINCE_ALIASES.find((a) => a.test.test(normalizeText(cleaned)))?.label || cleaned
     }
-    const provinceList = [...provinces.values()].sort((a, b) => b.ids.size - a.ids.size)
+    const ensureProvince = (name) => {
+      const key = canonProvince(name)
+      if (!key) return null
+      if (!provinces.has(key)) provinces.set(key, { label: key, value: key, ids: new Set(), points: [], courts: [], districts: new Map() })
+      return provinces.get(key)
+    }
+    const ensureDistrict = (prov, distName) => {
+      const district = String(distName || '').trim()
+      if (!prov || !district || normalizeText(district) === normalizeText(prov.label)) return null
+      const value = `${district}, ${prov.label}`
+      if (!prov.districts.has(value)) prov.districts.set(value, { label: district, value, province: prov.label, ids: new Set(), points: [], courts: [] })
+      return prov.districts.get(value)
+    }
+
+    for (const loc of apiLocations) {
+      const p = ensureProvince(loc?.province)
+      if (!p) continue
+      for (const dist of Array.isArray(loc?.districts) ? loc.districts : []) {
+        ensureDistrict(p, dist)
+      }
+    }
+
+    for (const court of apiFacilities) {
+      const { province, district } = areaOfCourt(court)
+      const p = ensureProvince(province)
+      if (!p) continue
+      const id = String(court.id)
+      if (!p.ids.has(id)) {
+        p.ids.add(id)
+        p.courts.push(court)
+        if (court.lat && court.lng) p.points.push([court.lat, court.lng])
+      }
+      const d = ensureDistrict(p, district)
+      if (d && !d.ids.has(id)) {
+        d.ids.add(id)
+        d.courts.push(court)
+        if (court.lat && court.lng) d.points.push([court.lat, court.lng])
+      }
+    }
+    const provinceList = [...provinces.values()]
+      .filter((p) => p.ids.size > 0)
+      .sort((a, b) => b.ids.size - a.ids.size)
     const districtList = provinceList
       .flatMap((p) => [...p.districts.values()])
+      .filter((d) => d.ids.size > 0)
       .sort((a, b) => b.ids.size - a.ids.size)
       .slice(0, MAX_AREA_CHIPS)
     return { provinces: provinceList, districts: districtList, all: [...provinceList, ...districtList] }
-  }, [apiFacilities])
+  }, [apiFacilities, apiLocations])
   const selectedAreaChip = useMemo(() => {
     const text = normalizeText(customOrigin.trim())
     return text ? areaChips.all.find((chip) => normalizeText(chip.value) === text) || null : null
   }, [areaChips, customOrigin])
 
-  // Tọa độ của vị trí người dùng tự nhập (tra địa chỉ, chờ ngừng gõ 600ms); chọn nút khu vực thì không cần tra
-  const [customGeo, setCustomGeo] = useState({ key: '', coords: null })
+  // Tọa độ của vị trí người dùng tự nhập (debounce 1 giây sau khi dừng gõ mới gọi API); chọn nút khu vực thì không cần tra
+  const [customGeo, setCustomGeo] = useState(() => {
+    const saved = readSavedBookingOrigin()
+    const key = saved?.source === 'custom' ? saved.customText || saved.label || '' : ''
+    return key && saved?.coords ? { key, coords: saved.coords } : { key: '', coords: null }
+  })
   useEffect(() => {
     const text = customOrigin.trim()
-    if (!text || selectedAreaChip) return undefined
+    if (text.length < 2 || selectedAreaChip) return undefined
     let cancelled = false
     const timer = setTimeout(() => {
       geocodeAddress(text).then((coords) => { if (!cancelled) setCustomGeo({ key: text, coords }) })
-    }, 600)
+    }, GEOCODE_DEBOUNCE_MS)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [customOrigin, selectedAreaChip])
 
   // Điểm xuất phát dùng cho ghim bản đồ, khoảng cách và chỉ đường:
   // vị trí tự nhập > GPS thiết bị > tọa độ khảo sát; thiếu cả ba trả null (không gán cứng tọa độ TP.HCM)
   const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
+  const gpsKey = trustedGps ? `${trustedGps.lat.toFixed(4)},${trustedGps.lng.toFixed(4)}` : ''
+  useEffect(() => {
+    if (!trustedGps) return undefined
+    let cancelled = false
+    reverseGeocode(trustedGps.lat, trustedGps.lng).then((name) => {
+      if (!cancelled && name) setGpsPlace({ key: gpsKey, name })
+    })
+    return () => { cancelled = true }
+  }, [trustedGps, gpsKey])
+  const gpsLabel = gpsKey && gpsPlace.key === gpsKey ? gpsPlace.name : ''
+
+  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến GPS chính xác, hồ sơ hoặc khảo sát
+  const effectiveOrigin = useMemo(() => {
+    if (customOrigin.trim()) return customOrigin.trim()
+    if (trustedGps && gpsLabel) return gpsLabel
+    return userProfileLocation || onboardingArea.name || ''
+  }, [customOrigin, trustedGps, gpsLabel, userProfileLocation, onboardingArea.name])
+
   const originPoint = useMemo(() => {
     const text = customOrigin.trim()
     // Nút khu vực: tâm của các cơ sở trong khu vực
     if (selectedAreaChip) {
       const pts = selectedAreaChip.points
+      if (!pts.length) return null
       return { lat: pts.reduce((sum, p) => sum + p[0], 0) / pts.length, lng: pts.reduce((sum, p) => sum + p[1], 0) / pts.length }
     }
     const typed = text && customGeo.key === text ? customGeo.coords : null
@@ -551,7 +572,56 @@ function MapBooking() {
   // Tên điểm xuất phát hiển thị: khớp với tọa độ đang dùng để tính khoảng cách
   const originLabel = customOrigin.trim()
     ? selectedAreaChip?.label && selectedAreaChip.province ? `${selectedAreaChip.label}, ${selectedAreaChip.province}` : customOrigin.trim()
-    : trustedGps ? 'Vị trí hiện tại của bạn' : userProfileLocation || onboardingArea.name || 'Chưa xác định vị trí'
+    : trustedGps ? (gpsLabel || 'Vị trí hiện tại của bạn') : userProfileLocation || onboardingArea.name || 'Chưa xác định vị trí'
+
+  // Đồng bộ điểm xuất phát hiện tại sang Ghép trận LFG (Hồ sơ ghép trận & Tạo kèo)
+  useEffect(() => {
+    const trimmedCustom = customOrigin.trim()
+    if (trimmedCustom) {
+      if (!selectedAreaChip && trimmedCustom.length >= 2 && customGeo.key !== trimmedCustom) return
+      saveBookingOrigin({
+        label: originLabel,
+        lat: originPoint?.lat ?? null,
+        lng: originPoint?.lng ?? null,
+        source: 'custom',
+        customText: trimmedCustom,
+      })
+      return
+    }
+    if (trustedGps) {
+      saveBookingOrigin({
+        label: gpsLabel || userProfileLocation || onboardingArea.name || 'Vị trí hiện tại của bạn',
+        lat: trustedGps.lat,
+        lng: trustedGps.lng,
+        source: 'gps',
+        customText: '',
+      })
+      return
+    }
+    if (!onboardingLoaded) return
+    if (userProfileLocation || onboardingArea.coords || onboardingArea.name) {
+      saveBookingOrigin({
+        label: userProfileLocation || onboardingArea.name || '',
+        lat: onboardingArea.coords?.lat ?? null,
+        lng: onboardingArea.coords?.lng ?? null,
+        source: userProfileLocation ? 'profile' : 'onboarding',
+        customText: '',
+      })
+      return
+    }
+    clearBookingOrigin()
+  }, [
+    customOrigin,
+    selectedAreaChip,
+    customGeo,
+    originLabel,
+    originPoint,
+    trustedGps,
+    gpsLabel,
+    userProfileLocation,
+    onboardingArea,
+    onboardingLoaded,
+  ])
 
   // Khu vực người dùng nhập ở ô "Vị trí" → chỉ hiện sân trong khu vực đó.
   // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể → bán kính quanh điểm đó.
@@ -617,17 +687,23 @@ function MapBooking() {
     let isMounted = true
     async function loadBackendFacilities() {
       try {
-        const rawFacilities = await getFacilities()
+        const [rawFacilities, rawLocations] = await Promise.all([
+          getFacilities(),
+          getFacilityLocations().catch(() => []),
+        ])
+        if (isMounted && Array.isArray(rawLocations)) {
+          setApiLocations(rawLocations)
+        }
         if (isMounted && Array.isArray(rawFacilities) && rawFacilities.length > 0) {
           const transformed = rawFacilities.map(transformFacilityToCourt).filter(Boolean)
           setApiFacilities(transformed)
           setApiStatus('connected')
         } else {
-          if (isMounted) setApiStatus('fallback')
+          if (isMounted) setApiStatus('empty')
         }
       } catch (err) {
         console.warn('API /api/v1/facilities không phản hồi:', err)
-        if (isMounted) setApiStatus('fallback')
+        if (isMounted) setApiStatus('error')
       }
     }
     loadBackendFacilities()
@@ -702,7 +778,7 @@ function MapBooking() {
   }, [query])
 
 
-  // Danh sách cụm sân trực tiếp từ Backend API GET /api/v1/facilities (fallback sang COURTS nếu API chưa tải xong hoặc rỗng)
+  // Danh sách cụm sân trực tiếp từ Backend API GET /api/v1/facilities
   const localizedCourts = useMemo(() => {
     const list = apiFacilities
 
@@ -741,14 +817,14 @@ function MapBooking() {
     if (minVal === 0 && (maxVal === Infinity || maxVal === 0)) return true
 
     const p = Number(court.price) || 0
-    const matchesMain = (minVal === 0 || p >= minVal) && (maxVal === Infinity || maxVal === 0 || p <= maxVal)
+    const matchesMain = p > 0 && (minVal === 0 || p >= minVal) && (maxVal === Infinity || maxVal === 0 || p <= maxVal)
     if (matchesMain) return true
 
     // Hoặc kiểm tra xem cụm sân có sân con nào nằm trong tầm giá người chơi chọn không
     if (Array.isArray(court.courts) && court.courts.length > 0) {
       return court.courts.some((sub) => {
         const subP = Number(sub.defaultPrice) || 0
-        return (minVal === 0 || subP >= minVal) && (maxVal === Infinity || maxVal === 0 || subP <= maxVal)
+        return subP > 0 && (minVal === 0 || subP >= minVal) && (maxVal === Infinity || maxVal === 0 || subP <= maxVal)
       })
     }
     return false
@@ -874,14 +950,15 @@ function MapBooking() {
     if (Array.isArray(selectedCourt.courts) && selectedCourt.courts.length > 0) {
       return selectedCourt.courts.map((child, idx) => {
         const isBooked = child.status !== 'ACTIVE'
+        const subPrice = Number(child.defaultPrice) > 0 ? Number(child.defaultPrice) : (Number(selectedCourt.price) || 0)
         return {
           id: child.id,
           number: String(idx + 1).padStart(2, '0'),
           name: child.name,
-          type: `${child.categoryName} • ${Number(child.defaultPrice || selectedCourt.price || 100000).toLocaleString('vi-VN')} Điểm/h`,
+          type: `${child.categoryName}${subPrice > 0 ? ` • ${subPrice.toLocaleString('vi-VN')} Điểm/h` : ''}`,
           isBooked,
           note: isBooked ? (child.status === 'MAINTENANCE' ? 'Đang bảo trì' : 'Tạm ngưng') : 'Đang trống',
-          price: Number(child.defaultPrice) > 0 ? Number(child.defaultPrice) : (selectedCourt.price || 100000),
+          price: subPrice,
           categoryName: child.categoryName,
         }
       })
@@ -935,6 +1012,7 @@ function MapBooking() {
 
   // Tải danh sách ca thật từ API cho sân con đang chọn
   const [liveCourtSlots, setLiveCourtSlots] = useState([])
+  const [slotsError, setSlotsError] = useState('')
   const activeSubCourtId = useMemo(() => {
     const isGuid = (val) =>
       typeof val === 'string' &&
@@ -959,11 +1037,15 @@ function MapBooking() {
       const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       if (!activeSubCourtId || !isGuidRegex.test(activeSubCourtId)) {
         setLiveCourtSlots([])
-        if (isMounted) setIsLoadingSlots(false)
+        if (isMounted) {
+          setSlotsError('')
+          setIsLoadingSlots(false)
+        }
         return
       }
       try {
         setIsLoadingSlots(true)
+        if (isMounted) setSlotsError('')
         const apiSlots = await getCourtSlots(activeSubCourtId, selectedDateStr)
         if (isMounted && Array.isArray(apiSlots) && apiSlots.length > 0) {
           setLiveCourtSlots(apiSlots)
@@ -972,7 +1054,10 @@ function MapBooking() {
         }
       } catch (err) {
         console.warn('[MapBooking] Lỗi khi tải ca sân:', err)
-        if (isMounted) setLiveCourtSlots([])
+        if (isMounted) {
+          setLiveCourtSlots([])
+          setSlotsError(err?.message || 'Không tải được lịch ca sân từ máy chủ.')
+        }
       } finally {
         if (isMounted) setIsLoadingSlots(false)
       }
@@ -985,7 +1070,7 @@ function MapBooking() {
   const currentSubCourtPrice = useMemo(() => {
     const firstActive = activeSubCourts[0]
     if (firstActive && Number(firstActive.price) > 0) return Number(firstActive.price)
-    return Number(selectedCourt?.price) || 100000
+    return Number(selectedCourt?.price) || 0
   }, [activeSubCourts, selectedCourt])
 
   const slots = useMemo(() => {
@@ -996,34 +1081,33 @@ function MapBooking() {
       liveCourtSlots.length > 0 &&
       (!activeSubCourtId || liveCourtSlots[0]?.courtId === activeSubCourtId)
 
-    if (isMatchingCurrentCourt) {
-      const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
-      // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
-      const inWindow = (s) => {
-        const start = s.formattedStart || vnClock(s.startTime) || '00:00'
-        const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
-        return (!fromTime || start >= fromTime) && (!toTime || (end === '00:00' ? '24:00' : end) <= toTime)
-      }
-      return grouped2h.filter(inWindow).map((s) => {
-        const start = s.formattedStart || vnClock(s.startTime) || '00:00'
-        const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
-        const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
-        return {
-          id: s.id,
-          slotIds: s.slotIds || [s.id],
-          start,
-          end,
-          hours: s.durationHours,
-          price: s.price,
-          status: isAvail ? 'available' : 'booked',
-          note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
-          rawSlot: s.rawSlots ? s.rawSlots[0] : s,
-          allRawSlots: s.rawSlots || [s],
-        }
-      })
+    if (!isMatchingCurrentCourt) return []
+
+    const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
+    // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
+    const inWindow = (s) => {
+      const start = s.formattedStart || vnClock(s.startTime) || '00:00'
+      const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
+      return (!fromTime || start >= fromTime) && (!toTime || (end === '00:00' ? '24:00' : end) <= toTime)
     }
-    return buildSlots(selectedCourt, selectedDateInfo.isToday, currentSubCourtPrice)
-  }, [selectedCourt, liveCourtSlots, activeSubCourtId, selectedDateInfo.isToday, currentSubCourtPrice, fromTime, toTime])
+    return grouped2h.filter(inWindow).map((s) => {
+      const start = s.formattedStart || vnClock(s.startTime) || '00:00'
+      const end = s.formattedEnd || vnClock(s.endTime) || '00:00'
+      const isAvail = s.isBookable || (s.status === 'Available' && !s.isPast)
+      return {
+        id: s.id,
+        slotIds: s.slotIds || [s.id],
+        start,
+        end,
+        hours: s.durationHours,
+        price: s.price,
+        status: isAvail ? 'available' : 'booked',
+        note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
+        rawSlot: s.rawSlots ? s.rawSlots[0] : s,
+        allRawSlots: s.rawSlots || [s],
+      }
+    })
+  }, [selectedCourt, liveCourtSlots, activeSubCourtId, currentSubCourtPrice, fromTime, toTime])
 
   // Nhãn độ dài ca trên tiêu đề lưới: theo ca thật; các ca dài khác nhau thì không ghi 1 con số chung
   const slotDurationLabel = useMemo(() => {
@@ -1546,7 +1630,7 @@ function MapBooking() {
         {/* ===================== RIGHT COLUMN ===================== */}
         <div className="mb-col">
           {/* Map */}
-          {/* Real Interactive Google Map */}
+          {/* Bản đồ tương tác Leaflet / OpenStreetMap */}
           <section className="mb-card mb-map-section" aria-label="Bản đồ sân">
             <InteractiveCourtMap
               courts={filteredCourts}
@@ -1658,7 +1742,11 @@ function MapBooking() {
           ) : filteredCourts.length === 0 ? (
             <div className="mb-card mb-empty">
               <span className="material-symbols-outlined">search_off</span>
-              {searchArea
+              {apiStatus === 'error'
+                ? 'Không thể kết nối máy chủ để tải danh sách cụm sân. Vui lòng thử lại sau.'
+                : apiStatus === 'empty' && !query.trim() && !searchArea && !hasTimeFilter
+                ? 'Hệ thống chưa có cụm sân nào khả dụng.'
+                : searchArea
                 ? `Không có sân phù hợp trong khu vực “${searchArea.label}”. Bấm “Xem tất cả” hoặc nhập khu vực khác.`
                 : hasTimeFilter
                 ? 'Không còn sân trống trong khung giờ này. Hãy thử ngày hoặc khung giờ khác.'
@@ -1686,7 +1774,7 @@ function MapBooking() {
                       <h3 className="mb-court-name">{court.name}</h3>
                       <span className="mb-rating">
                         <span className="material-symbols-outlined">star</span>
-                        {court.rating}
+                        {court.rating > 0 ? court.rating : 'Chưa có'}
                       </span>
                     </div>
                     <p className="mb-court-addr">
@@ -1732,7 +1820,13 @@ function MapBooking() {
                 </div>
                 <div className="mb-court-bottom">
                   <span className="mb-price">
-                    {court.price.toLocaleString('vi-VN')} Điểm<small>/h</small>
+                    {court.price > 0 ? (
+                      <>
+                        {court.price.toLocaleString('vi-VN')} Điểm<small>/h</small>
+                      </>
+                    ) : (
+                      <small>Liên hệ</small>
+                    )}
                   </span>
                   <div>
                     {active ? (
@@ -1844,7 +1938,7 @@ function MapBooking() {
             ) : slots.length === 0 ? (
               <div className="mb-empty">
                 <span className="material-symbols-outlined">event_busy</span>
-                Ngày {selectedDateInfo.fullLabel} hiện chưa có ca trống nào khả dụng. Vui lòng chọn ngày khác.
+                {slotsError || `Ngày ${selectedDateInfo.fullLabel} hiện chưa có ca trống nào khả dụng. Vui lòng chọn ngày khác.`}
               </div>
             ) : (
               <div className="mb-slots">
@@ -1996,7 +2090,11 @@ function MapBooking() {
                           >
                             {isBooked ? 'Đã kín' : isSelected ? 'Đang chọn' : 'Trống'}
                           </span>
-                          <span className="mb-subcourt-rate">{formatVnd(court.price || selectedSlot?.price || selectedCourt.price)}/sân</span>
+                          <span className="mb-subcourt-rate">
+                            {(court.price || selectedSlot?.price || selectedCourt.price) > 0
+                              ? `${formatVnd(court.price || selectedSlot?.price || selectedCourt.price)}/sân`
+                              : 'Liên hệ'}
+                          </span>
                         </div>
                       </div>
                     )
