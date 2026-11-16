@@ -11,6 +11,7 @@ import './dashboard.css'
 
 const settledValue = result => (result.status === 'fulfilled' ? result.value : undefined)
 const isCancelled = booking => /cancel/i.test(booking.status)
+const SPORT_TONES = ['emerald', 'blue', 'amber', 'violet', 'rose', 'teal']
 
 // Lấy tối đa AGGREGATE_MAX_PAGES trang booking trong kỳ để tính môn phổ biến; trả kèm tổng số đơn để biết có bị cắt bớt không.
 async function loadBookingSample({ fromDate, toDate }) {
@@ -58,18 +59,18 @@ export default function AdminDashboard() {
   const versus = (format, value) => (isToday && prev ? ` · hôm qua ${format(value)}` : '')
 
   const stats = [
-    { label: 'Tổng người dùng', value: show(formatNumber, users.total), icon: Users, to: '/admin/users', trend: when(Number.isFinite(users.newInRange) ? `+${formatNumber(users.newInRange)} mới` : undefined), supporting: when(`${formatNumber(users.players)} người chơi · ${formatNumber(users.locked)} bị khóa`) },
-    { label: 'Chủ sân', value: show(formatNumber, users.owners), icon: UserRoundCheck, to: '/admin/court-owners', supporting: when(`${formatNumber(pending.ownerVerifications)} chờ xác minh`) },
-    { label: 'Cơ sở thể thao', value: show(formatNumber, facilities.total), icon: Building2, to: '/admin/facilities', supporting: when(`${formatNumber(facilities.approved)} đã duyệt · ${formatNumber(facilities.courts)} sân`) },
-    { label: 'Lượt đặt sân', value: show(formatNumber, bookings.inRange), icon: CalendarDays, to: '/admin/bookings', trend: when(isToday ? undefined : growth(bookings.inRange, prev?.bookings.inRange)), supporting: when(`${periodLabel} · tỉ lệ hủy ${formatPercent(bookings.cancelRate)}${versus(formatNumber, prev?.bookings.inRange)}`) },
-    { label: 'Doanh thu nền tảng', value: show(formatCurrency, revenue.platformRevenue), icon: Wallet, to: '/admin/payments', trend: when(isToday ? undefined : growth(revenue.platformRevenue, prev?.revenue.platformRevenue)), supporting: when(`${periodLabel} · phí đặt sân ${formatPercent(revenue.currentBookingFeePercent)}${versus(formatCurrency, prev?.revenue.platformRevenue)}`) },
-    { label: 'Nhóm chơi đang mở', value: show(formatNumber, lfg.open), icon: Network, to: '/admin/lfg', supporting: when(`${formatNumber(lfg.createdInRange)} nhóm tạo ${periodLabel}`) },
+    { label: 'Tổng người dùng', tone: 'blue', value: show(formatNumber, users.total), icon: Users, to: '/admin/users', trend: when(Number.isFinite(users.newInRange) ? `+${formatNumber(users.newInRange)} mới` : undefined), supporting: when(`${formatNumber(users.players)} người chơi · ${formatNumber(users.locked)} bị khóa`) },
+    { label: 'Chủ sân', tone: 'violet', value: show(formatNumber, users.owners), icon: UserRoundCheck, to: '/admin/court-owners', supporting: when(`${formatNumber(pending.ownerVerifications)} chờ xác minh`) },
+    { label: 'Cơ sở thể thao', tone: 'teal', value: show(formatNumber, facilities.total), icon: Building2, to: '/admin/facilities', supporting: when(`${formatNumber(facilities.approved)} đã duyệt · ${formatNumber(facilities.courts)} sân`) },
+    { label: 'Lượt đặt sân', tone: 'amber', value: show(formatNumber, bookings.inRange), icon: CalendarDays, to: '/admin/bookings', trend: when(isToday ? undefined : growth(bookings.inRange, prev?.bookings.inRange)), supporting: when(`${periodLabel} · tỉ lệ hủy ${formatPercent(bookings.cancelRate)}${versus(formatNumber, prev?.bookings.inRange)}`) },
+    { label: 'Doanh thu nền tảng', tone: 'emerald', value: show(formatCurrency, revenue.platformRevenue), icon: Wallet, to: '/admin/payments', trend: when(isToday ? undefined : growth(revenue.platformRevenue, prev?.revenue.platformRevenue)), supporting: when(`${periodLabel} · phí đặt sân ${formatPercent(revenue.currentBookingFeePercent)}${versus(formatCurrency, prev?.revenue.platformRevenue)}`) },
+    { label: 'Nhóm chơi đang mở', tone: 'rose', value: show(formatNumber, lfg.open), icon: Network, to: '/admin/lfg', supporting: when(`${formatNumber(lfg.createdInRange)} nhóm tạo ${periodLabel}`) },
   ]
   const attention = [
-    { title: 'Chủ sân chờ xác minh', count: pending.ownerVerifications, text: 'Giấy tờ xác minh chưa đầy đủ hoặc đang chờ quản trị viên phê duyệt.', icon: ClipboardCheck, tone: 'green', detail: 'Đang chờ duyệt', action: 'Duyệt ngay', to: '/admin/court-owners?tab=kyc' },
+    { title: 'Chủ sân chờ xác minh', count: pending.ownerVerifications, text: 'Giấy tờ xác minh chưa đầy đủ hoặc đang chờ quản trị viên phê duyệt.', icon: ClipboardCheck, tone: 'violet', detail: 'Đang chờ duyệt', action: 'Duyệt ngay', to: '/admin/court-owners?tab=kyc' },
     { title: 'Báo cáo vi phạm', count: pending.openReports, text: 'Có đơn đặt sân / đánh giá bị báo cáo cần được kiểm tra và xử lý.', icon: Flag, tone: 'red', detail: 'Đang chờ xử lý', action: 'Kiểm tra', to: '/admin/reviews-reports?status=Pending' },
-    { title: 'Yêu cầu rút tiền', count: pending.withdrawals, text: 'Yêu cầu rút tiền từ ví đang chờ quản trị viên xác nhận.', icon: CircleDollarSign, tone: 'green', detail: `Tổng ${formatCurrency(pending.withdrawalAmount)}`, action: 'Xem xét', to: '/admin/payments?tab=withdrawals' },
-    { title: 'Cơ sở chờ duyệt', count: pending.facilityApprovals, text: 'Cần rà soát thông tin cơ sở và xác nhận trước khi hiển thị.', icon: Building2, tone: 'green', detail: 'Trạng thái chờ duyệt', action: 'Thẩm định', to: '/admin/facilities?status=Pending' },
+    { title: 'Yêu cầu rút tiền', count: pending.withdrawals, text: 'Yêu cầu rút tiền từ ví đang chờ quản trị viên xác nhận.', icon: CircleDollarSign, tone: 'amber', detail: `Tổng ${formatCurrency(pending.withdrawalAmount)}`, action: 'Xem xét', to: '/admin/payments?tab=withdrawals' },
+    { title: 'Cơ sở chờ duyệt', count: pending.facilityApprovals, text: 'Cần rà soát thông tin cơ sở và xác nhận trước khi hiển thị.', icon: Building2, tone: 'teal', detail: 'Trạng thái chờ duyệt', action: 'Thẩm định', to: '/admin/facilities?status=Pending' },
   ]
   const attentionTotal = attention.reduce((sum, item) => sum + (Number.isFinite(item.count) ? item.count : 0), 0)
 
@@ -103,7 +104,7 @@ export default function AdminDashboard() {
         <section className="admin-panel admin-popular-sports">
           <div className="admin-panel-heading"><div><h2>Môn thể thao phổ biến</h2><p>Tỷ lệ lượt đặt sân theo môn thể thao ({periodLabel}, không tính đơn hủy)</p></div></div>
           {sports.length && !periodLoading
-            ? <ol>{sports.map((item, index) => <li key={item.name}><div><strong><i className="admin-sport-rank">{index + 1}</i>{item.name}</strong><span>{item.count}</span></div><small>{item.bookings}</small><div className="admin-sport-track"><span style={{ width: `${item.width}%` }} /></div></li>)}</ol>
+            ? <ol>{sports.map((item, index) => <li key={item.name} className={`admin-sport-item admin-sport-item--${SPORT_TONES[index % SPORT_TONES.length]}`}><div><strong><i className="admin-sport-rank">{index + 1}</i>{item.name}</strong><span>{item.count}</span></div><small>{item.bookings}</small><div className="admin-sport-track"><span style={{ width: `${item.width}%` }} /></div></li>)}</ol>
             : <p className="admin-empty">{periodLoading ? 'Đang tải…' : 'Chưa có dữ liệu đặt sân theo môn.'}</p>}
           <div className="admin-sports-footer">
             <span>{periodLoading ? '…' : sampleTruncated

@@ -5,9 +5,9 @@ import { TREND_RANGES, buildTrendSeries, formatCurrency, formatNumber, lastDaysR
 
 const X0 = 52, X1 = 702, Y0 = 40, Y1 = 260
 const SERIES = {
-  revenue: { color: '#257148', integer: false },
-  bookings: { color: '#9dbfa5', integer: true },
-  newUsers: { color: '#d08a2c', integer: true },
+  revenue: { color: '#15803d', integer: false },
+  bookings: { color: '#0284c7', integer: true },
+  newUsers: { color: '#ea580c', integer: true },
 }
 
 function curveOf(points) {
@@ -62,9 +62,9 @@ export default function TrendsChart({ reloadKey = 0 }) {
         <div className="admin-segmented admin-range-tabs" role="group" aria-label="Khoảng thời gian biểu đồ">{Object.keys(TREND_RANGES).map(item => <button key={item} type="button" aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}{TREND_RANGES[item] > 30 && <small>theo tuần</small>}</button>)}</div>
       </div>
       <div className="admin-chart-summary">
-        <div><i className="admin-legend-dot" /><span>Giá trị đặt sân<small>(VNĐ)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
-        <div><i className="admin-legend-dot muted" /><span>Số lượng<small>lượt đặt sân</small></span><strong>{loading ? '…' : formatNumber(totalBookings)}</strong></div>
-        <div><i className="admin-legend-dot users" /><span>Người dùng<small>đăng ký mới</small></span><strong>{loading ? '…' : formatNumber(totalUsers)}</strong></div>
+        <div className="admin-trend-metric admin-trend-metric--revenue"><i className="admin-legend-dot admin-legend-dot--revenue" /><span>Giá trị đặt sân<small>(VNĐ)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
+        <div className="admin-trend-metric admin-trend-metric--bookings"><i className="admin-legend-dot admin-legend-dot--bookings" /><span>Số lượng<small>lượt đặt sân</small></span><strong>{loading ? '…' : formatNumber(totalBookings)}</strong></div>
+        <div className="admin-trend-metric admin-trend-metric--users"><i className="admin-legend-dot admin-legend-dot--users" /><span>Người dùng<small>đăng ký mới</small></span><strong>{loading ? '…' : formatNumber(totalUsers)}</strong></div>
         <span className="admin-chart-growth"><TrendingUp size={14} /> {range} gần nhất</span>
       </div>
       <div className="admin-chart-wrap">
@@ -72,12 +72,12 @@ export default function TrendsChart({ reloadKey = 0 }) {
           : state.error ? <p className="admin-empty">{state.error}</p>
             : empty ? <p className="admin-empty">Chưa có hoạt động trong {range} gần nhất.</p>
               : <svg viewBox="0 0 740 330" role="img" aria-label={`Xu hướng giá trị đặt sân, lượt đặt sân và người dùng mới trong ${range}`}>
-                <defs><linearGradient id="admin-revenue-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#24734b" stopOpacity=".28" /><stop offset="100%" stopColor="#24734b" stopOpacity=".015" /></linearGradient></defs>
+                <defs><linearGradient id="admin-revenue-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#16a34a" stopOpacity=".24" /><stop offset="100%" stopColor="#16a34a" stopOpacity=".015" /></linearGradient></defs>
                 <text x="12" y="22" fill="#9ca8af" fontSize="11">{axis.unit}</text>
                 {[0, 1, 2, 3, 4].map(index => <g key={index}><line x1={X0} y1={Y0 + index * 55} x2={X1} y2={Y0 + index * 55} stroke="#e5ece8" strokeDasharray="3 4" /><text x="12" y={Y0 + 4 + index * 55} fill="#9ca8af" fontSize="11">{axis.format((axisTop * (4 - index)) / 4)}</text></g>)}
                 {totalRevenue > 0 && <path d={`${revenueCurve} L ${X1},${Y1} L ${X0},${Y1} Z`} fill="url(#admin-revenue-fill)" />}
                 <path d={revenueCurve} fill="none" stroke={SERIES.revenue.color} strokeWidth="3" />
-                <path d={curveOf(points.bookings)} fill="none" stroke={SERIES.bookings.color} strokeWidth="2" strokeDasharray="4 4" />
+                <path d={curveOf(points.bookings)} fill="none" stroke={SERIES.bookings.color} strokeWidth="2.5" strokeDasharray="5 4" />
                 <path d={curveOf(points.newUsers)} fill="none" stroke={SERIES.newUsers.color} strokeWidth="2.5" />
                 {/* Chấm tại các điểm có dữ liệu để dễ đọc khi dữ liệu thưa (chỉ 1–2 ngày có hoạt động). */}
                 {Object.entries(SERIES).map(([key, { color }]) => series.map((item, index) => item[key] > 0 && <circle key={`${key}-${item.label}`} cx={points[key][index][0]} cy={points[key][index][1]} r="3.5" fill="#fff" stroke={color} strokeWidth="2" />))}
@@ -85,7 +85,7 @@ export default function TrendsChart({ reloadKey = 0 }) {
                 {series.map((item, index) => (index % labelEvery === 0 || index === series.length - 1) && <text key={item.label} x={xOf(index)} y="309" textAnchor={index === series.length - 1 ? 'end' : index ? 'middle' : 'start'} fill="#99a3ad" fontSize="11">{index === series.length - 1 && TREND_RANGES[range] <= 30 ? 'Hôm nay' : item.label}</text>)}
               </svg>}
       </div>
-      <div className="admin-chart-footer"><span><i className="admin-legend-dot" /> Giá trị đặt sân</span><span><i className="admin-legend-dot muted" /> Lượt đặt sân</span><span><i className="admin-legend-dot users" /> Người dùng mới</span><span className="admin-muted">Mỗi đường dùng thang riêng · rê chuột để xem số liệu</span></div>
+      <div className="admin-chart-footer"><span><i className="admin-legend-dot admin-legend-dot--revenue" /> Giá trị đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--bookings" /> Lượt đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--users" /> Người dùng mới</span><span className="admin-muted">Mỗi đường dùng thang riêng · rê chuột để xem số liệu</span></div>
     </section>
   )
 }

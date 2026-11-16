@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { getFacilities, getFacilityById, getFacilityReviews, getFacilityCourtById } from '../../../api/player/facilityApi.js'
-import { getCourtSlots } from '../../../api/player/bookingApi.js'
+import { getCourtSlots, getFacilityAvailability } from '../../../api/player/bookingApi.js'
 import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
@@ -106,6 +106,7 @@ function CourtDetails() {
 
   // Dữ liệu lưới ca của sân con từ API GET /api/v1/courts/{courtId}/slots
   const [courtSlots, setCourtSlots] = useState([])
+  const [facilityAvailability, setFacilityAvailability] = useState(null)
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsError, setSlotsError] = useState(null)
 
@@ -226,6 +227,25 @@ function CourtDetails() {
   useEffect(() => {
     Promise.resolve().then(() => loadSlots())
   }, [loadSlots])
+
+  // Lấy tổng quan ca trống của toàn cụm sân theo ngày: GET /api/v1/facilities/{id}/availability
+  const facilityIdForAvail = facility?.id
+  useEffect(() => {
+    if (!facilityIdForAvail || !selectedDateStr) return undefined
+    let cancelled = false
+    getFacilityAvailability(facilityIdForAvail, selectedDateStr)
+      .then((data) => { if (!cancelled && data) setFacilityAvailability(data) })
+      .catch(() => { if (!cancelled) setFacilityAvailability(null) })
+    return () => { cancelled = true }
+  }, [facilityIdForAvail, selectedDateStr])
+
+  const availabilityByCourtId = useMemo(() => {
+    const map = new Map()
+    for (const item of facilityAvailability?.courts || []) {
+      if (item?.courtId) map.set(String(item.courtId), item)
+    }
+    return map
+  }, [facilityAvailability])
 
   // Realtime: tải lại ngầm mỗi 20 giây khi tab đang mở, và ngay khi quay lại tab
   useEffect(() => {
@@ -687,6 +707,11 @@ function CourtDetails() {
                 <h3 className="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">stadium</span>
                   Chọn Sân Con Trong Cụm ({courtsList.length} sân)
+                  {facilityAvailability?.availableSlots != null && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+                      Còn {facilityAvailability.availableSlots} ca trống
+                    </span>
+                  )}
                 </h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
                   Chọn sân đấu bạn muốn đặt để xem danh sách ca tương ứng
@@ -710,6 +735,7 @@ function CourtDetails() {
               {courtsList.map((court) => {
                 const isCurrentCourt = court.id === activeCourt?.id
                 const countSelectedInThisCourt = selectedSlots.filter((s) => s.courtId === court.id).length
+                const courtAvail = availabilityByCourtId.get(String(court.id))
                 return (
                   <button
                     key={court.id}
@@ -739,6 +765,7 @@ function CourtDetails() {
                       </span>
                       <span className="font-label-sm text-label-sm text-on-surface-variant">
                         {court.sportName} • {court.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
+                        {courtAvail?.availableSlots != null ? ` • ${courtAvail.availableSlots} ca trống` : ''}
                       </span>
                     </div>
                   </button>

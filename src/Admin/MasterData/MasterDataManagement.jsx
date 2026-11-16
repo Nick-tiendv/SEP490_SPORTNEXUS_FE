@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArchiveRestore, Layers, Pencil, Plus, RefreshCw, Search, Trash2, Volleyball } from 'lucide-react'
+import { ArchiveRestore, Layers, Merge, Pencil, Plus, RefreshCw, Search, Trash2, Volleyball } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmDialog } from '../../components/common/confirm.js'
 import StatCard from '../components/StatCard.jsx'
-import { listMasterData, restoreMasterData } from '../../api/admin/masterDataApi.js'
+import { listMasterData, mergeCourtSlotsToSportLength, restoreMasterData } from '../../api/admin/masterDataApi.js'
 import { filterMasterData, formatNumber, kinds, masterDataStats } from './masterDataHelpers.js'
 import { AmenityIcon, DeleteMasterDataDialog, MasterDataForm } from './MasterDataDialogs.jsx'
 import '../Users/users.css'
@@ -20,6 +21,7 @@ export default function MasterDataManagement() {
   const [reload, setReload] = useState(0)
   const [dialog, setDialog] = useState(null) // { type: 'form' | 'delete', item }
   const [restoringId, setRestoringId] = useState(null)
+  const [merging, setMerging] = useState(false)
 
   // GET /api/v1/admin/master-data/{sports|amenities}?includeDeleted=true — tải cả mục đã xóa để đếm và khôi phục.
   const [data, setData] = useState({ key: -1, sports: [], amenities: [], errors: {} })
@@ -56,6 +58,21 @@ export default function MasterDataManagement() {
     }
   }
 
+  // POST /api/v1/admin/master-data/court-slots/merge-to-sport-length
+  const mergeSlots = async () => {
+    if (!(await confirmDialog('Gộp các ca trống sắp tới ngắn hơn thời lượng chuẩn của từng môn (giá = tổng giá các ca gộp)? Ca đã đặt, đang khóa hoặc giữ giải sẽ được giữ nguyên.', { confirmLabel: 'Gộp ca', danger: false }))) return
+    setMerging(true)
+    try {
+      const { message } = await mergeCourtSlotsToSportLength()
+      toast.success(message || 'Đã gộp ca trống theo thời lượng chuẩn của môn.')
+      refresh()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setMerging(false)
+    }
+  }
+
   const statusBadge = item => <span className={`admin-badge ${item.isDeleted ? 'admin-badge--neutral' : 'admin-badge--success'}`}>{item.isDeleted ? 'Đã xóa' : 'Đang dùng'}</span>
   const actions = item => <div className="md-actions">{item.isDeleted
     ? <button className="users-button" onClick={() => restore(item)} disabled={restoringId === item.id}><ArchiveRestore size={13} />{restoringId === item.id ? 'Đang khôi phục…' : 'Khôi phục'}</button>
@@ -65,8 +82,9 @@ export default function MasterDataManagement() {
     <header className="md-page-heading admin-page-header">
       <div><h1>Danh mục dùng chung</h1><p>Quản lý môn thể thao và tiện ích mà chủ sân chọn khi tạo cơ sở, sân con và giải đấu. Xóa là xóa mềm, có thể khôi phục.</p></div>
       <div className="md-heading-actions">
-        <button className="users-button" onClick={refresh} disabled={loading}><RefreshCw size={13} />Làm mới</button>
-        <button className="users-button primary" onClick={() => setDialog({ type: 'form', item: null })} disabled={loading}><Plus size={13} />Thêm {noun}</button>
+        {kind === 'sports' && <button className="users-button" onClick={mergeSlots} disabled={loading || merging}><Merge size={13} />{merging ? 'Đang gộp ca…' : 'Gộp ca theo môn'}</button>}
+        <button className="users-button" onClick={refresh} disabled={loading || merging}><RefreshCw size={13} />Làm mới</button>
+        <button className="users-button primary" onClick={() => setDialog({ type: 'form', item: null })} disabled={loading || merging}><Plus size={13} />Thêm {noun}</button>
       </div>
     </header>
 

@@ -65,6 +65,14 @@ const compressImageToDataUrl = (file, maxSize = 256, quality = 0.85) =>
     reader.readAsDataURL(file)
   })
 
+const toMember = (m = {}) => ({
+  accountId: String(m.accountId ?? m.id ?? ''),
+  fullName: m.fullName || '—',
+  phone: m.phone || '',
+  avatarUrl: m.avatarUrl || null,
+  joinedAt: m.joinedAt || null,
+})
+
 // TeamResponse: id, name, description, logoUrl, sportCategoryId, sportName, skillLevel (hệ thống tính từ Elo thành viên),
 // createdById (đội trưởng), createdByName, totalMembers, members[], isLocked
 export const toTeam = (raw = {}) => ({
@@ -81,13 +89,7 @@ export const toTeam = (raw = {}) => ({
   isLocked: raw.isLocked === true,
   lockedReason: raw.lockedReason || '',
   totalMembers: Number(raw.totalMembers ?? raw.members?.length ?? 0),
-  members: (raw.members || []).map(m => ({
-    accountId: String(m.accountId),
-    fullName: m.fullName || '—',
-    phone: m.phone || '',
-    avatarUrl: m.avatarUrl || null,
-    joinedAt: m.joinedAt || null,
-  })),
+  members: (raw.members || []).map(toMember),
 })
 
 export const getMyTeams = async () => (await getList(`${ENDPOINT}/my-teams`)).items.map(toTeam)
@@ -158,7 +160,7 @@ export async function uploadTeamLogo(teamId, file) {
 export const removeTeamMember = (teamId, accountId) => del(`${ENDPOINT}/${id(teamId)}/members/${id(accountId)}`)
 export const transferCaptain = async (teamId, newCaptainId) => toTeam(await put(`${ENDPOINT}/${id(teamId)}/captain`, { newCaptainId }))
 export const leaveTeam = teamId => post(`${ENDPOINT}/${id(teamId)}/leave`)
-export const getTeamMembers = async teamId => (await getList(`${ENDPOINT}/${id(teamId)}/members`)).items
+export const getTeamMembers = async teamId => (await getList(`${ENDPOINT}/${id(teamId)}/members`)).items.map(toMember)
 // TeamTournamentHistoryResponse (1 dòng / bảng đấu): tournamentName, parentTournamentName, facilityName, tournamentStatus, paymentStatus, entryFee
 export const getTeamTournaments = async teamId => (await getList(`${ENDPOINT}/${id(teamId)}/tournaments`)).items
 

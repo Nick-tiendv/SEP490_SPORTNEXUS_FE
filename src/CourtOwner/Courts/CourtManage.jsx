@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { createCourt, deleteCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
+import { createCourt, deleteCourt, getCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -213,7 +213,20 @@ export default function CourtManage() {
     const sportZone = zones.find(zone => zone.id === sportId)
     setCourtForm({ court: null, sportId: sportId || sports[0]?.id || '', price: sportZone ? sportZone.basePrice : '' })
   }
-  const openEditCourtModal = (court) => setCourtForm({ court, sportId: court.categoryId, price: court.defaultPrice })
+  const openEditCourtModal = (court) => {
+    setCourtForm({ court, sportId: court.categoryId, price: court.defaultPrice, detailLoading: true })
+    getCourt(facilityId, court.id)
+      .then((detail) => {
+        if (!detail) return
+        setCourtForm((prev) => {
+          if (!prev?.court || String(prev.court.id) !== String(court.id)) return prev
+          return { ...prev, court: { ...prev.court, ...detail }, detailLoading: false }
+        })
+      })
+      .catch(() => {
+        setCourtForm((prev) => (prev ? { ...prev, detailLoading: false } : prev))
+      })
+  }
 
   // Thêm: POST /facilities/{facilityId}/courts · Sửa: PUT /facilities/{facilityId}/courts/{courtId}
   const handleSaveCourt = async (payload) => {
