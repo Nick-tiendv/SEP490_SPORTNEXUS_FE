@@ -19,7 +19,7 @@ import {
   getBookingById,
   saveBookingSessionWindow,
 } from '../../../api/player/bookingApi.js'
-import { cancelLfg } from '../../../api/player/lfgApi.js'
+import { cancelLfg, describeLfgCancelResult } from '../../../api/player/lfgApi.js'
 import {
   getWallet,
   createDeposit,
@@ -733,9 +733,11 @@ function SplitPayment() {
       // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 48h), không tự đoán ở FE
       const isLfg = Boolean(state.isLfg || state.cardId)
       let refundAmount = 0
+      let lfgSummary = '' // hủy kèo: số tiền hoàn / bồi thường / điểm Fair Play do BE tính
       if (isLfg && state.cardId) {
         const result = await cancelLfg(state.cardId, { reason: finalReason })
         refundAmount = Number(result?.hostRefund) || 0
+        lfgSummary = describeLfgCancelResult(result)
       } else if (isValidGuid(bookingId)) {
         const result = await cancelBooking(bookingId, {
           reasonCode: selectedReasonCode,
@@ -764,11 +766,11 @@ function SplitPayment() {
             icon: 'cancel',
             color: '#DC2626',
             bg: '#FEE2E2',
-            title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn Điểm'}`,
+            title: lfgSummary ? 'Đã hủy kèo và đơn đặt sân (CANCELLED)' : `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn Điểm'}`,
             message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
-            details: isEligibleRefund
+            details: lfgSummary || (isEligibleRefund
               ? `Hủy trước ca >= 48h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
-              : 'Hủy dưới 48h trước giờ chơi: Không được hoàn Điểm theo quy định.',
+              : 'Hủy dưới 48h trước giờ chơi: Không được hoàn Điểm theo quy định.'),
             time: 'Vừa xong',
             unread: true,
             link: '/wallet',
@@ -779,7 +781,8 @@ function SplitPayment() {
 
       toast.success(
         `Đã hủy đơn đặt sân thành công!\n\n${
-          isEligibleRefund
+          lfgSummary ? lfgSummary
+          : isEligibleRefund
             ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 48 giờ trở lên.`
             : `⚠️ Hủy dưới 48 giờ trước giờ chơi: Theo quy định, không được hoàn Điểm.`
         }`
@@ -2822,7 +2825,8 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               </div>
             </div>
 
-            {/* Chính sách hoàn Điểm 48 giờ */}
+            {/* Chính sách hoàn Điểm 48 giờ (đơn thường; kèo LFG có chính sách riêng bên dưới) */}
+            {!(state.isLfg || state.cardId) && (
             <div className={`sp-cancel-policy-card ${getHoursUntilMatch() >= 48 ? 'sp-policy-full' : 'sp-policy-zero'}`}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 4 }}>
                 <span className="material-symbols-outlined">
@@ -2848,11 +2852,15 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 )}
               </div>
             </div>
+            )}
 
-            {/* Lưu ý nếu đơn là kèo LFG */}
+            {/* Đơn gắn kèo LFG: hủy đơn = chủ kèo hủy kèo */}
             {(state.isLfg || state.cardId) && (
-              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: 12, color: '#1e40af' }}>
-                ℹ️ <strong>Đơn gắn kèm kèo ghép LFG:</strong> Hệ thống sẽ tự động hủy kèo ghép theo quy định.
+              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
+                ℹ️ <strong>Đơn gắn kèm kèo ghép LFG:</strong> hủy đơn sẽ hủy luôn kèo ghép.
+                {getHoursUntilMatch() >= 48
+                  ? <> Còn từ 48 giờ trở lên trước giờ chơi: mọi người được hoàn 100% Điểm, bạn bị trừ <strong>10 điểm Fair Play</strong>.</>
+                  : <> Còn dưới 48 giờ trước giờ chơi: người tham gia được hoàn 100%; bạn bị trừ <strong>50% tiền sân</strong> (chia đều bồi thường cho người tham gia) và <strong>20 điểm Fair Play</strong>. Nếu chưa có ai vào kèo, bạn được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.</>}
               </div>
             )}
 

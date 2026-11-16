@@ -14,23 +14,18 @@ import {
   rejectLfgParticipant,
   removeLfgParticipant,
   cancelLfg,
+  describeLfgCancelResult,
   leaveLfg,
   getLfgCancelReasons,
   acceptLfgInvitation,
   declineLfgInvitation,
   removeLfgGroupMember,
-  createLfgCancelRequest,
-  getLatestLfgCancelRequest,
-  voteLfgCancelRequest,
   lfgSkillLabel,
 } from '../../api/player/lfgApi.js'
 import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
 import { finalReason } from './lfgReason.js'
-
-// Chủ kèo tự hủy được tới 24 giờ trước giờ chơi (BE trả hostCancelUntil); sau mốc này mới tạo yêu cầu hủy để bỏ phiếu
-const HOST_CANCEL_BEFORE_MS = 24 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { useSport } from '../Context/sportContext.js'
 import { getWallet } from '../../api/player/walletApi.js'
@@ -278,31 +273,12 @@ function CommunityFeed() {
   const [customCancelReason, setCustomCancelReason] = useState('')
   const [actionLoadingId, setActionLoadingId] = useState(null)
 
-  // LFG Cancel Requests & Bỏ phiếu hủy kèo (POST /cancel-requests, GET /cancel-requests/latest, POST /vote)
-  const [cancelVoteModal, setCancelVoteModal] = useState(null) // { card, request, isLoading }
-  const [cancelRequestReason, setCancelRequestReason] = useState('')
-  const [cancelRequestPick, setCancelRequestPick] = useState('')
-
-  // Mốc T − 24 giờ (QĐ-D): trước mốc chủ kèo tự hủy, không cần bỏ phiếu;
-  // sau mốc chủ kèo phải tạo yêu cầu hủy và các thành viên bỏ phiếu. Giờ hiện tại cập nhật mỗi 15 giây.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 15000)
-    return () => clearInterval(timer)
-  }, [])
-  const isPastLock = (card) => {
-    const until = card?.hostCancelUntil ? new Date(card.hostCancelUntil).getTime()
-      : card?.startTime ? new Date(card.startTime).getTime() - HOST_CANCEL_BEFORE_MS : null
-    return until != null && nowMs >= until
-  }
-
   // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
   useEffect(() => {
     let cancelled = false
     getLfgCancelReasons().then((list) => { if (!cancelled) setCancelReasonsList(list) })
     return () => { cancelled = true }
   }, [])
-  const [isSubmittingCancelReq, setIsSubmittingCancelReq] = useState(false)
 
   // Bộ lọc môn thể thao dùng chung SportContext để đồng bộ với Sidebar & Hồ sơ ghép trận cá nhân
   const { selectedSports, selectOnlySport, selectAllSports, isAllActive, SPORTS_LIST } = useSport()
@@ -633,20 +609,6 @@ function CommunityFeed() {
     }
   }
 
-  // Mở modal Yêu cầu hủy & Bỏ phiếu hủy: POST /cancel-requests, GET /cancel-requests/latest, POST /vote
-  const handleOpenCancelVoteModal = async (card, { asHost = false } = {}) => {
-    setCancelVoteModal({ card, asHost, request: null, isLoading: true })
-    setCancelRequestReason('')
-    setCancelRequestPick('')
-    try {
-      const latestReq = await getLatestLfgCancelRequest(card.id)
-      setCancelVoteModal({ card, asHost, request: latestReq, isLoading: false })
-    } catch (err) {
-      console.warn('[CommunityFeed] Chưa có yêu cầu hủy nào:', err)
-      setCancelVoteModal({ card, asHost, request: null, isLoading: false })
-    }
-  }
-
   // Chia sẻ kèo đang tuyển lên Bảng tin cộng đồng: POST /api/v1/community/posts { content, lfgCardId }
   // (BE chỉ nhận kèo còn suất và chưa tới giờ chơi; bài viết hiện thẻ kèo để người khác bấm nhận suất)
   const [sharingCardId, setSharingCardId] = useState(null)
@@ -664,46 +626,6 @@ function CommunityFeed() {
       toast.error(error?.message || 'Không đăng được kèo lên bảng tin.')
     } finally {
       setSharingCardId(null)
-    }
-  }
-
-  const handleCreateCancelReq = async (cardId) => {
-    const reason = finalReason(cancelRequestPick, cancelRequestReason)
-    if (!reason) {
-      toast.warning('Vui lòng chọn hoặc nhập lý do đề xuất hủy kèo!')
-      return
-    }
-    setIsSubmittingCancelReq(true)
-    try {
-      await createLfgCancelRequest(cardId, { reason })
-      setToastMessage({
-        title: 'Đã Tạo Yêu Cầu Hủy Kèo',
-        desc: 'Yêu cầu hủy kèo đã được gửi tới tất cả thành viên để bỏ phiếu.',
-        type: 'success',
-      })
-      const latestReq = await getLatestLfgCancelRequest(cardId).catch(() => null)
-      setCancelVoteModal((prev) => (prev ? { ...prev, request: latestReq } : null))
-    } catch (err) {
-      toast.error(err.message || 'Lỗi khi gửi yêu cầu hủy kèo')
-    } finally {
-      setIsSubmittingCancelReq(false)
-    }
-  }
-
-  const handleVoteCancelReq = async (cardId, requestId, approve) => {
-    try {
-      await voteLfgCancelRequest(cardId, requestId, { approve })
-      setToastMessage({
-        title: approve ? 'Đã Bỏ Phiếu Đồng Ý Hủy' : 'Đã Bỏ Phiếu Từ Chối',
-        desc: 'Phiếu bầu của bạn đã được ghi nhận trên hệ thống.',
-        type: 'success',
-      })
-      const updatedReq = await getLatestLfgCancelRequest(cardId).catch(() => null)
-      setCancelVoteModal((prev) => (prev ? { ...prev, request: updatedReq } : null))
-      loadMyCards()
-      loadJoinedCards()
-    } catch (err) {
-      toast.error(err.message || 'Lỗi khi bỏ phiếu')
     }
   }
 
@@ -872,10 +794,10 @@ function CommunityFeed() {
 
     setActionLoadingId(cancelMatchModal.id)
     try {
-      await cancelLfg(cancelMatchModal.id, { reason })
+      const result = await cancelLfg(cancelMatchModal.id, { reason })
       setToastMessage({
         title: 'Hủy Kèo Ghép Thành Công',
-        desc: 'Đã hủy kèo. Điểm được hoàn theo chính sách: hủy trước giờ chơi từ 48 giờ trở lên hoàn 100%, sau mốc này không hoàn.',
+        desc: `Đã hủy kèo. ${describeLfgCancelResult(result)}`,
         type: 'success',
       })
       setCancelMatchModal(null)
@@ -1663,7 +1585,7 @@ function CommunityFeed() {
                 <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
                   <div>
-                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo: hủy trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn.
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ 48 giờ trở lên: mọi người được hoàn 100% Điểm, chủ kèo bị trừ 10 điểm Fair Play. Hủy trong vòng 48 giờ: người tham gia được hoàn 100% kèm bồi thường, chủ kèo mất 50% tiền sân và bị trừ 20 điểm Fair Play.
                   </div>
                 </div>
 
@@ -1882,17 +1804,6 @@ function CommunityFeed() {
                               </button>
                             )}
 
-                            {/* Trong 24 giờ cuối: chủ kèo tạo yêu cầu hủy để thành viên bỏ phiếu */}
-                            {cardActive && isPastLock(card) && (
-                              <button
-                                onClick={() => handleOpenCancelVoteModal(card, { asHost: true })}
-                                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
-                                <span>Yêu Cầu Hủy (Bỏ Phiếu)</span>
-                              </button>
-                            )}
-
                             {/* Mở vé QR Check-in (2.7 Bước 1): kèo đã hủy thì không còn vé */}
                             {card.status !== 'CANCELLED' && (
                             <button
@@ -1904,8 +1815,8 @@ function CommunityFeed() {
                             </button>
                             )}
 
-                            {/* Hủy kèo đơn phương (2.6 Bước 5): tới trước giờ chơi 24 giờ */}
-                            {cardActive && !isPastLock(card) && (
+                            {/* Hủy kèo (POST /lfgs/{id}/cancel): được tới giờ chơi; BE chặn khi đã có người check-in */}
+                            {cardActive && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
                                 className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -2084,17 +1995,6 @@ function CommunityFeed() {
                             </div>
                           ) : (
                             <>
-                              {/* Bỏ phiếu hủy kèo (Vote Cancel): chỉ người đã vào kèo, trước giờ chơi */}
-                              {!isPending && !card.isStarted && isPastLock(card) && (
-                              <button
-                                onClick={() => handleOpenCancelVoteModal(card)}
-                                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-amber-200"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">how_to_vote</span>
-                                <span>Bỏ Phiếu Hủy Kèo</span>
-                              </button>
-                              )}
-
                               {/* Rời kèo (Bước 4): không rời được khi đã tới giờ chơi */}
                               {!card.isStarted && (
                               <button
@@ -2990,14 +2890,18 @@ function CommunityFeed() {
               onCustom={setCustomCancelReason}
             />
             <p className="text-[11px] text-gray-500 m-0">
-              Chủ kèo tự hủy được tới trước giờ chơi 24 tiếng. Sau mốc này cần tạo yêu cầu hủy để các thành viên bỏ phiếu.
+              Chủ kèo hủy được kèo tới trước giờ chơi, khi chưa có ai check-in.
             </p>
 
             {/* Refund policy note (2.6 Bước 5) */}
             <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
               <div>
-                <strong>Chính sách hoàn Điểm (2.6 Bước 5):</strong> Hủy trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho chủ kèo và người tham gia. Hủy sau mốc này: không được hoàn.
+                <strong>Chính sách hủy kèo (2.6 Bước 5):</strong>
+                <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                  <li>Trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho bạn và người tham gia; bạn bị trừ <strong>10 điểm Fair Play</strong>.</li>
+                  <li>Trong vòng 48 giờ: người tham gia được hoàn 100%; bạn bị trừ <strong>50% tiền sân</strong> (chia đều bồi thường cho người tham gia) và <strong>20 điểm Fair Play</strong>. Nếu chưa có ai vào kèo, bạn được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.</li>
+                </ul>
               </div>
             </div>
 
@@ -3113,8 +3017,9 @@ function CommunityFeed() {
                 <strong className="text-gray-900 block mb-1">
                   2. Cơ chế xử phạt huỷ slot &amp; No-show
                 </strong>
-                - Huỷ trước giờ chơi từ 48 giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
-                - Huỷ trong vòng 48 giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.
+                - Rời kèo trước giờ chơi từ 48 giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
+                - Rời kèo trong vòng 48 giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.<br />
+                - Chủ kèo hủy kèo: người tham gia luôn được hoàn 100% (trong vòng 48 giờ còn được bồi thường thêm).
               </div>
               <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                 <strong className="text-gray-900 block mb-1">
@@ -3628,11 +3533,13 @@ function CommunityFeed() {
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    Hủy trước giờ chơi từ <strong>48 giờ</strong> trở lên: <strong>hoàn 100% Điểm</strong>.
+                    <strong className="text-gray-900 font-bold">Người tham gia rời kèo:</strong> trước giờ chơi từ <strong>48 giờ</strong> trở lên được <strong>hoàn 100% Điểm</strong>; trong vòng 48 giờ <strong>không được hoàn</strong>.
                   </li>
-                  <li>Hủy trong vòng <strong>48 giờ</strong> trước giờ chơi: <strong>không được hoàn Điểm</strong>.</li>
                   <li>
-                    <strong className="text-red-700 font-bold">Phạt hủy kèo người tạo:</strong> Nếu kèo LFG đã tạo mà bị hủy trong vòng <strong>sau 24h trước giờ chơi</strong>: <strong>trừ 10 điểm</strong> Fair Play.
+                    <strong className="text-gray-900 font-bold">Chủ kèo hủy trước 48 giờ:</strong> mọi người được <strong>hoàn 100% Điểm</strong>; chủ kèo bị <strong>trừ 10 điểm</strong> Fair Play.
+                  </li>
+                  <li>
+                    <strong className="text-red-700 font-bold">Chủ kèo hủy trong vòng 48 giờ:</strong> người tham gia được hoàn 100% và nhận bồi thường; chủ kèo bị trừ <strong>50% tiền sân</strong> (chia đều cho người tham gia) và <strong>trừ 20 điểm</strong> Fair Play. Chưa có ai vào kèo thì chủ kèo được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.
                   </li>
                 </ul>
               </div>
@@ -3668,125 +3575,6 @@ function CommunityFeed() {
                 <span>Đã hiểu &amp; Đồng ý quy chế</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== MODAL: YÊU CẦU & BỎ PHIẾU HỦY KÈO (POST /cancel-requests & /vote) ===================== */}
-      {cancelVoteModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => setCancelVoteModal(null)}
-        >
-          <div
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-600 text-[24px]">how_to_vote</span>
-                <h3 className="text-base font-black text-gray-900">Biểu Quyết Hủy Kèo Ghép</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCancelVoteModal(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            {cancelVoteModal.isLoading ? (
-              <div className="p-8 text-center flex flex-col items-center gap-2">
-                <span className="material-symbols-outlined text-3xl animate-spin text-[#3B6817]">progress_activity</span>
-                <span className="text-xs text-gray-500 font-semibold">Đang tải thông tin yêu cầu hủy...</span>
-              </div>
-            ) : cancelVoteModal.request ? (
-              <div className="flex flex-col gap-3">
-                <div className="bg-amber-50 rounded-xl p-3.5 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                  <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-800">
-                    <span className="material-symbols-outlined text-[16px]">info</span>
-                    <span>Đang có yêu cầu hủy kèo cần các thành viên biểu quyết:</span>
-                  </div>
-                  <p><strong>Lý do:</strong> {cancelVoteModal.request.reason || '—'}</p>
-                  <p className="text-[11px] text-amber-700 mt-1">
-                    Trạng thái: <strong>{cancelVoteModal.request.status || 'PENDING_VOTE'}</strong> • Đồng ý: {cancelVoteModal.request.approveCount || 0} • Từ chối: {cancelVoteModal.request.declineCount || 0}
-                  </p>
-                </div>
-
-                <p className="text-xs text-gray-600">
-                  Nếu đa số thành viên đồng ý hủy, tiền cọc sẽ được hoàn lại 100% cho mọi người theo cơ chế Escrow.
-                </p>
-
-                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => handleVoteCancelReq(cancelVoteModal.card.id, cancelVoteModal.request.id, false)}
-                    className="px-4 py-2.5 rounded-xl border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs"
-                  >
-                    Không Đồng Ý
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleVoteCancelReq(cancelVoteModal.card.id, cancelVoteModal.request.id, true)}
-                    className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md"
-                  >
-                    Đồng Ý Hủy Kèo
-                  </button>
-                </div>
-              </div>
-            ) : !cancelVoteModal.asHost ? (
-              // Người tham gia không tạo yêu cầu hủy: chờ chủ kèo đề xuất rồi bỏ phiếu
-              <div className="flex flex-col gap-3">
-                <p className="text-xs text-gray-600">
-                  Hiện chưa có yêu cầu hủy nào cho kèo này. Khi chủ kèo đề xuất hủy, bạn sẽ bỏ phiếu tại đây.
-                </p>
-                <div className="flex items-center justify-end pt-2 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setCancelVoteModal(null)}
-                    className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <p className="text-xs text-gray-600">
-                  Chỉ còn dưới 24 tiếng trước giờ chơi nên không tự hủy được. Hãy tạo yêu cầu hủy để các thành viên cùng bỏ phiếu:
-                </p>
-
-                <LfgReasonPicker
-                  label="Lý do đề xuất hủy"
-                  required
-                  reasons={cancelReasonsList}
-                  picked={cancelRequestPick}
-                  onPick={setCancelRequestPick}
-                  custom={cancelRequestReason}
-                  onCustom={setCancelRequestReason}
-                  placeholder="Nhập lý do đề xuất hủy kèo..."
-                />
-
-                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setCancelVoteModal(null)}
-                    className="px-4 py-2 rounded-xl text-gray-600 font-bold text-xs hover:bg-gray-100"
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSubmittingCancelReq || !finalReason(cancelRequestPick, cancelRequestReason)}
-                    onClick={() => handleCreateCancelReq(cancelVoteModal.card.id)}
-                    className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md disabled:opacity-50"
-                  >
-                    {isSubmittingCancelReq ? 'Đang gửi...' : 'Gửi Yêu Cầu Hủy'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
