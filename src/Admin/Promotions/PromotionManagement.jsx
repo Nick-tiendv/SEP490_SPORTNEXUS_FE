@@ -10,7 +10,7 @@ import '../LFG/lfg.css'
 const TARGETS = { FACILITY: 'Cơ sở', TOURNAMENT: 'Giải đấu' }
 const PROMOTION_STATUS = { ACTIVE: ['Confirmed', 'Đang chạy'], SCHEDULED: ['Pending', 'Chờ chạy'], EXPIRED: ['Completed', 'Hết hạn'] }
 const number = value => (Number.isFinite(Number(value)) ? Number(value).toLocaleString('vi-VN') : '—')
-const money = value => `${number(value)} ₫`
+const money = value => `${number(value)} Điểm`
 const formatDate = value => (value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString('vi-VN') : '—')
 const noop = () => {}
 const EMPTY = { name: '', description: '', targetType: 'FACILITY', durationDays: '7', price: '', isActive: true }
@@ -42,7 +42,7 @@ function PackageDialog({ pkg, onClose, onDone }) {
       <label>Mô tả<textarea rows={2} maxLength={1000} value={form.description || ''} onChange={set('description')} /></label>
       <label>Áp dụng cho<select value={form.targetType} onChange={set('targetType')}>{Object.entries(TARGETS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Thời hạn (ngày)<input type="number" min="1" value={form.durationDays} onChange={set('durationDays')} /></label>
-      <label>Giá (₫)<input type="number" min="0" step="1000" value={form.price} onChange={set('price')} /></label>
+      <label>Giá (Điểm)<input type="number" min="0" step="1000" value={form.price} onChange={set('price')} /></label>
       <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={form.isActive} onChange={set('isActive')} />Đang bán (chủ sân thấy và mua được)</label>
       {error && <p role="alert" className="users-form-error">{error}</p>}
       <footer><button type="button" className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className="users-button primary" disabled={submitting}>{submitting ? 'Đang lưu…' : pkg ? 'Lưu thay đổi' : 'Tạo gói'}</button></footer>

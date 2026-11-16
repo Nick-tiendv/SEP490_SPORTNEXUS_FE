@@ -8,7 +8,7 @@ const toCoord = (v) => {
   return Number.isFinite(num) ? num : null
 }
 
-export const formatVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`
+export const formatVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} Điểm`
 
 // Công thức Haversine tính khoảng cách chuẩn theo tọa độ GPS (km)
 export function haversineDistance(lat1, lon1, lat2, lon2) {

@@ -9,7 +9,7 @@ export const sportLabels = { Pickleball: 'Pickleball', Badminton: 'Cầu lông',
 export const canCancel = booking => ['PENDING', 'PAID'].includes(booking.status)
 
 export const number = value => (Number(value) || 0).toLocaleString('vi-VN')
-export const money = value => `${number(value)} ₫`
+export const money = value => `${number(value)} Điểm`
 export const date = value => (value ? value.split('-').reverse().join('/') : '—')
 export function parseBookingDate(value) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)

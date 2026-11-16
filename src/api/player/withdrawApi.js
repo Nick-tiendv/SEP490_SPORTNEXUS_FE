@@ -6,7 +6,7 @@ import apiClient, { normalizeApiError } from '../apiClient.js'
  * - GET  /api/v1/wallet/transactions/{transactionId}
  */
 
-export const MIN_MAINTENANCE_FEE = 50000 // 50.000đ phí duy trì tài khoản Player
+export const MIN_MAINTENANCE_FEE = 50000 // 50.000 Điểm phí duy trì tài khoản Player
 
 export const WITHDRAW_STATUS = {
   PENDING: 'PENDING',

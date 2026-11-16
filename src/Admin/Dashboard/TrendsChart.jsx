@@ -62,7 +62,7 @@ export default function TrendsChart({ reloadKey = 0 }) {
         <div className="admin-segmented admin-range-tabs" role="group" aria-label="Khoảng thời gian biểu đồ">{Object.keys(TREND_RANGES).map(item => <button key={item} type="button" aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}{TREND_RANGES[item] > 30 && <small>theo tuần</small>}</button>)}</div>
       </div>
       <div className="admin-chart-summary">
-        <div><i className="admin-legend-dot" /><span>Giá trị đặt sân<small>(VNĐ)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
+        <div><i className="admin-legend-dot" /><span>Giá trị đặt sân<small>(Điểm)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
         <div><i className="admin-legend-dot muted" /><span>Số lượng<small>lượt đặt sân</small></span><strong>{loading ? '…' : formatNumber(totalBookings)}</strong></div>
         <div><i className="admin-legend-dot users" /><span>Người dùng<small>đăng ký mới</small></span><strong>{loading ? '…' : formatNumber(totalUsers)}</strong></div>
         <span className="admin-chart-growth"><TrendingUp size={14} /> {range} gần nhất</span>

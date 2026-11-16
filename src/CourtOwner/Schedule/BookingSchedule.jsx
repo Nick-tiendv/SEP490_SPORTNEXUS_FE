@@ -177,7 +177,7 @@ export default function ViewCourtBookingSchedule() {
   const occupancyRate = totalSlotsCount ? Math.round((bookedCount / totalSlotsCount) * 100) : 0
   const activeCourtCount = filteredCourts.filter((court) => court.status === 'ACTIVE').length
 
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ'
+  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm'
 
   // Số ca trống liên tiếp tính từ ca được chọn (để đặt nhiều giờ một lần)
   const consecutiveFreeSlots = (court, slot) => {
@@ -308,7 +308,7 @@ export default function ViewCourtBookingSchedule() {
   const handleChangeSlotPrice = (slot) => {
     const price = Number(priceDraft?.value)
     if (!Number.isFinite(price) || price < 1000) {
-      showToast('Giá ca phải từ 1.000 đ trở lên.', 'error')
+      showToast('Giá ca phải từ 1.000 Điểm trở lên.', 'error')
       return
     }
     runAction(

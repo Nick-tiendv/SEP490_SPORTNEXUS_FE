@@ -4,9 +4,9 @@ import apiClient, { normalizeApiError } from '../apiClient.js'
  * HẰNG SỐ & TIỆN ÍCH LUỒNG NẠP TIỀN (PayOS)
  * ============================================================ */
 
-/** Giới hạn số tiền nạp theo quy định: số nguyên 10.000đ – 2.000.000đ */
+/** Giới hạn số tiền nạp theo quy định: số nguyên 10.000đ – 50.000.000đ */
 export const DEPOSIT_MIN = 10000
-export const DEPOSIT_MAX = 2000000
+export const DEPOSIT_MAX = 50000000
 
 /** Trạng thái lệnh nạp do BE trả về */
 export const DEPOSIT_STATUS = {
@@ -29,10 +29,10 @@ export function validateDepositAmount(amount) {
     return 'Số tiền nạp phải là số nguyên hợp lệ'
   }
   if (num < DEPOSIT_MIN) {
-    return `Số tiền nạp tối thiểu là ${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MIN)}đ`
+    return `Số tiền nạp tối thiểu là ${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MIN)} đ`
   }
   if (num > DEPOSIT_MAX) {
-    return `Số tiền nạp không được vượt quá ${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MAX)}đ (bạn đang nhập ${new Intl.NumberFormat('vi-VN').format(num)}đ)`
+    return `Số tiền nạp không được vượt quá ${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MAX)} đ (bạn đang nhập ${new Intl.NumberFormat('vi-VN').format(num)} đ)`
   }
   return null
 }

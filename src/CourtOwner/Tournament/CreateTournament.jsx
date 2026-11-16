@@ -73,7 +73,7 @@ const STATUS = {
 }
 const statusOf = (value) => STATUS[String(value || '').toUpperCase()] || { label: value || '—', bg: '#F1F5F9', color: '#475569' }
 
-const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ'
+const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm'
 const parseAmount = (text) => Number(String(text).replace(/\D/g, '')) || 0
 const formatAmountInput = (text) => {
   const amount = parseAmount(text)

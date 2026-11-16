@@ -470,7 +470,7 @@ function CheckInQR() {
       }
       const refundAmount = (Number(result?.refundAmount) || 0) + extraRefund
       const isEligibleRefund = refundAmount > 0
-      const refundText = `${refundAmount.toLocaleString('vi-VN')} đ`
+      const refundText = `${refundAmount.toLocaleString('vi-VN')} Điểm`
       const facilityLabel = ticketData?.venueName && ticketData.venueName !== '—' ? ticketData.venueName : 'sân'
 
       // Tiền hoàn do backend xử lý; báo các thành phần đang hiển thị số dư tải lại ví.
@@ -2551,7 +2551,7 @@ function CheckInQR() {
                     Giải ngân ký quỹ Escrow thành công
                   </div>
                   <div>
-                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} đ</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
+                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} Điểm</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
                   </div>
                 </div>
 
@@ -3380,7 +3380,7 @@ function CheckInQR() {
                 {getHoursUntilMatch() >= 24 ? (
                   <>
                     Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 24h).
-                    Bạn sẽ nhận lại <strong>100% tiền ({new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} đ)</strong> vào Ví Escrow ngay sau khi hủy.
+                    Bạn sẽ nhận lại <strong>100% tiền ({new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} Điểm)</strong> vào Ví Escrow ngay sau khi hủy.
                   </>
                 ) : (
                   <>
@@ -3747,7 +3747,7 @@ function CheckInQR() {
                           </div>
                           {amount > 0 && (
                             <div style={{ fontSize: '12.5px', color: '#047857', fontWeight: 700, marginTop: '4px' }}>
-                              {Number(amount).toLocaleString('vi-VN')} đ
+                              {Number(amount).toLocaleString('vi-VN')} Điểm
                             </div>
                           )}
                         </div>

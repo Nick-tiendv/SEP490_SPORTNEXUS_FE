@@ -245,7 +245,7 @@ export default function WalletEscrow() {
       toast.error(
         `Số dư của bạn (${formatVND(
           currentAvailableBalance
-        )}đ) chưa đủ mức tối thiểu 50.000đ (phí duy trì ví Player bắt buộc).`
+        )} Điểm) chưa đủ mức tối thiểu 50.000 Điểm (phí duy trì ví Player bắt buộc).`
       )
       return
     }
@@ -257,7 +257,7 @@ export default function WalletEscrow() {
       toast.error(
         `Số tiền rút tối đa là ${formatVND(
           maxWithdrawable
-        )}đ (Quy định: bắt buộc giữ lại tối thiểu 50.000đ phí duy trì ví của Player).`
+        )} Điểm (Quy định: bắt buộc giữ lại tối thiểu 50.000 Điểm phí duy trì ví của Player).`
       )
       return
     }
@@ -280,7 +280,7 @@ export default function WalletEscrow() {
       })
       setShowWithdrawModal(false)
       setWithdrawReceipt({ ...receipt, remainingBalance: receipt.remainingBalance ?? currentAvailableBalance - withdrawAmount })
-      toast.success(`🎉 Đã gửi yêu cầu rút ${formatVND(withdrawAmount)}đ tới Admin xét duyệt!`)
+      toast.success(`🎉 Đã gửi yêu cầu rút ${formatVND(withdrawAmount)} Điểm tới Admin xét duyệt!`)
       loadWallet()
       reloadTransactions()
       loadWithdrawals()
@@ -348,11 +348,11 @@ export default function WalletEscrow() {
   const handleSubmit = async () => {
     setTouched(true)
     if (amount > DEPOSIT_MAX) {
-      toast.error(`Số tiền nạp (${formatVND(amount)}đ) vượt quá hạn mức tối đa 2.000.000đ. Không thể thực hiện giao dịch!`)
+      toast.error(`Số tiền nạp (${formatVND(amount)} đ) vượt quá hạn mức tối đa ${formatVND(DEPOSIT_MAX)} đ. Không thể thực hiện giao dịch!`)
       return
     }
     if (amount < DEPOSIT_MIN) {
-      toast.error(`Số tiền nạp tối thiểu là ${formatVND(DEPOSIT_MIN)}đ.`)
+      toast.error(`Số tiền nạp tối thiểu là ${formatVND(DEPOSIT_MIN)} đ.`)
       return
     }
     if (amountError || submitting) return
@@ -411,7 +411,7 @@ export default function WalletEscrow() {
           setQrPhase(DEPOSIT_STATUS.SUCCESS)
           clearPendingDeposit()
           setPendingDeposit(null)
-          toast.success(`Nạp tiền thành công +${formatVND(data?.amount ?? qrSession.amount)} đ`)
+          toast.success(`Nạp tiền thành công +${formatVND(data?.amount ?? qrSession.amount)} Điểm`)
           loadWallet()
           reloadTransactions()
           return
@@ -486,7 +486,7 @@ export default function WalletEscrow() {
         setQrPhase(DEPOSIT_STATUS.SUCCESS)
         clearPendingDeposit()
         setPendingDeposit(null)
-        toast.success(`Nạp tiền thành công +${formatVND(data?.amount ?? qrSession.amount)} đ`)
+        toast.success(`Nạp tiền thành công +${formatVND(data?.amount ?? qrSession.amount)} Điểm`)
         loadWallet()
         reloadTransactions()
       } else if (status === DEPOSIT_STATUS.CANCELLED || status === DEPOSIT_STATUS.FAILED) {
@@ -574,9 +574,9 @@ export default function WalletEscrow() {
           <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 flex items-start gap-3">
             <span className="material-symbols-outlined text-blue-700 text-[24px] shrink-0">info</span>
             <div>
-              <h4 className="text-sm font-bold text-blue-900">Đơn đặt sân cần thanh toán {formatVND(rawSuggestedAmount)} đ</h4>
+              <h4 className="text-sm font-bold text-blue-900">Đơn đặt sân cần thanh toán {formatVND(rawSuggestedAmount)} Điểm</h4>
               <p className="text-xs text-blue-800 mt-0.5 leading-relaxed">
-                Do quy định hạn mức mỗi giao dịch PayOS tối đa là {formatVND(DEPOSIT_MAX)} đ, số tiền đã được tự động điền {formatVND(DEPOSIT_MAX)} đ. Bạn có thể nạp trước 2.000.000đ, sau đó nạp thêm phần còn lại để hoàn tất đặt sân.
+                Do quy định hạn mức mỗi giao dịch PayOS tối đa là {formatVND(DEPOSIT_MAX)} đ, số tiền đã được tự động điền {formatVND(DEPOSIT_MAX)} đ. Bạn có thể nạp trước {formatVND(DEPOSIT_MAX)} đ, sau đó nạp thêm phần còn lại để hoàn tất đặt sân.
               </p>
             </div>
           </div>
@@ -647,18 +647,18 @@ export default function WalletEscrow() {
                   Số dư khả dụng
                 </span>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/20 text-emerald-50 border border-white/25">
-                  Phí duy trì: 50.000đ
+                  Phí duy trì: 50.000 Điểm
                 </span>
                 {Number(wallet?.frozenBalance) > 0 && (
                   <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-100 border border-amber-300/30 flex items-center gap-1">
                     <span className="material-symbols-outlined text-[13px]">lock</span>
-                    Tạm giữ: {formatVND(wallet?.frozenBalance)} đ
+                    Tạm giữ: {formatVND(wallet?.frozenBalance)} Điểm
                   </span>
                 )}
               </div>
 
               <p className="mt-1 text-3xl sm:text-4xl font-black tracking-tight">
-                {walletLoading && !wallet ? '—' : `${formatVND(wallet?.availableBalance ?? currentAvailableBalance)} đ`}
+                {walletLoading && !wallet ? '—' : `${formatVND(wallet?.availableBalance ?? currentAvailableBalance)} Điểm`}
               </p>
             </div>
 
@@ -676,7 +676,7 @@ export default function WalletEscrow() {
               </button>
               <div className="text-[11px] text-emerald-100/85 text-center sm:text-right flex items-center justify-center sm:justify-end gap-1 font-medium">
                 <span className="material-symbols-outlined text-[14px]">shield</span>
-                <span>Yêu cầu số dư tối thiểu 50.000đ</span>
+                <span>Yêu cầu số dư tối thiểu 50.000 Điểm</span>
               </div>
             </div>
             )}
@@ -695,7 +695,7 @@ export default function WalletEscrow() {
             {/* Số tiền */}
             <section className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-6">
               <label htmlFor="deposit-amount-input" className="text-xs font-extrabold uppercase tracking-wider text-[#1F2937] block mb-4">
-                Số tiền muốn nạp (VND)
+                Số tiền muốn nạp (VNĐ)
               </label>
               <div
                 className={`border rounded-2xl px-5 py-4 flex items-center gap-4 transition-all focus-within:ring-2 ${
@@ -745,7 +745,7 @@ export default function WalletEscrow() {
                 <div className="mt-3 p-3.5 rounded-xl bg-rose-100/80 border border-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2 text-rose-900 text-xs font-bold">
                     <span className="material-symbols-outlined text-[20px] text-rose-600 shrink-0">block</span>
-                    <span>Số tiền nạp tối đa là {formatVND(DEPOSIT_MAX)}đ. Bạn đang nhập dư {formatVND(amount - DEPOSIT_MAX)}đ.</span>
+                    <span>Số tiền nạp tối đa là {formatVND(DEPOSIT_MAX)} đ. Bạn đang nhập dư {formatVND(amount - DEPOSIT_MAX)} đ.</span>
                   </div>
                   <button
                     id="deposit-fix-max-btn"
@@ -756,14 +756,21 @@ export default function WalletEscrow() {
                     }}
                     className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shrink-0 transition shadow-sm self-start sm:self-auto"
                   >
-                    Chỉnh về 2.000.000đ
+                    Chỉnh về {formatVND(DEPOSIT_MAX)} đ
                   </button>
                 </div>
               )}
 
               <p id="deposit-amount-hint" className={`mt-2 text-xs font-semibold ${showAmountError ? 'text-rose-600' : 'text-[#6B7280]'}`}>
-                {showAmountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)}đ, tối đa ${formatVND(DEPOSIT_MAX)}đ.`}
+                {showAmountError ? amountError : `Tối thiểu ${formatVND(DEPOSIT_MIN)} đ, tối đa ${formatVND(DEPOSIT_MAX)} đ.`}
               </p>
+
+              <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 flex items-start gap-2 text-xs text-sky-900">
+                <span className="material-symbols-outlined text-[18px] text-sky-700 shrink-0">info</span>
+                <span>
+                  <strong>Lưu ý:</strong> Số tiền nạp sẽ được quy đổi thành Điểm trong ví theo tỷ lệ <strong>1 đ = 1 Điểm</strong>. Điểm dùng để đặt sân, ghép trận và các dịch vụ trên SportNexus.
+                </span>
+              </div>
 
               <div className="mt-5">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#6B7280] block mb-2.5">Chọn nhanh:</span>
@@ -880,7 +887,7 @@ export default function WalletEscrow() {
                   <div className="flex items-center justify-between">
                     <dt className="text-[#6B7280] font-medium">Khả dụng sau khi nạp</dt>
                     <dd className={`font-bold ${amount > DEPOSIT_MAX ? 'text-rose-600' : 'text-[#15803D]'}`}>
-                      {amount > DEPOSIT_MAX ? 'Không hợp lệ' : `${formatVND((wallet.availableBalance || 0) + (amountError ? 0 : amount))} đ`}
+                      {amount > DEPOSIT_MAX ? 'Không hợp lệ' : `${formatVND((wallet.availableBalance || 0) + (amountError ? 0 : amount))} Điểm`}
                     </dd>
                   </div>
                 )}
@@ -918,9 +925,9 @@ export default function WalletEscrow() {
                   {submitting
                     ? 'Đang tạo lệnh nạp…'
                     : amount > DEPOSIT_MAX
-                    ? `Vượt quá hạn mức 2.000.000 đ (Không thể nạp)`
+                    ? `Vượt quá hạn mức ${formatVND(DEPOSIT_MAX)} đ (Không thể nạp)`
                     : amount < DEPOSIT_MIN
-                    ? `Số tiền nạp tối thiểu là 10.000 đ`
+                    ? `Số tiền nạp tối thiểu là ${formatVND(DEPOSIT_MIN)} đ`
                     : payMode === 'redirect'
                     ? `Thanh toán qua PayOS (${formatVND(amount)} đ)`
                     : `Tạo mã VietQR (${formatVND(amount)} đ)`}
@@ -1099,9 +1106,9 @@ export default function WalletEscrow() {
                         <div className="text-right shrink-0">
                           <p className={`text-sm font-extrabold ${meta.color}`}>
                             {meta.sign}
-                            {formatVND(amt)} đ
+                            {formatVND(amt)} Điểm
                           </p>
-                          {tx.balanceAfter != null && <p className="text-[11px] text-[#94A3B8]">Số dư: {formatVND(tx.balanceAfter)} đ</p>}
+                          {tx.balanceAfter != null && <p className="text-[11px] text-[#94A3B8]">Số dư: {formatVND(tx.balanceAfter)} Điểm</p>}
                         </div>
                       </div>
                     )
@@ -1143,7 +1150,7 @@ export default function WalletEscrow() {
                 <span className="material-symbols-outlined text-emerald-700 text-[20px] shrink-0 mt-0.5">verified_user</span>
                 <div className="text-xs text-emerald-900 leading-relaxed">
                   <span className="font-bold">Quy định rút tiền cho Player: </span>
-                  Hệ thống bắt buộc giữ lại tối thiểu <span className="font-extrabold text-emerald-700">50.000đ</span> trong ví làm phí duy trì tài khoản. 
+                  Hệ thống bắt buộc giữ lại tối thiểu <span className="font-extrabold text-emerald-700">50.000 Điểm</span> trong ví làm phí duy trì tài khoản. 
                   Yêu cầu rút tiền sau khi gửi sẽ được Admin SportNexus đối soát và giải ngân qua tài khoản ngân hàng trong vòng 24 giờ làm việc.
                 </div>
               </div>
@@ -1155,7 +1162,7 @@ export default function WalletEscrow() {
                   </div>
                   <p className="text-sm text-[#111827] font-bold">Bạn chưa có yêu cầu rút tiền nào</p>
                   <p className="text-xs text-[#6B7280] mt-1 max-w-sm mx-auto">
-                    Khi số dư khả dụng trên 50.000đ, bạn có thể tạo yêu cầu rút số tiền khả dụng về tài khoản ngân hàng cá nhân.
+                    Khi số dư khả dụng trên 50.000 Điểm, bạn có thể tạo yêu cầu rút số tiền khả dụng về tài khoản ngân hàng cá nhân.
                   </p>
                   <button
                     type="button"
@@ -1241,13 +1248,13 @@ export default function WalletEscrow() {
 
                       <div className="text-left sm:text-right shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-dashed border-gray-200 sm:pl-4">
                         <p className="text-base font-black text-rose-600">
-                          - {formatVND(item.amount)} đ
+                          - {formatVND(item.amount)} Điểm
                         </p>
                         <p className="text-[11px] text-[#64748B] mt-0.5">
-                          Số dư giữ lại: <span className="font-bold text-[#15803D]">50.000 đ</span>
+                          Số dư giữ lại: <span className="font-bold text-[#15803D]">50.000 Điểm</span>
                         </p>
                         <p className="text-[10.5px] text-[#94A3B8]">
-                          Số dư sau rút: {formatVND(item.remainingBalance ?? 0)} đ
+                          Số dư sau rút: {formatVND(item.remainingBalance ?? 0)} Điểm
                         </p>
                         {isPending && (
                           <button
@@ -1280,9 +1287,9 @@ export default function WalletEscrow() {
                   <span className="material-symbols-outlined text-[46px] text-emerald-700">check_circle</span>
                 </div>
                 <h3 id="qr-modal-title" className="text-xl font-extrabold text-[#111827]">Nạp tiền thành công!</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">+{formatVND(qrSession.amount)} đ đã vào Ví Escrow.</p>
+                <p className="mt-1 text-sm text-[#6B7280]">+{formatVND(qrSession.amount)} Điểm đã vào Ví Escrow.</p>
                 {wallet && (
-                  <p className="mt-3 text-sm font-bold text-[#15803D]">Số dư khả dụng: {formatVND(wallet.availableBalance)} đ</p>
+                  <p className="mt-3 text-sm font-bold text-[#15803D]">Số dư khả dụng: {formatVND(wallet.availableBalance)} Điểm</p>
                 )}
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
                   {returnTarget && (
@@ -1352,7 +1359,7 @@ export default function WalletEscrow() {
                   </div>
                   <div className="flex items-center justify-between">
                     <dt className="text-gray-500 font-medium">Số tiền</dt>
-                    <dd className="font-extrabold text-emerald-800">{formatVND(qrSession.amount)} đ</dd>
+                    <dd className="font-extrabold text-emerald-800">{formatVND(qrSession.amount)} Điểm</dd>
                   </div>
                   {qrSession.accountName && (
                     <div className="flex items-center justify-between">
@@ -1433,23 +1440,23 @@ export default function WalletEscrow() {
 
               <h3 className="text-xl font-black text-gray-900">Chưa Đủ Điều Kiện Rút Tiền</h3>
               <p className="text-xs text-gray-500 mt-1.5 leading-relaxed px-2">
-                Theo quy định của hệ thống SportNexus, tài khoản của role <strong className="text-emerald-700">Player</strong> phải duy trì số dư khả dụng tối thiểu <strong className="text-gray-900">50.000đ</strong> làm phí duy trì tài khoản.
+                Theo quy định của hệ thống SportNexus, tài khoản của role <strong className="text-emerald-700">Player</strong> phải duy trì số dư khả dụng tối thiểu <strong className="text-gray-900">50.000 Điểm</strong> làm phí duy trì tài khoản.
               </p>
 
               <div className="my-5 p-4 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-left space-y-2.5 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 font-medium">Số dư khả dụng hiện tại:</span>
-                  <span className="font-extrabold text-rose-600 text-sm">{formatVND(currentAvailableBalance)} đ</span>
+                  <span className="font-extrabold text-rose-600 text-sm">{formatVND(currentAvailableBalance)} Điểm</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 font-medium">Mức phí duy trì bắt buộc:</span>
-                  <span className="font-bold text-gray-800 text-sm">50.000 đ</span>
+                  <span className="font-bold text-gray-800 text-sm">50.000 Điểm</span>
                 </div>
                 <div className="h-px bg-gray-200 my-1" />
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600 font-semibold">Cần có thêm tối thiểu:</span>
                   <span className="font-black text-amber-600">
-                    {formatVND(Math.max(0, MIN_MAINTENANCE_FEE - currentAvailableBalance))} đ
+                    {formatVND(Math.max(0, MIN_MAINTENANCE_FEE - currentAvailableBalance))} Điểm
                   </span>
                 </div>
               </div>
@@ -1514,19 +1521,19 @@ export default function WalletEscrow() {
             <div className="p-4 rounded-2xl bg-[#F0FDF4] border border-emerald-200/80 mb-5 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#334155] font-medium">Số dư khả dụng hiện tại:</span>
-                <span className="font-extrabold text-gray-900">{formatVND(currentAvailableBalance)} đ</span>
+                <span className="font-extrabold text-gray-900">{formatVND(currentAvailableBalance)} Điểm</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#334155] font-medium flex items-center gap-1">
                   <span>Phí duy trì bắt buộc:</span>
                   <span className="material-symbols-outlined text-[14px] text-emerald-700" title="Bắt buộc giữ lại làm phí duy trì ví Player">shield</span>
                 </span>
-                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">50.000 đ</span>
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">50.000 Điểm</span>
               </div>
               <div className="h-px bg-emerald-200/60 my-1" />
               <div className="flex items-center justify-between text-xs">
                 <span className="text-emerald-950 font-bold">Số tiền tối đa có thể rút:</span>
-                <span className="font-black text-[#15803D] text-sm">{formatVND(maxWithdrawable)} đ</span>
+                <span className="font-black text-[#15803D] text-sm">{formatVND(maxWithdrawable)} Điểm</span>
               </div>
             </div>
 
@@ -1584,14 +1591,14 @@ export default function WalletEscrow() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-gray-700">
-                    Số tiền muốn rút (VND) <span className="text-rose-500">*</span>
+                    Số điểm muốn rút <span className="text-rose-500">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setWithdrawAmount(maxWithdrawable)}
                     className="text-[11px] font-bold text-[#15803D] hover:underline cursor-pointer"
                   >
-                    Rút tối đa ({formatVND(maxWithdrawable)}đ)
+                    Rút tối đa ({formatVND(maxWithdrawable)} Điểm)
                   </button>
                 </div>
 
@@ -1603,7 +1610,7 @@ export default function WalletEscrow() {
                     max={maxWithdrawable}
                     value={withdrawAmount || ''}
                     onChange={(e) => setWithdrawAmount(Number(e.target.value))}
-                    className={`w-full px-3.5 py-3 rounded-xl border text-lg font-black outline-none transition pr-10 ${
+                    className={`w-full px-3.5 py-3 rounded-xl border text-lg font-black outline-none transition pr-16 ${
                       withdrawAmount > maxWithdrawable
                         ? 'border-rose-400 bg-rose-50/40 text-rose-700 focus:ring-2 focus:ring-rose-200'
                         : 'border-gray-300 text-gray-900 focus:border-[#15803D] focus:ring-2 focus:ring-[#15803D]/20'
@@ -1611,7 +1618,7 @@ export default function WalletEscrow() {
                     placeholder="Nhập số tiền..."
                     required
                   />
-                  <span className="absolute right-3.5 top-3.5 font-bold text-gray-400 text-sm">đ</span>
+                  <span className="absolute right-3.5 top-3.5 font-bold text-gray-400 text-sm">Điểm</span>
                 </div>
 
                 {/* Quick amount chips */}
@@ -1629,7 +1636,7 @@ export default function WalletEscrow() {
                             : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                         }`}
                       >
-                        {formatVND(val)} đ
+                        {formatVND(val)} Điểm
                       </button>
                     ))}
                 </div>
@@ -1638,13 +1645,13 @@ export default function WalletEscrow() {
                 {withdrawAmount > maxWithdrawable ? (
                   <p className="mt-1.5 text-xs text-rose-600 font-semibold flex items-center gap-1">
                     <span className="material-symbols-outlined text-[15px]">error</span>
-                    <span>Số tiền rút vượt quá hạn mức! Phải giữ lại tối thiểu 50.000đ phí duy trì ví.</span>
+                    <span>Số tiền rút vượt quá hạn mức! Phải giữ lại tối thiểu 50.000 Điểm phí duy trì ví.</span>
                   </p>
                 ) : (
                   <div className="mt-2 text-xs text-[#64748B] flex items-center justify-between px-1">
                     <span>Số dư ví còn lại sau rút:</span>
                     <span className="font-bold text-[#111827]">
-                      {formatVND(Math.max(0, currentAvailableBalance - withdrawAmount))} đ (≥ 50.000đ phí duy trì)
+                      {formatVND(Math.max(0, currentAvailableBalance - withdrawAmount))} Điểm (≥ 50.000 Điểm phí duy trì)
                     </span>
                   </div>
                 )}
@@ -1736,15 +1743,15 @@ export default function WalletEscrow() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Số tiền rút:</span>
-                <span className="font-extrabold text-rose-600 text-sm">- {formatVND(withdrawReceipt.amount)} đ</span>
+                <span className="font-extrabold text-rose-600 text-sm">- {formatVND(withdrawReceipt.amount)} Điểm</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Phí duy trì giữ lại:</span>
-                <span className="font-bold text-[#15803D]">50.000 đ</span>
+                <span className="font-bold text-[#15803D]">50.000 Điểm</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Số dư còn lại:</span>
-                <span className="font-bold text-gray-800">{formatVND(withdrawReceipt.remainingBalance)} đ</span>
+                <span className="font-bold text-gray-800">{formatVND(withdrawReceipt.remainingBalance)} Điểm</span>
               </div>
               <div className="h-px bg-gray-200 my-1" />
               <div className="flex items-center justify-between">
@@ -1837,19 +1844,19 @@ export default function WalletEscrow() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Số tiền:</span>
                     <span className="font-extrabold text-sm text-gray-900">
-                      {formatVND(Math.abs(selectedTxDetail.amount || 0))} đ
+                      {formatVND(Math.abs(selectedTxDetail.amount || 0))} Điểm
                     </span>
                   </div>
                   {selectedTxDetail.balanceBefore != null && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Số dư trước GD:</span>
-                      <span className="font-medium text-gray-700">{formatVND(selectedTxDetail.balanceBefore)} đ</span>
+                      <span className="font-medium text-gray-700">{formatVND(selectedTxDetail.balanceBefore)} Điểm</span>
                     </div>
                   )}
                   {selectedTxDetail.balanceAfter != null && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Số dư sau GD:</span>
-                      <span className="font-extrabold text-[#15803D]">{formatVND(selectedTxDetail.balanceAfter)} đ</span>
+                      <span className="font-extrabold text-[#15803D]">{formatVND(selectedTxDetail.balanceAfter)} Điểm</span>
                     </div>
                   )}
                   <div className="flex justify-between">

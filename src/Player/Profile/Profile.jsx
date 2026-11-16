@@ -3059,7 +3059,7 @@ export default function Profile() {
 
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
-                        {(Number(b.totalAmount ?? b.totalPrice) || 0).toLocaleString('vi-VN')} đ
+                        {(Number(b.totalAmount ?? b.totalPrice) || 0).toLocaleString('vi-VN')} Điểm
                       </div>
                       <button
                         type="button"

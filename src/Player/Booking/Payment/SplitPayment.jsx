@@ -29,6 +29,8 @@ import {
   savePendingDeposit,
   clearPendingDeposit,
   DEPOSIT_STATUS,
+  DEPOSIT_MIN,
+  DEPOSIT_MAX,
 } from '../../../api/player/walletApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
 import './SplitPayment.css'
@@ -406,7 +408,7 @@ function SplitPayment() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
 
-  const formatVnd = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+  const formatVnd = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' Điểm'
 
   // Che số điện thoại bảo mật (Bước 1: SĐT trả về đã được che)
   const maskPhone = (phone) => {
@@ -1092,12 +1094,12 @@ function SplitPayment() {
       return
     }
 
-    if (payableAmount > 2000000) {
-      toast.error(`Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)}đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (2.000.000đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
+    if (payableAmount > DEPOSIT_MAX) {
+      toast.error(`Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)} đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MAX)} đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
       navigate('/wallet', {
         state: {
           returnTo: { path: '/split-payment', state: location.state, label: 'Quay lại đặt sân' },
-          suggestedAmount: 2000000,
+          suggestedAmount: DEPOSIT_MAX,
         },
       })
       return
@@ -1105,8 +1107,8 @@ function SplitPayment() {
 
     setIsSubmitting(true)
     try {
-      // Giới hạn nạp tối thiểu 10.000đ, tối đa 2.000.000đ
-      const depositAmount = Math.min(2000000, Math.max(10000, Math.round(payableAmount)))
+      // Giới hạn nạp tối thiểu 10.000đ, tối đa 50.000.000đ
+      const depositAmount = Math.min(DEPOSIT_MAX, Math.max(DEPOSIT_MIN, Math.round(payableAmount)))
       const depRes = await createDeposit({ amount: depositAmount })
       const orderCode = depRes?.orderCode
       if (!orderCode) throw new Error('Máy chủ không trả về mã đơn (orderCode).')
@@ -1902,7 +1904,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <span className="sp-receipt-line-left sp-receipt-line-discount">
                     Ưu đãi giờ vàng thành viên
                   </span>
-                  <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-0 đ</span>
+                  <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-0 Điểm</span>
                 </div>
               </div>
 

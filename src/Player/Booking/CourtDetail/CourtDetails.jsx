@@ -877,7 +877,7 @@ function CourtDetails() {
                           )}
                         </span>
                         <span className="font-label-md text-label-md font-bold text-primary">
-                          {Number(slot.price || 0).toLocaleString('vi-VN')} đ
+                          {Number(slot.price || 0).toLocaleString('vi-VN')} Điểm
                         </span>
                       </div>
                     </button>
@@ -908,7 +908,7 @@ function CourtDetails() {
                 </div>
                 <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
                   <span className="text-on-surface-variant">Giá mặc định</span>
-                  <strong className="text-primary font-semibold">{(Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice) || 120000).toLocaleString('vi-VN')} đ/h</strong>
+                  <strong className="text-primary font-semibold">{(Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice) || 120000).toLocaleString('vi-VN')} Điểm/h</strong>
                 </div>
                 <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
                   <span className="text-on-surface-variant">Mặt sân</span>
@@ -1074,7 +1074,7 @@ function CourtDetails() {
                       </span>
                     </div>
                     <span className="font-label-md text-label-md font-bold text-primary">
-                      {Number(s.price || 0).toLocaleString('vi-VN')} đ
+                      {Number(s.price || 0).toLocaleString('vi-VN')} Điểm
                     </span>
                   </div>
                 ))
@@ -1107,7 +1107,7 @@ function CourtDetails() {
                 <span className="font-display-lg text-display-lg font-extrabold text-primary leading-none tracking-tight">
                   {totalAmountVnd.toLocaleString('vi-VN')}
                 </span>
-                <span className="font-headline-sm text-headline-sm text-primary font-bold">đ</span>
+                <span className="font-headline-sm text-headline-sm text-primary font-bold">Điểm</span>
               </div>
             </div>
 

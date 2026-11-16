@@ -165,7 +165,7 @@ export default function InteractiveCourtMap({
           </div>
           <div class="sn-popup-addr">${court.address}</div>
           <div class="sn-popup-footer">
-            <span class="sn-popup-price">${court.price.toLocaleString('vi-VN')} đ/giờ</span>
+            <span class="sn-popup-price">${court.price.toLocaleString('vi-VN')} Điểm/giờ</span>
             ${court.distance != null ? `<span class="sn-popup-dist">Cách ~${court.distance} km</span>` : ''}
           </div>
         </div>

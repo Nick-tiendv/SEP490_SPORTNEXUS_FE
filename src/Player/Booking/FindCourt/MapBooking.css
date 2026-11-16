@@ -588,7 +588,7 @@
   font: inherit; font-size: 14px; font-weight: 700; color: var(--mb-ink);
   text-align: right; font-variant-numeric: tabular-nums;
 }
-.mb-price-field span { font-size: 13px; font-weight: 700; color: var(--mb-muted); text-decoration: underline; }
+.mb-price-field span { font-size: 13px; font-weight: 700; color: var(--mb-muted); }
 
 
 

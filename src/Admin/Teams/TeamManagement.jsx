@@ -16,7 +16,7 @@ const STATUS_OPTIONS = [
 ]
 const TOURNAMENT_STATUS = { OPEN: 'Đang mở đăng ký', IN_PROGRESS: 'Đang thi đấu', FINISHED: 'Đã kết thúc', CANCELLED: 'Đã hủy' }
 const number = value => (Number.isFinite(Number(value)) ? Number(value).toLocaleString('vi-VN') : '—')
-const money = value => `${number(value)} ₫`
+const money = value => `${number(value)} Điểm`
 const formatDate = value => (value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString('vi-VN') : '—')
 const noop = () => {}
 

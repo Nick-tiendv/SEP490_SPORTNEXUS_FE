@@ -26,7 +26,7 @@ import { TournamentWorkspace } from '../../CourtOwner/Tournament/CreateTournamen
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
 const TIER_LABEL = { AMATEUR: 'Phong trào', SEMI_PRO: 'Bán chuyên', PRO: 'Chuyên nghiệp' }
-const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} đ` : 'Miễn phí')
+const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} Điểm` : 'Miễn phí')
 const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 // Ngày của giải chưa được ban tổ chức nhập
 const dateOrTba = (value) => (value ? date(value) : 'Chưa công bố')

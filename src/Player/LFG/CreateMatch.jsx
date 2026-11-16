@@ -621,7 +621,7 @@ function CreateMatch() {
 
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
-      toast.error(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} đ). Vui lòng nạp thêm tiền!`)
+      toast.error(`Số dư ví Escrow hiện tại không đủ để trừ 100% tiền sân (${new Intl.NumberFormat('vi-VN').format(courtFee)} Điểm). Vui lòng nạp thêm tiền!`)
       setSubmitting(false)
       return
     }
@@ -1229,7 +1229,7 @@ function CreateMatch() {
                           <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] w-full">
                             <span className="font-semibold text-gray-500">{facCourtsCount} sân đấu</span>
                             <span className="font-extrabold text-[#15803D]">
-                              từ {new Intl.NumberFormat('vi-VN').format(fac.price || 100000)} đ/h
+                              từ {new Intl.NumberFormat('vi-VN').format(fac.price || 100000)} Điểm/h
                             </span>
                           </div>
                         </button>
@@ -1272,7 +1272,7 @@ function CreateMatch() {
                                 isCourtSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                               }`}
                             >
-                              {new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice) || 100000)} đ/h
+                              {new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice) || 100000)} Điểm/h
                             </span>
                           </button>
                         )
@@ -1334,7 +1334,7 @@ function CreateMatch() {
 
                             <div className="flex items-center justify-between text-[10.5px] w-full pt-1 border-t border-black/5">
                               <span className={`font-black ${isSlotSelected ? 'text-green-100' : 'text-[#15803D]'}`}>
-                                {new Intl.NumberFormat('vi-VN').format(slot.price)} đ
+                                {new Intl.NumberFormat('vi-VN').format(slot.price)} Điểm
                               </span>
                               <span
                                 className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold uppercase ${
@@ -1387,7 +1387,7 @@ function CreateMatch() {
                           {selectedFacility?.name} • {selectedSubCourt?.name || 'Sân tiêu chuẩn'}
                         </p>
                         <p className="text-xs text-gray-600">
-                          Khung giờ: <strong>{preferredTimeRange}</strong> ({preferredDurationHours} giờ) • Giá sân: <strong className="text-[#15803D]">{new Intl.NumberFormat('vi-VN').format(courtFee)} đ</strong>
+                          Khung giờ: <strong>{preferredTimeRange}</strong> ({preferredDurationHours} giờ) • Giá sân: <strong className="text-[#15803D]">{new Intl.NumberFormat('vi-VN').format(courtFee)} Điểm</strong>
                         </p>
                         {!isEditMode && consecutiveRun.length > 1 && (
                           <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -1408,7 +1408,7 @@ function CreateMatch() {
                     </div>
                     <div className="text-left sm:text-right shrink-0">
                       <span className="text-[11px] text-[#15803D] font-bold block">100% Tiền sân trừ từ ví Escrow</span>
-                      <span className="text-base font-black text-[#111827]">{new Intl.NumberFormat('vi-VN').format(courtFee)} đ</span>
+                      <span className="text-base font-black text-[#111827]">{new Intl.NumberFormat('vi-VN').format(courtFee)} Điểm</span>
                     </div>
                   </div>
                 ) : (
@@ -1665,7 +1665,7 @@ function CreateMatch() {
                     <span className="block text-xs font-bold text-gray-700 mb-1.5">Tiền mỗi người đóng:</span>
                     <div className="w-full min-h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#111827] flex items-center">
                       {isEditMode && pricePerPerson
-                        ? `${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} đ / người`
+                        ? `${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} Điểm / người`
                         : 'Hệ thống tự chia đều tiền sân'}
                     </div>
                     <span className="text-[10.5px] text-gray-500 mt-1 block">
@@ -1768,7 +1768,7 @@ function CreateMatch() {
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-md bg-[#EAF7EE] text-[#15803D] font-black text-xs shrink-0">
-                      từ {new Intl.NumberFormat('vi-VN').format(selectedFacility?.price || 100000)} đ
+                      từ {new Intl.NumberFormat('vi-VN').format(selectedFacility?.price || 100000)} Điểm
                     </span>
                   </div>
                 </div>
@@ -1828,7 +1828,7 @@ function CreateMatch() {
                 <div className="text-right">
                   <span className="text-[10px] text-gray-400 block font-semibold">Ví Escrow</span>
                   <span className="text-xs font-black text-[#15803D]">
-                    {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
+                    {new Intl.NumberFormat('vi-VN').format(walletBalance)} Điểm
                   </span>
                 </div>
               </div>
@@ -1895,7 +1895,7 @@ function CreateMatch() {
                       {preferredTimeRange} ({preferredDurationHours}h)
                     </span>
                     <span className="font-black text-[#15803D]">
-                      {new Intl.NumberFormat('vi-VN').format(courtFee)} đ
+                      {new Intl.NumberFormat('vi-VN').format(courtFee)} Điểm
                     </span>
                   </div>
                 </div>
@@ -1960,7 +1960,7 @@ function CreateMatch() {
 
       {/* Modal xác nhận thanh toán: BE đặt ca và trừ 100% tiền sân từ ví ngay khi tạo kèo */}
       {paymentConfirm.open && (() => {
-        const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(n) || 0))} đ`
+        const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(n) || 0))} Điểm`
         const players = (Number(slotsNeeded) || 3) + 1
         const wallet = paymentConfirm.wallet
         const available = wallet ? Number(wallet.availableBalance ?? wallet.balance) : null

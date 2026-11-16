@@ -91,7 +91,7 @@ const FEED_IMAGES = {
   volleyball: 'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&h=600&fit=crop',
   table_tennis: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?w=800&h=600&fit=crop',
 }
-const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} Điểm`
 
 // Trạng thái người tham gia / của tôi trong kèo (LfgParticipantResponse.status, joined.myStatus)
 const PARTICIPANT_STATUS_TEXT = {
@@ -960,7 +960,7 @@ function CommunityFeed() {
       totalSlots: 1 + Number(newMatch.slots),
       priceLabel: 'Tiền cọc ký quỹ:',
       price: Number(newMatch.deposit),
-      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(newMatch.deposit)} đ`,
+      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(newMatch.deposit)} Điểm`,
       buttonText: 'Chốt Slot Ngay',
       isFlashClaim: false,
       image: sportImageMap[newMatch.sport] || sportImageMap.badminton,
@@ -1732,7 +1732,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Giá mỗi người</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {card.pricePerPerson ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : 'Chia đều ca'}
+                              {card.pricePerPerson ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} Điểm` : 'Chia đều ca'}
                             </span>
                           </div>
                         </div>
@@ -2032,7 +2032,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Cọc giữ chỗ Escrow</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : '—'}
+                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} Điểm` : '—'}
                             </span>
                           </div>
                         </div>
@@ -2744,7 +2744,7 @@ function CommunityFeed() {
               <div className="flex justify-between items-center text-xs text-gray-600">
                 <span className="font-medium">Số dư ví hiện tại:</span>
                 <span className="font-bold text-[#111827]">
-                  {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
+                  {new Intl.NumberFormat('vi-VN').format(walletBalance)} Điểm
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm font-bold text-[#111827] pt-1.5 border-t border-gray-200/60">
@@ -2760,7 +2760,7 @@ function CommunityFeed() {
                     walletBalance - bookingModal.price < 0 ? 'text-red-600' : 'text-[#111827]'
                   }`}
                 >
-                  {new Intl.NumberFormat('vi-VN').format(walletBalance - bookingModal.price)} đ
+                  {new Intl.NumberFormat('vi-VN').format(walletBalance - bookingModal.price)} Điểm
                 </span>
               </div>
             </div>
@@ -3177,7 +3177,7 @@ function CommunityFeed() {
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Tiền cọc chia đều (VNĐ):</label>
+                  <label className="font-bold text-gray-700 block mb-1">Tiền cọc chia đều (Điểm):</label>
                   <input
                     type="number"
                     step="5000"

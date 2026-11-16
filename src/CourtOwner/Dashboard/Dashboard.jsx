@@ -273,7 +273,7 @@ export default function Dashboard() {
     },
   ].filter(Boolean)
 
-  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ')
+  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm')
   const formatPercent = (num) => (num === null || num === undefined ? '—' : `${Number(num).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`)
   const statValue = (value, format = (v) => v) => (data ? format(value) : statsLoadError ? '—' : '...')
 

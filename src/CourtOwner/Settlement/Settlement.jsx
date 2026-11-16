@@ -17,7 +17,7 @@ const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const daysAgoVN = (days) => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE }).format(new Date(Date.now() - days * 86400000))
 const formatDateTimeVN = (value) =>
   value ? new Date(value).toLocaleString('vi-VN', { timeZone: VN_TIME_ZONE, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
-const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ')
+const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm')
 const parseAmount = (text) => Number(String(text).replace(/\D/g, '')) || 0
 
 const PERIOD_OPTIONS = [7, 30, 90]
