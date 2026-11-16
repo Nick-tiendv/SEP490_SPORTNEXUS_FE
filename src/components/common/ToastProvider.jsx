@@ -5,7 +5,7 @@ import ConfirmHost from './ConfirmDialog.jsx'
 export default function ToastProvider() {
   return (
     <>
-      <Toaster position="top-right" richColors closeButton duration={4500} toastOptions={{ style: { fontFamily: 'Inter, sans-serif', borderRadius: '12px' } }} />
+      <Toaster position="top-right" richColors closeButton duration={4500} toastOptions={{ style: { fontFamily: 'var(--snx-font-sans, Inter, sans-serif)', borderRadius: '12px' } }} />
       <ConfirmHost />
     </>
   )

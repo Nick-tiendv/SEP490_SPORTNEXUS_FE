@@ -19,6 +19,11 @@ export default function AdminLayout() {
   const { pathname } = useLocation()
 
   useEffect(() => {
+    document.body.classList.add('sn-admin-active')
+    return () => document.body.classList.remove('sn-admin-active')
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     getMyAccount().then(account => !cancelled && setProfile(account)).catch(() => {})
     return () => { cancelled = true }

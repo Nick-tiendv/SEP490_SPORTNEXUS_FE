@@ -209,4 +209,18 @@ test('Module 01, 03, 08: nối các API bị bỏ quên và giao diện tiếng 
       assert.match(dashboardSrc, new RegExp(`SPORT_TONES[\\s\\S]*'${sportTone}'`), `Thiếu màu môn phổ biến ${sportTone}`)
     }
   })
+
+  await t.test('Admin: đồng bộ toàn bộ font chữ sang Times New Roman', async () => {
+    const [themeCss, dashboardCss, layoutSrc] = await Promise.all([
+      readFile(new URL('../src/Admin/styles/admin-theme.css', import.meta.url), 'utf8'),
+      readFile(new URL('../src/Admin/Dashboard/dashboard.css', import.meta.url), 'utf8'),
+      readFile(new URL('../src/Admin/Layout/AdminLayout.jsx', import.meta.url), 'utf8'),
+    ])
+    assert.match(themeCss, /--font-admin:\s*'Times New Roman',\s*Times,\s*serif;/)
+    assert.match(themeCss, /--font-sans:\s*var\(--font-admin\);/)
+    assert.match(themeCss, /--font-display:\s*var\(--font-admin\);/)
+    assert.match(themeCss, /body\.sn-admin-active\s*\{/)
+    assert.doesNotMatch(dashboardCss, /ui-monospace/)
+    assert.match(layoutSrc, /sn-admin-active/)
+  })
 })

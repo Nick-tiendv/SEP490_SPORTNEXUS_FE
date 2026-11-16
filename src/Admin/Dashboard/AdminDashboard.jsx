@@ -67,7 +67,7 @@ export default function AdminDashboard() {
     { label: 'Nhóm chơi đang mở', tone: 'rose', value: show(formatNumber, lfg.open), icon: Network, to: '/admin/lfg', supporting: when(`${formatNumber(lfg.createdInRange)} nhóm tạo ${periodLabel}`) },
   ]
   const attention = [
-    { title: 'Chủ sân chờ xác minh', count: pending.ownerVerifications, text: 'Giấy tờ xác minh chưa đầy đủ hoặc đang chờ quản trị viên phê duyệt.', icon: ClipboardCheck, tone: 'violet', detail: 'Đang chờ duyệt', action: 'Duyệt ngay', to: '/admin/court-owners?tab=kyc' },
+    { title: 'Chủ sân chờ xác minh', count: pending.ownerVerifications, text: 'Hồ sơ xác minh đang chờ quản trị viên kiểm tra và phê duyệt.', icon: ClipboardCheck, tone: 'violet', detail: 'Đang chờ duyệt', action: 'Duyệt ngay', to: '/admin/court-owners?tab=kyc' },
     { title: 'Báo cáo vi phạm', count: pending.openReports, text: 'Có đơn đặt sân / đánh giá bị báo cáo cần được kiểm tra và xử lý.', icon: Flag, tone: 'red', detail: 'Đang chờ xử lý', action: 'Kiểm tra', to: '/admin/reviews-reports?status=Pending' },
     { title: 'Yêu cầu rút tiền', count: pending.withdrawals, text: 'Yêu cầu rút tiền từ ví đang chờ quản trị viên xác nhận.', icon: CircleDollarSign, tone: 'amber', detail: `Tổng ${formatCurrency(pending.withdrawalAmount)}`, action: 'Xem xét', to: '/admin/payments?tab=withdrawals' },
     { title: 'Cơ sở chờ duyệt', count: pending.facilityApprovals, text: 'Cần rà soát thông tin cơ sở và xác nhận trước khi hiển thị.', icon: Building2, tone: 'teal', detail: 'Trạng thái chờ duyệt', action: 'Thẩm định', to: '/admin/facilities?status=Pending' },
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
       <div className="admin-analytics-grid">
         <TrendsChart reloadKey={reloadKey} />
         <section className="admin-panel admin-popular-sports">
-          <div className="admin-panel-heading"><div><h2>Môn thể thao phổ biến</h2><p>Tỷ lệ lượt đặt sân theo môn thể thao ({periodLabel}, không tính đơn hủy)</p></div></div>
+          <div className="admin-panel-heading"><div><h2>Môn thể thao phổ biến</h2><p>Tỷ lệ đặt sân theo môn (trừ đơn hủy)</p></div></div>
           {sports.length && !periodLoading
             ? <ol>{sports.map((item, index) => <li key={item.name} className={`admin-sport-item admin-sport-item--${SPORT_TONES[index % SPORT_TONES.length]}`}><div><strong><i className="admin-sport-rank">{index + 1}</i>{item.name}</strong><span>{item.count}</span></div><small>{item.bookings}</small><div className="admin-sport-track"><span style={{ width: `${item.width}%` }} /></div></li>)}</ol>
             : <p className="admin-empty">{periodLoading ? 'Đang tải…' : 'Chưa có dữ liệu đặt sân theo môn.'}</p>}

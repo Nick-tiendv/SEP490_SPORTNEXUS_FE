@@ -89,9 +89,12 @@
   --admin-muted: var(--admin-text-muted);
   --admin-border: var(--admin-border-color);
 
-  /* ---------- Typography ---------- */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-  --font-display: 'Outfit', 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  /* ---------- Typography (đồng bộ toàn bộ khu vực Admin về Times New Roman) ---------- */
+  --font-admin: 'Times New Roman', Times, serif;
+  --font-sans: var(--font-admin);
+  --font-display: var(--font-admin);
+  --snx-font-sans: var(--font-admin);
+  --snx-font-display: var(--font-admin);
 
   --fs-xs: 12px;
   --fs-sm: 13px;
@@ -191,7 +194,19 @@
    cascade behaves exactly as before) ---------- */
 .sn-admin * { box-sizing: border-box; }
 .sn-admin h1, .sn-admin h2, .sn-admin h3, .sn-admin p { margin: 0; }
-.sn-admin button, .sn-admin input, .sn-admin select { font: inherit; }
+.sn-admin button,
+.sn-admin input,
+.sn-admin select,
+.sn-admin textarea,
+.sn-admin optgroup { font: inherit; }
+.sn-admin :is(code, kbd, pre, samp, svg) { font-family: inherit; }
+
+/* Áp dụng Times New Roman cho các portal ngoài .sn-admin (Toast, ConfirmDialog) khi đang mở Admin */
+body.sn-admin-active {
+  --snx-font-sans: 'Times New Roman', Times, serif;
+  --snx-font-display: 'Times New Roman', Times, serif;
+  font-family: 'Times New Roman', Times, serif;
+}
 .sn-admin button { cursor: pointer; }
 .sn-admin button:disabled { cursor: not-allowed; }
 .sn-admin button:focus-visible,
