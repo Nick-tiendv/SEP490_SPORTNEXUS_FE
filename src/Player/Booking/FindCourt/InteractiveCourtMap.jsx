@@ -142,7 +142,7 @@ export default function InteractiveCourtMap({
           <div class="sn-pin-marker">
             <span class="material-symbols-outlined">${court.sport === 'pickleball' ? 'sports_tennis' : 'sports_tennis'}</span>
           </div>
-          <div class="sn-pin-badge">${Math.round(court.price / 1000)}k</div>
+          <div class="sn-pin-badge">${court.price > 0 ? `${Math.round(court.price / 1000)}k` : '—'}</div>
         </div>
       `
 
@@ -161,11 +161,11 @@ export default function InteractiveCourtMap({
         <div class="sn-map-popup">
           <div class="sn-popup-header">
             <strong>${court.name.replace('SportNexus ', '')}</strong>
-            <span class="sn-popup-rating">★ ${court.rating}</span>
+            <span class="sn-popup-rating">${court.rating > 0 ? `★ ${court.rating}` : 'Chưa có đánh giá'}</span>
           </div>
-          <div class="sn-popup-addr">${court.address}</div>
+          <div class="sn-popup-addr">${court.address || ''}</div>
           <div class="sn-popup-footer">
-            <span class="sn-popup-price">${court.price.toLocaleString('vi-VN')} đ/giờ</span>
+            <span class="sn-popup-price">${court.price > 0 ? `${court.price.toLocaleString('vi-VN')} đ/giờ` : 'Chưa cập nhật giá'}</span>
             ${court.distance != null ? `<span class="sn-popup-dist">Cách ~${court.distance} km</span>` : ''}
           </div>
         </div>

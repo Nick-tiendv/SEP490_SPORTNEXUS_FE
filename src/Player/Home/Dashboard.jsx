@@ -1027,7 +1027,12 @@ function Dashboard() {
                   border: '1px solid #86EFAC',
                 }}
               >
-                {eloText(standing.best)}
+                {selectedSports.length === 1
+                  ? eloText(
+                      standing.forSport(selectedSports[0]),
+                      SPORTS_LIST.find((s) => s.key === selectedSports[0])?.name || '',
+                    )
+                  : eloText(standing.best)}
               </span>
             </div>
             <p style={{ fontSize: '13.5px', color: '#4B5563', margin: 0, lineHeight: 1.5 }}>
@@ -1649,7 +1654,7 @@ function Dashboard() {
                   type="button"
                   onClick={() => {
                     setCourtSearchKeyword('')
-                    getFacilities().then((all) => Array.isArray(all) && setApiSuggestedCourts(all))
+                    getFacilities().then((all) => Array.isArray(all) && setApiSuggestedCourts(all.map(toSuggestedCourt)))
                   }}
                   style={{
                     border: 'none',

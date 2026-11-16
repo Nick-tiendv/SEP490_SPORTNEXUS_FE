@@ -38,7 +38,7 @@ function getNext7Days() {
 }
 
 // Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 120000) {
+function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
   if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
 
   const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -152,7 +152,7 @@ function CourtDetails() {
         name: c.name,
         sportName: c.categoryName,
         status: c.status,
-        defaultPrice: Number(c.defaultPrice) || 120000,
+        defaultPrice: Number(c.defaultPrice) || 0,
         isBookable: c.status === 'ACTIVE',
       }))
     }
@@ -193,7 +193,7 @@ function CourtDetails() {
   // Không tự chọn ca: người dùng tự chọn giờ. silent = tải lại ngầm (realtime), không hiện vòng xoay.
   const [slotsCheckedAt, setSlotsCheckedAt] = useState(null)
   const activeCourtId = activeCourt?.id
-  const activeCourtPrice = activeCourt?.defaultPrice || 120000
+  const activeCourtPrice = activeCourt?.defaultPrice || 0
   const latestSlotsKey = useRef('') // sân|ngày đang xem, để bỏ kết quả trả về muộn của sân / ngày cũ
   const loadSlots = useCallback(async ({ silent = false } = {}) => {
     if (!activeCourtId) return
@@ -419,7 +419,7 @@ function CourtDetails() {
   const heroImage =
     facility?.imageItems?.find((img) => img.isThumbnail)?.url ||
     facility?.images?.[0] ||
-    'https://picsum.photos/seed/sportnexus-fac-2-1/800/600'
+    '/sports-bg.jpg'
 
   // Chuyển sang Bước 3 & Bước 4 tại SplitPayment
   // Trước khi sang thanh toán: tải lại lưới ca của từng sân / ngày đã chọn và bỏ ca không còn trống.
@@ -432,7 +432,7 @@ function CourtDetails() {
     }
     let dropped = 0
     for (const { courtId, dateStr } of groups.values()) {
-      const price = courtsList.find((c) => c.id === courtId)?.defaultPrice || 120000
+      const price = courtsList.find((c) => c.id === courtId)?.defaultPrice || 0
       const raw = await getCourtSlots(courtId, dateStr)
       const fresh = buildTwoHourSlots(Array.isArray(raw) ? raw : [], price)
       if (courtId === activeCourt?.id && dateStr === selectedDateStr) setCourtSlots(fresh)
@@ -496,12 +496,19 @@ function CourtDetails() {
       state: {
         facilityId: facility?.id,
         courtId: activeCourt?.id,
-        court: facility?.name || 'Cụm Sân Thể Thao',
-        address: facility?.address || 'Hồ Chí Minh',
-        subCourt: uniqueCourtNames.join(', ') || activeCourt?.name || 'Sân 1',
+        court: facility?.name || '',
+        address: facility?.address || '',
+        subCourt: uniqueCourtNames.join(', ') || activeCourt?.name || '',
         subCourts: uniqueCourtNames,
-        courtCount: uniqueCourtNames.length || 1,
-        subCourtDesc: `${facility?.openTime?.slice(0, 5) || '06:00'} - ${facility?.closeTime?.slice(0, 5) || '22:00'} • ${facility?.description || 'Sân đạt chuẩn thi đấu'}`,
+        courtCount: uniqueCourtNames.length || courtsList.length || 0,
+        subCourtDesc: [
+          facility?.openTime && facility?.closeTime
+            ? `${facility.openTime.slice(0, 5)} - ${facility.closeTime.slice(0, 5)}`
+            : null,
+          facility?.description || null,
+        ]
+          .filter(Boolean)
+          .join(' • '),
         image: heroImage,
         sport: primarySport,
         date: selectedDateStr,
@@ -543,7 +550,7 @@ function CourtDetails() {
                   </span>
                   <span className="text-on-surface-variant text-label-sm">•</span>
                   <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">
-                    {facility?.address || 'Hồ Chí Minh'}
+                    {facility?.address || 'Chưa cập nhật địa chỉ'}
                   </span>
                   {facility?.openTime && (
                     <>
@@ -555,13 +562,17 @@ function CourtDetails() {
                   )}
                 </div>
                 <h1 className="font-display-lg text-display-lg text-on-surface tracking-tight leading-none">
-                  {facility?.name || 'Cụm Sân Thể Thao SportNexus'}
+                  {facility?.name || 'Cụm sân thể thao'}
                 </h1>
                 <p className="font-headline-sm text-headline-sm text-on-surface-variant font-medium flex items-center gap-space-xs">
                   <span className="text-primary font-bold">
                     {courtsList.length} sân con trong cụm
                   </span>
-                  <span className="text-primary">•</span> {facility?.description || 'Mặt sân mới, đèn thi đấu hiện đại'}
+                  {facility?.description && (
+                    <>
+                      <span className="text-primary">•</span> {facility.description}
+                    </>
+                  )}
                 </p>
 
                 {/* Badges & Amenities */}
@@ -569,10 +580,10 @@ function CourtDetails() {
                   <div className="flex items-center gap-1.5 px-space-md py-space-xs rounded-lg bg-surface-container-high/95 backdrop-blur-md shadow-md">
                     <span className="material-symbols-outlined text-primary-container text-[18px]">star</span>
                     <span className="font-headline-sm text-headline-sm font-bold text-on-surface leading-none">
-                      {facility?.averageRating > 0 ? facility.averageRating : 4.9}
+                      {facility?.averageRating > 0 ? Number(facility.averageRating).toFixed(1) : '—'}
                     </span>
                     <span className="font-body-sm text-body-sm text-on-surface-variant font-medium">
-                      ({facility?.reviewCount || 128} đánh giá)
+                      {facility?.reviewCount > 0 ? `(${facility.reviewCount} đánh giá)` : '(Chưa có đánh giá)'}
                     </span>
                   </div>
 
@@ -908,11 +919,15 @@ function CourtDetails() {
                 </div>
                 <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
                   <span className="text-on-surface-variant">Giá mặc định</span>
-                  <strong className="text-primary font-semibold">{(Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice) || 120000).toLocaleString('vi-VN')} đ/h</strong>
+                  <strong className="text-primary font-semibold">
+                    {Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice) > 0
+                      ? `${Number(activeCourtDetail?.defaultPrice || activeCourt.defaultPrice).toLocaleString('vi-VN')} đ/h`
+                      : 'Chưa cập nhật'}
+                  </strong>
                 </div>
                 <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
                   <span className="text-on-surface-variant">Mặt sân</span>
-                  <strong className="text-on-surface font-semibold">{activeCourtDetail?.surfaceType || 'Chuẩn thi đấu quốc tế'}</strong>
+                  <strong className="text-on-surface font-semibold">{activeCourtDetail?.surfaceType || 'Chưa cập nhật'}</strong>
                 </div>
                 <div className="p-2.5 rounded-xl bg-surface-container flex flex-col">
                   <span className="text-on-surface-variant">Tình trạng ca</span>

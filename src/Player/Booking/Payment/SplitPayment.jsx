@@ -230,25 +230,34 @@ function SplitPayment() {
     return () => { isMounted = false }
   }, [state])
 
-  // Court info with exact fallbacks to reference design
-  const courtName = state.court || 'Cụm Sân SportNexus'
-  const subCourt = state.subCourt || 'Sân 01'
-  const subCourts = state.subCourts || (state.subCourt ? state.subCourt.split(', ') : ['Sân 01'])
+  // Thông tin cơ sở/ca đặt sân nhận từ state điều hướng hoặc đồng bộ trực tiếp từ API
+  const SPORT_LABELS = {
+    badminton: 'CẦU LÔNG',
+    pickleball: 'PICKLEBALL',
+    football: 'BÓNG ĐÁ',
+    basketball: 'BÓNG RỔ',
+    tennis: 'TENNIS',
+    volleyball: 'BÓNG CHUYỀN',
+    table_tennis: 'BÓNG BÀN',
+  }
+  const courtName = state.court || 'Chưa chọn cơ sở'
+  const subCourt = state.subCourt || '—'
+  const subCourts = state.subCourts || (state.subCourt ? state.subCourt.split(', ') : [])
   const courtCount = state.courtCount || subCourts.length || 1
-  const address = state.address || 'Hồ Chí Minh'
-  const locationName = state.locationName || (address.includes(',') ? address.split(',').slice(-2).join(', ').trim() : address) || 'Hồ Chí Minh'
+  const address = state.address || 'Chưa cập nhật địa chỉ'
+  const locationName =
+    state.locationName ||
+    (state.address ? (address.includes(',') ? address.split(',').slice(-2).join(', ').trim() : address) : '—')
   const slotTime = activeSlotData
     ? (activeSlotData.displayRange || `${vnClock(activeSlotData.startTime)} - ${vnClock(activeSlotData.endTime)}`)
-    : (state.slot || '20:00 - 22:00')
+    : (state.slot || 'Chưa chọn ca')
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
-  const totalAmount = Number(state.total) || 120000
-  const hourlyRate = state.hourlyRate || Math.round(totalAmount / (hours || 1))
-  const unitPrice = state.unitPrice || Math.round(totalAmount / courtCount)
-  const courtImage =
-    state.image ||
-    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop'
-  const sportLabel = state.sport === 'pickleball' ? 'PICKLEBALL CHUYÊN NGHIỆP' : 'CẦU LÔNG CHUYÊN NGHIỆP'
-  const floorType = state.subCourtDesc || 'Sân đạt chuẩn thi đấu'
+  const totalAmount = Number(state.total) || Number(activeSlotData?.price) || 0
+  const hourlyRate = state.hourlyRate || (hours > 0 ? Math.round(totalAmount / hours) : 0)
+  const unitPrice = state.unitPrice || (courtCount > 0 ? Math.round(totalAmount / courtCount) : 0)
+  const courtImage = state.image || '/sports-bg.jpg'
+  const sportLabel = SPORT_LABELS[state.sport] || (state.sport ? String(state.sport).toUpperCase() : 'THỂ THAO')
+  const floorType = state.subCourtDesc || ''
 
   const bookingDateStr = (state.date || new Date().toISOString()).slice(0, 10)
   const displayBookingDate = useMemo(() => {
@@ -1460,10 +1469,12 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               <div className="sp-court-box">
                 <div className="sp-court-img-wrap">
                   <img src={courtImage} alt={courtName} className="sp-court-img" />
-                  <div className="sp-court-img-pill">
-                    <span className="material-symbols-outlined">check_circle</span>
-                    <span>{floorType}</span>
-                  </div>
+                  {floorType && (
+                    <div className="sp-court-img-pill">
+                      <span className="material-symbols-outlined">check_circle</span>
+                      <span>{floorType}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="sp-court-info">
@@ -1851,14 +1862,18 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-user-avatar">{initialsOf(currentUser?.name)}</div>
                 <div className="sp-user-details">
                   <p className="sp-user-name">{currentUser?.name || 'Bạn'}</p>
-                  <p className="sp-user-contact">0908 ••• 888 • minhm@domain.vn</p>
+                  <p className="sp-user-contact">{[currentUser?.phone, currentUser?.email].filter(Boolean).join(' • ') || '—'}</p>
                 </div>
               </div>
 
               <div className="sp-user-stats-grid">
                 <div className="sp-user-stat-card">
                   <small>TRÌNH ĐỘ</small>
-                  <strong>{eloText(standing.best)}</strong>
+                  <strong>
+                    {state.sport
+                      ? eloText(standing.forSport(state.sport), SPORT_LABELS[state.sport] || String(state.sport))
+                      : eloText(standing.best)}
+                  </strong>
                 </div>
                 <div className="sp-user-stat-card">
                   <small>ĐIỂM FAIRPLAY</small>
@@ -2578,14 +2593,18 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-pass-user-avatar">{initialsOf(currentUser?.name)}</div>
                 <div className="sp-pass-user-info">
                   <p className="sp-pass-user-name">{currentUser?.name || 'Bạn'}</p>
-                  <p className="sp-pass-user-sub">0908 ••• 888 • minhm@domain.vn</p>
+                  <p className="sp-pass-user-sub">{[currentUser?.phone, currentUser?.email].filter(Boolean).join(' • ') || '—'}</p>
                 </div>
               </div>
 
               <div className="sp-pass-user-stats">
                 <div className="sp-pass-stat-pill">
                   <small>TRÌNH ĐỘ</small>
-                  <strong>{eloText(standing.best)}</strong>
+                  <strong>
+                    {state.sport
+                      ? eloText(standing.forSport(state.sport), SPORT_LABELS[state.sport] || String(state.sport))
+                      : eloText(standing.best)}
+                  </strong>
                 </div>
                 <div className="sp-pass-stat-pill">
                   <small>ĐIỂM FAIRPLAY</small>
