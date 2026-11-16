@@ -959,3 +959,42 @@
 .sn-admin .admin-summary-group dd { margin: 0; font-weight: var(--fw-semibold); color: var(--admin-text); font-variant-numeric: tabular-nums; text-align: right; }
 .sn-admin .admin-summary-link { color: var(--admin-primary); text-decoration: none; border-style: solid; }
 .sn-admin .admin-summary-link:hover { background: var(--sn-green-50); border-color: var(--sn-green-200); }
+
+/* ---------- Kiểu xem của khung biểu đồ (TrendsChart + ChartViews) ---------- */
+.sn-admin .admin-chart-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-5) var(--sp-3);
+}
+.sn-admin .admin-chart-views > button {
+  padding: 6px 14px;
+  border: 1px solid var(--admin-border-color);
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--admin-text-muted);
+  cursor: pointer;
+  transition: background var(--dur-base), color var(--dur-base), border-color var(--dur-base);
+}
+.sn-admin .admin-chart-views > button:hover { border-color: var(--sn-green-200); color: var(--admin-text); }
+.sn-admin .admin-chart-views > button.selected { background: var(--admin-primary); border-color: var(--admin-primary); color: #fff; }
+.sn-admin .admin-chart-views > button:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
+
+.sn-admin .admin-chart-view { display: flex; flex: 1; flex-direction: column; gap: var(--sp-3); padding: 0 var(--sp-5) var(--sp-4); }
+.sn-admin .admin-chart-view__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.sn-admin .admin-chart-view__bar .admin-select { min-width: 240px; }
+.sn-admin .admin-chart-view__note { font-size: var(--fs-xs); color: var(--admin-text-muted); }
+.sn-admin .admin-chart-view__note strong { color: var(--admin-text); }
+.sn-admin .admin-chart-canvas { width: 100%; min-width: 0; }
+.sn-admin .admin-chart-canvas svg { min-height: 0; }
+.sn-admin .admin-chart-canvas--scroll { max-height: 360px; overflow-y: auto; }
+.sn-admin .admin-chart-wrap .admin-chart-canvas { padding-bottom: var(--sp-3); }
+
+@media (max-width: 768px) {
+  .sn-admin .admin-chart-views { padding: 0 var(--sp-4) var(--sp-3); }
+  .sn-admin .admin-chart-view { padding: 0 var(--sp-4) var(--sp-4); }
+  .sn-admin .admin-chart-view__bar .admin-select { min-width: 0; width: 100%; }
+}

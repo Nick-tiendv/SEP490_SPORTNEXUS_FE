@@ -103,7 +103,7 @@ function AdjustDialog({ wallet, onClose, onDone }) {
     <p>Ví của <strong>{wallet.fullName}</strong> · số dư hiện tại {money(wallet.balance)}</p>
     <form className="users-form" onSubmit={submit} noValidate>
       <label>Loại điều chỉnh<select value={direction} onChange={event => setDirection(event.target.value)}><option value="add" disabled={creditBlocked}>Cộng tiền vào ví{creditBlocked ? ' (không cho phép trên hệ thống thật)' : ''}</option><option value="subtract">Trừ tiền khỏi ví</option></select></label>
-      <label>Số tiền (₫)<input type="number" min="0" step="1000" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
+      <label>Số tiền (Điểm)<input type="number" min="0" step="1000" value={amount} onChange={event => setAmount(event.target.value)} required /></label>
       <label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Ví dụ: Bồi hoàn do lỗi hệ thống…" required /></label>
       {Number.isFinite(value) && value > 0 && <p className="payments-muted">Số dư sau điều chỉnh: {money(wallet.balance + signed)}</p>}
       {error && <p className="users-form-error" role="alert">{error}</p>}

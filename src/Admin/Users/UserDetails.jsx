@@ -13,7 +13,7 @@ const adminDisplayLabels = {
   "All": "Tất cả"
 }
 
-const money = value => value == null ? "Chưa có thông tin" : `${value.toLocaleString('vi-VN')} ₫`
+const money = value => value == null ? "Chưa có thông tin" : `${value.toLocaleString('vi-VN')} Điểm`
 const dateTime = value => {
   const date = value ? new Date(value) : null
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }) : 'Chưa có thông tin'

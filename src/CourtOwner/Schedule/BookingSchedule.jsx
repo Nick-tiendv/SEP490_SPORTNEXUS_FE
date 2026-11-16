@@ -177,7 +177,7 @@ export default function ViewCourtBookingSchedule() {
   const occupancyRate = totalSlotsCount ? Math.round((bookedCount / totalSlotsCount) * 100) : 0
   const activeCourtCount = filteredCourts.filter((court) => court.status === 'ACTIVE').length
 
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' đ'
+  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm'
 
   // Số ca trống liên tiếp tính từ ca được chọn (để đặt nhiều giờ một lần)
   const consecutiveFreeSlots = (court, slot) => {
@@ -308,7 +308,7 @@ export default function ViewCourtBookingSchedule() {
   const handleChangeSlotPrice = (slot) => {
     const price = Number(priceDraft?.value)
     if (!Number.isFinite(price) || price < 1000) {
-      showToast('Giá ca phải từ 1.000 đ trở lên.', 'error')
+      showToast('Giá ca phải từ 1.000 Điểm trở lên.', 'error')
       return
     }
     runAction(
@@ -337,7 +337,8 @@ export default function ViewCourtBookingSchedule() {
     )
   }
 
-  // Hủy đơn (người đặt luôn được hoàn tiền): POST /bookings/owner/{id}/cancel
+  // Hủy đơn: POST /bookings/owner/{id}/cancel. Người đặt được hoàn 100% + voucher 10%;
+  // chủ sân bị phạt (BE tự trừ ví): dưới 48h 20% + 10 điểm Fair Play, từ 48h 10%; đơn vãng lai trả tại quầy không phạt.
   const handleCancelBooking = (e) => {
     e.preventDefault()
     const { slot } = selectedSlot
@@ -353,7 +354,7 @@ export default function ViewCourtBookingSchedule() {
           reason: reason?.isCustom ? cancelReasonText.trim() : reason?.label || cancelReasonText.trim() || null,
           lockSlotAfterCancel: lockAfterCancel,
         }),
-      'Đã hủy đơn đặt sân và hoàn tiền cho người đặt.',
+      'Đã hủy đơn. Người đặt được hoàn 100% và nhận voucher 10%; tiền phạt hủy đơn (nếu có) đã trừ vào ví của bạn.',
       () => setSelectedSlot(null),
     )
   }
@@ -926,9 +927,15 @@ export default function ViewCourtBookingSchedule() {
                         <input type="checkbox" checked={lockAfterCancel} onChange={(e) => setLockAfterCancel(e.target.checked)} />
                         Khóa ca này để bảo trì sau khi hủy
                       </label>
-                      <p style={{ fontSize: '12px', color: '#B45309', fontWeight: 600, margin: '0 0 16px 0' }}>
-                        Chủ sân hủy đơn thì người đặt luôn được hoàn tiền.
-                      </p>
+                      <div style={{ fontSize: '12px', color: '#9A3412', fontWeight: 600, margin: '0 0 16px 0', padding: '10px 12px', borderRadius: '10px', background: '#FFF7ED', border: '1px solid #FED7AA', lineHeight: 1.5 }}>
+                        <div>Người đặt được hoàn 100% và nhận voucher giảm 10%.</div>
+                        <div style={{ marginTop: '4px' }}>Bạn bị trừ tiền phạt thẳng vào ví (ví có thể bị âm):</div>
+                        <ul style={{ margin: '2px 0 0', paddingLeft: '18px' }}>
+                          <li>Hủy trong vòng 48 giờ trước giờ chơi: phạt <strong>20% giá trị đơn</strong> và trừ <strong>10 điểm Fair Play</strong>.</li>
+                          <li>Hủy trước giờ chơi từ 48 giờ trở lên: phạt <strong>10% giá trị đơn</strong>.</li>
+                          <li>Đơn khách vãng lai trả tại quầy: không phạt.</li>
+                        </ul>
+                      </div>
                       <div style={{ display: 'flex', gap: '10px' }}>
                         <button type="button" onClick={() => setCancelMode(false)} style={{ flex: 1, background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
                           Quay lại

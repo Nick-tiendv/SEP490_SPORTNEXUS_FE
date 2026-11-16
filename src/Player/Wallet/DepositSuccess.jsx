@@ -74,7 +74,7 @@ export default function DepositSuccess() {
       const notifiedKey = `deposit_notified_${orderCode}`
       if (!sessionStorage.getItem(notifiedKey)) {
         sessionStorage.setItem(notifiedKey, '1')
-        toast.success(`Nạp tiền thành công +${formatVND(data?.amount)} đ`)
+        toast.success(`Nạp tiền thành công +${formatVND(data?.amount)} Điểm`)
         window.dispatchEvent(
           new CustomEvent('player_new_notification', {
             detail: {
@@ -83,7 +83,7 @@ export default function DepositSuccess() {
               color: '#16A34A',
               bg: '#DCFCE7',
               title: 'Nạp tiền thành công!',
-              message: `Đã nạp +${formatVND(data?.amount)} đ vào Ví Escrow.`,
+              message: `Đã nạp +${formatVND(data?.amount)} Điểm vào Ví Escrow.`,
               details: `Mã lệnh: #${orderCode}`,
               link: '/wallet',
               linkText: 'Xem số dư ví',
@@ -148,11 +148,11 @@ export default function DepositSuccess() {
   const amount = deposit?.amount
   const rows = [
     { label: 'Mã lệnh nạp', value: `#${orderCode || 'N/A'}`, className: 'font-mono font-bold text-gray-900' },
-    ...(amount ? [{ label: 'Số tiền nạp', value: `+${formatVND(amount)} đ`, className: 'font-extrabold text-emerald-700 text-base' }] : []),
+    ...(amount ? [{ label: 'Số tiền nạp', value: `+${formatVND(amount)} Điểm`, className: 'font-extrabold text-emerald-700 text-base' }] : []),
     ...(wallet
       ? [
-          { label: 'Số dư ví', value: `${formatVND(wallet.balance)} đ` },
-          { label: 'Số dư khả dụng', value: `${formatVND(wallet.availableBalance)} đ`, className: 'font-extrabold text-emerald-800' },
+          { label: 'Số dư ví', value: `${formatVND(wallet.balance)} Điểm` },
+          { label: 'Số dư khả dụng', value: `${formatVND(wallet.availableBalance)} Điểm`, className: 'font-extrabold text-emerald-800' },
         ]
       : []),
   ]

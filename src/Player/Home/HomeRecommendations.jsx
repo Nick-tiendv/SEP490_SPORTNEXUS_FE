@@ -6,7 +6,7 @@ import { RecommendedLfgCard } from '../LFG/RecommendedLfg.jsx'
 
 // Gợi ý trên trang chủ theo khảo sát người chơi: kèo phù hợp, sân có ca trống trong giờ rảnh, giải hợp Elo.
 // Mỗi khối tự ẩn khi lỗi / không có dữ liệu để không làm vỡ trang chủ.
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 const TIER = { AMATEUR: 'Phong trào', SEMI_PRO: 'Bán chuyên', PRO: 'Chuyên nghiệp' }
 
 function Block({ title, icon, link, linkLabel, children }) {

@@ -7,7 +7,7 @@ import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { SHOP_ORDER_STATUS, cancelMyShopOrder, getMyShopOrders } from '../../api/shopApi.js'
 
 // Đơn mua tại sân của tôi: GET /api/v1/shop/orders/me. Hủy được khi đơn còn PENDING.
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 const dateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—')
 
 export default function MyShopOrders() {

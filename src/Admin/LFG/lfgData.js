@@ -8,7 +8,7 @@ export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball',
 export const canCancel = lfg => lfg.status === 'OPEN' || lfg.status === 'FILLED'
 
 export const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
-export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
+export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} Điểm` : '—')
 // Tỉ lệ BE có thể trả 0–1 hoặc 0–100.
 export const percent = value => (Number.isFinite(value) ? `${(value <= 1 ? value * 100 : value).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : '—')
 export const formatDate = value => (value && !Number.isNaN(new Date(value).getTime()) ? new Date(value).toLocaleDateString('vi-VN') : '')

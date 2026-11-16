@@ -16,8 +16,8 @@ export const roleLabels = { Player: 'Người chơi', Owner: 'Chủ sân', Admin
 export const badgeOf = status => (/success|complete|approved/i.test(status) ? 'Confirmed' : /pending|processing/i.test(status) ? 'Pending' : /refund/i.test(status) ? 'Completed' : 'Cancelled')
 
 export const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
-export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
-export const signedMoney = value => (Number.isFinite(value) ? `${value > 0 ? '+' : ''}${value.toLocaleString('vi-VN')} ₫` : '—')
+export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} Điểm` : '—')
+export const signedMoney = value => (Number.isFinite(value) ? `${value > 0 ? '+' : ''}${value.toLocaleString('vi-VN')} Điểm` : '—')
 export const dateTime = value => (value ? new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 export const shortId = id => (id ? `#${id.slice(0, 8).toUpperCase()}` : '—')
 

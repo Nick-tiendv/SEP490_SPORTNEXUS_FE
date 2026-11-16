@@ -118,8 +118,8 @@ export default function DepositCancel() {
 
   const rows = [
     { label: 'Mã lệnh nạp', value: `#${orderCode || 'N/A'}`, className: 'font-mono font-bold text-gray-900' },
-    ...(deposit?.amount ? [{ label: 'Số tiền', value: `${formatVND(deposit.amount)} đ` }] : []),
-    ...(wallet ? [{ label: 'Số dư khả dụng', value: `${formatVND(wallet.availableBalance)} đ`, className: 'font-extrabold text-emerald-800' }] : []),
+    ...(deposit?.amount ? [{ label: 'Số tiền', value: `${formatVND(deposit.amount)} Điểm` }] : []),
+    ...(wallet ? [{ label: 'Số dư khả dụng', value: `${formatVND(wallet.availableBalance)} Điểm`, className: 'font-extrabold text-emerald-800' }] : []),
   ]
   const backFootnote = autoBackIn !== null && autoBackIn > 0 ? `Tự động quay lại màn ví sau ${autoBackIn} giây…` : null
   const goWallet = () => navigate('/wallet', { replace: true })

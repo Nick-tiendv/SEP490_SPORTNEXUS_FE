@@ -89,7 +89,7 @@ const formatEditedAgo = (value, nowMs) => {
   return `đã sửa ${Math.floor(minutes / 1440)} ngày trước`
 }
 
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 
 // Đồng bộ ảnh đại diện cá nhân của người chơi hiện tại lên bài viết & bình luận
 function resolveUserAvatar(item, me) {

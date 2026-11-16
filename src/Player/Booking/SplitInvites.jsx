@@ -5,7 +5,7 @@ import { getMyBookings, joinBooking } from '../../api/player/bookingApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { confirmDialog } from '../../components/common/confirm.js'
 
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 const when = (value) => (value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '')
 
 // Lời mời góp tiền sân (đơn chia tiền người khác tạo và mời mình).

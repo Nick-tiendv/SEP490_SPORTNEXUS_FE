@@ -7,7 +7,7 @@ import { lfgSkillLabel } from '../../api/player/lfgApi.js'
 // "Kèo phù hợp với bạn": GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
 // Điểm phù hợp tính theo khảo sát người chơi (môn, trình độ, lịch rảnh, khu vực, nội dung hay chơi) và hành vi.
 // Nhúng trong trang Ghép trận LFG (/community), Bảng tin cộng đồng (/feed) và trang chủ — không có trang riêng.
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 const when = (start, end) => {
   if (!start) return '—'
   const s = new Date(start)

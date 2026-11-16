@@ -232,19 +232,19 @@ function FlashClaim() {
             <div className="flex justify-between items-center text-xs text-gray-600">
               <span className="font-medium">Số dư ví hiện tại:</span>
               <span className="font-bold text-[#111827]">
-                {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
+                {new Intl.NumberFormat('vi-VN').format(walletBalance)} Điểm
               </span>
             </div>
             <div className="flex justify-between items-center text-sm font-bold text-[#111827] pt-1.5 border-t border-gray-200/60">
               <span>Phí cọc giữ slot:</span>
               <span className="text-[#15803D] font-extrabold text-base">
-                {depositKnown ? `${new Intl.NumberFormat('vi-VN').format(depositFee)} đ` : cardLoading ? 'Đang tải…' : '—'}
+                {depositKnown ? `${new Intl.NumberFormat('vi-VN').format(depositFee)} Điểm` : cardLoading ? 'Đang tải…' : '—'}
               </span>
             </div>
             <div className="flex justify-between items-center text-xs text-gray-600 pt-1.5 border-t border-gray-200/60">
               <span className="font-medium">Số dư còn lại:</span>
               <span className={`font-bold ${walletBalance - depositFee < 0 ? 'text-red-600' : 'text-[#111827]'}`}>
-                {depositKnown ? `${new Intl.NumberFormat('vi-VN').format(walletBalance - depositFee)} đ` : '—'}
+                {depositKnown ? `${new Intl.NumberFormat('vi-VN').format(walletBalance - depositFee)} Điểm` : '—'}
               </span>
             </div>
             {!depositKnown && !cardLoading && cardError && (

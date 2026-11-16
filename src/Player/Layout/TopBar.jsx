@@ -81,7 +81,7 @@ function TopBar({ onMenu }) {
             <span className="material-symbols-outlined">account_balance_wallet</span>
             <span>
               <span className="snx-pill-label">Ví Escrow</span>
-              <span className="snx-pill-value">{new Intl.NumberFormat('vi-VN').format(walletBalance)} đ</span>
+              <span className="snx-pill-value">{new Intl.NumberFormat('vi-VN').format(walletBalance)} Điểm</span>
             </span>
           </Link>
           <NotificationBell />

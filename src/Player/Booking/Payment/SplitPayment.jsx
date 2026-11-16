@@ -19,7 +19,7 @@ import {
   getBookingById,
   saveBookingSessionWindow,
 } from '../../../api/player/bookingApi.js'
-import { cancelLfg } from '../../../api/player/lfgApi.js'
+import { cancelLfg, describeLfgCancelResult } from '../../../api/player/lfgApi.js'
 import {
   getWallet,
   createDeposit,
@@ -29,6 +29,8 @@ import {
   savePendingDeposit,
   clearPendingDeposit,
   DEPOSIT_STATUS,
+  DEPOSIT_MIN,
+  DEPOSIT_MAX,
 } from '../../../api/player/walletApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
 import './SplitPayment.css'
@@ -415,7 +417,7 @@ function SplitPayment() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
 
-  const formatVnd = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+  const formatVnd = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' Điểm'
 
   // Che số điện thoại bảo mật (Bước 1: SĐT trả về đã được che)
   const maskPhone = (phone) => {
@@ -428,7 +430,7 @@ function SplitPayment() {
     return s
   }
 
-  // Tính số giờ còn lại từ bây giờ tới ca thi đấu (Image 2: mốc 24h xét hoàn tiền)
+  // Tính số giờ còn lại từ bây giờ tới ca thi đấu (Image 2: mốc 48h xét hoàn Điểm)
   const getHoursUntilMatch = () => {
     try {
       const now = new Date()
@@ -448,7 +450,7 @@ function SplitPayment() {
         }
       }
     } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 26 // Mặc định > 24h nếu chưa rõ thời điểm cụ thể
+    return 50 // Mặc định > 48h nếu chưa rõ thời điểm cụ thể
   }
 
   // Split calculation: Tổng tiền / (1 Người tạo + N Bạn bè)
@@ -485,9 +487,9 @@ function SplitPayment() {
           icon: 'timer_off',
           color: '#DC2626',
           bg: '#FEE2E2',
-          title: 'Đơn chia tiền đã hết hạn (CANCELLED)',
-          message: `Đơn đặt sân tại ${courtName} đã tự động hủy do quá thời gian góp tiền của các thành viên.`,
-          details: `Hệ thống đã tự động hoàn 100% tiền (${formatVnd(payableAmount)}) vào Ví Escrow.`,
+          title: 'Đơn cùng thanh toán đã hết hạn (CANCELLED)',
+          message: `Đơn đặt sân tại ${courtName} đã tự động hủy do quá thời gian góp Điểm của các thành viên.`,
+          details: `Hệ thống đã tự động hoàn 100% Điểm (${formatVnd(payableAmount)}) vào Ví Escrow.`,
           time: 'Vừa xong',
           unread: true,
           link: '/wallet',
@@ -495,7 +497,7 @@ function SplitPayment() {
         },
       })
     )
-    toast.error(`⏰ Đã hết hạn góp tiền!\n\nĐơn đặt sân đã tự động hủy do chưa đủ người góp tiền. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
+    toast.error(`⏰ Đã hết hạn góp Điểm!\n\nĐơn đặt sân đã tự động hủy do chưa đủ người góp Điểm. Hệ thống đã hoàn trả ${formatVnd(payableAmount)} vào ví Escrow của bạn.`)
   }
 
   // BƯỚC 5: Đếm ngược hạn nộp tiền (PaymentDeadline). Quá hạn mà chưa đủ -> Hệ thống tự hủy đơn và hoàn tiền
@@ -523,8 +525,10 @@ function SplitPayment() {
       setLookupError('Vui lòng nhập số điện thoại bạn bè cần tìm.')
       return
     }
-    if (!/^(0|\+84)(3|5|7|8|9)[0-9]{8}$/.test(cleanPhone)) {
-      setLookupError('Số điện thoại không đúng định dạng Việt Nam (10 chữ số, ví dụ: 0912345678).')
+    // Chỉ kiểm tra hình thức (0/+84 + 9 chữ số); tồn tại hay không do BE trả lời.
+    // Không lọc đầu số nhà mạng vì tài khoản có thể đã lưu số như 0123456789.
+    if (!/^(0|\+84)[0-9]{9}$/.test(cleanPhone)) {
+      setLookupError('Số điện thoại phải gồm 10 chữ số (ví dụ: 0912345678).')
       return
     }
     setLookupLoading(true)
@@ -535,7 +539,7 @@ function SplitPayment() {
       if (data) {
         const id = data.id || data.userId
         if (invitedFriends.some((f) => f.id === id)) {
-          setLookupError('Người này đã có trong danh sách chia tiền.')
+          setLookupError('Người này đã có trong danh sách cùng thanh toán.')
           return
         }
         setLookupResult({
@@ -559,11 +563,11 @@ function SplitPayment() {
   const handleAddInvitedFriend = async (friend) => {
     if (!friend || !friend.id) return
     if (invitedFriends.some((f) => f.id === friend.id)) {
-      toast.warning('Bạn này đã có trong danh sách chia tiền rồi!')
+      toast.warning('Bạn này đã có trong danh sách cùng thanh toán rồi!')
       return
     }
     if (invitedFriends.length >= 7) {
-      toast.warning('Tối đa 8 người chia tiền cho 1 đơn đặt sân.')
+      toast.warning('Tối đa 8 người cùng thanh toán cho 1 đơn đặt sân.')
       return
     }
 
@@ -572,7 +576,7 @@ function SplitPayment() {
       try {
         await addBookingParticipants(targetBookingId, [friend.id])
       } catch (err) {
-        toast.error(err?.message || 'Không thêm được người chia tiền.')
+        toast.error(err?.message || 'Không thêm được người cùng thanh toán.')
         return
       }
     }
@@ -617,7 +621,7 @@ function SplitPayment() {
       setInvitedFriends((prev) => prev.map((f) => (paidIds.has(String(f.id)) ? { ...f, status: 'PAID' } : f)))
       const status = String(detail?.bookingStatus || '').toUpperCase()
       if (status) setBookingStatus(status)
-      toast.success(status === 'PAID' ? 'Mọi người đã góp đủ, đơn đã xác nhận.' : 'Đã cập nhật trạng thái góp tiền.')
+      toast.success(status === 'PAID' ? 'Mọi người đã góp đủ, đơn đã xác nhận.' : 'Đã cập nhật trạng thái góp Điểm.')
     } catch (err) {
       toast.error(err?.message || 'Không tải được trạng thái đơn.')
     } finally {
@@ -629,7 +633,7 @@ function SplitPayment() {
   const handlePayRemaining = async () => {
     const unpaid = invitedFriends.filter((f) => f.status !== 'PAID')
     if (unpaid.length === 0) {
-      toast.warning('Tất cả mọi người đã góp đủ tiền rồi!')
+      toast.warning('Tất cả mọi người đã góp đủ Điểm rồi!')
       return
     }
     const remainingDue = unpaid.length * splitAmount
@@ -726,12 +730,14 @@ function SplitPayment() {
     setCancelError(null)
     try {
       // Đơn đang dùng cho kèo LFG không hủy trực tiếp được: phải hủy kèo (POST /api/v1/lfgs/{cardId}/cancel)
-      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h), không tự đoán ở FE
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 48h), không tự đoán ở FE
       const isLfg = Boolean(state.isLfg || state.cardId)
       let refundAmount = 0
+      let lfgSummary = '' // hủy kèo: số tiền hoàn / bồi thường / điểm Fair Play do BE tính
       if (isLfg && state.cardId) {
         const result = await cancelLfg(state.cardId, { reason: finalReason })
         refundAmount = Number(result?.hostRefund) || 0
+        lfgSummary = describeLfgCancelResult(result)
       } else if (isValidGuid(bookingId)) {
         const result = await cancelBooking(bookingId, {
           reasonCode: selectedReasonCode,
@@ -760,11 +766,11 @@ function SplitPayment() {
             icon: 'cancel',
             color: '#DC2626',
             bg: '#FEE2E2',
-            title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
+            title: lfgSummary ? 'Đã hủy kèo và đơn đặt sân (CANCELLED)' : `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn Điểm'}`,
             message: `Đơn tại ${courtName} đã được hủy thành công. Lý do: ${finalReason}.`,
-            details: isEligibleRefund
-              ? `Hủy trước ca >= 24h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
-              : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
+            details: lfgSummary || (isEligibleRefund
+              ? `Hủy trước ca >= 48h: Đã hoàn ${formatVnd(refundAmount)} vào Ví Escrow.`
+              : 'Hủy dưới 48h trước giờ chơi: Không được hoàn Điểm theo quy định.'),
             time: 'Vừa xong',
             unread: true,
             link: '/wallet',
@@ -775,9 +781,10 @@ function SplitPayment() {
 
       toast.success(
         `Đã hủy đơn đặt sân thành công!\n\n${
-          isEligibleRefund
-            ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 24 giờ trở lên.`
-            : `⚠️ Hủy dưới 24 giờ trước giờ chơi: Theo quy định, không được hoàn tiền.`
+          lfgSummary ? lfgSummary
+          : isEligibleRefund
+            ? `💰 Bạn đã được hoàn ${formatVnd(refundAmount)} vào Ví Escrow vì hủy trước giờ chơi từ 48 giờ trở lên.`
+            : `⚠️ Hủy dưới 48 giờ trước giờ chơi: Theo quy định, không được hoàn Điểm.`
         }`
       )
     } catch (err) {
@@ -924,7 +931,7 @@ function SplitPayment() {
   // Action: Click "Xác nhận thanh toán & lấy vé QR" (Thực hiện Bước 3, 4, 5)
   const handleConfirmCheckout = async () => {
     if (paymentMode === 'split' && invitedFriends.length === 0) {
-      toast.warning('Vui lòng tra cứu số điện thoại để thêm ít nhất 1 bạn chơi cùng chia tiền, hoặc chọn Thanh Toán Toàn Bộ.')
+      toast.warning('Vui lòng tra cứu số điện thoại để thêm ít nhất 1 bạn chơi cùng thanh toán, hoặc chọn Thanh Toán Toàn Bộ.')
       return
     }
     if (paymentChannel === 'escrow') {
@@ -1052,11 +1059,11 @@ function SplitPayment() {
               color: paymentMode === 'split' ? '#D97706' : '#15803D',
               bg: paymentMode === 'split' ? '#FEF3C7' : '#EAF7EE',
               title: paymentMode === 'split'
-                ? 'Đã tạo đơn chia tiền (Trạng thái: PENDING)!'
+                ? 'Đã tạo đơn cùng thanh toán (Trạng thái: PENDING)!'
                 : 'Đặt sân thành công',
               message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
               details: paymentMode === 'split'
-                ? `Hạn góp tiền: 30 phút • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
+                ? `Hạn góp Điểm: 30 phút • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
                 : `Khung giờ: ${slotTime} • Mã vé: #${ticketTokenValue}`,
               time: 'Vừa xong',
               unread: true,
@@ -1069,7 +1076,7 @@ function SplitPayment() {
 
         setModalData({
           title: paymentMode === 'split'
-            ? 'Đã Tạo Đơn Chia Tiền Thành Công (PENDING)!'
+            ? 'Đã Tạo Đơn Cùng Thanh Toán Thành Công (PENDING)!'
             : 'Thanh Toán & Đặt Sân Thành Công (PAID)!',
           desc: paymentMode === 'split'
             ? `Đã trừ ${formatVnd(payableAmount)} (phần của bạn) từ Ví Escrow. Đơn ở trạng thái PENDING với hạn nộp 30 phút. Chờ người được mời góp để chuyển PAID.`
@@ -1101,12 +1108,12 @@ function SplitPayment() {
       return
     }
 
-    if (payableAmount > 2000000) {
-      toast.error(`Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)}đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (2.000.000đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
+    if (payableAmount > DEPOSIT_MAX) {
+      toast.error(`Số tiền thanh toán (${new Intl.NumberFormat('vi-VN').format(payableAmount)} đ) vượt quá hạn mức nạp tối đa của một giao dịch PayOS (${new Intl.NumberFormat('vi-VN').format(DEPOSIT_MAX)} đ).\nVui lòng vào mục Ví Escrow để nạp tiền thành nhiều lần trước khi đặt sân.`)
       navigate('/wallet', {
         state: {
           returnTo: { path: '/split-payment', state: location.state, label: 'Quay lại đặt sân' },
-          suggestedAmount: 2000000,
+          suggestedAmount: DEPOSIT_MAX,
         },
       })
       return
@@ -1114,8 +1121,8 @@ function SplitPayment() {
 
     setIsSubmitting(true)
     try {
-      // Giới hạn nạp tối thiểu 10.000đ, tối đa 2.000.000đ
-      const depositAmount = Math.min(2000000, Math.max(10000, Math.round(payableAmount)))
+      // Giới hạn nạp tối thiểu 10.000đ, tối đa 50.000.000đ
+      const depositAmount = Math.min(DEPOSIT_MAX, Math.max(DEPOSIT_MIN, Math.round(payableAmount)))
       const depRes = await createDeposit({ amount: depositAmount })
       const orderCode = depRes?.orderCode
       if (!orderCode) throw new Error('Máy chủ không trả về mã đơn (orderCode).')
@@ -1183,7 +1190,7 @@ function SplitPayment() {
         createdBooking = await createBooking(bookingPayload)
       } catch (apiErr) {
         console.error('[SplitPayment] createBooking thất bại sau khi PayOS thanh toán:', apiErr)
-        toast.error(`Đã nhận thanh toán qua PayOS nhưng lỗi tạo đơn đặt sân:\n${apiErr?.message || 'Lỗi hệ thống'}\nTiền đã được lưu vào ví Escrow của bạn.`)
+        toast.error(`Đã nhận thanh toán qua PayOS nhưng lỗi tạo đơn đặt sân:\n${apiErr?.message || 'Lỗi hệ thống'}\nĐiểm đã được lưu vào ví Escrow của bạn.`)
         navigate('/wallet')
         return
       }
@@ -1280,7 +1287,7 @@ function SplitPayment() {
             bg: '#E0F2FE',
             title: 'Thanh toán PayOS khớp lệnh thành công!',
             message: `Hệ thống Napas 24/7 đã khớp giao dịch chuyển tiền thật qua cổng PayOS cho cụm sân ${courtName}.`,
-            details: `Số tiền: ${formatVnd(payableAmount)} • Hợp đồng Escrow bảo chứng 100%`,
+            details: `Số Điểm: ${formatVnd(payableAmount)} • Hợp đồng Escrow bảo chứng 100%`,
             time: 'Vừa xong',
             unread: true,
             link: '/wallet',
@@ -1503,7 +1510,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       <span>{displayBookingDate}</span>
                     </div>
                     <div className="sp-stat-item">
-                      <small>TỔNG TIỀN ({hours}H)</small>
+                      <small>TỔNG ĐIỂM ({hours}H)</small>
                       <strong className="sp-price-color">{formatVnd(totalAmount)}</strong>
                       <span>{courtCount > 1 ? `${courtCount} sân × ${formatVnd(unitPrice)}` : `${formatVnd(hourlyRate)}/giờ`}</span>
                     </div>
@@ -1543,7 +1550,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <span className="sp-badge-default">Mặc định</span>
                   </div>
                   <div className="sp-mode-amount-row">
-                    <small>SỐ TIỀN:</small>
+                    <small>SỐ ĐIỂM:</small>
                     <strong>{formatVnd(totalAmount)}</strong>
                   </div>
                 </div>
@@ -1567,7 +1574,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     </span>
                   </div>
                   <div className="sp-mode-amount-row">
-                    <small>SỐ TIỀN:</small>
+                    <small>SỐ ĐIỂM:</small>
                     <strong className="sp-split-color">
                       {formatVnd(invitedFriends.length > 0 ? splitAmount : displaySplitAmount)} / người
                     </strong>
@@ -1581,7 +1588,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <div className="sp-split-title-row">
                     <div className="sp-split-title-left">
                       <span className="material-symbols-outlined" style={{ color: '#15803D' }}>group_add</span>
-                      <span>Tìm &amp; Thêm Bạn Bè Cùng Chia Tiền</span>
+                      <span>Tìm &amp; Thêm Bạn Bè Cùng Thanh Toán</span>
                     </div>
                     <span className="sp-badge-count" style={{ background: '#DCFCE7', color: '#15803D' }}>
                       {invitedFriends.length + 1} người trong đơn
@@ -1590,7 +1597,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                   {invitedFriends.length === 0 && (
                     <div style={{ padding: '10px 14px', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '10px', color: '#92400E', fontSize: '12.5px', marginBottom: '12px' }}>
-                      ⚠️ <strong>Chưa có bạn bè trong nhóm chia tiền.</strong> Vui lòng nhập số điện thoại của bạn chơi để cùng chia tiền (tối thiểu 2 người).
+                      ⚠️ <strong>Chưa có bạn bè trong nhóm cùng thanh toán.</strong> Vui lòng nhập số điện thoại của bạn chơi để cùng thanh toán (tối thiểu 2 người).
                     </div>
                   )}
 
@@ -1641,7 +1648,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                         onClick={() => handleAddInvitedFriend(lookupResult)}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
-                        <span>Thêm vào nhóm chia tiền</span>
+                        <span>Thêm vào nhóm cùng thanh toán</span>
                       </button>
                     </div>
                   )}
@@ -1682,7 +1689,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                           <button
                             type="button"
                             className="sp-btn-remove-friend"
-                            title="Xóa bạn này khỏi đơn chia tiền"
+                            title="Xóa bạn này khỏi đơn cùng thanh toán"
                             onClick={() => handleRemoveInvitedFriend(friend.id)}
                           >
                             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
@@ -1695,7 +1702,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   {/* Bảng tóm tắt chia tiền */}
                   <div className="sp-split-summary-box">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong>Tổng tiền: {formatVnd(totalAmount)} ÷ {invitedFriends.length + 1} người</strong>
+                      <strong>Tổng Điểm: {formatVnd(totalAmount)} ÷ {invitedFriends.length + 1} người</strong>
                       <strong style={{ fontSize: 14, color: '#15803D' }}>= {formatVnd(splitAmount)} / người</strong>
                     </div>
                   </div>
@@ -1903,7 +1910,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-receipt-line sp-receipt-line--court">
                   <div className="sp-receipt-court-header">
                     <span className="sp-receipt-court-name">
-                      Tiền thuê {courtCount > 1 ? `${courtCount} sân` : subCourt}
+                      Phí thuê {courtCount > 1 ? `${courtCount} sân` : subCourt}
                     </span>
                     <span className="sp-receipt-price-nowrap">{formatVnd(totalAmount)}</span>
                   </div>
@@ -1917,7 +1924,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <span className="sp-receipt-line-left sp-receipt-line-discount">
                     Ưu đãi giờ vàng thành viên
                   </span>
-                  <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-0 đ</span>
+                  <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-0 Điểm</span>
                 </div>
               </div>
 
@@ -1927,7 +1934,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-total-labels">
                   <span className="sp-total-head">TỔNG THANH TOÁN KỲ NÀY</span>
                   <span className="sp-total-sub">
-                    {paymentMode === 'full' ? 'Ký quỹ 100% toàn bộ tiền sân' : `Ký quỹ phần của bạn (1/${totalParticipantCount}) tiền sân`}
+                    {paymentMode === 'full' ? 'Ký quỹ 100% toàn bộ phí sân' : `Ký quỹ phần của bạn (1/${totalParticipantCount}) phí sân`}
                   </span>
                 </div>
                 <strong className="sp-total-value">{formatVnd(payableAmount)}</strong>
@@ -1962,8 +1969,8 @@ Xem vé QR: ${window.location.origin}/qr-pass`
               <div className="sp-escrow-box">
                 <span className="material-symbols-outlined">verified_user</span>
                 <p className="sp-escrow-text">
-                  <strong>Bảo chứng Escrow 100%:</strong> Tiền giữ tại Hợp đồng Ký quỹ thông minh SportNexus.
-                  Chủ sân chỉ nhận tiền sau khi hết ca 24 giờ (thời hạn khiếu nại). Vé điện tử được gửi kèm qua email.
+                  <strong>Bảo chứng Escrow 100%:</strong> Điểm được giữ tại Hợp đồng Ký quỹ thông minh SportNexus.
+                  Chủ sân chỉ nhận Điểm sau khi hết ca 24 giờ (thời hạn khiếu nại). Vé điện tử được gửi kèm qua email.
                 </p>
               </div>
             </section>
@@ -2007,7 +2014,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
             <div className="sp-bank-qr-amount-pill">
               <small>Số tiền thanh toán PayOS:</small>
-              <strong>{formatVnd(payosSession?.amount || payableAmount)}</strong>
+              <strong>{new Intl.NumberFormat('vi-VN').format(payosSession?.amount || payableAmount)} đ</strong>
             </div>
 
             <p style={{ fontSize: 11.5, color: '#6b7280', marginTop: 12, lineHeight: 1.4 }}>
@@ -2037,7 +2044,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-bank-field-row">
                   <span className="sp-bank-field-label">Số tiền:</span>
                   <div className="sp-bank-field-val">
-                    <strong style={{ color: '#2f5d12', fontSize: 16 }}>{formatVnd(payosSession?.amount || payableAmount)}</strong>
+                    <strong style={{ color: '#2f5d12', fontSize: 16 }}>{new Intl.NumberFormat('vi-VN').format(payosSession?.amount || payableAmount)} đ</strong>
                     <button
                       type="button"
                       className="sp-btn-copy"
@@ -2145,21 +2152,21 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   </div>
                   <div className="sp-status-info">
                     <div className="sp-status-head-row">
-                      <span className="sp-status-title">PENDING • Đơn chia tiền đang chờ người được mời góp</span>
+                      <span className="sp-status-title">PENDING • Đơn cùng thanh toán đang chờ người được mời góp</span>
                       <span className="sp-deadline-badge">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>timer</span>
                         HẠN GÓP: {formatTimer(deadlineSeconds)}
                       </span>
                     </div>
                     <div className="sp-status-desc">
-                      Người tạo đã thanh toán phần của mình ({formatVnd(payableAmount)}). Hạn góp tiền cho bạn bè là 30 phút. Quá hạn mà chưa đủ thì hệ thống sẽ tự động hủy đơn và hoàn tiền 100% cho mọi người đã đóng.
+                      Người tạo đã thanh toán phần của mình ({formatVnd(payableAmount)}). Hạn góp Điểm cho bạn bè là 30 phút. Quá hạn mà chưa đủ thì hệ thống sẽ tự động hủy đơn và hoàn 100% Điểm cho mọi người đã đóng.
                     </div>
 
                     {/* Danh sách người tham gia góp tiền */}
                     <div className="sp-participants-panel">
                       <div className="sp-participants-title">
                         <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#D97706' }}>group</span>
-                        <span>Tiến độ góp tiền ({invitedFriends.filter(f => f.status === 'PAID').length + 1} / {invitedFriends.length + 1} người đã đóng)</span>
+                        <span>Tiến độ góp Điểm ({invitedFriends.filter(f => f.status === 'PAID').length + 1} / {invitedFriends.length + 1} người đã đóng)</span>
                       </div>
 
                       {/* Host */}
@@ -2189,14 +2196,14 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span>{formatVnd(splitAmount)}</span>
                             {f.status === 'PAID' ? (
-                              <span className="sp-part-status-badge sp-part-status--paid">ĐÃ GÓP TIỀN</span>
+                              <span className="sp-part-status-badge sp-part-status--paid">ĐÃ GÓP ĐIỂM</span>
                             ) : (
                               <>
                                 <span className="sp-part-status-badge sp-part-status--pending">CHỜ GÓP</span>
                                 <button
                                   type="button"
                                   className="sp-btn-sim-join"
-                                  title="Bạn chơi tự góp tiền từ tài khoản của họ. Bấm để cập nhật trạng thái mới nhất."
+                                  title="Bạn chơi tự góp Điểm từ tài khoản của họ. Bấm để cập nhật trạng thái mới nhất."
                                   disabled={syncingParticipants}
                                   onClick={handleRefreshParticipants}
                                 >
@@ -2243,7 +2250,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       </span>
                     </div>
                     <div className="sp-status-desc">
-                      Đã thanh toán đủ tiền sân, giữ chỗ thành công. Tiền được bảo chứng an toàn 100% trong quỹ Escrow SportNexus.
+                      Đã thanh toán đủ phí sân, giữ chỗ thành công. Điểm được bảo chứng an toàn 100% trong quỹ Escrow SportNexus.
                     </div>
                   </div>
                 </div>
@@ -2275,7 +2282,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       <span className="sp-status-title">CANCELLED • Đã hủy đơn đặt sân</span>
                     </div>
                     <div className="sp-status-desc">
-                      Đơn đặt sân này đã bị hủy (người đặt, chủ sân, Admin hủy hoặc quá hạn góp tiền). Tiền đã được xử lý hoàn trả theo quy định.
+                      Đơn đặt sân này đã bị hủy (người đặt, chủ sân, Admin hủy hoặc quá hạn góp Điểm). Điểm đã được xử lý hoàn trả theo quy định.
                     </div>
                   </div>
                 </div>
@@ -2316,7 +2323,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#D97706' }}>lock_clock</span>
                     <strong style={{ fontSize: 13, color: '#92400E' }}>Mã QR Tạm Khóa</strong>
                     <span style={{ fontSize: 11, color: '#78350F' }}>
-                      Đang chờ bạn bè góp đủ tiền để kích hoạt mã vé QR check-in cổng sân.
+                      Đang chờ bạn bè góp đủ Điểm để kích hoạt mã vé QR check-in cổng sân.
                     </span>
                   </div>
                 )}
@@ -2442,12 +2449,12 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                   <div className="sp-timer-text-wrap">
                     <strong>
-                      Trạng thái đơn: {bookingStatus} {bookingStatus === 'PENDING' ? '(Chờ góp tiền)' : '(Bảo chứng Escrow)'}
+                      Trạng thái đơn: {bookingStatus} {bookingStatus === 'PENDING' ? '(Chờ góp Điểm)' : '(Bảo chứng Escrow)'}
                     </strong>
                     <small>
                       {bookingStatus === 'PENDING'
                         ? `Đã góp: ${formatVnd(payableAmount)} • Còn thiếu: ${formatVnd(invitedFriends.filter(f => f.status !== 'PAID').length * splitAmount)}`
-                        : `Tiền được giữ trong frozenBalance (${formatVnd(payableAmount)}) tới khi chơi xong`}
+                        : `Điểm được giữ trong frozenBalance (${formatVnd(payableAmount)}) tới khi chơi xong`}
                     </small>
                   </div>
                 </div>
@@ -2571,7 +2578,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       ? 'Đơn đã check-in (Không thể hủy)'
                       : isTicketExpiredNoCheckIn
                         ? 'Đã quá giờ thi đấu (Không thể hủy)'
-                        : 'Hủy đơn đặt sân & Hoàn tiền'}
+                        : 'Hủy đơn đặt sân & Hoàn Điểm'}
                 </span>
               </button>
             </div>
@@ -2670,7 +2677,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div className="sp-spec-item sp-spec-full" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', padding: '14px 18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                     <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#166534' }}>
-                      Tổng số tiền đã thanh toán
+                      Tổng số Điểm đã thanh toán
                     </span>
                     <strong className="sp-spec-highlight" style={{ fontSize: '18px', fontWeight: 850, color: '#15803d' }}>
                       {formatVnd(payableAmount)}
@@ -2704,7 +2711,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>Trạng Thái Đơn Hàng:</span>
                   <span style={{ fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 4, fontSize: 12 }}>
-                    {[bookingResult?.bookingStatus, bookingResult?.status, qrTicketData?.status].find((v) => typeof v === 'string' && v.trim()) || (bookingStatus === 'PENDING' ? 'PENDING (Chờ góp tiền)' : 'PAID (Đã thanh toán)')}
+                    {[bookingResult?.bookingStatus, bookingResult?.status, qrTicketData?.status].find((v) => typeof v === 'string' && v.trim()) || (bookingStatus === 'PENDING' ? 'PENDING (Chờ góp Điểm)' : 'PAID (Đã thanh toán)')}
                   </span>
                 </div>
 
@@ -2813,42 +2820,47 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   Xác Nhận Hủy Đơn Đặt Sân
                 </h3>
                 <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#64748b' }}>
-                  Áp dụng chính sách hoàn tiền tự động theo quy định của SportNexus
+                  Áp dụng chính sách hoàn Điểm tự động theo quy định của SportNexus
                 </p>
               </div>
             </div>
 
-            {/* Chính sách hoàn tiền 24 giờ */}
-            <div className={`sp-cancel-policy-card ${getHoursUntilMatch() >= 24 ? 'sp-policy-full' : 'sp-policy-zero'}`}>
+            {/* Chính sách hoàn Điểm 48 giờ (đơn thường; kèo LFG có chính sách riêng bên dưới) */}
+            {!(state.isLfg || state.cardId) && (
+            <div className={`sp-cancel-policy-card ${getHoursUntilMatch() >= 48 ? 'sp-policy-full' : 'sp-policy-zero'}`}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 4 }}>
                 <span className="material-symbols-outlined">
-                  {getHoursUntilMatch() >= 24 ? 'check_circle' : 'warning'}
+                  {getHoursUntilMatch() >= 48 ? 'check_circle' : 'warning'}
                 </span>
                 <span>
-                  {getHoursUntilMatch() >= 24
-                    ? 'ĐỦ ĐIỀU KIỆN HOÀN TIỀN 100%'
-                    : 'KHÔNG HOÀN TIỀN (0%)'}
+                  {getHoursUntilMatch() >= 48
+                    ? 'ĐỦ ĐIỀU KIỆN HOÀN 100% ĐIỂM'
+                    : 'KHÔNG HOÀN ĐIỂM (0%)'}
                 </span>
               </div>
               <div>
-                {getHoursUntilMatch() >= 24 ? (
+                {getHoursUntilMatch() >= 48 ? (
                   <>
-                    Thời điểm hủy cách giờ chơi <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 24h).
-                    Bạn sẽ nhận lại <strong>100% số tiền ({formatVnd(payableAmount)})</strong> vào Ví Escrow ngay sau khi hủy.
+                    Thời điểm hủy cách giờ chơi <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 48h).
+                    Bạn sẽ nhận lại <strong>toàn bộ ({formatVnd(payableAmount)})</strong> vào Ví Escrow ngay sau khi hủy.
                   </>
                 ) : (
                   <>
-                    Thời điểm hủy cách giờ chơi chỉ <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&lt; 24h).
-                    Theo quy định SportNexus, đơn hủy trong vòng 24 giờ trước giờ thi đấu sẽ <strong>không được hoàn tiền</strong>.
+                    Thời điểm hủy cách giờ chơi chỉ <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&lt; 48h).
+                    Theo quy định SportNexus, chỉ hoàn 100% Điểm khi hủy trước giờ thi đấu từ 48 giờ trở lên; hủy sau mốc này sẽ <strong>không được hoàn Điểm</strong>.
                   </>
                 )}
               </div>
             </div>
+            )}
 
-            {/* Lưu ý nếu đơn là kèo LFG */}
+            {/* Đơn gắn kèo LFG: hủy đơn = chủ kèo hủy kèo */}
             {(state.isLfg || state.cardId) && (
-              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: 12, color: '#1e40af' }}>
-                ℹ️ <strong>Đơn gắn kèm kèo ghép LFG:</strong> Hệ thống sẽ tự động hủy kèo ghép theo quy định.
+              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>
+                ℹ️ <strong>Đơn gắn kèm kèo ghép LFG:</strong> hủy đơn sẽ hủy luôn kèo ghép.
+                {getHoursUntilMatch() >= 48
+                  ? <> Còn từ 48 giờ trở lên trước giờ chơi: mọi người được hoàn 100% Điểm, bạn bị trừ <strong>10 điểm Fair Play</strong>.</>
+                  : <> Còn dưới 48 giờ trước giờ chơi: người tham gia được hoàn 100%; bạn bị trừ <strong>50% tiền sân</strong> (chia đều bồi thường cho người tham gia) và <strong>20 điểm Fair Play</strong>. Nếu chưa có ai vào kèo, bạn được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.</>}
               </div>
             )}
 

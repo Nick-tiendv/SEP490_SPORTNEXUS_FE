@@ -100,7 +100,7 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
               {[
                 court.availableSlotsNext7Days != null && `${court.availableSlotsNext7Days} ca trống 7 ngày tới`,
                 court.effectiveSlotMinutes != null && `Thời lượng áp dụng: ${court.effectiveSlotMinutes} phút`,
-                court.minUpcomingPrice != null && `Giá sắp tới: ${Number(court.minUpcomingPrice).toLocaleString('vi-VN')}–${Number(court.maxUpcomingPrice ?? court.minUpcomingPrice).toLocaleString('vi-VN')} đ`,
+                court.minUpcomingPrice != null && `Giá sắp tới: ${Number(court.minUpcomingPrice).toLocaleString('vi-VN')}–${Number(court.maxUpcomingPrice ?? court.minUpcomingPrice).toLocaleString('vi-VN')} Điểm`,
               ].filter(Boolean).join(' • ')}
             </div>
           )}

@@ -91,7 +91,24 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
     checkInRate: toNumber(data.checkInRatePercent),
     refunded: toNumber(data.totalRefundedAmount),
     penalty: toNumber(data.totalPenaltyRetainedAmount),
+    // Xếp hạng cơ sở theo số đơn trong kỳ (AdminFacilityBookingRankDto, docs 11.17).
+    topFacilities: (Array.isArray(data.topFacilities) ? data.topFacilities : []).map(item => ({
+      id: String(item.facilityId ?? ''),
+      name: item.facilityName || '—',
+      ownerName: item.ownerName || '',
+      totalBookings: toNumber(item.totalBookings) ?? 0,
+      activeBookings: toNumber(item.activeBookings) ?? 0,
+      cancelledBookings: toNumber(item.cancelledBookings) ?? 0,
+    })),
   }
+}
+
+// Số đơn theo từng sân con của một cơ sở cho Admin.
+// BE CHƯA có endpoint này (chỉ có revenueByCourt ở GET /owner/dashboard cho chủ sân).
+// Khi BE bổ sung: đặt ADMIN_COURT_STATS_READY = true và gọi API trong hàm dưới, trả về [{ courtName, bookings }].
+export const ADMIN_COURT_STATS_READY = false
+export async function getAdminCourtBookingStats() {
+  return []
 }
 
 // ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------
@@ -117,7 +134,7 @@ async function loadAdminDashboard({ fromDate, toDate }) {
     users: numbers(data.users, ['total', 'players', 'owners', 'admins', 'locked', 'newInRange', 'claimBanned', 'belowFairPlayThreshold']),
     facilities: numbers(data.facilities, ['total', 'approved', 'pending', 'rejected', 'courts']),
     bookings: numbers(data.bookings, ['inRange', 'paid', 'checkedIn', 'cancelled', 'pending', 'cancelRate']),
-    revenue: numbers(data.revenue, ['bookingGrossValue', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerBookingEarnings', 'totalDeposits', 'withdrawalsCompleted', 'totalWalletBalance', 'totalFrozenBalance', 'currentBookingFeePercent']),
+    revenue: numbers(data.revenue, ['bookingGrossValue', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerCancelPenaltyRevenue', 'ownerBookingEarnings', 'totalDeposits', 'withdrawalsCompleted', 'totalWalletBalance', 'totalFrozenBalance', 'currentBookingFeePercent']),
     tournaments: numbers(data.tournaments, ['total', 'open', 'inProgress', 'finished', 'cancelled', 'locked']),
     lfg: numbers(data.lfg, ['createdInRange', 'open', 'filled', 'cancelled']),
     pending: numbers(data.pending, ['facilityApprovals', 'ownerVerifications', 'withdrawals', 'withdrawalAmount', 'openReports']),

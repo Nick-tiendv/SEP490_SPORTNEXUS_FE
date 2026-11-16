@@ -132,7 +132,7 @@ export function PhoneLookupDialog({ onClose, onOpen }) {
       <label>Số điện thoại<input type="tel" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="0901234567" /></label>
       {state.error && <p role="alert" className="users-form-error">{state.error}</p>}
       {state.items && (state.items.length ? <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>{state.items.map(account => <li key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--sn-gray-200, #e5e7eb)', borderRadius: 10 }}>
-        <span style={{ flex: 1, minWidth: 0 }}><strong>{account.name}</strong><small style={{ display: 'block', color: 'var(--sn-gray-500, #6b7280)' }}>{[account.username && `@${account.username}`, roleLabel(account.role), account.email, account.wallet != null && `Ví ${account.wallet.toLocaleString('vi-VN')} ₫`].filter(Boolean).join(' · ')}</small></span>
+        <span style={{ flex: 1, minWidth: 0 }}><strong>{account.name}</strong><small style={{ display: 'block', color: 'var(--sn-gray-500, #6b7280)' }}>{[account.username && `@${account.username}`, roleLabel(account.role), account.email, account.wallet != null && `Ví ${account.wallet.toLocaleString('vi-VN')} Điểm`].filter(Boolean).join(' · ')}</small></span>
         <button type="button" className="users-button" onClick={() => onOpen(account.id)}>Xem chi tiết</button>
       </li>)}</ul> : <p>Không tìm thấy tài khoản nào với số điện thoại này.</p>)}
       <footer><button type="button" className="users-button" onClick={onClose}>Đóng</button><button className="users-button primary" disabled={state.loading}>{state.loading ? 'Đang tra cứu…' : 'Tra cứu'}</button></footer>
