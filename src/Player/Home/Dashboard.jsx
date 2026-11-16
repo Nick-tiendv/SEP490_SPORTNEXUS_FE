@@ -803,7 +803,7 @@ const toSuggestedCourt = (fac) => {
     dist: fac.district || fac.address?.split(',').slice(-2, -1)[0]?.trim() || '',
     name: fac.name,
     surface: fac.description || '',
-    price: `${minPrice ? `Từ ${minPrice.toLocaleString('vi-VN')} đ/h` : 'Liên hệ'} • ${courtCount} sân`,
+    price: `${minPrice ? `Từ ${minPrice.toLocaleString('vi-VN')} Điểm/h` : 'Liên hệ'} • ${courtCount} sân`,
     rating: fac.reviewCount > 0 ? `${fac.averageRating} ★ (${fac.reviewCount} đánh giá)` : 'Chưa có đánh giá',
     img: thumb,
     isFromApi: true,
@@ -811,7 +811,7 @@ const toSuggestedCourt = (fac) => {
   }
 }
 
-const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} Điểm`
 const whenText = (start, end) => {
   if (!start) return '—'
   const s = new Date(start)

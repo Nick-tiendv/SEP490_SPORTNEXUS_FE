@@ -5,7 +5,7 @@ import { useApi } from '../../hooks/useApi.js'
 import { createShopOrder, getShopProducts } from '../../api/shopApi.js'
 
 // Shop của cơ sở trên trang chi tiết sân: đặt trước, nhận hàng và trả tiền tại quầy (không qua ví).
-const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`
+const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
 
 function OrderModal({ product, onClose }) {
   const [quantity, setQuantity] = useState(1)

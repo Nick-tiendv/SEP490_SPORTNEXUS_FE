@@ -5,7 +5,7 @@ import { vnClock } from '../../utils/vnTime.js'
 // Chi tiết một kèo LFG (GET /api/v1/lfgs/{cardId}): thông tin sân, giờ, giá, trạng thái và người tham gia.
 // Chủ kèo thấy cả người đang chờ duyệt / đã rời; người khác chỉ thấy người đã vào kèo (theo BE).
 
-const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} Điểm`
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—')
 const dateTimeVN = (value) => (value ? `${vnClock(value)} ${dateVN(value)}` : '—')
 

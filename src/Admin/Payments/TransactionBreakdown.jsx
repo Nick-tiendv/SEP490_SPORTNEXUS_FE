@@ -2,7 +2,7 @@ import { money } from './paymentData.js'
 
 const groups = [
   ['Đang giữ', [['bookingEscrowHeld', 'Tiền đặt sân đang giữ (escrow)', '#287b4c'], ['prizeFundsHeld', 'Quỹ giải thưởng đang giữ', '#60b582'], ['totalFrozenBalance', 'Số dư bị đóng băng', '#a1d9b8']]],
-  ['Doanh thu', [['bookingCommissionRevenue', 'Hoa hồng đặt sân', '#287b4c'], ['promotionRevenue', 'Gói quảng bá', '#60b582'], ['ownerBookingEarnings', 'Chủ sân nhận từ đặt sân', '#a1d9b8'], ['tournamentFeesToOwners', 'Phí giải đấu trả chủ sân', '#d2eadb']]],
+  ['Doanh thu', [['bookingCommissionRevenue', 'Hoa hồng đặt sân', '#287b4c'], ['promotionRevenue', 'Gói quảng bá', '#60b582'], ['ownerCancelPenaltyRevenue', 'Phạt chủ sân hủy đơn', '#3f9a68'],['ownerBookingEarnings', 'Chủ sân nhận từ đặt sân', '#a1d9b8'], ['tournamentFeesToOwners', 'Phí giải đấu trả chủ sân', '#d2eadb']]],
   ['Chi ra', [['bookingRefunds', 'Hoàn tiền đặt sân', '#f5a6b0'], ['withdrawalsCompleted', 'Rút tiền đã chuyển', '#efb63e'], ['prizesPaid', 'Tiền thưởng đã trả', '#efb63e'], ['adminAdjustments', 'Điều chỉnh của quản trị viên', '#9baaa3']]],
 ]
 

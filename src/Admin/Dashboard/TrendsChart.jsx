@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { getAdminDashboard } from '../../api/admin/dashboardApi.js'
 import { TREND_RANGES, buildTrendSeries, formatCurrency, formatNumber, lastDaysRange, moneyUnit, niceMax, toApiDate } from './dashboardData.js'
+import { BookingsBarView, CourtCompareView, FacilityCompareView, PeriodCompareView } from './ChartViews.jsx'
+
+// Kiểu xem của khung biểu đồ: người dùng chọn, mỗi kiểu một dạng biểu đồ phù hợp.
+const VIEWS = {
+  trend: { label: 'Xu hướng', desc: 'Giá trị đặt sân, lượt đặt sân và người dùng mới theo thời gian.' },
+  bookings: { label: 'Lượt đặt', desc: 'Số lượt đặt sân theo từng ngày (theo tuần khi xem 90 ngày).' },
+  compare: { label: 'So sánh kỳ', desc: 'Lượt đặt sân tháng này so với tháng trước, quý này so với quý trước.' },
+  facilities: { label: 'Theo cơ sở', desc: 'So sánh số đơn đặt sân giữa các cơ sở (cụm sân).' },
+  courts: { label: 'Theo sân con', desc: 'So sánh số đơn giữa các sân con trong một cơ sở.' },
+}
 
 const X0 = 52, X1 = 702, Y0 = 40, Y1 = 260
 const SERIES = {
@@ -20,9 +30,11 @@ function curveOf(points) {
 }
 
 export default function TrendsChart({ reloadKey = 0 }) {
+  const [view, setView] = useState('trend')
   const [range, setRange] = useState('30 ngày')
   const [state, setState] = useState({ key: '', error: '', byDay: [] })
   const days = TREND_RANGES[range]
+  const apiRange = useMemo(() => { const { from, to } = lastDaysRange(days); return { fromDate: toApiDate(from), toDate: toApiDate(to) } }, [days])
   const requestKey = `${days}|${reloadKey}`
 
   useEffect(() => {
@@ -58,11 +70,18 @@ export default function TrendsChart({ reloadKey = 0 }) {
   return (
     <section className="admin-panel admin-trends">
       <div className="admin-panel-heading">
-        <div><h2>Xu hướng nền tảng</h2><p>Giá trị đặt sân, lượt đặt sân và người dùng mới theo thời gian.</p></div>
-        <div className="admin-segmented admin-range-tabs" role="group" aria-label="Khoảng thời gian biểu đồ">{Object.keys(TREND_RANGES).map(item => <button key={item} type="button" aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}{TREND_RANGES[item] > 30 && <small>theo tuần</small>}</button>)}</div>
+        <div><h2>Xu hướng nền tảng</h2><p>{VIEWS[view].desc}</p></div>
+        {view !== 'compare' && <div className="admin-segmented admin-range-tabs" role="group" aria-label="Khoảng thời gian biểu đồ">{Object.keys(TREND_RANGES).map(item => <button key={item} type="button" aria-pressed={range === item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}{TREND_RANGES[item] > 30 && (view === 'trend' || view === 'bookings') && <small>theo tuần</small>}</button>)}</div>}
       </div>
+      <div className="admin-chart-views" role="tablist" aria-label="Kiểu biểu đồ">
+        {Object.entries(VIEWS).map(([key, item]) => <button key={key} type="button" role="tab" aria-selected={view === key} className={view === key ? 'selected' : ''} onClick={() => setView(key)}>{item.label}</button>)}
+      </div>
+      {view === 'compare' ? <PeriodCompareView reloadKey={reloadKey} />
+        : view === 'facilities' ? <FacilityCompareView range={apiRange} rangeLabel={range} reloadKey={reloadKey} />
+          : view === 'courts' ? <CourtCompareView range={apiRange} rangeLabel={range} reloadKey={reloadKey} />
+            : <>
       <div className="admin-chart-summary">
-        <div className="admin-trend-metric admin-trend-metric--revenue"><i className="admin-legend-dot admin-legend-dot--revenue" /><span>Giá trị đặt sân<small>(VNĐ)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
+        <div className="admin-trend-metric admin-trend-metric--revenue"><i className="admin-legend-dot admin-legend-dot--revenue" /><span>Giá trị đặt sân<small>(Điểm)</small></span><strong>{loading ? '…' : formatCurrency(totalRevenue)}</strong></div>
         <div className="admin-trend-metric admin-trend-metric--bookings"><i className="admin-legend-dot admin-legend-dot--bookings" /><span>Số lượng<small>lượt đặt sân</small></span><strong>{loading ? '…' : formatNumber(totalBookings)}</strong></div>
         <div className="admin-trend-metric admin-trend-metric--users"><i className="admin-legend-dot admin-legend-dot--users" /><span>Người dùng<small>đăng ký mới</small></span><strong>{loading ? '…' : formatNumber(totalUsers)}</strong></div>
         <span className="admin-chart-growth"><TrendingUp size={14} /> {range} gần nhất</span>
@@ -70,6 +89,7 @@ export default function TrendsChart({ reloadKey = 0 }) {
       <div className="admin-chart-wrap">
         {loading ? <p className="admin-empty">Đang tải dữ liệu biểu đồ…</p>
           : state.error ? <p className="admin-empty">{state.error}</p>
+            : view === 'bookings' ? <BookingsBarView series={series} rangeLabel={range} />
             : empty ? <p className="admin-empty">Chưa có hoạt động trong {range} gần nhất.</p>
               : <svg viewBox="0 0 740 330" role="img" aria-label={`Xu hướng giá trị đặt sân, lượt đặt sân và người dùng mới trong ${range}`}>
                 <defs><linearGradient id="admin-revenue-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#16a34a" stopOpacity=".24" /><stop offset="100%" stopColor="#16a34a" stopOpacity=".015" /></linearGradient></defs>
@@ -85,7 +105,8 @@ export default function TrendsChart({ reloadKey = 0 }) {
                 {series.map((item, index) => (index % labelEvery === 0 || index === series.length - 1) && <text key={item.label} x={xOf(index)} y="309" textAnchor={index === series.length - 1 ? 'end' : index ? 'middle' : 'start'} fill="#99a3ad" fontSize="11">{index === series.length - 1 && TREND_RANGES[range] <= 30 ? 'Hôm nay' : item.label}</text>)}
               </svg>}
       </div>
-      <div className="admin-chart-footer"><span><i className="admin-legend-dot admin-legend-dot--revenue" /> Giá trị đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--bookings" /> Lượt đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--users" /> Người dùng mới</span><span className="admin-muted">Mỗi đường dùng thang riêng · rê chuột để xem số liệu</span></div>
+      {view === 'trend' && <div className="admin-chart-footer"><span><i className="admin-legend-dot admin-legend-dot--revenue" /> Giá trị đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--bookings" /> Lượt đặt sân</span><span><i className="admin-legend-dot admin-legend-dot--users" /> Người dùng mới</span><span className="admin-muted">Mỗi đường dùng thang riêng · rê chuột để xem số liệu</span></div>}
+            </>}
     </section>
   )
 }

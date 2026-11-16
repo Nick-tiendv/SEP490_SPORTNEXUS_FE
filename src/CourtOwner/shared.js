@@ -1,5 +1,5 @@
 // Hàm định dạng và nhãn trạng thái dùng chung cho các trang Chủ sân.
-export const formatVND = (value) => (value === null || value === undefined || value === '' ? '—' : `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} đ`)
+export const formatVND = (value) => (value === null || value === undefined || value === '' ? '—' : `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`)
 
 export const formatDateTime = (value) => {
   if (!value) return '—'

@@ -14,6 +14,7 @@ import {
   rejectLfgParticipant,
   removeLfgParticipant,
   cancelLfg,
+  describeLfgCancelResult,
   leaveLfg,
   getLfgCancelReasons,
   acceptLfgInvitation,
@@ -25,7 +26,6 @@ import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
 import { finalReason } from './lfgReason.js'
-
 // Mốc khóa hủy kèo: 48 giờ trước giờ chơi (BE trả isLocked / hostCancelUntil); hủy dưới 48h chịu phạt bồi thường & Fair Play
 const HOST_CANCEL_BEFORE_MS = 48 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
@@ -94,7 +94,7 @@ const FEED_IMAGES = {
   volleyball: 'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&h=600&fit=crop',
   table_tennis: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?w=800&h=600&fit=crop',
 }
-const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} đ`
+const formatVnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Number(n) || 0)} Điểm`
 
 // Trạng thái người tham gia / của tôi trong kèo (LfgParticipantResponse.status, joined.myStatus)
 const PARTICIPANT_STATUS_TEXT = {
@@ -295,7 +295,6 @@ function CommunityFeed() {
       : null
     return until != null && nowMs >= until
   }
-
   // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
   useEffect(() => {
     let cancelled = false
@@ -845,17 +844,23 @@ function CommunityFeed() {
           : null
 
       if (isLockedCancel) {
+        const extraSummary = describeLfgCancelResult(res)
         setToastMessage({
           title: 'Đã Hủy Kèo Sát Giờ (< 48h)',
           desc: compFormatted != null
             ? `Hủy kèo sát giờ: Bạn bị trừ ${compFormatted} Điểm (50% tiền sân) bồi thường và -20 điểm FairPlay.`
-            : 'Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay.',
+            : extraSummary
+              ? `Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay. ${extraSummary}`
+              : 'Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay.',
           type: 'error',
         })
       } else {
+        const summary = describeLfgCancelResult(res)
         setToastMessage({
           title: 'Hủy Kèo Ghép Thành Công',
-          desc: 'Đã hủy kèo. Hoàn 100% tiền cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân.',
+          desc: summary
+            ? `Đã hủy kèo. ${summary}`
+            : 'Đã hủy kèo. Hoàn 100% Điểm cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân.',
           type: 'success',
         })
       }
@@ -1654,7 +1659,7 @@ function CommunityFeed() {
                 <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
                   <div>
-                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo: người tham gia được hoàn 100%; nếu hủy dưới 48 giờ trước giờ chơi sẽ bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay.
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ 48 giờ trở lên: mọi người được hoàn 100% Điểm. Nếu hủy dưới 48 giờ trước giờ chơi: người tham gia được hoàn 100% Điểm và chủ kèo bị trừ 50% tiền sân bồi thường cùng -20 điểm FairPlay.
                   </div>
                 </div>
 
@@ -1726,7 +1731,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Giá mỗi người</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {card.pricePerPerson ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : 'Chia đều ca'}
+                              {card.pricePerPerson ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} Điểm` : 'Chia đều ca'}
                             </span>
                           </div>
                         </div>
@@ -1884,7 +1889,7 @@ function CommunityFeed() {
                             </button>
                             )}
 
-                            {/* Hủy kèo đơn phương (POST /lfgs/{id}/cancel): dưới 48h (isLocked = true) chịu phạt bồi thường & Fair Play */}
+                            {/* Hủy kèo đơn phương (POST /lfgs/{id}/cancel): dưới 48h (isLocked = true) chịu phạt bồi thường & Fair Play; BE chặn khi đã có người check-in */}
                             {cardActive && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
@@ -1914,7 +1919,7 @@ function CommunityFeed() {
                 <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs text-[#1C3524] flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px] shrink-0 mt-0.5">verified_user</span>
                   <div>
-                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo được hoàn 100% tiền (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
+                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
                   </div>
                 </div>
 
@@ -2019,7 +2024,7 @@ function CommunityFeed() {
                           <div className="text-right">
                             <span className="text-[11px] text-gray-400 block font-semibold">Cọc giữ chỗ Escrow</span>
                             <span className="text-lg font-black text-[#15803D]">
-                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} đ` : '—'}
+                              {card.pricePerPerson != null ? `${new Intl.NumberFormat('vi-VN').format(card.pricePerPerson)} Điểm` : '—'}
                             </span>
                           </div>
                         </div>
@@ -2732,7 +2737,7 @@ function CommunityFeed() {
               <div className="flex justify-between items-center text-xs text-gray-600">
                 <span className="font-medium">Số dư ví hiện tại:</span>
                 <span className="font-bold text-[#111827]">
-                  {new Intl.NumberFormat('vi-VN').format(walletBalance)} đ
+                  {new Intl.NumberFormat('vi-VN').format(walletBalance)} Điểm
                 </span>
               </div>
               <div className="flex justify-between items-center text-sm font-bold text-[#111827] pt-1.5 border-t border-gray-200/60">
@@ -2748,7 +2753,7 @@ function CommunityFeed() {
                     walletBalance - bookingModal.price < 0 ? 'text-red-600' : 'text-[#111827]'
                   }`}
                 >
-                  {new Intl.NumberFormat('vi-VN').format(walletBalance - bookingModal.price)} đ
+                  {new Intl.NumberFormat('vi-VN').format(walletBalance - bookingModal.price)} Điểm
                 </span>
               </div>
             </div>
@@ -2991,14 +2996,18 @@ function CommunityFeed() {
               <p className={`text-[11px] m-0 ${isLocked ? 'text-rose-600 font-semibold' : 'text-gray-500'}`}>
                 {isLocked
                   ? 'Kèo đã qua mốc khóa 48 tiếng trước giờ chơi (isLocked = true). Nếu vẫn hủy đơn phương, hệ thống sẽ trừ tiền bồi thường và điểm FairPlay ngay khi xác nhận.'
-                  : 'Chủ kèo có thể hủy đơn phương trước giờ chơi từ 48 tiếng trở lên mà không bị phạt điểm FairPlay.'}
+                  : 'Chủ kèo có thể hủy đơn phương trước giờ chơi từ 48 tiếng trở lên mà không bị phạt sát giờ; BE chặn hủy khi đã có người check-in.'}
               </p>
 
               {/* Refund policy note */}
               <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
                 <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
                 <div>
-                  <strong>Chính sách hoàn tiền:</strong> Hoàn 100% tiền cọc cho tất cả người tham gia. Tiền sân của chủ kèo được xử lý theo mốc hủy 48h của hệ thống.
+                  <strong>Chính sách hủy kèo (2.6 Bước 5):</strong>
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                    <li>Trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho các thành viên tham gia và hoàn tiền sân cho chủ kèo theo chính sách.</li>
+                    <li>Dưới 48 giờ (sát giờ): người tham gia được hoàn 100% Điểm; chủ kèo bị trừ <strong>50% tiền sân bồi thường</strong> và <strong>-20 điểm FairPlay</strong>.</li>
+                  </ul>
                 </div>
               </div>
 
@@ -3059,7 +3068,7 @@ function CommunityFeed() {
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5">timer</span>
               <div>
-                <strong>Quy định hoàn tiền:</strong> Hoàn 100% tiền cọc (hoặc rút yêu cầu đang chờ). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
+                <strong>Quy định hoàn Điểm:</strong> Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (rút yêu cầu đang chờ thì không mất Điểm). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
               </div>
             </div>
 
@@ -3115,8 +3124,9 @@ function CommunityFeed() {
                 <strong className="text-gray-900 block mb-1">
                   2. Cơ chế xử phạt huỷ slot &amp; No-show
                 </strong>
-                - Huỷ trước 60 phút: Hoàn 100% tiền cọc về Ví Escrow không phạt.<br />
-                - Huỷ dưới 60 phút hoặc vắng mặt: Trừ 100% tiền cọc bồi thường cho đối thủ và chủ sân.
+                - Rời kèo trước giờ chơi từ 48 giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
+                - Rời kèo trong vòng 48 giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.<br />
+                - Chủ kèo hủy kèo: người tham gia luôn được hoàn 100% (trong vòng 48 giờ còn được bồi thường thêm).
               </div>
               <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                 <strong className="text-gray-900 block mb-1">
@@ -3626,14 +3636,17 @@ function CommunityFeed() {
               <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
                 <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px]">assignment_return</span>
-                  <h4>4. Chính Sách Hủy Kèo &amp; Hoàn Tiền Ký Quỹ Escrow</h4>
+                  <h4>4. Chính Sách Hủy Kèo &amp; Hoàn Điểm Ký Quỹ Escrow</h4>
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    <strong className="text-gray-900 font-bold">Hủy kèo trước mốc 48 giờ:</strong> Chủ kèo có thể hủy kèo trước giờ chơi <strong>48 giờ</strong> mà <strong>không bị trừ điểm FairPlay</strong>; tiền cọc của các thành viên tham gia được hoàn 100% từ Escrow.
+                    <strong className="text-gray-900 font-bold">Người tham gia rời kèo:</strong> trước giờ chơi từ <strong>48 giờ</strong> trở lên được <strong>hoàn 100% Điểm</strong>; trong vòng 48 giờ <strong>không được hoàn</strong>.
                   </li>
                   <li>
-                    <strong className="text-red-700 font-bold">Hủy kèo đơn phương dưới 48 giờ (sát giờ):</strong> Sau mốc <strong>48 giờ</strong> trước giờ chơi (kèo đã khóa), nếu chủ kèo vẫn hủy đơn phương sẽ bị trừ <strong>50% tiền sân bồi thường</strong> (tính theo Điểm) và <strong>-20 điểm FairPlay</strong>.
+                    <strong className="text-gray-900 font-bold">Hủy kèo trước mốc 48 giờ:</strong> Chủ kèo có thể hủy kèo trước giờ chơi <strong>48 giờ</strong> mà <strong>không bị trừ điểm FairPlay</strong>; tiền cọc của các thành viên tham gia được hoàn 100% Điểm từ Escrow.
+                  </li>
+                  <li>
+                    <strong className="text-red-700 font-bold">Hủy kèo đơn phương dưới 48 giờ (sát giờ):</strong> Sau mốc <strong>48 giờ</strong> trước giờ chơi (kèo đã khóa), nếu chủ kèo vẫn hủy đơn phương sẽ bị trừ <strong>50% tiền sân bồi thường</strong> (tính theo Điểm, chia bồi thường cho người tham gia) và <strong>-20 điểm FairPlay</strong>.
                   </li>
                 </ul>
               </div>

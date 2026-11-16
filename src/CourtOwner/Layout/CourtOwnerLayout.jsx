@@ -94,7 +94,7 @@ export default function CourtOwnerLayout() {
   const facility = facilities.find((item) => item.id === facilityId) || null
   const outletContext = { profile, wallet, facilities, facilityId, facility, selectFacility, refreshProfile, refreshWallet, refreshFacilities, loading, error }
 
-  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' đ')
+  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' Điểm')
   const displayName = profile?.fullName || profile?.username || 'Chủ sân'
 
   // Xác định tiêu đề hiển thị trên header tương ứng với trang

@@ -44,7 +44,7 @@ export function lastDaysRange(days, now = new Date()) {
 
 // ---------- Định dạng ----------
 export const formatNumber = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
-export const formatCurrency = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
+export const formatCurrency = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} Điểm` : '—')
 export const formatPercent = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : '—')
 export function growth(current, previous) {
   if (!Number.isFinite(current) || !Number.isFinite(previous) || previous === 0) return undefined
@@ -74,9 +74,9 @@ export function niceMax(max, integer = false) {
 }
 // Đơn vị tiền cho trục theo độ lớn (tránh 0,1 / 0,1 / 0,1 khi giá trị nhỏ).
 export function moneyUnit(max) {
-  if (max >= 1e6) return { unit: 'Triệu ₫', divisor: 1e6 }
-  if (max >= 1e3) return { unit: 'Nghìn ₫', divisor: 1e3 }
-  return { unit: '₫', divisor: 1 }
+  if (max >= 1e6) return { unit: 'Triệu Điểm', divisor: 1e6 }
+  if (max >= 1e3) return { unit: 'Nghìn Điểm', divisor: 1e3 }
+  return { unit: 'Điểm', divisor: 1 }
 }
 
 // Gom dữ liệu byDay của API dashboard theo ngày (hoặc theo tuần khi khoảng dài) cho biểu đồ xu hướng.
@@ -120,12 +120,12 @@ export function dashboardCsvRows(dashboard, period, range) {
     ...section('Người dùng', [['Tổng người dùng', users.total], ['Người chơi', users.players], ['Chủ sân', users.owners], ['Quản trị viên', users.admins], ['Bị khóa', users.locked], ['Đăng ký mới trong kỳ', users.newInRange], ['Bị cấm nhận kèo', users.claimBanned], ['Dưới ngưỡng Fair Play', users.belowFairPlayThreshold]]),
     ...section('Cơ sở thể thao', [['Tổng cơ sở', facilities.total], ['Đã duyệt', facilities.approved], ['Chờ duyệt', facilities.pending], ['Bị từ chối', facilities.rejected], ['Tổng số sân', facilities.courts]]),
     ...section('Đặt sân', [['Lượt đặt trong kỳ', bookings.inRange], ['Đã thanh toán', bookings.paid], ['Đã check-in', bookings.checkedIn], ['Đã hủy', bookings.cancelled], ['Chờ thanh toán', bookings.pending], ['Tỉ lệ hủy (%)', bookings.cancelRate]]),
-    ...section('Doanh thu (₫)', [['Giá trị đặt sân', revenue.bookingGrossValue], ['Doanh thu nền tảng', revenue.platformRevenue], ['Phí đặt sân', revenue.bookingCommissionRevenue], ['Gói đẩy tin', revenue.promotionRevenue], ['Chủ sân nhận', revenue.ownerBookingEarnings], ['Nạp ví', revenue.totalDeposits], ['Rút tiền đã chi', revenue.withdrawalsCompleted], ['Tổng số dư ví', revenue.totalWalletBalance], ['Số dư đang tạm giữ', revenue.totalFrozenBalance], ['Phí đặt sân hiện tại (%)', revenue.currentBookingFeePercent]]),
+    ...section('Doanh thu (Điểm)', [['Giá trị đặt sân', revenue.bookingGrossValue], ['Doanh thu nền tảng', revenue.platformRevenue], ['Phí đặt sân', revenue.bookingCommissionRevenue], ['Gói đẩy tin', revenue.promotionRevenue], ['Phạt chủ sân hủy đơn', revenue.ownerCancelPenaltyRevenue], ['Chủ sân nhận', revenue.ownerBookingEarnings], ['Nạp ví', revenue.totalDeposits], ['Rút tiền đã chi', revenue.withdrawalsCompleted], ['Tổng số dư ví', revenue.totalWalletBalance], ['Số dư đang tạm giữ', revenue.totalFrozenBalance], ['Phí đặt sân hiện tại (%)', revenue.currentBookingFeePercent]]),
     ...section('Giải đấu', [['Tổng', tournaments.total], ['Đang mở đăng ký', tournaments.open], ['Đang diễn ra', tournaments.inProgress], ['Đã kết thúc', tournaments.finished], ['Đã hủy', tournaments.cancelled], ['Bị khóa', tournaments.locked]]),
     ...section('Ghép kèo', [['Tạo trong kỳ', lfg.createdInRange], ['Đang mở', lfg.open], ['Đã đủ người', lfg.filled], ['Đã hủy', lfg.cancelled]]),
-    ...section('Chờ xử lý', [['Cơ sở chờ duyệt', pending.facilityApprovals], ['Chủ sân chờ xác minh', pending.ownerVerifications], ['Yêu cầu rút tiền', pending.withdrawals], ['Tổng tiền chờ rút (₫)', pending.withdrawalAmount], ['Báo cáo vi phạm đang mở', pending.openReports]]),
+    ...section('Chờ xử lý', [['Cơ sở chờ duyệt', pending.facilityApprovals], ['Chủ sân chờ xác minh', pending.ownerVerifications], ['Yêu cầu rút tiền', pending.withdrawals], ['Tổng tiền chờ rút (Điểm)', pending.withdrawalAmount], ['Báo cáo vi phạm đang mở', pending.openReports]]),
     [],
-    ['Ngày', 'Người dùng mới', 'Lượt đặt', 'Giá trị đặt sân (₫)'],
+    ['Ngày', 'Người dùng mới', 'Lượt đặt', 'Giá trị đặt sân (Điểm)'],
     ...byDay.map(day => [String(day.date ?? '').slice(0, 10), day.newUsers, day.bookings, day.bookingGrossValue]),
   ]
 }

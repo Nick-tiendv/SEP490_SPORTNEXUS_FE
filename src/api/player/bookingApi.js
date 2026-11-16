@@ -277,8 +277,8 @@ export async function getCancellationReasons() {
 /**
  * Hủy đơn đặt sân và hoàn tiền
  * POST /api/v1/bookings/{bookingId}/cancel
- * - Hủy trước giờ chơi >= 24h: hoàn 100%
- * - Hủy dưới 24h: không hoàn tiền
+ * - Hủy trước giờ chơi >= 48h: hoàn 100%
+ * - Hủy dưới 48h: không hoàn
  * - Đơn đã check-in (CHECKED_IN): không hủy được
  * - Đơn gắn kèo LFG: không hủy trực tiếp (phải hủy kèo qua POST /api/v1/lfgs/{cardId}/cancel)
  * @param {string} bookingId - UUID đơn đặt sân

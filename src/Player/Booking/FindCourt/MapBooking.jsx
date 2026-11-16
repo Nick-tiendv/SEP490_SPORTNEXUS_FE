@@ -100,7 +100,7 @@ const getDistanceForCourt = (court, liveCoords = null) => {
   return d != null ? Math.max(0.2, d) : null
 }
 
-const formatVnd = (n) => `${(Number(n) || 0).toLocaleString('vi-VN')} đ`
+const formatVnd = (n) => `${(Number(n) || 0).toLocaleString('vi-VN')} Điểm`
 
 const SPORT_SEARCH_TEXT = {
   badminton: 'cầu lông cau long badminton',
@@ -955,7 +955,7 @@ function MapBooking() {
           id: child.id,
           number: String(idx + 1).padStart(2, '0'),
           name: child.name,
-          type: `${child.categoryName}${subPrice > 0 ? ` • ${subPrice.toLocaleString('vi-VN')} đ/h` : ''}`,
+          type: `${child.categoryName}${subPrice > 0 ? ` • ${subPrice.toLocaleString('vi-VN')} Điểm/h` : ''}`,
           isBooked,
           note: isBooked ? (child.status === 'MAINTENANCE' ? 'Đang bảo trì' : 'Tạm ngưng') : 'Đang trống',
           price: subPrice,
@@ -1230,12 +1230,12 @@ function MapBooking() {
       return 'Mọi mức giá'
     }
     if (minPriceInput && !maxPriceInput) {
-      return `Từ ${minPriceInput} đ`
+      return `Từ ${minPriceInput} Điểm`
     }
     if (!minPriceInput && maxPriceInput) {
-      return `Đến ${maxPriceInput} đ`
+      return `Đến ${maxPriceInput} Điểm`
     }
-    return `${minPriceInput} đ – ${maxPriceInput} đ`
+    return `${minPriceInput} Điểm – ${maxPriceInput} Điểm`
   }, [isAllPrices, minPriceInput, maxPriceInput])
 
   const handleClearFilters = () => {
@@ -1559,7 +1559,7 @@ function MapBooking() {
                   onBlur={handlePriceBlur}
                   aria-label="Giá tối thiểu"
                 />
-                <span>đ</span>
+                <span>Điểm</span>
               </label>
 
               <label className="mb-price-field" htmlFor="mb-price-input-max">
@@ -1574,7 +1574,7 @@ function MapBooking() {
                   onBlur={handlePriceBlur}
                   aria-label="Giá tối đa"
                 />
-                <span>đ</span>
+                <span>Điểm</span>
               </label>
             </div>
 
@@ -1822,7 +1822,7 @@ function MapBooking() {
                   <span className="mb-price">
                     {court.price > 0 ? (
                       <>
-                        {court.price.toLocaleString('vi-VN')} đ<small>/h</small>
+                        {court.price.toLocaleString('vi-VN')} Điểm<small>/h</small>
                       </>
                     ) : (
                       <small>Liên hệ</small>
@@ -2138,7 +2138,7 @@ function MapBooking() {
               </div>
               <div className="mb-summary-total">
                 <small>Tổng tiền {courtQuantity} sân:</small>
-                <strong>{selectedSlot ? formatVnd(totalBookingPrice) : '0 đ'}</strong>
+                <strong>{selectedSlot ? formatVnd(totalBookingPrice) : '0 Điểm'}</strong>
                 {courtQuantity > 1 && (
                   <span className="mb-summary-unit-calc">
                     ({courtQuantity} sân × {formatVnd(selectedSlot.price)})

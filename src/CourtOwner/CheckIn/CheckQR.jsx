@@ -190,7 +190,7 @@ export default function CheckQR() {
     inputRef.current?.focus()
   }
 
-  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' đ')
+  const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' Điểm')
   const panelStyle = {
     background: 'rgba(255, 255, 255, 0.94)',
     backdropFilter: 'blur(24px)',

@@ -291,7 +291,7 @@ export async function removeLfgParticipant(cardId, userId) {
 /**
  * Bước 5 (Chủ kèo): Hủy kèo ghép LFG (đơn phương, không còn bước bỏ phiếu)
  * POST /api/v1/lfgs/{cardId}/cancel
- * Hoàn 100% cho người tham gia; hủy trước 48h hoàn theo chính sách sân, hủy dưới 48h (isLocked) trừ compensationTotal (50% tiền sân) và -20 Fair Play.
+ * Hoàn 100% cho người tham gia; hủy trước 48h hoàn tiền sân theo chính sách, hủy dưới 48h (isLocked) trừ compensationTotal (50% tiền sân) và -20 Fair Play.
  * @param {string} cardId - UUID kèo ghép
  * @param {Object} [payload]
  * @param {string} [payload.reason] - Lý do hủy kèo
@@ -310,6 +310,22 @@ export async function cancelLfg(cardId, payload = {}) {
     console.warn(`[lfgApi] Lỗi khi hủy kèo LFG ${cardId}:`, error)
     throw normalizeApiError(error)
   }
+}
+
+/**
+ * Câu tóm tắt kết quả hủy kèo từ data của POST /lfgs/{cardId}/cancel
+ * ({ refundedParticipants, totalRefundedToParticipants, hostRefund, fairPlayPenalty }).
+ * Dưới 48h trước giờ chơi, totalRefundedToParticipants gồm cả tiền bồi thường từ chủ kèo.
+ */
+export function describeLfgCancelResult(result) {
+  const points = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
+  const parts = []
+  const people = Number(result?.refundedParticipants) || 0
+  if (people > 0) parts.push(`Đã hoàn ${points(result.totalRefundedToParticipants)} cho ${people} người tham gia.`)
+  parts.push(`Bạn được hoàn ${points(result?.hostRefund)} tiền sân.`)
+  const penalty = Math.abs(Number(result?.fairPlayPenalty) || 0)
+  if (penalty) parts.push(`Bạn bị trừ ${penalty} điểm Fair Play vì tự hủy kèo.`)
+  return parts.join(' ')
 }
 
 /**

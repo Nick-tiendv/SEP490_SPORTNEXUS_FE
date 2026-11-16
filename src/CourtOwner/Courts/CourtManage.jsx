@@ -296,7 +296,7 @@ export default function CourtManage() {
     }
   }
 
-  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' đ'
+  const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num) + ' Điểm'
 
   // Các ca trong ngày theo giờ mở/đóng cửa và thời lượng ca của sân đang xem
   const previewCourt = courts.find((c) => c.id === previewCourtId) || courts[0] || null
@@ -797,7 +797,7 @@ export default function CourtManage() {
             }}
           >
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0F172A', marginBottom: '14px' }}>
-              Bảng giá cơ sở theo từng cụm sân (VNĐ/Giờ)
+              Bảng giá cơ sở theo từng cụm sân (Điểm/Giờ)
             </h3>
 
             {zones.length === 0 ? (
@@ -816,7 +816,7 @@ export default function CourtManage() {
                         Số sân
                       </th>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                        Giá mặc định (VNĐ/Giờ)
+                        Giá mặc định (Điểm/Giờ)
                       </th>
                       <th style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
                         Thao tác

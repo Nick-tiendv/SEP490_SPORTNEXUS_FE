@@ -10,6 +10,7 @@ export default function PlatformSummary({ dashboard, loading, periodLabel }) {
       ['Giá trị đặt sân', formatCurrency(revenue.bookingGrossValue)],
       ['Phí đặt sân thu được', formatCurrency(revenue.bookingCommissionRevenue)],
       ['Doanh thu gói đẩy tin', formatCurrency(revenue.promotionRevenue)],
+      ['Phạt chủ sân hủy đơn', formatCurrency(revenue.ownerCancelPenaltyRevenue)],
       ['Chủ sân nhận', formatCurrency(revenue.ownerBookingEarnings)],
       ['Nạp vào ví', formatCurrency(revenue.totalDeposits)],
       ['Rút tiền đã chi', formatCurrency(revenue.withdrawalsCompleted)],

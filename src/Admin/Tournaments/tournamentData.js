@@ -18,7 +18,7 @@ export const isClosed = tournament => /complete|cancel|finish/i.test(tournament.
 export const statusBadge = status => (/cancel/i.test(status) ? 'Cancelled' : /complete|finish/i.test(status) ? 'Completed' : /regist|open/i.test(status) ? 'Confirmed' : 'Pending')
 
 export const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
-export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} ₫` : '—')
+export const money = value => (Number.isFinite(value) ? `${value.toLocaleString('vi-VN')} Điểm` : '—')
 export const date = value => (value ? value.split('-').reverse().join('/') : '—')
 
 // Thẻ KPI từ GET /api/v1/admin/tournaments/statistics.

@@ -39,7 +39,7 @@ const createFacilityPopup = fac => {
   const priceNum = Number(fac.price)
   if (Number.isFinite(priceNum) && priceNum > 0) {
     const price = document.createElement('div')
-    price.textContent = `Từ ${new Intl.NumberFormat('vi-VN').format(priceNum)} đ/giờ`
+    price.textContent = `Từ ${new Intl.NumberFormat('vi-VN').format(priceNum)} Điểm/giờ`
     price.style.cssText = 'font-size:11px;font-weight:700;color:#15803d'
     wrap.appendChild(price)
   }
