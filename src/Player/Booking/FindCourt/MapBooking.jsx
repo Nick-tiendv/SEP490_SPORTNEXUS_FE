@@ -4,33 +4,15 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { getOnboarding } from '../../../api/player/ratingApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
-import { geocodeAddress } from '../../../utils/geolocation.js'
+import { geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
 import { vnClock } from '../../../utils/vnTime.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
 import './MapBooking.css'
 
 const HOLD_SECONDS = 15 * 60
-
-// Thông tin quận — dùng cho tìm kiếm & đồng bộ vị trí
-const DISTRICTS = {
-  thuduc: { name: 'TP. Thủ Đức', aliases: 'thu duc td q2 q.2 quan 2 quan 9 q9 thao dien tang nhon phu le van viet binh trieu hiep phu dinh phong phu hue an hue an linh tay sala' },
-  q1: { name: 'Quận 1', aliases: 'q1 q.1 quan1 quan 1 ben thanh tao dan nguyen thi minh khai huyen tran cong chua lao dong' },
-  q3: { name: 'Quận 3', aliases: 'q3 q.3 quan3 quan 3 ho xuan huong nam ky khoi nghia vo thi sau ban co ga sai gon' },
-  q5: { name: 'Quận 5', aliases: 'q5 q.5 quan5 quan 5 tinh vo dai the gioi nguyen trai tran hung dao' },
-  q7: { name: 'Quận 7', aliases: 'q7 q.7 quan7 quan 7 phu my hung tan thuan huynh tan phat nguyen van linh nguyen luong bang tre xanh long vien' },
-  quan8: { name: 'Quận 8', aliases: 'q8 q.8 quan8 quan 8 chanh hung bong sao pham hung ta quang buu dong dieu cao lo' },
-  q10: { name: 'Quận 10', aliases: 'q10 q.10 quan10 quan 10 ky hoa 3 thang 2 ba thang hai to hien thanh lan anh cach mang thang 8 bac hai thanh thai' },
-  q11: { name: 'Quận 11', aliases: 'q11 q.11 quan11 quan 11 phu tho ly thuong kiet lac long quan dam sen hoa binh' },
-  q12: { name: 'Quận 12', aliases: 'q12 q.12 quan12 quan 12 thoi an le van khuong cau vong nguyen van qua' },
-  binhthanh: { name: 'Bình Thạnh', aliases: 'binh thanh q.bt qbt dien bien phu hang xanh bach dang thanh da chu van an' },
-  phunhuan: { name: 'Phú Nhuận', aliases: 'phu nhuan pn q.pn quan phu nhuan rach mieu phan xich long hoa phuong hoang dieu' },
-  tanbinh: { name: 'Tân Bình', aliases: 'tan binh q.tb qtb hoang hoa tham ga truc thang cong hoa viettel tan son truong chinh' },
-  tanphu: { name: 'Tân Phú', aliases: 'tan phu q.tp qtp celadon bo bao tan thang luy ban bich thien van thoai ngoc hau' },
-  govap: { name: 'Gò Vấp', aliases: 'go vap q.gv qgv quang trung phan van tri nguyen oanh khang an ben cat an hoi pham van chieu' },
-  binhtan: { name: 'Bình Tân', aliases: 'binh tan q.btn qbtn le trong tan binh hung hoa' },
-}
 
 // Bỏ dấu tiếng Việt + chữ thường để tìm kiếm không phân biệt dấu
 const normalizeText = (s = '') =>
@@ -40,87 +22,32 @@ const normalizeText = (s = '') =>
     .replace(/đ/gi, 'd')
     .toLowerCase()
 
-// Xác định key quận từ vị trí hồ sơ hoặc địa chỉ người chơi cung cấp
-const detectDistrictKey = (loc = '') => {
-  const norm = normalizeText(loc)
-  if (norm.includes('thu duc') || norm.includes('thao dien') || norm.includes('quan 2') || norm.includes('q2') || norm.includes('quan 9') || norm.includes('q9') || norm.includes('le van viet') || norm.includes('tang nhon phu') || norm.includes('binh trieu') || norm.includes('hiep phu') || norm.includes('dinh phong phu') || norm.includes('hue an') || norm.includes('linh tay') || norm.includes('sala')) return 'thuduc'
-  if (norm.includes('binh thanh') || norm.includes('dinh bo linh') || norm.includes('dien bien phu') || norm.includes('hang xanh') || norm.includes('chu van an') || norm.includes('thanh da')) return 'binhthanh'
-  if (norm.includes('quan 7') || norm.includes('q7') || norm.includes('phu my hung') || norm.includes('huynh tan phat') || norm.includes('nguyen thi thap') || norm.includes('nguyen luong bang') || norm.includes('tre xanh') || norm.includes('long vien')) return 'q7'
-  if (norm.includes('quan 1') || norm.includes('q1') || norm.includes('ben thanh') || norm.includes('tao dan') || norm.includes('huyen tran') || norm.includes('lao dong')) return 'q1'
-  if (norm.includes('quan 3') || norm.includes('q3') || norm.includes('ho xuan huong') || norm.includes('vo thi sau') || norm.includes('ga sai gon')) return 'q3'
-  if (norm.includes('quan 5') || norm.includes('q5') || norm.includes('tinh vo') || norm.includes('dai the gioi')) return 'q5'
-  if (norm.includes('quan 10') || norm.includes('q10') || norm.includes('ky hoa') || norm.includes('lan anh') || norm.includes('ba thang hai') || norm.includes('3 thang 2') || norm.includes('bac hai')) return 'q10'
-  if (norm.includes('phu nhuan') || norm.includes('rach mieu') || norm.includes('phan xich long') || norm.includes('hoa phuong')) return 'phunhuan'
-  if (norm.includes('tan binh') || norm.includes('hoang hoa tham') || norm.includes('ga truc thang') || norm.includes('viettel') || norm.includes('tan son')) return 'tanbinh'
-  if (norm.includes('quan 8') || norm.includes('q8') || norm.includes('chanh hung') || norm.includes('bong sao') || norm.includes('dong dieu')) return 'quan8'
-  if (norm.includes('tan phu') || norm.includes('celadon') || norm.includes('thien van')) return 'tanphu'
-  if (norm.includes('go vap') || norm.includes('quang trung') || norm.includes('khang an') || norm.includes('ben cat') || norm.includes('an hoi')) return 'govap'
-  if (norm.includes('quan 11') || norm.includes('q11') || norm.includes('phu tho') || norm.includes('dam sen')) return 'q11'
-  if (norm.includes('quan 12') || norm.includes('q12') || norm.includes('thoi an') || norm.includes('cau vong')) return 'q12'
-  if (norm.includes('binh tan') || norm.includes('le trong tan')) return 'binhtan'
-  return 'thuduc'
-}
-
-// Ma trận khoảng cách ước tính giữa các quận (km)
-const DISTRICT_DISTANCES = {
-  thuduc: { thuduc: 1.0, binhthanh: 4.2, q1: 7.5, phunhuan: 8.0, q10: 10.5, q7: 12.0, tanbinh: 9.5, quan8: 13.0, tanphu: 14.0, govap: 9.0, q3: 8.5, q11: 12.0, q5: 11.5, q12: 13.0, binhtan: 15.0 },
-  binhthanh: { binhthanh: 1.0, phunhuan: 2.8, q1: 3.5, thuduc: 4.2, q10: 6.0, q7: 7.5, tanbinh: 4.5, quan8: 9.0, tanphu: 8.5, govap: 4.0, q3: 4.0, q11: 7.0, q5: 6.5, q12: 8.0, binhtan: 10.0 },
-  q7: { q7: 1.0, q1: 5.5, binhthanh: 7.5, q10: 8.0, phunhuan: 9.5, thuduc: 12.0, quan8: 4.5, tanbinh: 9.0, tanphu: 11.0, govap: 12.5, q3: 7.0, q11: 9.5, q5: 6.5, q12: 14.0, binhtan: 10.5 },
-  q1: { q1: 1.0, binhthanh: 3.5, phunhuan: 3.8, q10: 4.0, q7: 5.5, thuduc: 7.5, tanbinh: 5.0, quan8: 6.0, tanphu: 8.0, govap: 7.0, q3: 2.0, q11: 5.5, q5: 3.5, q12: 11.0, binhtan: 9.0 },
-  q3: { q3: 1.0, q1: 2.0, q10: 2.5, phunhuan: 2.5, binhthanh: 4.0, tanbinh: 4.0, q7: 7.0, quan8: 5.5, tanphu: 6.5, govap: 6.0, thuduc: 8.5, q11: 4.0, q5: 3.0, q12: 9.5, binhtan: 7.5 },
-  q5: { q5: 1.0, q10: 2.0, q1: 3.5, q3: 3.0, quan8: 3.0, q11: 2.5, tanbinh: 4.5, tanphu: 5.0, q7: 6.5, binhthanh: 6.5, phunhuan: 5.0, govap: 8.0, thuduc: 11.5, q12: 10.0, binhtan: 5.5 },
-  q10: { q10: 1.0, q1: 4.0, phunhuan: 4.5, binhthanh: 6.0, q7: 8.0, thuduc: 10.5, tanbinh: 3.5, quan8: 4.0, tanphu: 5.0, govap: 6.5, q3: 2.5, q11: 2.5, q5: 2.0, q12: 8.5, binhtan: 6.5 },
-  phunhuan: { phunhuan: 1.0, binhthanh: 2.8, q1: 3.8, q10: 4.5, thuduc: 8.0, q7: 9.5, tanbinh: 3.0, quan8: 7.5, tanphu: 6.0, govap: 3.5, q3: 2.5, q11: 5.5, q5: 5.0, q12: 8.0, binhtan: 8.5 },
-  tanbinh: { tanbinh: 1.0, phunhuan: 3.0, q10: 3.5, q1: 5.0, govap: 3.5, tanphu: 3.0, binhthanh: 4.5, thuduc: 9.5, q7: 9.0, quan8: 6.5, q3: 4.0, q11: 3.8, q5: 4.5, q12: 6.0, binhtan: 5.0 },
-  quan8: { quan8: 1.0, q7: 4.5, q10: 4.0, q1: 6.0, tanbinh: 6.5, tanphu: 7.0, binhthanh: 9.0, phunhuan: 7.5, thuduc: 13.0, govap: 11.0, q3: 5.5, q11: 5.0, q5: 3.0, q12: 12.0, binhtan: 6.0 },
-  tanphu: { tanphu: 1.0, tanbinh: 3.0, q10: 5.0, quan8: 7.0, q1: 8.0, govap: 6.0, phunhuan: 6.0, binhthanh: 8.5, thuduc: 14.0, q7: 11.0, q3: 6.5, q11: 4.5, q5: 5.0, q12: 6.5, binhtan: 3.5 },
-  govap: { govap: 1.0, tanbinh: 3.5, phunhuan: 3.5, binhthanh: 4.0, q1: 7.0, q10: 6.5, thuduc: 9.0, tanphu: 6.0, quan8: 11.0, q7: 12.5, q3: 6.0, q11: 7.5, q5: 8.0, q12: 4.5, binhtan: 7.5 },
-  q11: { q11: 1.0, q10: 2.5, tanbinh: 3.8, tanphu: 4.5, quan8: 5.0, q1: 5.5, q3: 4.0, phunhuan: 5.5, binhthanh: 7.0, thuduc: 12.0, q7: 9.5, govap: 7.5, q5: 2.5, q12: 7.5, binhtan: 4.5 },
-  q12: { q12: 1.0, govap: 4.5, tanbinh: 6.0, tanphu: 6.5, binhthanh: 8.0, thuduc: 13.0, q10: 8.5, q11: 7.5, q1: 11.0, q3: 9.5, q5: 10.0, quan8: 12.0, q7: 14.0, binhtan: 8.0 },
-  binhtan: { binhtan: 1.0, tanphu: 3.5, q11: 4.5, q5: 5.5, tanbinh: 5.0, quan8: 6.0, q10: 6.5, q1: 9.0, q3: 7.5, govap: 7.5, q12: 8.0, binhthanh: 10.0, q7: 10.5, thuduc: 15.0 },
+const parseCoord = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  const num = Number(v)
+  return Number.isFinite(num) ? num : null
 }
 
 // Công thức tính khoảng cách Haversine chính xác theo tọa độ GPS (km)
 const haversineDistanceKm = (lat1, lon1, lat2, lon2) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null
+  const nLat1 = parseCoord(lat1)
+  const nLon1 = parseCoord(lon1)
+  const nLat2 = parseCoord(lat2)
+  const nLon2 = parseCoord(lon2)
+  if (nLat1 == null || nLon1 == null || nLat2 == null || nLon2 == null) return null
   const R = 6371 // Bán kính Trái Đất theo km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const dLat = ((nLat2 - nLat1) * Math.PI) / 180
+  const dLon = ((nLon2 - nLon1) * Math.PI) / 180
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos((nLat1 * Math.PI) / 180) *
+      Math.cos((nLat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return Math.round(R * c * 10) / 10
 }
 
-// Tọa độ trung tâm các quận trên Google Maps TP. Hồ Chí Minh
-const DISTRICT_COORDS = {
-  thuduc: { lat: 10.8490, lng: 106.7537, name: 'TP. Thủ Đức' },
-  binhthanh: { lat: 10.8105, lng: 106.6975, name: 'Bình Thạnh' },
-  q7: { lat: 10.7340, lng: 106.7215, name: 'Quận 7' },
-  q1: { lat: 10.7756, lng: 106.7004, name: 'Quận 1' },
-  q3: { lat: 10.7788, lng: 106.6852, name: 'Quận 3' },
-  q5: { lat: 10.7538, lng: 106.6621, name: 'Quận 5' },
-  q10: { lat: 10.7715, lng: 106.6672, name: 'Quận 10' },
-  q11: { lat: 10.7652, lng: 106.6578, name: 'Quận 11' },
-  q12: { lat: 10.8524, lng: 106.6542, name: 'Quận 12' },
-  phunhuan: { lat: 10.7992, lng: 106.6803, name: 'Phú Nhuận' },
-  tanbinh: { lat: 10.8015, lng: 106.6534, name: 'Tân Bình' },
-  quan8: { lat: 10.7242, lng: 106.6286, name: 'Quận 8' },
-  tanphu: { lat: 10.7901, lng: 106.6281, name: 'Tân Phú' },
-  govap: { lat: 10.8388, lng: 106.6653, name: 'Gò Vấp' },
-  binhtan: { lat: 10.7825, lng: 106.6085, name: 'Bình Tân' },
-}
-
-// Quận cũ đã gộp vào TP. Thủ Đức: detectDistrictKey trả 'thuduc' (tâm ở Linh Chiểu) nên lệch ~7 km.
-// Dùng tọa độ riêng khi người dùng nhập đích danh các khu này làm điểm xuất phát.
-const LEGACY_AREA_COORDS = [
-  { match: ['quan 2', 'q2', 'thao dien', 'an phu', 'an khanh', 'thu thiem', 'binh an'], lat: 10.7872, lng: 106.7498 },
-  { match: ['quan 9', 'q9', 'hiep phu', 'tang nhon phu', 'le van viet', 'long thanh my'], lat: 10.8428, lng: 106.8287 },
-]
 // Bán kính tìm sân quanh một địa chỉ cụ thể (khi không có ranh giới khu vực)
 const AREA_RADIUS_KM = 3
 // Sai số GPS tối đa còn dùng làm điểm xuất phát (vị trí đoán theo IP / Wi-Fi thường > 1 km)
@@ -136,20 +63,8 @@ const TIME_PRESETS = [
   { label: 'Tối', from: '17:00', to: '23:00' },
 ]
 
-// Số nút quận gợi ý tối đa ở ô "Khu vực" (nút tỉnh / thành luôn hiện đủ)
-const MAX_DISTRICT_CHIPS = 10
-
-const hasWord = (norm, word) => new RegExp(`(^|[^a-z0-9])${word}($|[^a-z0-9])`).test(norm)
-
-// Tọa độ ước lượng cho tên khu vực quen thuộc ở TP.HCM khi chưa tra được địa chỉ.
-// Chỉ trả khi văn bản nhắc đích danh khu vực đó; khu vực khác (vd Hà Nội) trả null, không đoán bừa về Thủ Đức.
-const localOriginCoords = (text = '') => {
-  const norm = normalizeText(text)
-  const legacy = LEGACY_AREA_COORDS.find((area) => area.match.some((m) => hasWord(norm, m)))
-  if (legacy) return { lat: legacy.lat, lng: legacy.lng }
-  const district = Object.values(DISTRICT_COORDS).find((d) => hasWord(norm, normalizeText(d.name).replace(/^tp\.\s*/, '')))
-  return district ? { lat: district.lat, lng: district.lng } : null
-}
+// Số nút khu vực gợi ý tối đa ở ô "Khu vực" (nút tỉnh / thành luôn hiện đủ)
+const MAX_AREA_CHIPS = 10
 
 // Gộp các cách ghi tỉnh / thành (BE có dữ liệu ghi khác nhau, vd "TP.HCM", "Hồ Chí Minh")
 const PROVINCE_ALIASES = [
@@ -157,7 +72,7 @@ const PROVINCE_ALIASES = [
   { label: 'Hà Nội', test: /ha noi/ },
   { label: 'Đà Nẵng', test: /da nang/ },
 ]
-// Tỉnh / quận của cơ sở: ưu tiên trường của BE, thiếu thì lấy từ địa chỉ "…, Quận, Tỉnh"
+// Tỉnh / phường (khu vực) của cơ sở: ưu tiên trường của BE, thiếu thì lấy từ địa chỉ "…, Phường, Tỉnh"
 const areaOfCourt = (court) => {
   const parts = String(court.address || '').split(',').map((p) => p.trim()).filter(Boolean)
   const lastPart = parts[parts.length - 1] || ''
@@ -174,22 +89,13 @@ const boundsOfPoints = (points) => {
   return [[Math.min(...lats) - pad, Math.min(...lngs) - pad], [Math.max(...lats) + pad, Math.max(...lngs) + pad]]
 }
 
-// Tính khoảng cách sân linh hoạt theo vị trí người chơi và tọa độ vệ tinh GPS trực tiếp từ Google Maps
-const getDistanceForCourt = (court, playerLocation, liveCoords = null) => {
-  if (liveCoords && liveCoords.lat && liveCoords.lng && court.lat && court.lng) {
-    const d = haversineDistanceKm(liveCoords.lat, liveCoords.lng, court.lat, court.lng)
-    if (d != null) return Math.max(0.2, d)
+// Tính khoảng cách thực (km) từ điểm xuất phát của người chơi tới sân bằng Haversine; thiếu tọa độ trả null
+const getDistanceForCourt = (court, liveCoords = null) => {
+  if (!liveCoords || liveCoords.lat == null || liveCoords.lng == null || court?.lat == null || court?.lng == null) {
+    return null
   }
-  const userDistrict = detectDistrictKey(playerLocation)
-  const userCoords = DISTRICT_COORDS[userDistrict]
-  if (userCoords && court.lat && court.lng) {
-    const d = haversineDistanceKm(userCoords.lat, userCoords.lng, court.lat, court.lng)
-    if (d != null) return Math.max(0.4, d)
-  }
-  const courtDistrict = court.district || 'thuduc'
-  const base = DISTRICT_DISTANCES[userDistrict]?.[courtDistrict] ?? 5.0
-  const offset = (court.id.charCodeAt(0) % 5) * 0.2
-  return Math.max(0.6, Math.round((base + offset) * 10) / 10)
+  const d = haversineDistanceKm(liveCoords.lat, liveCoords.lng, court.lat, court.lng)
+  return d != null ? Math.max(0.2, d) : null
 }
 
 // Mẫu khung giờ — quy chuẩn hệ thống là 2 tiếng / ca (sân mở cửa 06:00 - 22:00)
@@ -218,11 +124,11 @@ const searchIndexOf = (c) =>
       c.name,
       c.street,
       c.address,
+      c.provinceName,
+      c.districtName,
       c.mapQuery,
       c.subCourt,
       c.subCourtDesc,
-      DISTRICTS[c.district]?.name,
-      DISTRICTS[c.district]?.aliases,
       SPORT_SEARCH_TEXT[c.sport] || '',
     ].join(' ')
   )
@@ -230,7 +136,7 @@ const searchIndexOf = (c) =>
 // Các từ dừng thông dụng khi người dùng tìm kiếm sân cầu lông/pickleball
 const STOP_WORDS = new Set([
   'san', 'clb', 'cum', 'khu', 'tim', 'dat', 'o', 'tai', 'gan', 'cho',
-  'the', 'thao', 'tt', 'phuong', 'quan', 'tp', 'thanh', 'pho', 'duong',
+  'the', 'thao', 'tt', 'phuong', 'xa', 'tinh', 'quan', 'tp', 'thanh', 'pho', 'duong',
   'gia', 're', 'dep', 'tot', 'gan', 'day', 'nhat', 'kiem'
 ])
 
@@ -250,7 +156,7 @@ const matchesQuery = (court, query) => {
   const compactIndex = rawIndex.replace(/[^a-z0-9]/g, '')
   const compactQuery = normalizeText(qClean).replace(/[^a-z0-9]/g, '')
 
-  // 1. Khớp chuỗi trực tiếp (vd: "lan anh", "viettel", "chanh hung", "q10", "dien bien phu")
+  // 1. Khớp chuỗi trực tiếp
   if (compactIndex.includes(compactQuery) || compactQuery.includes(compactIndex)) return true
 
   // 2. Lọc bỏ các từ đệm ("sân", "clb", "tìm", "đặt", "ở", "gần"...)
@@ -264,12 +170,12 @@ const matchesQuery = (court, query) => {
   const joinedTokens = meaningfulTokens.join('')
   if (compactIndex.includes(joinedTokens)) return true
 
-  // 3. Khớp theo tỷ lệ các từ khóa cốt lõi (tên riêng như "lan", "anh", "viettel", "bong", "sao", "celadon")
+  // 3. Khớp theo tỷ lệ các từ khóa cốt lõi
   const matchedCount = meaningfulTokens.filter((token) => compactIndex.includes(token)).length
   return matchedCount >= Math.ceil(meaningfulTokens.length * 0.5)
 }
 
-// Phân loại kết quả tìm kiếm thông minh: Tên sân, Tuyến đường hay Quận/Khu vực
+// Phân loại kết quả tìm kiếm: Tên sân, Tuyến đường hay Khu vực
 const getMatchBadge = (court, q = '') => {
   const qClean = normalizeText(q).trim()
   if (!qClean) return null
@@ -295,27 +201,29 @@ const getMatchBadge = (court, q = '') => {
     return { type: 'street', label: 'Tuyến đường', className: 'mb-badge-street', icon: 'add_road' }
   }
 
-  // 3. Khớp tên quận / khu vực
-  const districtObj = DISTRICTS[court.district]
-  if (districtObj) {
-    const distNameCompact = normalizeText(districtObj.name).replace(/[^a-z0-9]/g, '')
-    const distAliasCompact = normalizeText(districtObj.aliases).replace(/[^a-z0-9]/g, '')
-    if (distNameCompact.includes(compactQuery) || distAliasCompact.includes(compactQuery)) {
-      return { type: 'district', label: 'Quận / Khu vực', className: 'mb-badge-district', icon: 'map' }
-    }
+  // 3. Khớp phường / tỉnh / khu vực
+  const areaCompact = normalizeText([court.districtName, court.provinceName, court.address].filter(Boolean).join(' ')).replace(/[^a-z0-9]/g, '')
+  if (areaCompact && (areaCompact.includes(compactQuery) || meaningfulTokens.some((t) => areaCompact.includes(t)))) {
+    return { type: 'district', label: 'Khu vực', className: 'mb-badge-district', icon: 'map' }
   }
 
   return { type: 'general', label: 'Gần bạn', className: 'mb-badge-general', icon: 'near_me' }
 }
 
-// Tính lộ trình và thời gian di chuyển động dựa theo điểm xuất phát của người chơi
+// Tính lộ trình và thời gian di chuyển khi có khoảng cách thực theo tọa độ
 const calculateRoute = (court, origin) => {
   if (!court) return { eta: 'Chưa xác định', note: '' }
-  const dist = court.distance || 1.0
+  const dist = court.distance
+  if (dist == null || !Number.isFinite(dist)) {
+    return {
+      eta: 'Chưa xác định khoảng cách (hãy bật GPS hoặc nhập vị trí xuất phát)',
+      note: origin ? `Chỉ đường từ “${origin}” đến ${court.name}` : `Chỉ đường đến ${court.name}`,
+    }
+  }
   const mins = Math.max(3, Math.round(dist * 2.6))
   return {
     eta: `~${mins} phút di chuyển xe máy (${dist.toFixed(1)} km)`,
-    note: `Tuyến đường tối ưu từ “${origin}” đến ${court.name}`,
+    note: origin ? `Tuyến đường tối ưu từ “${origin}” đến ${court.name}` : `Chỉ đường đến ${court.name}`,
   }
 }
 
@@ -452,7 +360,7 @@ function MapBooking() {
   const navigate = useNavigate()
   const { isSportActive, isAllActive, toggleSport, selectAllSports, SPORTS_LIST } = useSport()
 
-  // Vị trí người chơi lấy từ Hồ sơ cá nhân (mặc định 'Thủ Đức')
+  // Vị trí người chơi lấy từ Hồ sơ cá nhân hoặc khảo sát (không mặc định về Thủ Đức/TP.HCM)
   const [userProfileLocation, setUserProfileLocation] = useState(() => {
     try {
       const saved = localStorage.getItem('player_profile_data')
@@ -461,8 +369,23 @@ function MapBooking() {
         if (parsed.location) return parsed.location
       }
     } catch { /* bỏ qua: không ảnh hưởng luồng chính */ }
-    return 'Thủ Đức'
+    return ''
   })
+  const [onboardingArea, setOnboardingArea] = useState({ coords: null, name: '' })
+  useEffect(() => {
+    let cancelled = false
+    getOnboarding()
+      .then((o) => {
+        if (cancelled || o?.latitude == null || o?.longitude == null) return
+        const coords = { lat: Number(o.latitude), lng: Number(o.longitude) }
+        setOnboardingArea((prev) => ({ ...prev, coords }))
+        reverseGeocode(coords.lat, coords.lng).then((name) => {
+          if (!cancelled && name) setOnboardingArea((prev) => ({ ...prev, name }))
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // Điểm xuất phát tùy chỉnh (cho phép người chơi nhập vị trí cụ thể bất kỳ để chỉ đường)
   const [customOrigin, setCustomOrigin] = useState('')
@@ -547,13 +470,7 @@ function MapBooking() {
         })
       },
       () => {
-        const key = detectDistrictKey(userProfileLocation)
-        const fallback = DISTRICT_COORDS[key] || DISTRICT_COORDS.thuduc
-        setGpsCoords({
-          lat: fallback.lat,
-          lng: fallback.lng,
-          accuracy: 12,
-        })
+        setGpsCoords(null)
       },
       {
         enableHighAccuracy: true,
@@ -561,16 +478,16 @@ function MapBooking() {
         maximumAge: 10000,
       }
     )
-  }, [userProfileLocation])
+  }, [])
 
-  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến hồ sơ hoặc Thủ Đức
+  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến hồ sơ hoặc khảo sát
   const effectiveOrigin = useMemo(() => {
     if (customOrigin.trim()) return customOrigin.trim()
-    return userProfileLocation || 'Thủ Đức'
-  }, [customOrigin, userProfileLocation])
+    return userProfileLocation || onboardingArea.name || ''
+  }, [customOrigin, userProfileLocation, onboardingArea.name])
 
   // Khu vực gợi ý lấy từ chính các cơ sở trong hệ thống (mọi tỉnh / thành, kể cả Hà Nội):
-  // nút tỉnh / thành trước, sau đó các quận có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
+  // nút tỉnh / thành trước, sau đó các phường có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
   const areaChips = useMemo(() => {
     const provinces = new Map()
     for (const court of apiFacilities) {
@@ -595,7 +512,7 @@ function MapBooking() {
     const districtList = provinceList
       .flatMap((p) => [...p.districts.values()])
       .sort((a, b) => b.ids.size - a.ids.size)
-      .slice(0, MAX_DISTRICT_CHIPS)
+      .slice(0, MAX_AREA_CHIPS)
     return { provinces: provinceList, districts: districtList, all: [...provinceList, ...districtList] }
   }, [apiFacilities])
   const selectedAreaChip = useMemo(() => {
@@ -616,7 +533,7 @@ function MapBooking() {
   }, [customOrigin, selectedAreaChip])
 
   // Điểm xuất phát dùng cho ghim bản đồ, khoảng cách và chỉ đường:
-  // vị trí tự nhập (tọa độ tra được, chưa có thì ước theo khu vực) > GPS thiết bị > khu vực trong hồ sơ.
+  // vị trí tự nhập > GPS thiết bị > tọa độ khảo sát; thiếu cả ba trả null (không gán cứng tọa độ TP.HCM)
   const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
   const originPoint = useMemo(() => {
     const text = customOrigin.trim()
@@ -625,19 +542,19 @@ function MapBooking() {
       const pts = selectedAreaChip.points
       return { lat: pts.reduce((sum, p) => sum + p[0], 0) / pts.length, lng: pts.reduce((sum, p) => sum + p[1], 0) / pts.length }
     }
-    const typed = text ? (customGeo.key === text && customGeo.coords) || localOriginCoords(text) : null
+    const typed = text && customGeo.key === text ? customGeo.coords : null
     if (typed) return typed
     // Chỉ tin GPS khi đủ chính xác: máy tính không có GPS thường bị đoán theo IP, lệch hàng chục km
     if (trustedGps) return trustedGps
-    return localOriginCoords(userProfileLocation || '') || { lat: DISTRICT_COORDS.thuduc.lat, lng: DISTRICT_COORDS.thuduc.lng }
-  }, [customOrigin, customGeo, trustedGps, userProfileLocation, selectedAreaChip])
+    return onboardingArea.coords || null
+  }, [customOrigin, customGeo, trustedGps, onboardingArea.coords, selectedAreaChip])
   // Tên điểm xuất phát hiển thị: khớp với tọa độ đang dùng để tính khoảng cách
   const originLabel = customOrigin.trim()
     ? selectedAreaChip?.label && selectedAreaChip.province ? `${selectedAreaChip.label}, ${selectedAreaChip.province}` : customOrigin.trim()
-    : trustedGps ? 'Vị trí hiện tại của bạn' : userProfileLocation || 'Thủ Đức'
+    : trustedGps ? 'Vị trí hiện tại của bạn' : userProfileLocation || onboardingArea.name || 'Chưa xác định vị trí'
 
-  // Khu vực người dùng nhập ở ô "Vị trí" (quận 1, quận 2, Thủ Đức…) → chỉ hiện sân trong khu vực đó.
-  // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể / chưa tra được → bán kính quanh điểm đó.
+  // Khu vực người dùng nhập ở ô "Vị trí" → chỉ hiện sân trong khu vực đó.
+  // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể → bán kính quanh điểm đó.
   const [areaOffFor, setAreaOffFor] = useState('') // khu vực người dùng đã bấm "Xem tất cả"
   const searchArea = useMemo(() => {
     const label = customOrigin.trim()
@@ -646,7 +563,7 @@ function MapBooking() {
     if (selectedAreaChip) {
       return { label: originLabel, ids: selectedAreaChip.ids, bounds: boundsOfPoints(selectedAreaChip.points) }
     }
-    const typedPoint = (customGeo.key === label && customGeo.coords) || localOriginCoords(label)
+    const typedPoint = customGeo.key === label ? customGeo.coords : null
     if (!typedPoint) return null // chưa tra được địa chỉ: chưa lọc
     const bounds = customGeo.key === label ? customGeo.coords?.bounds : null
     // Ranh giới ≥ ~1 km mới là khu vực; nhỏ hơn là một địa chỉ cụ thể
@@ -791,9 +708,9 @@ function MapBooking() {
 
     return list.map((c) => ({
       ...c,
-      distance: getDistanceForCourt(c, effectiveOrigin, originPoint),
+      distance: getDistanceForCourt(c, originPoint),
     }))
-  }, [apiFacilities, effectiveOrigin, originPoint])
+  }, [apiFacilities, originPoint])
 
   const courtMatchesSport = useCallback((c) => {
     if (Array.isArray(c.sports) && c.sports.length > 0) {
@@ -839,7 +756,7 @@ function MapBooking() {
 
   // Lọc cụm sân:
   // - Khi không gõ tìm kiếm: lọc theo môn và khoảng giá (sắp xếp theo khoảng cách từ người chơi)
-  // - Khi người chơi gõ tìm kiếm (tên sân, tuyến đường, quận):
+  // - Khi người chơi gõ tìm kiếm (tên sân, tuyến đường, phường, tỉnh):
   //   1. Ưu tiên tìm trong danh sách các cụm sân có sẵn. Không ép lọc theo môn/giá để tránh làm biến mất kết quả sân người chơi đang tìm kiếm!
   //   2. Không có sân nào khớp thì trả danh sách rỗng
   const baseFilteredCourts = useMemo(() => {
@@ -851,7 +768,7 @@ function MapBooking() {
             courtMatchesSport(c) &&
             courtMatchesPrice(c)
         )
-        .sort((a, b) => a.distance - b.distance)
+        .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
     }
 
     const matched = localizedCourts.filter((c) => matchesQuery(c, trimmed) && courtMatchesPrice(c))
@@ -862,7 +779,7 @@ function MapBooking() {
         const aFitSport = courtMatchesSport(a) ? 1 : 0
         const bFitSport = courtMatchesSport(b) ? 1 : 0
         if (aFitSport !== bFitSport) return bFitSport - aFitSport
-        return a.distance - b.distance
+        return (a.distance ?? Infinity) - (b.distance ?? Infinity)
       })
     }
 
@@ -921,22 +838,29 @@ function MapBooking() {
     () =>
       query.trim()
         ? localizedCourts.filter((c) => matchesQuery(c, query))
-            .sort((a, b) => a.distance - b.distance)
+            .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
             .slice(0, 8)
         : [],
     [localizedCourts, query]
   )
   const showSuggest = searchFocused && query.trim().length > 0
 
-  // Sân đang hiển thị: giữ sân người dùng chọn nếu vẫn nằm trong kết quả lọc và (khi vị trí đổi) cùng quận;
-  // nếu không thì ưu tiên sân ở quận xuất phát (khi không gõ tìm kiếm), cuối cùng là sân đầu danh sách
-  const originDistrictKey = query.trim() ? null : detectDistrictKey(effectiveOrigin)
+  // Sân đang hiển thị: giữ sân người dùng chọn nếu vẫn nằm trong kết quả lọc và (khi vị trí đổi) cùng khu vực;
+  // nếu không thì ưu tiên sân gần khu vực xuất phát (khi không gõ tìm kiếm), cuối cùng là sân đầu danh sách
+  const originAreaNorm = !query.trim() && effectiveOrigin ? normalizeText(effectiveOrigin) : ''
+  const matchesOriginArea = (court) => {
+    if (!originAreaNorm) return false
+    const { district, province } = areaOfCourt(court)
+    return [district, province]
+      .map((item) => normalizeText(item || ''))
+      .some((token) => token && (originAreaNorm.includes(token) || token.includes(originAreaNorm)))
+  }
   const pickedCourt = filteredCourts.find((c) => c.id === courtPick.id)
   const isPickedCourtValid =
-    pickedCourt && (courtPick.origin === effectiveOrigin || !originDistrictKey || pickedCourt.district === originDistrictKey)
+    pickedCourt && (courtPick.origin === effectiveOrigin || !originAreaNorm || matchesOriginArea(pickedCourt))
   const selectedCourt =
     (isPickedCourtValid ? pickedCourt : null) ||
-    (originDistrictKey && filteredCourts.find((c) => c.district === originDistrictKey)) ||
+    (originAreaNorm && filteredCourts.find(matchesOriginArea)) ||
     filteredCourts[0] ||
     null
   const selectedCourtId = selectedCourt?.id || null
@@ -1371,8 +1295,8 @@ function MapBooking() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur()
                   }}
-                  placeholder="Tìm tên sân, tên đường…"
-                  aria-label="Tìm kiếm sân theo quận, tên đường hoặc tên sân"
+                  placeholder="Tìm tên sân, tên đường, phường, tỉnh…"
+                  aria-label="Tìm kiếm sân theo tên sân, tên đường, phường, tỉnh"
                 />
                 {query && (
                   <button
@@ -1414,13 +1338,15 @@ function MapBooking() {
                                 )}
                               </div>
                               <small>
-                                {c.address} • {DISTRICTS[c.district]?.name}
+                                {c.address || [c.districtName, c.provinceName].filter(Boolean).join(', ')}
                               </small>
                             </span>
-                            <div className="mb-suggest-right">
-                              <em>{c.distance} km</em>
-                              <span className="mb-suggest-subdist">gần bạn</span>
-                            </div>
+                            {c.distance != null && (
+                              <div className="mb-suggest-right">
+                                <em>{c.distance} km</em>
+                                <span className="mb-suggest-subdist">gần bạn</span>
+                              </div>
+                            )}
                           </button>
                         </li>
                       )
@@ -1435,7 +1361,7 @@ function MapBooking() {
               )}
             </div>
 
-            {/* Khu vực: nhập quận / phường / địa chỉ → chỉ hiện sân trong khu vực đó trên danh sách và bản đồ */}
+            {/* Khu vực: nhập tên đường / phường / tỉnh → chỉ hiện sân trong khu vực đó trên danh sách và bản đồ */}
             <div className="mb-label-row">
               <span className="mb-label">Khu vực</span>
               {customOrigin && (
@@ -1450,7 +1376,7 @@ function MapBooking() {
                   type="text"
                   className="mb-search-input"
                   autoComplete="off"
-                  placeholder="Nhập quận, phường hoặc địa chỉ (vd: Quận 2)"
+                  placeholder="Tên đường, phường, tỉnh..."
                   value={customOrigin}
                   onChange={(e) => { setCustomOrigin(e.target.value); setAreaOffFor('') }}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
@@ -1654,7 +1580,9 @@ function MapBooking() {
                     <div className="mb-route-text-box">
                       <div className="mb-route-headline">
                         <strong>{routeInfo.eta}</strong>
-                        <span className="mb-route-pill">~{selectedCourt.distance} km</span>
+                        {selectedCourt.distance != null && (
+                          <span className="mb-route-pill">~{selectedCourt.distance} km</span>
+                        )}
                       </div>
                       <div className="mb-route-sub">
                         Từ <strong>{originLabel}</strong> đến <strong>{selectedCourt.name}</strong> ({selectedCourt.address})
@@ -1793,10 +1721,12 @@ function MapBooking() {
                           {a.name}
                         </span>
                       ))}
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        <span className="material-symbols-outlined">directions_car</span>
-                        {court.distance} km
-                      </span>
+                      {court.distance != null && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <span className="material-symbols-outlined">directions_car</span>
+                          {court.distance} km
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

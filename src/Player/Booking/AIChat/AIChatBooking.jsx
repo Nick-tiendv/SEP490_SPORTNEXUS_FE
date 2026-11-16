@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
-  DISTRICT_CENTERS,
   buildWelcomeMessage,
   describeArea,
   getUserProfileContext,
@@ -23,17 +22,23 @@ import AiSuggestions from './AiSuggestions.jsx'
 import { buildPaymentState } from './aiRealBooking.js'
 import './AIChatModal.css'
 
+const buildProfileOrigin = (profile) => ({
+  lat: profile?.lat ?? null,
+  lng: profile?.lng ?? null,
+  name: profile?.rawLocation || 'Chưa xác định vị trí',
+  address: profile?.rawLocation || '',
+  updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+})
+
 function AIChatBooking() {
   const navigate = useNavigate()
 
-  // Vị trí người chơi thời gian thực
-  const [userLocation, setUserLocation] = useState(() => ({
-    ...DISTRICT_CENTERS.q7,
-    updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-  }))
+  // Vị trí người chơi thời gian thực (lấy từ hồ sơ hoặc GPS, không gán cứng quận/tọa độ TP.HCM)
+  const [initialProfile] = useState(() => getUserProfileContext())
+  const [userLocation, setUserLocation] = useState(() => buildProfileOrigin(initialProfile))
 
-  const [, setUserProfile] = useState(() => getUserProfileContext())
-  const [messages, setMessages] = useState(() => [buildWelcomeMessage(DISTRICT_CENTERS.q7)])
+  const [, setUserProfile] = useState(() => initialProfile)
+  const [messages, setMessages] = useState(() => [buildWelcomeMessage(buildProfileOrigin(initialProfile), initialProfile)])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
@@ -55,12 +60,16 @@ function AIChatBooking() {
     const handleProfileSync = () => {
       const p = getUserProfileContext()
       setUserProfile(p)
-      if (p.districtCenter) {
-        setUserLocation((prev) => ({
-          ...p.districtCenter,
-          updatedAt: prev.updatedAt,
-        }))
-      }
+      setUserLocation((prev) => {
+        if (prev.isGps) return prev
+        return {
+          ...prev,
+          lat: p.lat ?? prev.lat,
+          lng: p.lng ?? prev.lng,
+          name: p.rawLocation || prev.name || 'Chưa xác định vị trí',
+          address: p.rawLocation || prev.address || '',
+        }
+      })
     }
     window.addEventListener('player-profile-updated', handleProfileSync)
     window.addEventListener('storage', handleProfileSync)
@@ -297,27 +306,31 @@ function AIChatBooking() {
         },
         () => {
           const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-          const fallback = DISTRICT_CENTERS.q7
+          const p = getUserProfileContext()
           applyNewLoc({
-            lat: fallback.lat,
-            lng: fallback.lng,
-            name: fallback.name,
-            address: fallback.address,
+            lat: p.lat ?? null,
+            lng: p.lng ?? null,
+            name: p.rawLocation || 'Chưa xác định vị trí',
+            address: p.rawLocation || '',
+            isGps: false,
             updatedAt: nowStr,
           })
+          showToast('⚠️ Chưa lấy được GPS — vui lòng bật quyền vị trí hoặc nhập khu vực trong câu hỏi')
         },
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     } else {
       const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-      const fallback = DISTRICT_CENTERS.q7
+      const p = getUserProfileContext()
       applyNewLoc({
-        lat: fallback.lat,
-        lng: fallback.lng,
-        name: fallback.name,
-        address: fallback.address,
+        lat: p.lat ?? null,
+        lng: p.lng ?? null,
+        name: p.rawLocation || 'Chưa xác định vị trí',
+        address: p.rawLocation || '',
+        isGps: false,
         updatedAt: nowStr,
       })
+      showToast('⚠️ Trình duyệt không hỗ trợ định vị GPS')
     }
   }
 

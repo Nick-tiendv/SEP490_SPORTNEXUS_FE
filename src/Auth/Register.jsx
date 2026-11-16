@@ -51,7 +51,7 @@ function Register() {
   const [sportOptions, setSportOptions] = useState([])
   const [sportsLoading, setSportsLoading] = useState(true)
   const [selectedSports, setSelectedSports] = useState({}) // { [sportCategoryId]: skillLevel }
-  const [registeredAddress, setRegisteredAddress] = useState('TP. Thủ Đức')
+  const [registeredAddress, setRegisteredAddress] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const navigate = useNavigate()
@@ -125,7 +125,7 @@ function Register() {
             'player_profile_data',
             JSON.stringify({
               ...prevProfile,
-              location: registeredAddress.trim() || prevProfile.location || 'TP. Thủ Đức',
+              location: registeredAddress.trim() || prevProfile.location || '',
             })
           )
           const savedSportsList = Object.entries(selectedSports).map(([sportCategoryId, skillLevel]) => {
@@ -424,7 +424,7 @@ function Register() {
                     type="text"
                     value={registeredAddress}
                     onChange={(e) => setRegisteredAddress(e.target.value)}
-                    placeholder="Ví dụ: Võ Văn Ngân, TP. Thủ Đức hoặc Quận 7, Bình Thạnh..."
+                    placeholder="Tên đường, phường, tỉnh..."
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-[#4A7C59] focus:ring-2 focus:ring-[#4A7C59]/20 outline-none transition-all text-sm"
                   />
                   <p className="text-xs text-gray-500 mt-1">

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { uid } from '../../../utils/ids.js'
 import { useNavigate } from 'react-router-dom'
 import {
-  DISTRICT_CENTERS,
   buildWelcomeMessage,
   describeArea,
   getUserProfileContext,
@@ -19,23 +18,26 @@ import AiSuggestions from './AiSuggestions.jsx'
 import { buildPaymentState } from './aiRealBooking.js'
 import './AIChatModal.css'
 
+const buildProfileOrigin = (profile) => ({
+  lat: profile?.lat ?? null,
+  lng: profile?.lng ?? null,
+  name: profile?.rawLocation || 'Chưa xác định vị trí',
+  address: profile?.rawLocation || '',
+  updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+})
+
 function AIChatModal({
   isOpen = false,
   onClose = () => {},
 }) {
   const navigate = useNavigate()
 
-    // Đồng bộ thông tin hồ sơ người chơi & vị trí từ hồ sơ hoặc GPS
-  const profileContext = getUserProfileContext()
-  const initialLoc = profileContext.districtCenter || DISTRICT_CENTERS.thuduc
+  // Đồng bộ thông tin hồ sơ người chơi & vị trí từ hồ sơ hoặc GPS (không gán cứng quận/tọa độ TP.HCM)
+  const [initialProfile] = useState(() => getUserProfileContext())
+  const [userLocation, setUserLocation] = useState(() => buildProfileOrigin(initialProfile))
 
-  const [, setUserProfile] = useState(() => profileContext)
-  const [userLocation, setUserLocation] = useState(() => ({
-    ...initialLoc,
-    updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-  }))
-
-  const [messages, setMessages] = useState(() => [buildWelcomeMessage(initialLoc, profileContext)])
+  const [, setUserProfile] = useState(() => initialProfile)
+  const [messages, setMessages] = useState(() => [buildWelcomeMessage(buildProfileOrigin(initialProfile), initialProfile)])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -51,12 +53,16 @@ function AIChatModal({
     const handleProfileSync = () => {
       const p = getUserProfileContext()
       setUserProfile(p)
-      if (p.districtCenter && !userLocation.isGps) {
-        setUserLocation((prev) => ({
-          ...p.districtCenter,
-          updatedAt: prev.updatedAt,
-        }))
-      }
+      setUserLocation((prev) => {
+        if (prev.isGps) return prev
+        return {
+          ...prev,
+          lat: p.lat ?? prev.lat,
+          lng: p.lng ?? prev.lng,
+          name: p.rawLocation || prev.name || 'Chưa xác định vị trí',
+          address: p.rawLocation || prev.address || '',
+        }
+      })
     }
     window.addEventListener('player-profile-updated', handleProfileSync)
     window.addEventListener('storage', handleProfileSync)
@@ -64,7 +70,7 @@ function AIChatModal({
       window.removeEventListener('player-profile-updated', handleProfileSync)
       window.removeEventListener('storage', handleProfileSync)
     }
-  }, [userLocation.isGps])
+  }, [])
 
   // Cập nhật vị trí GPS ngầm khi modal mở lần đầu
   useEffect(() => {
@@ -275,29 +281,33 @@ function AIChatModal({
           })
         },
         () => {
-          // Nếu người dùng không cấp quyền hoặc trên thiết bị không có GPS
+          // Nếu người dùng không cấp quyền hoặc trên thiết bị không có GPS: dùng vị trí hồ sơ (nếu có), không gán cứng quận
           const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-          const fallback = DISTRICT_CENTERS.q7
+          const p = getUserProfileContext()
           applyNewLoc({
-            lat: fallback.lat,
-            lng: fallback.lng,
-            name: fallback.name,
-            address: fallback.address,
+            lat: p.lat ?? null,
+            lng: p.lng ?? null,
+            name: p.rawLocation || 'Chưa xác định vị trí',
+            address: p.rawLocation || '',
+            isGps: false,
             updatedAt: nowStr,
           })
+          showToast('⚠️ Chưa lấy được GPS — vui lòng bật quyền vị trí hoặc nhập khu vực trong câu hỏi')
         },
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     } else {
       const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-      const fallback = DISTRICT_CENTERS.q7
+      const p = getUserProfileContext()
       applyNewLoc({
-        lat: fallback.lat,
-        lng: fallback.lng,
-        name: fallback.name,
-        address: fallback.address,
+        lat: p.lat ?? null,
+        lng: p.lng ?? null,
+        name: p.rawLocation || 'Chưa xác định vị trí',
+        address: p.rawLocation || '',
+        isGps: false,
         updatedAt: nowStr,
       })
+      showToast('⚠️ Trình duyệt không hỗ trợ định vị GPS')
     }
   }
 

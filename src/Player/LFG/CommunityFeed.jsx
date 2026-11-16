@@ -432,13 +432,9 @@ function CommunityFeed() {
 
   const isMatchNearUser = (matchLoc, userLoc) => {
     if (!matchLoc || !userLoc) return false
-    const normM = matchLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    const normU = userLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    if (normM.includes(normU) || normU.includes(normM)) return true
-    if ((normU.includes('thu duc') || normU.includes('quan 2')) && (normM.includes('thu duc') || normM.includes('thao dien'))) return true
-    if (normU.includes('binh thanh') && (normM.includes('binh thanh') || normM.includes('dinh bo linh'))) return true
-    if (normU.includes('quan 7') && (normM.includes('quan 7') || normM.includes('huynh tan phat'))) return true
-    return false
+    const normM = matchLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    const normU = userLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    return normM.includes(normU) || normU.includes(normM)
   }
   // Kèo gần người chơi: có tọa độ thì so với bán kính trong khảo sát (mặc định 5 km), không thì so theo tên khu vực
   const isNearMe = (m) => {
@@ -1026,6 +1022,7 @@ function CommunityFeed() {
   const effectiveSkillFilter = levelFilter !== 'all' ? levelFilter : selectedSkillLevel
   const suggestionData = buildPersonalizedLfgSuggestions({
     userProfileLocation,
+    userCoords: playerArea.coords,
     profileSports,
     habits: playerHabits,
     learnedDesires,
@@ -1076,13 +1073,16 @@ function CommunityFeed() {
 
   const filteredMatches = matches
     .map((m) => {
-      const distanceKm = realDistanceKm(m) ?? calculateDistanceFromRegisteredAddress({
-        targetAddress: m.location || m.facilityAddress || m.title || '',
-        registeredAddress: userProfileLocation,
-        targetLat: m.lat ?? null,
-        targetLng: m.lng ?? null,
-        itemSeed: m.id || m.title || '',
-      })
+      const distanceKm =
+        realDistanceKm(m) ??
+        calculateDistanceFromRegisteredAddress({
+          targetAddress: m.location || m.facilityAddress || m.title || '',
+          registeredAddress: userProfileLocation,
+          userCoords: playerArea.coords,
+          targetLat: m.lat ?? null,
+          targetLng: m.lng ?? null,
+          itemSeed: m.id || m.title || '',
+        })
       const rangeInfo = getDistanceRangeInfo(distanceKm)
       return {
         ...m,
@@ -1103,9 +1103,9 @@ function CommunityFeed() {
         if (matchSkill && targetSkill && matchSkill !== targetSkill) return false
       }
       if (activeRangeId && activeRangeId !== 'all' && (m.rangeInfo?.id || m.rangeInfo?.key) !== activeRangeId) return false
-      if ((distanceFilter === '5km' || selectedDistance === '5km') && m.distanceKm > 5) return false
-      if ((distanceFilter === '10km' || selectedDistance === '10km') && m.distanceKm > 10) return false
-      if ((distanceFilter === 'district' || selectedDistance === '3km') && m.distanceKm > 3.5) return false
+      if ((distanceFilter === '5km' || selectedDistance === '5km') && (m.distanceKm == null || m.distanceKm > 5)) return false
+      if ((distanceFilter === '10km' || selectedDistance === '10km') && (m.distanceKm == null || m.distanceKm > 10)) return false
+      if ((distanceFilter === 'district' || selectedDistance === '3km') && (m.distanceKm == null || m.distanceKm > 3.5)) return false
       if (selectedVenueFilter) {
         const sameId = m.facilityId && String(m.facilityId) === String(selectedVenueFilter.id)
         const sameName = (m.location || '').toLowerCase().includes((selectedVenueFilter.name || '').toLowerCase())
@@ -1119,7 +1119,7 @@ function CommunityFeed() {
       if (filterFlashOnly && !m.isFlashClaim) return false
       return true
     })
-    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
 
   void matches
     .filter((m) => {
@@ -1361,7 +1361,7 @@ function CommunityFeed() {
               <option value="all">Mọi khoảng cách</option>
               <option value="5km">Dưới 5 km</option>
               <option value="10km">Dưới 10 km</option>
-              <option value="district">Cùng quận/huyện</option>
+              <option value="district">Gần bạn (dưới 3.5 km)</option>
             </select>
             <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-[16px]">
               expand_more
