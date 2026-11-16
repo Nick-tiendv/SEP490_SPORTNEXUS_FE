@@ -199,12 +199,36 @@
 .sn-admin select,
 .sn-admin textarea,
 .sn-admin optgroup { font: inherit; }
-.sn-admin :is(code, kbd, pre, samp, svg) { font-family: inherit; }
+.sn-admin,
+.sn-admin *:not(.material-symbols-outlined),
+.sn-admin *:not(.material-symbols-outlined)::before,
+.sn-admin *:not(.material-symbols-outlined)::after {
+  font-family: var(--font-admin, 'Times New Roman', Times, serif);
+}
 
 /* Áp dụng Times New Roman cho các portal ngoài .sn-admin (Toast, ConfirmDialog) khi đang mở Admin */
 body.sn-admin-active {
-  --snx-font-sans: 'Times New Roman', Times, serif;
-  --snx-font-display: 'Times New Roman', Times, serif;
+  --font-admin: 'Times New Roman', Times, serif;
+  --font-sans: var(--font-admin);
+  --font-display: var(--font-admin);
+  --snx-font-sans: var(--font-admin);
+  --snx-font-display: var(--font-admin);
+  font-family: 'Times New Roman', Times, serif;
+}
+body.sn-admin-active :is(
+  .snx-modal-backdrop,
+  .snx-modal,
+  .snx-modal *:not(.material-symbols-outlined),
+  [data-sonner-toaster],
+  [data-sonner-toaster] *,
+  code,
+  kbd,
+  pre,
+  samp,
+  svg,
+  svg text,
+  svg tspan
+) {
   font-family: 'Times New Roman', Times, serif;
 }
 .sn-admin button { cursor: pointer; }

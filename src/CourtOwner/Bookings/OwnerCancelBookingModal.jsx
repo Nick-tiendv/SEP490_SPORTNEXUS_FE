@@ -126,7 +126,7 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
         aria-modal="true"
         aria-labelledby="owner-cancel-warning-title"
         style={{
-          maxWidth: 480,
+          maxWidth: 540,
           border: penaltyInfo.hasPenalty ? '2px solid #EF4444' : '1px solid #CBD5E1',
         }}
       >
@@ -190,7 +190,7 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
                 lineHeight: 1.55,
               }}
             >
-              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8, textWrap: 'balance' }}>
                 {penaltyInfo.warningMessage}
               </div>
 
@@ -243,11 +243,6 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
               <div style={{ fontSize: 12, fontWeight: 600 }}>
                 Người đặt được hoàn 100% và nhận voucher 10%. Hủy dưới 48h phạt 20% + trừ 10 điểm Fair Play; từ 48h trở lên phạt 10%; đơn vãng lai tại quầy không phạt.
               </div>
-              {previewFallback && (
-                <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.85 }}>
-                  (Hiển thị theo quy tắc 48h của hệ thống do API preview không khả dụng.)
-                </div>
-              )}
             </div>
           )}
 
