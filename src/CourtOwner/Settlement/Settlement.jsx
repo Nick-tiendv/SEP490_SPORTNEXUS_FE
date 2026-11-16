@@ -11,6 +11,7 @@ import {
   updateBankAccount,
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import { csvDateTime } from '../../utils/vnTime.js'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const daysAgoVN = (days) => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE }).format(new Date(Date.now() - days * 86400000))
@@ -194,7 +195,7 @@ export default function Settlement() {
     const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const rows = [
       ['Thời gian', 'Loại', 'Mô tả', 'Số tiền', 'Biến động số dư', 'Trạng thái'],
-      ...txnItems.map((txn) => [formatDateTimeVN(txn.createdAt), TXN_TYPE_LABEL[txn.type] || txn.type, txn.description, txn.amount, txn.balanceChange, txn.status]),
+      ...txnItems.map((txn) => [csvDateTime(txn.createdAt), TXN_TYPE_LABEL[txn.type] || txn.type, txn.description, txn.amount, txn.balanceChange, txn.status]),
     ]
     const blob = new Blob(['﻿' + rows.map((row) => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)

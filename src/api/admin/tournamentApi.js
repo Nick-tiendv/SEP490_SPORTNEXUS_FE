@@ -37,6 +37,8 @@ export function toTournament(raw) {
   return {
     id: String(pick(raw, 'id', 'tournamentId') ?? ''),
     name: pick(raw, 'name', 'title') || '—',
+    // Ảnh bìa giải (Ban tổ chức tải lên ở "Sửa thông tin giải")
+    imageUrl: pick(raw, 'imageUrl', 'coverImageUrl', 'bannerUrl') || '',
     sport: pick(raw, 'categoryName', 'sportName', 'category.name', 'sport.name') || '',
     facility: pick(raw, 'facilityName', 'facility.name') || '',
     facilityId: String(pick(raw, 'facilityId', 'facility.id') ?? ''),

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
 import { SKILL_VERDICTS, submitSkillFeedback } from '../../api/player/ratingApi.js'
 import ReportModal from '../../components/common/ReportModal.jsx'
+import MyGivenRatings from './MyGivenRatings.jsx'
 import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
@@ -550,7 +551,35 @@ function PostMatchRating() {
           </span>
           Đánh Giá Chất Lượng Cơ Sở Sân Đấu
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveRatingTab('given')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '12px',
+            background: activeRatingTab === 'given' ? '#15803D' : '#ffffff',
+            color: activeRatingTab === 'given' ? '#ffffff' : '#4B5563',
+            border: activeRatingTab === 'given' ? 'none' : '1px solid #E2E8F0',
+            fontWeight: 800,
+            fontSize: '13.5px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s ease',
+            boxShadow: activeRatingTab === 'given' ? '0 4px 12px rgba(21, 128, 61, 0.25)' : 'none',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+            history
+          </span>
+          Đánh Giá Tôi Đã Viết
+        </button>
       </div>
+
+      {/* ===================== TAB 3: ĐÁNH GIÁ FAIR PLAY TÔI ĐÃ VIẾT ===================== */}
+      {activeRatingTab === 'given' && <MyGivenRatings />}
 
       {/* ===================== TAB 1: ĐÁNH GIÁ NGƯỜI CHƠI (FAIR PLAY) ===================== */}
       {activeRatingTab === 'player' && (
@@ -620,7 +649,7 @@ function PostMatchRating() {
             <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <li>Đảm bảo người chơi đã có mặt thực tế tại sân đấu (Quy định 2.7: Cả hai người phải đã check-in).</li>
               <li>Chống spam đánh giá ảo hoặc gian lận điểm danh tiếng Fair Play thể thao.</li>
-              <li>Danh sách bạn chơi lấy từ những người đã cùng check-in; hạn chấm điểm kéo dài sau giờ kết thúc ca.</li>
+              <li>Danh sách bạn chơi lấy từ những người đã cùng check-in; được chấm điểm trong 24 giờ tính từ giờ kết thúc ca (không tính theo lúc check-out).</li>
             </ul>
           </div>
 

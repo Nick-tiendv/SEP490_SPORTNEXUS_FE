@@ -4,7 +4,8 @@ import { UserAvatar } from '../Users/UserDetails.jsx'
 import { listTransactions } from '../../api/admin/walletApi.js'
 import { PaymentStatus, Pager } from './PaymentShared.jsx'
 import { usePagedList } from '../components/listHooks.js'
-import { typeLabels, transactionStatusLabels, roleLabels, money, signedMoney, dateTime, shortId, downloadCsv } from './paymentData.js'
+import { csvDateTime } from '../../utils/vnTime.js'
+import { TRANSACTION_TYPE_FILTERS, typeLabels, transactionStatusLabels, roleLabels, money, signedMoney, dateTime, shortId, downloadCsv } from './paymentData.js'
 
 const emptyFilters = { type: '', status: '', from: '', to: '', minAmount: '' }
 
@@ -22,13 +23,13 @@ export default function TransactionsTab({ user, onClearUser, onOpenWallet, reloa
   const reset = () => { setFilters(emptyFilters); setPage(1); onClearUser() }
   const exportCsv = () => {
     downloadCsv('giao-dich.csv', ['Mã giao dịch', 'Người dùng', 'Vai trò', 'Loại', 'Mô tả', 'Số tiền (đ)', 'Biến động số dư (đ)', 'Trạng thái', 'Mã tham chiếu', 'Thời gian'],
-      list.items.map(item => [item.id, item.fullName, roleLabels[item.role] || item.role, typeLabels[item.type] || item.type, item.description, item.amount, item.balanceChange, transactionStatusLabels[item.status] || item.status, item.referenceId, dateTime(item.createdAt)]))
+      list.items.map(item => [item.id, item.fullName, roleLabels[item.role] || item.role, typeLabels[item.type] || item.type, item.description, item.amount, item.balanceChange, transactionStatusLabels[item.status] || item.status, item.referenceId, csvDateTime(item.createdAt)]))
     onNotice(`Đã xuất ${list.items.length} giao dịch của trang hiện tại ra CSV.`)
   }
 
   return <>
     <section className="payments-toolbar" aria-label="Bộ lọc giao dịch"><div className="payments-filter-row">
-      <label>Loại giao dịch<select value={filters.type} onChange={event => change('type', event.target.value)}><option value="">Tất cả loại</option>{Object.entries(typeLabels).filter(([value]) => value !== 'WITHDRAW').map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Loại giao dịch<select value={filters.type} onChange={event => change('type', event.target.value)}><option value="">Tất cả loại</option>{TRANSACTION_TYPE_FILTERS.map(value => <option key={value} value={value}>{typeLabels[value]}</option>)}</select></label>
       <label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(transactionStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>Từ ngày<input type="date" value={filters.from} onChange={event => change('from', event.target.value)} /></label>
       <label>Đến ngày<input type="date" value={filters.to} onChange={event => change('to', event.target.value)} /></label>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
@@ -11,6 +12,12 @@ const dateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN', { h
 
 export default function MyShopOrders() {
   const orders = useApi(getMyShopOrders, [], { initialData: [] })
+  // Tự tải lại đơn mỗi 30 giây khi đang mở trang (đơn mới / đơn đổi trạng thái hiện ra không cần bấm Làm mới)
+  const refreshOrders = orders.refresh
+  useEffect(() => {
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') refreshOrders() }, 30000)
+    return () => clearInterval(timer)
+  }, [refreshOrders])
   const cancel = async (order) => {
     if (!(await confirmDialog(`Hủy đơn ${order.quantity} × ${order.productName}?`))) return
     try {

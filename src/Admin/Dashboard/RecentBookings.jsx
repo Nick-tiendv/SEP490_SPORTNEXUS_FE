@@ -4,6 +4,11 @@ import { getAdminBookings } from '../../api/admin/dashboardApi.js'
 import { formatCurrency, formatDate, formatTime } from './dashboardData.js'
 
 const PAGE_SIZE = 5
+// Tối đa 5 số trang quanh trang hiện tại (giống các bảng khác của trang quản trị)
+const pageWindow = (current, pages) => {
+  const start = Math.max(1, Math.min(current - 2, pages - 4))
+  return Array.from({ length: Math.min(5, pages) }, (_, index) => start + index)
+}
 // Giá trị lọc hợp lệ của GET /api/v1/bookings/admin (docs 11.16): PENDING, PAID, CHECKED_IN, CANCELLED.
 const STATUSES = { PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CHECKED_IN: 'Đã check-in', CANCELLED: 'Đã hủy' }
 // Màu badge dùng lại các kiểu sẵn có của StatusBadge.
@@ -55,7 +60,7 @@ export default function RecentBookings({ reloadKey = 0 }) {
           : state.error ? <p className="admin-empty">{state.error}</p>
             : !items.length && <p className="admin-empty">Không có đơn đặt sân phù hợp với bộ lọc.</p>}
       </div>
-      <div className="admin-table-footer"><span>Hiển thị {items.length} / {state.total.toLocaleString('vi-VN')} đơn <span className="admin-footer-divider">•</span> Trang {page} / {state.totalPages}</span><div><button className="admin-btn admin-btn--sm" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Trước</button><button className="admin-btn admin-btn--primary admin-btn--sm" disabled={loading || page >= state.totalPages} onClick={() => setPage(page + 1)}>Sau</button></div></div>
+      <div className="admin-table-footer"><span>Hiển thị {items.length} / {state.total.toLocaleString('vi-VN')} đơn <span className="admin-footer-divider">•</span> Trang {page} / {state.totalPages}</span><nav aria-label="Phân trang đơn đặt sân gần đây" style={{ display: 'flex', gap: 'var(--sp-2)' }}><button className="admin-btn admin-btn--sm" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}>Trước</button>{pageWindow(page, state.totalPages).map(value => <button key={value} className={`admin-btn admin-btn--sm${page === value ? ' admin-btn--primary' : ''}`} aria-label={`Trang ${value}`} aria-current={page === value ? 'page' : undefined} disabled={loading} onClick={() => setPage(value)}>{value}</button>)}<button className="admin-btn admin-btn--sm" disabled={loading || page >= state.totalPages} onClick={() => setPage(page + 1)}>Sau</button></nav></div>
     </section>
   )
 }

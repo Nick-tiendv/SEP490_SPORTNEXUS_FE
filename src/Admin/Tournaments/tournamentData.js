@@ -1,4 +1,7 @@
 // Nhãn hiển thị và hàm tiện ích cho trang Quản lý giải đấu (dữ liệu thật lấy qua src/api/admin/tournamentApi.js).
+// BE khóa giải theo cơ sở (khi Admin khóa cơ sở) với lockReason bắt đầu bằng chuỗi này: hiển thị "Tạm hoãn"
+export const FACILITY_LOCK_PREFIX = 'Tạm hoãn do cơ sở bị khóa'
+export const isPostponed = (locked, lockReason) => Boolean(locked) && String(lockReason || '').startsWith(FACILITY_LOCK_PREFIX)
 // BE trả trạng thái chữ hoa (OPEN đã thấy trong response); IN_PROGRESS / FINISHED / CANCELLED suy ra từ thống kê.
 
 export const statusLabels = { DRAFT: 'Bản nháp', OPEN: 'Đang mở đăng ký', IN_PROGRESS: 'Đang diễn ra', INPROGRESS: 'Đang diễn ra', FINISHED: 'Đã kết thúc', COMPLETED: 'Đã kết thúc', CANCELLED: 'Đã hủy' }

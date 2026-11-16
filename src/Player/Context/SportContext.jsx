@@ -34,9 +34,9 @@ export function SportProvider({ children }) {
         return [key]
       }
 
-      // Nếu đang chọn môn này: bỏ chọn môn đó và giữ nguyên trạng thái (chỉ nút 'Tất cả' mới chọn hết)
+      // Nếu đang chọn môn này: bỏ chọn môn đó (luôn giữ ít nhất 1 môn; chỉ nút 'Tất cả' mới chọn hết)
       if (prev.includes(key)) {
-        return prev.filter((k) => k !== key)
+        return prev.length === 1 ? prev : prev.filter((k) => k !== key)
       }
 
       // Nếu chưa chọn: thêm môn vào danh sách lọc

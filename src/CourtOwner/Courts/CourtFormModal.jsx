@@ -18,6 +18,8 @@ const COURT_PRESETS = [
   { match: ['bong ro', 'basketball'], types: [['Sân 3x3', 3], ['Sân 5x5', 5]] },
   { match: ['bong chuyen', 'volleyball'], types: [['Sân 6 người', 6], ['Bóng chuyền bãi biển (2 người)', 2]] },
 ]
+// Thời lượng 1 ca chủ sân chọn (BE: bội số 15 phút, 15 - 480); bỏ trống = theo môn
+const SLOT_MINUTE_OPTIONS = [30, 45, 60, 90, 120, 150, 180, 240]
 const plain = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/đ/gi, 'd').toLowerCase()
 const presetOf = (sportName) => {
   const name = plain(sportName)
@@ -35,10 +37,12 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
     surfaceType: court?.surfaceType || '',
     maxPlayers: court?.maxPlayers == null ? '' : String(court.maxPlayers),
     teamSize: court?.teamSize == null ? '' : String(court.teamSize),
+    slotMinutes: court?.slotMinutes == null ? '' : String(court.slotMinutes),
   }))
   const [error, setError] = useState('')
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
   const presets = presetOf(sports.find((sport) => sport.id === form.categoryId)?.name)
+  const sportSlotMinutes = Number(sports.find((sport) => sport.id === form.categoryId)?.defaultSlotMinutes) || 120
   const teamSizeOptions = presets ? [...new Set(presets.map(([, size]) => size))].sort((a, b) => a - b) : []
   // Giá trị đã lưu nhưng không nằm trong danh sách gợi ý: vẫn hiện để không mất dữ liệu
   const legacyCourtType = Boolean(presets && form.courtType) && !presets.some(([label]) => label === form.courtType)
@@ -73,6 +77,8 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
       isIndoor: form.isIndoor === '' ? null : form.isIndoor === 'true',
       maxPlayers,
       teamSize,
+      // Thời lượng ca: "" = theo môn (sửa sân gửi 0 để bỏ lựa chọn cũ)
+      slotMinutes: form.slotMinutes === '' ? (editing ? 0 : null) : Number(form.slotMinutes),
     }
     if (editing) payload.clearIsIndoor = form.isIndoor === '' && court.isIndoor != null
     onSubmit(payload)
@@ -128,6 +134,13 @@ export default function CourtFormModal({ court, sports, defaultSportId = '', def
               ) : (
                 <input className="snx-input" type="number" min={1} max={15} value={form.teamSize} onChange={set('teamSize')} />
               )}
+            </label>
+            <label className="snx-field">Thời lượng mỗi ca
+              <select className="snx-select" value={form.slotMinutes} onChange={set('slotMinutes')}>
+                <option value="">Theo môn ({sportSlotMinutes} phút)</option>
+                {form.slotMinutes !== '' && !SLOT_MINUTE_OPTIONS.includes(Number(form.slotMinutes)) && <option value={form.slotMinutes}>{form.slotMinutes} phút</option>}
+                {SLOT_MINUTE_OPTIONS.map((m) => <option key={m} value={String(m)}>{m} phút</option>)}
+              </select>
             </label>
           </div>
           {error && <div className="snx-alert snx-alert--error">{error}</div>}

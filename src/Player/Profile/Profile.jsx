@@ -675,7 +675,8 @@ export default function Profile() {
         // Tổng số trận = số lần đã check-in (đặt sân, kèo, giải), BE đếm
         matchesPlayed: Number(u.matchesPlayed) || 0,
         winRate: u.winRate != null && Number.isFinite(Number(u.winRate)) ? Number(u.winRate) : null,
-        punctualityRate: u.punctualityRate != null && Number.isFinite(Number(u.punctualityRate)) ? Number(u.punctualityRate) : null,
+        // GET /api/auth/me trả onTimeRate (% đúng giờ, null = chưa có trận nào)
+        punctualityRate: u.onTimeRate != null && Number.isFinite(Number(u.onTimeRate)) ? Number(u.onTimeRate) : null,
         hasPassword,
       }))
       setSecurityTab((prev) => {
@@ -1287,7 +1288,7 @@ export default function Profile() {
                   </div>
                 )}
 
-                {/* 3. Đúng giờ (chỉ hiển thị nếu BE trả về punctualityRate) */}
+                {/* 3. Đúng giờ (chỉ hiển thị nếu BE trả về onTimeRate) */}
                 {profile.punctualityRate != null && (
                   <div
                     style={{

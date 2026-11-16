@@ -478,6 +478,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         <>
           {/* THÔNG TIN GIẢI & BẢNG ĐẤU */}
           <div style={{ ...panelStyle, marginBottom: '24px' }}>
+            {tournament.imageUrl && <img src={tournament.imageUrl} alt={`Ảnh bìa giải ${tournament.name}`} style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }} />}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
@@ -1003,11 +1004,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               + Thêm bảng đấu
             </button>
 
-            <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#F0FDF4', border: '1px solid #BBF7D0', fontSize: '12.5px', fontWeight: 600, color: '#166534', marginBottom: '18px' }}>
-              Hệ thống không giữ quỹ thưởng trong ví: giải thưởng chỉ để hiển thị, Ban tổ chức trao ngoài hệ thống. Lệ phí về ví Ban tổ chức khi bảng đấu kết thúc.
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
               <button type="button" onClick={() => setShowCreateModal(false)} style={{ padding: '11px 20px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
               <button type="submit" disabled={busy} style={{ padding: '11px 22px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)', color: '#FFFFFF', fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
                 {busy ? 'Đang tạo...' : 'Tạo giải đấu'}

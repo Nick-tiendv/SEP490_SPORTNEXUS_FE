@@ -40,7 +40,7 @@ function CancelDialog({ booking, onClose, onCancelled }) {
 
   return <DemoDialog title={`Hủy đơn #${booking.id}`} onClose={submitting ? () => {} : onClose}><form className="users-form" onSubmit={submit}>
     <p>Đơn của <strong>{booking.player.name}</strong> tại {booking.venue.name}, ngày {date(booking.date)} · {money(bookingTotal(booking))}.</p>
-    {reasons.length > 0 && <label>Lý do<select value={choice} onChange={event => setChoice(event.target.value)}>{reasons.map(item => <option key={item} value={item}>{item}</option>)}<option value={OTHER}>Lý do khác</option></select></label>}
+    {reasons.length > 0 && <label>Lý do<select value={choice} onChange={event => setChoice(event.target.value)}>{reasons.map(item => <option key={item} value={item}>{item}</option>)}<option value={OTHER}>Khác (tự nhập lý do)</option></select></label>}
     <label>{choice === OTHER ? 'Lý do hủy' : 'Ghi chú thêm (không bắt buộc)'}<textarea rows={3} maxLength={500} value={note} onChange={event => setNote(event.target.value)} required={choice === OTHER} /></label>
     <label>Tỷ lệ hoàn tiền cho người đặt (%)<input type="number" min={0} max={100} step={1} value={refund} onChange={event => setRefund(event.target.value)} required /></label>
     <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={lockSlot} onChange={event => setLockSlot(event.target.checked)} />Khóa khung giờ sau khi hủy (không cho người khác đặt lại)</label>

@@ -1,3 +1,4 @@
+import { csvDateTime } from '../../utils/vnTime.js'
 // Nhãn và hàm thuần cho trang Quản lý thông báo (docs 41). Dữ liệu thật lấy qua src/api/admin/notificationApi.js.
 
 export const MAX_TITLE = 255
@@ -118,6 +119,6 @@ export const broadcastAction = status => (status === 'SCHEDULED' ? 'cancel' : st
 const csvCell = value => `"${String(value ?? '').replaceAll('"', '""')}"`
 export function broadcastsCsv(rows) {
   const header = ['ID', 'Tiêu đề', 'Nội dung', 'Đối tượng', 'Số người nhận', 'Đã đọc', 'Tỷ lệ đọc (%)', 'Trạng thái', 'Hẹn gửi', 'Đã gửi', 'Thu hồi', 'Người tạo']
-  const lines = rows.map(row => [row.id, row.title, row.body, targetLabels[row.target] || row.target, row.recipientCount, row.readCount, row.readRate, statusLabels[row.status]?.label || row.status, formatTime(row.scheduledAt), formatTime(row.sentAt), formatTime(row.recalledAt), row.createdByName])
+  const lines = rows.map(row => [row.id, row.title, row.body, targetLabels[row.target] || row.target, row.recipientCount, row.readCount, row.readRate, statusLabels[row.status]?.label || row.status, csvDateTime(row.scheduledAt), csvDateTime(row.sentAt), csvDateTime(row.recalledAt), row.createdByName])
   return '﻿' + [header, ...lines].map(line => line.map(csvCell).join(',')).join('\n')
 }

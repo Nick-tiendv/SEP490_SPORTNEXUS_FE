@@ -129,6 +129,7 @@ test('Đồng bộ Elo, Rank và Môn thể thao từ Hồ sơ cá nhân sang LF
   await t.test('CommunityFeed chỉ hiển thị dòng xanh biển Elo khi pick 1 môn cụ thể và đồng bộ với SportContext', async () => {
     const feedCode = await readFile(path.join(SRC_ROOT, 'Player/LFG/CommunityFeed.jsx'), 'utf8')
     assert.match(feedCode, /useSport\s*\(\)/)
+    assert.match(feedCode, /pickedSportMeta\?\.label/)
     assert.match(feedCode, /pickedSportKey\s*\?\s*standing\.forSport\(pickedSportKey\)\s*:\s*null/)
     assert.match(feedCode, /\{pickedSportKey\s*&&\s*\([\s\S]{0,160}bg-\[#E0F2FE\][\s\S]{0,160}eloText\(pickedStanding,\s*pickedSportName\)/)
     assert.doesNotMatch(feedCode, /bg-\[#E0F2FE\][\s\S]{0,120}standing\.best/)
@@ -140,7 +141,7 @@ test('Đồng bộ Elo, Rank và Môn thể thao từ Hồ sơ cá nhân sang LF
     const splitPaymentCode = await readFile(path.join(SRC_ROOT, 'Player/Booking/Payment/SplitPayment.jsx'), 'utf8')
 
     assert.match(createMatchCode, /standing\.forSport\(sport\)/)
-    assert.match(dashboardCode, /standing\.forSport\(selectedSports\[0\]\)/)
+    assert.match(dashboardCode, /standing\.forSport\(selectedSports\[0\]\)[\s\S]{0,80}\?\.label/)
     assert.match(splitPaymentCode, /standing\.forSport\(state\.sport\)/)
     assert.doesNotMatch(splitPaymentCode, /minhm@domain\.vn|0908 ••• 888/)
   })

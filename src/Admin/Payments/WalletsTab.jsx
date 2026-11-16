@@ -5,6 +5,7 @@ import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { adjustWallet, getWallet, listWallets } from '../../api/admin/walletApi.js'
 import { PaymentStatus, Pager } from './PaymentShared.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
+import { csvDateTime } from '../../utils/vnTime.js'
 import { roleLabels, typeLabels, transactionStatusLabels, money, signedMoney, number, dateTime, shortId, downloadCsv } from './paymentData.js'
 
 const noop = () => {}
@@ -23,7 +24,7 @@ export default function WalletsTab({ initialUserId, initialNegative, reload, onC
   const list = usePagedList(listWallets, params, reload)
   const exportCsv = () => {
     downloadCsv('vi-nguoi-dung.csv', ['Mã người dùng', 'Họ tên', 'Email', 'Số điện thoại', 'Vai trò', 'Số dư (đ)', 'Đóng băng (đ)', 'Số giao dịch', 'Giao dịch gần nhất', 'Trạng thái'],
-      list.items.map(item => [item.userId, item.fullName, item.email, item.phone, roleLabels[item.role] || item.role, item.balance, item.frozenBalance, item.transactionCount, dateTime(item.lastTransactionAt), item.isActive ? 'Đang hoạt động' : 'Đã khóa']))
+      list.items.map(item => [item.userId, item.fullName, item.email, item.phone, roleLabels[item.role] || item.role, item.balance, item.frozenBalance, item.transactionCount, csvDateTime(item.lastTransactionAt), item.isActive ? 'Đang hoạt động' : 'Đã khóa']))
     onNotice(`Đã xuất ${list.items.length} ví của trang hiện tại ra CSV.`)
   }
 

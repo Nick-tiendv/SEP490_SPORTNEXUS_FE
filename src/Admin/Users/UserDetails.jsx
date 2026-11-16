@@ -31,7 +31,11 @@ export function AccountStatus({ status }) {
   return <span className={`users-status ${status.toLowerCase()}`}><i />{adminDisplayLabels[status] || status}</span>
 }
 
+// BE chặn khóa / xóa tài khoản Quản trị viên (403); Fair Play chỉ dùng cho người chơi (LFG, đánh giá sau trận)
 export default function UserDetails({ user, loading, error, isSelf, onClose, onSuspend, onDelete }) {
+  const isAdminAccount = /admin/i.test(String(user.role || ''))
+  const isPlayer = /player/i.test(String(user.role || ''))
+  const locked = isSelf || isAdminAccount
   return (
     <aside className="users-details" aria-label={`Chi tiết người dùng ${user.name}`} aria-busy={loading}>
       <header className="users-details-heading"><h2>Chi tiết người dùng <small title={user.id}>{user.id.slice(0, 8).toUpperCase()}</small></h2><button onClick={onClose} aria-label="Đóng chi tiết người dùng"><X size={18} /></button></header>
@@ -43,15 +47,17 @@ export default function UserDetails({ user, loading, error, isSelf, onClose, onS
           <div className="users-profile-dates"><div><small>Ngày tham gia</small><strong>{user.joined ? user.joined.split('-').reverse().join('/') : 'Chưa có thông tin'}</strong></div><div><small>Cập nhật lần cuối</small><strong>{dateTime(user.modifiedAt)}</strong></div></div>
         </section>
         <section><h3 className="users-section-title"><UserRound size={15} />Hồ sơ thể thao</h3><div className="users-skill-grid">
-          <div><small>Điểm tinh thần thể thao</small><strong className="users-rating">{user.fairplay == null ? '—' : user.fairplay.toLocaleString('vi-VN')}</strong><p>Fair-play score</p></div>
+          {isPlayer
+            ? <div><small>Điểm tinh thần thể thao</small><strong className="users-rating">{user.fairplay == null ? '—' : user.fairplay.toLocaleString('vi-VN')}</strong><p>Fair-play score</p></div>
+            : <div><small>Điểm tinh thần thể thao</small><strong className="users-sport-name">Không áp dụng</strong><p>Chỉ tính cho người chơi</p></div>}
           <div><small>Vai trò</small><strong className="users-sport-name">{roleLabel(user.role)}</strong><p>Quyền truy cập trên nền tảng</p></div>
         </div></section>
         <section className="users-wallet"><h3 className="users-section-title"><Wallet size={15} />Ví SportNexus</h3><div><span><small>Số dư ví</small><strong>{money(user.wallet)}</strong></span></div></section>
-        <section className="users-governance"><h3><TriangleAlert size={15} />Quản lý tài khoản</h3><p>{isSelf ? 'Đây là tài khoản bạn đang đăng nhập, không thể tạm khóa hoặc xóa.' : user.status === 'Suspended' ? 'Tài khoản đang bị tạm khóa. Người dùng không thể đăng nhập cho tới khi được khôi phục.' : 'Tạm khóa sẽ chặn người dùng đăng nhập. Xóa tài khoản không thể hoàn tác.'}</p></section>
+        <section className="users-governance"><h3><TriangleAlert size={15} />Quản lý tài khoản</h3><p>{isSelf ? 'Đây là tài khoản bạn đang đăng nhập, không thể tạm khóa hoặc xóa.' : isAdminAccount ? 'Tài khoản Quản trị viên không thể bị tạm khóa hoặc xóa.' : user.status === 'Suspended' ? 'Tài khoản đang bị tạm khóa. Người dùng không thể đăng nhập cho tới khi được khôi phục.' : 'Tạm khóa sẽ chặn người dùng đăng nhập. Xóa tài khoản không thể hoàn tác.'}</p></section>
       </div>
       <footer className="users-details-actions">
-        <button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend} disabled={isSelf || loading}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button>
-        <button className="users-button users-danger" onClick={onDelete} disabled={isSelf || loading} aria-label="Xóa tài khoản"><Trash2 size={15} />Xóa</button>
+        <button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend} disabled={locked || loading}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button>
+        <button className="users-button users-danger" onClick={onDelete} disabled={locked || loading} aria-label="Xóa tài khoản"><Trash2 size={15} />Xóa</button>
       </footer>
     </aside>
   )

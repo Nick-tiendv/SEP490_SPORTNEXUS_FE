@@ -17,6 +17,16 @@ export function vnClock(value) {
   return Number.isNaN(date.getTime()) ? '' : clockFormat.format(date)
 }
 
+const csvDateFormat = new Intl.DateTimeFormat('en-GB', { timeZone: VN_TIME_ZONE, day: '2-digit', month: '2-digit', year: 'numeric' })
+
+// Thời điểm cho file CSV: "11/11/2026 lúc 13:09" (giờ Việt Nam). Có chữ "lúc" nên Excel giữ nguyên là chữ,
+// không tự đổi sang kiểu ngày giờ (kiểu ngày giờ hiện "###" khi cột hẹp)
+export function csvDateTime(value) {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : `${csvDateFormat.format(date)} lúc ${clockFormat.format(date)}`
+}
+
 const dateKeyFormat = new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
 
 // "2026-11-10T18:00:00+00:00" → "2026-11-11" (ngày theo giờ Việt Nam, dạng yyyy-MM-dd)

@@ -71,6 +71,11 @@ const TABS = [
 function TournamentCard({ tournament, actions, onOpen }) {
   return (
     <article className="snx-card snx-stack" style={{ gap: 12 }}>
+      {tournament.imageUrl && (
+        <button type="button" onClick={onOpen} aria-label={`Xem giải ${tournament.name}`} style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer' }}>
+          <img src={tournament.imageUrl} alt="" loading="lazy" style={{ display: 'block', width: '100%', height: 140, objectFit: 'cover', borderRadius: 12 }} />
+        </button>
+      )}
       <div className="snx-row" style={{ alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <button type="button" onClick={onOpen} style={{ padding: 0, border: 0, background: 'none', cursor: 'pointer', textAlign: 'left' }}>
@@ -182,6 +187,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
         {detail.error && <div className="snx-alert snx-alert--error">{detail.error}</div>}
+        {t?.imageUrl && <img src={t.imageUrl} alt={`Ảnh bìa giải ${t.name}`} style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 12, marginBottom: 12 }} />}
         {t && (
           <div className="snx-stack">
             <div className="snx-row"><StatusBadge value={t.status} /><span className="snx-muted">{t.starts || t.ends ? `${dateOrTba(t.starts)} – ${dateOrTba(t.ends)}` : 'Lịch thi đấu chưa công bố'} · Hạn đăng ký {dateOrTba(t.deadline)}</span></div>

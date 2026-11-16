@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import {
   addTournamentStaff, assignMatchCourt, assignMatchOfficials, autoScheduleTournament, blockCourts, decideRegistration,
-  getCourtSchedule, getCourts, getFacilitySlots, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff, updateTournamentInfo,
+  getCourtSchedule, getCourts, getFacilitySlots, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff, updateTournamentInfo, updateTournamentStaff,
 } from '../../api/owner'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
@@ -236,18 +236,28 @@ const STAFF_ROLE_LABEL = Object.fromEntries(STAFF_ROLES)
 // Nhân sự giải: người có accountId (tài khoản SportNexus) nhập được tỉ số
 function StaffSection({ tournamentId, staff, onChanged, closed }) {
   const [form, setForm] = useState({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' })
+  // Đang sửa nhân sự nào (null = form đang thêm mới)
+  const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
+  const startEdit = (m) => {
+    setEditingId(m.id || m.staffId)
+    setForm({ fullName: m.fullName || '', phone: m.phone || '', role: String(m.role || 'REFEREE').toUpperCase(), accountId: m.accountId || '', note: m.note || '' })
+  }
+  const cancelEdit = () => { setEditingId(null); setForm({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' }) }
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
   const submit = async (event) => {
     event.preventDefault()
     if (!form.fullName.trim() || !form.phone.trim()) { toast.error('Nhập họ tên và số điện thoại.'); return }
     setBusy(true)
     try {
-      await addTournamentStaff(tournamentId, {
+      const payload = {
         fullName: form.fullName.trim(), phone: form.phone.trim(), role: form.role,
         accountId: form.accountId.trim() || null, note: form.note.trim() || null,
-      })
-      toast.success('Đã thêm nhân sự.')
+      }
+      if (editingId) await updateTournamentStaff(tournamentId, editingId, payload)
+      else await addTournamentStaff(tournamentId, payload)
+      toast.success(editingId ? 'Đã cập nhật nhân sự.' : 'Đã thêm nhân sự.')
+      setEditingId(null)
       setForm({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' })
       onChanged()
     } catch (error) {
@@ -277,6 +287,7 @@ function StaffSection({ tournamentId, staff, onChanged, closed }) {
                 <strong style={{ fontSize: 14 }}>{m.fullName}</strong> <span className="snx-badge snx-badge--blue">{STAFF_ROLE_LABEL[String(m.role).toUpperCase()] || m.role}</span>
                 <div className="snx-muted">{m.phone}{m.accountId ? ' · Có tài khoản (nhập được tỉ số)' : ''}{m.note ? ` · ${m.note}` : ''}</div>
               </div>
+              {!closed && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => startEdit(m)} disabled={busy}>Sửa</button>}
               {!closed && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => remove(m)}>Xóa</button>}
             </div>
           ))}
@@ -291,7 +302,10 @@ function StaffSection({ tournamentId, staff, onChanged, closed }) {
           </label>
           <label className="snx-field">Mã tài khoản (không bắt buộc)<input className="snx-input" placeholder="accountId" value={form.accountId} onChange={set('accountId')} /></label>
           <label className="snx-field">Ghi chú<input className="snx-input" maxLength={200} value={form.note} onChange={set('note')} /></label>
-          <div className="snx-field" style={{ justifyContent: 'flex-end' }}><button type="submit" className="snx-btn snx-btn--primary" disabled={busy}>Thêm nhân sự</button></div>
+          <div className="snx-field" style={{ justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
+            {editingId && <button type="button" className="snx-btn snx-btn--secondary" onClick={cancelEdit} disabled={busy}>Hủy sửa</button>}
+            <button type="submit" className="snx-btn snx-btn--primary" disabled={busy}>{editingId ? 'Lưu thay đổi' : 'Thêm nhân sự'}</button>
+          </div>
         </form>
       )}
     </>
