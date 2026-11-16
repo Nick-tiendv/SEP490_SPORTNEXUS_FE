@@ -21,7 +21,6 @@ import {
 import {
   normalizeSportKey,
   recordNewPlayerDesire,
-  calculateDistanceFromRegisteredAddress,
 } from './lfgSuggestionEngine.js'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
@@ -186,20 +185,16 @@ function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
 const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 // Gom cơ sở thật (GET /api/v1/facilities/search) theo khu vực để chọn sân ghép trận
-const groupByDistrict = (facilities, userOrigin = '') => {
+const groupByDistrict = (facilities) => {
   const map = {}
   facilities.forEach((f) => {
     const name = f.district || f.province || 'Khác'
     const key = normalize(name).replace(/[^a-z0-9]/g, '') || 'khac'
     if (!map[key]) map[key] = { name, label: name, courts: [] }
     const computedDist =
-      f.distanceKm != null
+      f.distanceKm != null && f.distanceKm !== '' && Number.isFinite(Number(f.distanceKm))
         ? Number(f.distanceKm)
-        : calculateDistanceFromRegisteredAddress(
-            f.address || f.name || name,
-            userOrigin,
-            f.latitude != null && f.longitude != null ? { lat: f.latitude, lng: f.longitude } : null
-          )
+        : null
     map[key].courts.push({
       id: f.id,
       name: f.name,
@@ -280,8 +275,8 @@ function CreateMatch() {
   }, [])
 
   const districtData = useMemo(
-    () => groupByDistrict(rawFacilitiesForDistricts, userOriginCoords || userProfileLocation),
-    [rawFacilitiesForDistricts, userOriginCoords, userProfileLocation]
+    () => groupByDistrict(rawFacilitiesForDistricts),
+    [rawFacilitiesForDistricts]
   )
   const districtKeys = Object.keys(districtData)
   const userDistrictKey =
@@ -426,25 +421,17 @@ function CreateMatch() {
     })
   }, [facilities, sport])
 
-  // Sắp xếp ưu tiên cơ sở tại khu vực đang chọn rồi theo khoảng cách thực (nếu có tọa độ)
+  // Sắp xếp ưu tiên cơ sở tại khu vực đang chọn rồi theo khoảng cách distanceKm từ API (nếu có)
   const sortedFacilities = useMemo(() => {
     return [...filteredFacilities].sort((a, b) => {
       const aInDist = a.district === selectedDistrict ? 1 : 0
       const bInDist = b.district === selectedDistrict ? 1 : 0
       if (aInDist !== bInDist) return bInDist - aInDist
-      const aDistKm = calculateDistanceFromRegisteredAddress(
-        a.location || a.address || a.name,
-        userOriginCoords || userProfileLocation,
-        a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null
-      )
-      const bDistKm = calculateDistanceFromRegisteredAddress(
-        b.location || b.address || b.name,
-        userOriginCoords || userProfileLocation,
-        b.lat != null && b.lng != null ? { lat: b.lat, lng: b.lng } : null
-      )
+      const aDistKm = a.distanceKm != null && Number.isFinite(Number(a.distanceKm)) ? Number(a.distanceKm) : null
+      const bDistKm = b.distanceKm != null && Number.isFinite(Number(b.distanceKm)) ? Number(b.distanceKm) : null
       return (aDistKm ?? Infinity) - (bDistKm ?? Infinity)
     })
-  }, [filteredFacilities, selectedDistrict, userOriginCoords, userProfileLocation])
+  }, [filteredFacilities, selectedDistrict])
 
   // Cơ sở đang chọn
   const selectedFacility = useMemo(() => {
@@ -628,11 +615,11 @@ function CreateMatch() {
     if (firstCourt) setSelectedSubCourtId(firstCourt.id)
   }
 
-  // Lọc khu vực theo tên khu vực hoặc tên / địa chỉ cơ sở & sắp xếp theo khoảng cách thực (nếu có tọa độ)
+  // Lọc khu vực theo tên khu vực hoặc tên / địa chỉ cơ sở & sắp xếp theo khoảng cách distanceKm từ API (nếu có)
   const filteredDistricts = Object.entries(districtData)
     .sort(([, a], [, b]) => {
-      const distA = a.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(a.name, userOriginCoords || userProfileLocation)
-      const distB = b.courts?.[0]?.distanceKm ?? calculateDistanceFromRegisteredAddress(b.name, userOriginCoords || userProfileLocation)
+      const distA = a.courts?.[0]?.distanceKm ?? null
+      const distB = b.courts?.[0]?.distanceKm ?? null
       return (distA ?? Infinity) - (distB ?? Infinity)
     })
     .filter(([, item]) => {

@@ -289,9 +289,9 @@ export async function removeLfgParticipant(cardId, userId) {
 }
 
 /**
- * Bước 5 (Chủ kèo): Hủy kèo ghép LFG
+ * Bước 5 (Chủ kèo): Hủy kèo ghép LFG (đơn phương, không còn bước bỏ phiếu)
  * POST /api/v1/lfgs/{cardId}/cancel
- * Hoàn 100% cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 24h hoàn 100%).
+ * Hoàn 100% cho người tham gia; hủy trước 48h hoàn theo chính sách sân, hủy dưới 48h (isLocked) trừ compensationTotal (50% tiền sân) và -20 Fair Play.
  * @param {string} cardId - UUID kèo ghép
  * @param {Object} [payload]
  * @param {string} [payload.reason] - Lý do hủy kèo
@@ -435,72 +435,6 @@ export async function removeLfgGroupMember(cardId, friendId) {
 }
 
 /**
- * Tạo yêu cầu hủy kèo có bỏ phiếu
- * POST /api/v1/lfgs/{cardId}/cancel-requests
- * @param {string} cardId - UUID kèo ghép
- * @param {Object} payload
- * @param {string} payload.reason - Lý do hủy kèo
- * @returns {Promise<Object>}
- */
-export async function createLfgCancelRequest(cardId, payload = {}) {
-  if (!cardId) throw new Error('cardId không được để trống')
-  try {
-    const response = await apiClient.post(`${LFGS_ENDPOINT}/${cardId}/cancel-requests`, {
-      reason: payload.reason ? String(payload.reason).trim() : 'Yêu cầu hủy kèo do việc bận đột xuất',
-    })
-    const body = response.data
-    return body?.data || body?.result || body
-  } catch (error) {
-    console.warn(`[lfgApi] Lỗi khi tạo yêu cầu hủy kèo ${cardId}:`, error)
-    throw normalizeApiError(error)
-  }
-}
-
-/**
- * Lấy yêu cầu hủy kèo mới nhất
- * GET /api/v1/lfgs/{cardId}/cancel-requests/latest
- * @param {string} cardId - UUID kèo ghép
- * @returns {Promise<Object>}
- */
-export async function getLatestLfgCancelRequest(cardId) {
-  if (!cardId) throw new Error('cardId không được để trống')
-  try {
-    const response = await apiClient.get(`${LFGS_ENDPOINT}/${cardId}/cancel-requests/latest`)
-    const body = response.data
-    return body?.data || body?.result || body
-  } catch (error) {
-    console.warn(`[lfgApi] Lỗi lấy yêu cầu hủy mới nhất ${cardId}:`, error)
-    return null
-  }
-}
-
-/**
- * Bỏ phiếu đồng ý hoặc từ chối yêu cầu hủy kèo
- * POST /api/v1/lfgs/{cardId}/cancel-requests/{requestId}/vote
- * @param {string} cardId - UUID kèo ghép
- * @param {string} requestId - UUID yêu cầu hủy
- * @param {Object} payload
- * @param {boolean} payload.approve - Đồng ý hủy hay không
- * @param {string} [payload.note] - Ghi chú
- * @returns {Promise<Object>}
- */
-export async function voteLfgCancelRequest(cardId, requestId, payload = {}) {
-  if (!cardId || !requestId) throw new Error('cardId và requestId không được để trống')
-  try {
-    const bodyPayload = {
-      approve: Boolean(payload.approve),
-      note: payload.note ? String(payload.note).trim() : null,
-    }
-    const response = await apiClient.post(`${LFGS_ENDPOINT}/${cardId}/cancel-requests/${requestId}/vote`, bodyPayload)
-    const body = response.data
-    return body?.data || body?.result || body
-  } catch (error) {
-    console.warn(`[lfgApi] Lỗi khi bỏ phiếu hủy kèo ${requestId}:`, error)
-    throw normalizeApiError(error)
-  }
-}
-
-/**
  * ============================================================================
  * 2.7. CHECK-IN VÀ CHẤM FAIR PLAY - API SERVICE
  * ============================================================================
@@ -614,9 +548,6 @@ export default {
   acceptLfgInvitation,
   declineLfgInvitation,
   removeLfgGroupMember,
-  createLfgCancelRequest,
-  getLatestLfgCancelRequest,
-  voteLfgCancelRequest,
   getMyFairPlay,
   getPendingFairPlayRatings,
   rateFairPlay,

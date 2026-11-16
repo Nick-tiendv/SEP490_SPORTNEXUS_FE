@@ -170,70 +170,14 @@ export function detectSkillInText(text = '') {
 }
 
 // ============================================================================
-// HỆ THỐNG ĐỊA LÝ & KHOẢNG CÁCH (TÍNH THEO TỌA ĐỘ THỰC, KHÔNG HARDCODE QUẬN)
+// KHOẢNG CÁCH & PHÂN TẦNG RANGE (ĐỌC TRỰC TIẾP distanceKm TỪ API, KHÔNG TỰ TÍNH Ở FE)
 // ============================================================================
-const parseCoord = (value) => {
-  if (value === null || value === undefined || value === '') return null
-  const num = Number(value)
-  return Number.isFinite(num) ? num : null
-}
-
-const extractCoords = (obj) => {
-  if (!obj || typeof obj !== 'object') return null
-  const lat = parseCoord(obj.lat ?? obj.latitude)
-  const lng = parseCoord(obj.lng ?? obj.longitude)
-  if (lat == null || lng == null || (Math.abs(lat) < 1 && Math.abs(lng) < 1)) return null
-  return { lat, lng }
-}
-
-export function haversineKm(lat1, lng1, lat2, lng2) {
-  const nLat1 = parseCoord(lat1)
-  const nLng1 = parseCoord(lng1)
-  const nLat2 = parseCoord(lat2)
-  const nLng2 = parseCoord(lng2)
-  if (nLat1 == null || nLng1 == null || nLat2 == null || nLng2 == null) {
-    return null
-  }
-  if (Math.abs(nLat1) < 1 || Math.abs(nLat2) < 1) return null
-  const R = 6371
-  const dLat = ((nLat2 - nLat1) * Math.PI) / 180
-  const dLng = ((nLng2 - nLng1) * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((nLat1 * Math.PI) / 180) *
-      Math.cos((nLat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return Math.round(R * c * 10) / 10
-}
-
-// Tính khoảng cách (km) theo tọa độ GPS thực giữa người chơi và địa điểm mục tiêu;
-// trả null nếu thiếu tọa độ thực của một trong hai phía (không tự suy đoán khoảng cách giả).
-export function calculateDistanceFromRegisteredAddress(arg1 = {}, arg2 = '', arg3 = null) {
-  let userLat
-  let userLng
-  let targetLat = null
-  let targetLng = null
-
-  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1)) {
-    const u = extractCoords(arg1.userCoords)
-    const t = extractCoords(arg1.targetCoords)
-    userLat = parseCoord(arg1.userLat ?? arg1.originLat ?? u?.lat)
-    userLng = parseCoord(arg1.userLng ?? arg1.originLng ?? u?.lng)
-    targetLat = parseCoord(arg1.targetLat ?? arg1.lat ?? arg1.latitude ?? t?.lat)
-    targetLng = parseCoord(arg1.targetLng ?? arg1.lng ?? arg1.longitude ?? t?.lng)
-  } else {
-    const u = extractCoords(arg2)
-    userLat = u?.lat ?? null
-    userLng = u?.lng ?? null
-    if (arg3 && typeof arg3 === 'object') {
-      targetLat = parseCoord(arg3.lat ?? arg3.latitude ?? arg3.targetLat)
-      targetLng = parseCoord(arg3.lng ?? arg3.longitude ?? arg3.targetLng)
-    }
-  }
-
-  return haversineKm(userLat, userLng, targetLat, targetLng)
+const readApiDistanceKm = (item) => {
+  if (!item || typeof item !== 'object') return null
+  const raw = item.distanceKm ?? item.distance_km
+  if (raw === null || raw === undefined || raw === '') return null
+  const num = Number(raw)
+  return Number.isFinite(num) && num >= 0 ? num : null
 }
 
 // Phân tầng Range khoảng cách từ trên xuống dưới (Gần nhất -> Xa nhất)
@@ -619,7 +563,6 @@ export function clearAllLearnedDesires() {
 export function buildPersonalizedLfgSuggestions({
   profileSports = [],
   userProfileLocation = '',
-  userCoords = null,
   habits = {},
   learnedDesires = { sports: [], timeSlots: [], skillLevels: [], districts: [], keywords: [] },
   includeLearnedDesires = true,
@@ -680,8 +623,6 @@ export function buildPersonalizedLfgSuggestions({
     .filter((tok) => tok.length >= 2)
     .filter((tok) => !['keo', 'ghep', 'san', 'tim', 'choi', 'giao', 'luu', 'ca', 'buoi', 'trinh', 'do'].includes(tok))
 
-  const resolvedUserCoords = extractCoords(userCoords)
-
   const matchesRangeFilter = (distanceKm) => {
     if (activeFilters.maxDistanceKm != null) {
       if (distanceKm == null || distanceKm > Number(activeFilters.maxDistanceKm)) return false
@@ -734,14 +675,7 @@ export function buildPersonalizedLfgSuggestions({
       if (matchedSports.length === 0) return null
 
       const address = fac.address || fac.street || ''
-      const distanceKm = calculateDistanceFromRegisteredAddress({
-        registeredAddress: userProfileLocation,
-        userCoords: resolvedUserCoords,
-        targetAddress: `${fac.name || ''} ${address}`,
-        targetLat: fac.lat ?? fac.latitude,
-        targetLng: fac.lng ?? fac.longitude,
-        itemSeed: fac.id || fac.name,
-      })
+      const distanceKm = readApiDistanceKm(fac)
 
       if (!matchesRangeFilter(distanceKm)) return null
 
@@ -858,15 +792,8 @@ export function buildPersonalizedLfgSuggestions({
         return null
       }
 
-      // Tính khoảng cách từ tọa độ người chơi đến sân của kèo
-      const distanceKm = calculateDistanceFromRegisteredAddress({
-        registeredAddress: userProfileLocation,
-        userCoords: resolvedUserCoords,
-        targetAddress: m.location || m.title || '',
-        targetLat: m.lat ?? m.latitude ?? null,
-        targetLng: m.lng ?? m.longitude ?? null,
-        itemSeed: m.id || m.title,
-      })
+      // Đọc trực tiếp khoảng cách distanceKm mà API trả về trên từng kèo
+      const distanceKm = readApiDistanceKm(m)
 
       if (!matchesRangeFilter(distanceKm)) return null
 
@@ -982,22 +909,7 @@ export function buildPersonalizedLfgSuggestions({
 
       if (!activeSportSet.has(effectiveSportKey)) return null
 
-      const postLocationText =
-        post.location ||
-        post.sharedLfg?.facilityAddress ||
-        post.sharedLfg?.facilityName ||
-        post.sharedTournament?.facilityName ||
-        post.content ||
-        userProfileLocation
-
-      const distanceKm = calculateDistanceFromRegisteredAddress({
-        registeredAddress: userProfileLocation,
-        userCoords: resolvedUserCoords,
-        targetAddress: postLocationText,
-        targetLat: post.sharedLfg?.latitude ?? post.latitude ?? post.lat ?? null,
-        targetLng: post.sharedLfg?.longitude ?? post.longitude ?? post.lng ?? null,
-        itemSeed: post.id || post.postId || post.content?.slice(0, 24),
-      })
+      const distanceKm = readApiDistanceKm(post) ?? readApiDistanceKm(post.sharedLfg)
 
       if (!matchesRangeFilter(distanceKm)) return null
 
