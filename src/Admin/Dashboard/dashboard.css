@@ -207,6 +207,7 @@
   margin-top: var(--sp-1);
   font-size: var(--fs-sm);
   color: var(--admin-text-muted);
+  text-wrap: pretty;
 }
 
 .sn-admin .admin-analytics-grid,
@@ -732,7 +733,7 @@
   box-shadow: 0 10px 20px -10px var(--attn-icon-shadow), inset 0 1px 0 rgba(255, 255, 255, .42);
 }
 .sn-admin .admin-attention-body h3 { margin-bottom: var(--sp-1); font-size: var(--fs-base); font-weight: var(--fw-bold); line-height: var(--lh-snug); color: var(--attn-title); }
-.sn-admin .admin-attention-body p { font-size: var(--fs-sm); color: #475569; }
+.sn-admin .admin-attention-body p { font-size: var(--fs-sm); color: #475569; text-wrap: pretty; }
 .sn-admin .admin-attention-footer {
   position: relative;
   z-index: 1;
@@ -777,7 +778,7 @@
 .sn-admin .admin-bookings td { white-space: nowrap; }
 .sn-admin .admin-bookings td strong { display: block; font-weight: var(--fw-semibold); line-height: var(--lh-snug); }
 .sn-admin .admin-bookings td small { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--admin-text-muted); }
-.sn-admin .admin-booking-id { font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace; font-size: var(--fs-xs); color: var(--admin-text-muted); white-space: nowrap; }
+.sn-admin .admin-booking-id { font-family: var(--font-sans); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--admin-text-muted); white-space: nowrap; }
 .sn-admin .admin-user-cell { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
 .sn-admin .admin-amount { font-weight: var(--fw-semibold); }
 .sn-admin .admin-payment { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--sn-success-text); white-space: nowrap; }
