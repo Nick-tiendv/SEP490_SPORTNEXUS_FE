@@ -392,7 +392,7 @@ export default function Settlement() {
           <ul style={{ margin: '14px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: '#475569', fontWeight: 600, lineHeight: 1.7 }}>
             <li>Rút tối thiểu {formatVND(MIN_WITHDRAWAL)}, mỗi lúc chỉ 1 yêu cầu chờ duyệt.</li>
             <li>Tiền rút bị giữ tạm tới khi Quản trị viên chuyển khoản hoặc từ chối.</li>
-            <li>Không rút được khi ví đang âm (do hoàn tiền cho khách).</li>
+            <li>Không rút được khi ví đang âm (do hoàn tiền cho khách hoặc tiền phạt khi bạn hủy đơn của khách).</li>
           </ul>
         </div>
 

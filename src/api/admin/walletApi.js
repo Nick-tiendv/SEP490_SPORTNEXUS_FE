@@ -64,7 +64,7 @@ export async function getWallet(userId) {
 export const adjustWallet = async (userId, { amount, reason }) => unwrap((await apiClient.post(`/api/v1/admin/wallets/${path(userId)}/adjust`, { amount, reason })).data)
 
 // ---------- Thống kê: GET /api/v1/admin/wallets/statistics?from&to ----------
-const STAT_KEYS = ['walletCount', 'totalBalance', 'totalFrozenBalance', 'negativeWallets', 'negativeAmount', 'bookingEscrowHeld', 'prizeFundsHeld', 'totalDeposits', 'bookingGrossValue', 'bookingRefunds', 'ownerBookingEarnings', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'currentBookingFeePercent', 'withdrawalsCompleted', 'withdrawalsPending', 'pendingDeposits', 'tournamentFeesToOwners', 'prizesPaid', 'adminAdjustments']
+const STAT_KEYS = ['walletCount', 'totalBalance', 'totalFrozenBalance', 'negativeWallets', 'negativeAmount', 'bookingEscrowHeld', 'prizeFundsHeld', 'totalDeposits', 'bookingGrossValue', 'bookingRefunds', 'ownerBookingEarnings', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerCancelPenaltyRevenue', 'currentBookingFeePercent', 'withdrawalsCompleted', 'withdrawalsPending', 'pendingDeposits', 'tournamentFeesToOwners', 'prizesPaid', 'adminAdjustments']
 export async function getWalletStatistics({ from, to } = {}) {
   const data = unwrap((await apiClient.get('/api/v1/admin/wallets/statistics', { params: clean({ from, to }) })).data) || {}
   return {

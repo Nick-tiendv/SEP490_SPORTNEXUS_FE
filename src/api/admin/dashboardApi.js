@@ -134,7 +134,7 @@ async function loadAdminDashboard({ fromDate, toDate }) {
     users: numbers(data.users, ['total', 'players', 'owners', 'admins', 'locked', 'newInRange', 'claimBanned', 'belowFairPlayThreshold']),
     facilities: numbers(data.facilities, ['total', 'approved', 'pending', 'rejected', 'courts']),
     bookings: numbers(data.bookings, ['inRange', 'paid', 'checkedIn', 'cancelled', 'pending', 'cancelRate']),
-    revenue: numbers(data.revenue, ['bookingGrossValue', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerBookingEarnings', 'totalDeposits', 'withdrawalsCompleted', 'totalWalletBalance', 'totalFrozenBalance', 'currentBookingFeePercent']),
+    revenue: numbers(data.revenue, ['bookingGrossValue', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerCancelPenaltyRevenue', 'ownerBookingEarnings', 'totalDeposits', 'withdrawalsCompleted', 'totalWalletBalance', 'totalFrozenBalance', 'currentBookingFeePercent']),
     tournaments: numbers(data.tournaments, ['total', 'open', 'inProgress', 'finished', 'cancelled', 'locked']),
     lfg: numbers(data.lfg, ['createdInRange', 'open', 'filled', 'cancelled']),
     pending: numbers(data.pending, ['facilityApprovals', 'ownerVerifications', 'withdrawals', 'withdrawalAmount', 'openReports']),
