@@ -1,15 +1,28 @@
 import { useState, useEffect } from 'react'
 import { uid } from '../../utils/ids.js'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import apiClient from '../../api/apiClient.js'
 import { rateFairPlay } from '../../api/player/lfgApi.js'
 import { SKILL_VERDICTS, submitSkillFeedback } from '../../api/player/ratingApi.js'
 import ReportModal from '../../components/common/ReportModal.jsx'
 import MyGivenRatings from './MyGivenRatings.jsx'
 import {
+  normalizeFairPlayReasons,
+  isOtherFairPlayReason,
+  hasTextLetters,
+  validateFairPlayRating,
+} from './fairPlayReasons.js'
+import {
   getPendingFairPlayRatings,
   checkFacilityReviewEligibility,
   createFacilityReview,
 } from '../../api/player/reviewApi.js'
+
+// Lấy danh sách lý do bắt buộc khi chấm Fair Play 1 - 2 sao: GET /api/v1/reviews/fair-play/reasons
+async function fetchFairPlayReasons() {
+  const response = await apiClient.get('/api/v1/reviews/fair-play/reasons')
+  return normalizeFairPlayReasons(response?.data)
+}
 
 const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('vi-VN') : '')
@@ -64,8 +77,53 @@ function PostMatchRating() {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [reviewedPlayers, setReviewedPlayers] = useState([])
 
-  // Đánh giá: Chấm điểm sao (1 đến 5 sao)
+  // Đánh giá: Chấm điểm sao (1 đến 5 sao) & Lý do bắt buộc khi chấm 1 - 2 sao
   const [rating, setRating] = useState(5)
+  const [fairPlayReasons, setFairPlayReasons] = useState([])
+  const [loadingReasons, setLoadingReasons] = useState(true)
+  const [reasonsError, setReasonsError] = useState('')
+  const [selectedReasonId, setSelectedReasonId] = useState(null)
+
+  const handleRetryReasons = async () => {
+    setLoadingReasons(true)
+    setReasonsError('')
+    try {
+      const list = await fetchFairPlayReasons()
+      setFairPlayReasons(list)
+    } catch (err) {
+      setFairPlayReasons([])
+      setReasonsError(err?.message || 'Không tải được danh sách lý do đánh giá 1 - 2 sao.')
+    } finally {
+      setLoadingReasons(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    fetchFairPlayReasons()
+      .then((list) => {
+        if (!cancelled) {
+          setFairPlayReasons(list)
+          setReasonsError('')
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setFairPlayReasons([])
+          setReasonsError(err?.message || 'Không tải được danh sách lý do đánh giá 1 - 2 sao.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingReasons(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const handleSelectStar = (star) => {
+    setRating(star)
+    if (star > 2) setSelectedReasonId(null)
+  }
+
   // Đánh giá trình độ thật so với Elo (không bắt buộc): LOWER | ACCURATE | HIGHER
   const [skillVerdict, setSkillVerdict] = useState('')
   // Báo cáo người chơi (bùng kèo, phi thể thao, khai gian trình độ…)
@@ -158,12 +216,27 @@ function PostMatchRating() {
     if (!item) return
     setSelectedContextId(item.contextId)
     setSelectedPlayerId(null)
+    setSelectedReasonId(null)
     triggerToast(`Đã chọn trận: ${item.facilityName || ''} ${item.courtName || ''} để chấm điểm!`)
   }
 
   const isEligibleToRate = Boolean(selectedMatch)
   const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0] || { name: '', role: '' }
   const isAlreadyReviewed = reviewedPlayers.includes(`${selectedMatch?.contextId}:${selectedPlayer.id}`)
+  const isLowRating = rating === 1 || rating === 2
+  const selectedReasonObj =
+    isLowRating && selectedReasonId != null && selectedReasonId !== ''
+      ? fairPlayReasons.find((r) => String(r.id) === String(selectedReasonId)) || null
+      : null
+  const isOtherReasonSelected =
+    isLowRating && (isOtherFairPlayReason(selectedReasonObj) || String(selectedReasonId || '').trim() === '4')
+  const ratingValidation = validateFairPlayRating({
+    score: rating,
+    reasonId: selectedReasonId,
+    reasons: fairPlayReasons,
+    comment: writtenReview,
+  })
+  const canSubmitRating = ratingValidation.valid && !isSubmittingRating
 
   // Quick suggestion tags để chèn vào phần viết nhận xét
   const quickTags = [
@@ -188,12 +261,14 @@ function PostMatchRating() {
       triggerToast('⚠️ Chỉ được đánh giá người đã cùng check-in trong trận còn hạn chấm điểm!')
       return
     }
-    if (!rating || rating < 1 || rating > 5) {
-      triggerToast('⚠️ Vui lòng chấm điểm sao từ 1 đến 5 sao!')
-      return
-    }
-    if (!writtenReview || writtenReview.trim().length < 10) {
-      triggerToast('⚠️ Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự) cho người chơi cùng sân!')
+    const validation = validateFairPlayRating({
+      score: rating,
+      reasonId: selectedReasonId,
+      reasons: fairPlayReasons,
+      comment: writtenReview,
+    })
+    if (!validation.valid) {
+      triggerToast(`⚠️ ${validation.error}`)
       return
     }
     if (isAlreadyReviewed) {
@@ -207,7 +282,8 @@ function PostMatchRating() {
         revieweeId: selectedPlayer.userId,
         contextId: selectedMatch.contextId,
         score: rating,
-        comment: writtenReview.trim(),
+        comment: validation.comment,
+        ...(validation.reasonId != null ? { reasonId: validation.reasonId } : {}),
       })
     } catch (apiErr) {
       triggerToast(`⚠️ ${apiErr?.message || 'Không gửi được đánh giá.'}`)
@@ -240,13 +316,15 @@ function PostMatchRating() {
         court: checkoutSession.courtName,
         time: 'Vừa xong',
         rating,
-        content: writtenReview.trim(),
+        reasonLabel: selectedReasonObj?.label || null,
+        content: validation.comment,
         verifiedCheckout: true,
       },
       ...prev,
     ])
     setReviewedPlayers((prev) => [...prev, `${selectedMatch.contextId}:${selectedPlayer.id}`])
     setWrittenReview('')
+    setSelectedReasonId(null)
     setRating(5)
     triggerToast(`🎉 Đã chấm Fair Play ${rating} sao${skillNote} cho ${selectedPlayer.name}!`)
   }
@@ -269,21 +347,24 @@ function PostMatchRating() {
     }
   }
 
+  const isWarningToast = typeof toastMessage === 'string' && toastMessage.startsWith('⚠️')
+
   return (
     <div className="snx-page">
       {/* Toast Notification */}
       {toastMessage && (
         <div
+          role={isWarningToast ? 'alert' : 'status'}
           style={{
             position: 'fixed',
             top: '76px',
             right: '32px',
             zIndex: 9999,
-            background: '#065F46',
+            background: isWarningToast ? '#991B1B' : '#065F46',
             color: '#ffffff',
             padding: '12px 20px',
             borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(6, 95, 70, 0.3)',
+            boxShadow: isWarningToast ? '0 8px 24px rgba(153, 27, 27, 0.35)' : '0 8px 24px rgba(6, 95, 70, 0.3)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
@@ -292,8 +373,8 @@ function PostMatchRating() {
             animation: 'fadeIn 0.25s ease-out',
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#86EFAC' }}>
-            check_circle
+          <span className="material-symbols-outlined" style={{ fontSize: '20px', color: isWarningToast ? '#FCA5A5' : '#86EFAC' }}>
+            {isWarningToast ? 'error' : 'check_circle'}
           </span>
           <span>{toastMessage}</span>
         </div>
@@ -733,7 +814,10 @@ function PostMatchRating() {
                   return (
                     <div
                       key={player.id}
-                      onClick={() => setSelectedPlayerId(player.id)}
+                      onClick={() => {
+                        setSelectedPlayerId(player.id)
+                        setSelectedReasonId(null)
+                      }}
                       style={{
                         padding: '12px 14px',
                         borderRadius: '14px',
@@ -988,7 +1072,7 @@ function PostMatchRating() {
                       <button
                         key={star}
                         type="button"
-                        onClick={() => setRating(star)}
+                        onClick={() => handleSelectStar(star)}
                         onMouseEnter={() => setHoverRating(star)}
                         onMouseLeave={() => setHoverRating(0)}
                         style={{
@@ -1054,6 +1138,111 @@ function PostMatchRating() {
                 </div>
               </div>
 
+              {/* PHẦN 1b: CHỌN LÝ DO KHI ĐÁNH GIÁ 1 - 2 SAO (Bắt buộc reasonId theo BE) */}
+              {isLowRating && (
+                <fieldset
+                  style={{
+                    background: '#FEF2F2',
+                    borderRadius: '16px',
+                    border: '1.5px solid #FCA5A5',
+                    padding: '18px 20px',
+                    margin: '0 0 22px 0',
+                  }}
+                >
+                  <legend
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      color: '#991B1B',
+                      padding: '0 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#DC2626' }}>
+                      report
+                    </span>
+                    <span>Lý Do Đánh Giá {rating} Sao (Bắt buộc) *</span>
+                  </legend>
+
+                  {loadingReasons ? (
+                    <div style={{ fontSize: '13px', color: '#7F1D1D', fontWeight: 600 }}>
+                      Đang tải danh sách lý do đánh giá từ hệ thống…
+                    </div>
+                  ) : reasonsError || fairPlayReasons.length === 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '13px', color: '#991B1B', fontWeight: 600 }}>
+                        {reasonsError || 'Chưa tải được danh sách lý do đánh giá 1 - 2 sao.'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRetryReasons}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid #DC2626',
+                          background: '#FFFFFF',
+                          color: '#DC2626',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Tải lại lý do
+                      </button>
+                    </div>
+                  ) : (
+                    <div role="radiogroup" aria-label="Lý do đánh giá 1-2 sao" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {fairPlayReasons.map((reason) => {
+                        const isChecked = String(selectedReasonId) === String(reason.id)
+                        return (
+                          <label
+                            key={String(reason.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '10px',
+                              padding: '10px 12px',
+                              borderRadius: '12px',
+                              border: isChecked ? '1.5px solid #DC2626' : '1px solid #FECACA',
+                              background: isChecked ? '#FEE2E2' : '#FFFFFF',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name="fairPlayReason"
+                              value={String(reason.id)}
+                              checked={isChecked}
+                              onChange={() => setSelectedReasonId(reason.id)}
+                              style={{ marginTop: '3px', accentColor: '#DC2626', cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#1E293B' }}>
+                                {reason.label}
+                              </div>
+                              {reason.description && (
+                                <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                                  {reason.description}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        )
+                      })}
+
+                      {(selectedReasonId == null || selectedReasonId === '') && (
+                        <div style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 700, marginTop: '4px' }}>
+                          ⚠️ Vui lòng chọn 1 lý do để tiếp tục gửi đánh giá 1 - 2 sao.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+
               {/* PHẦN 2: VIẾT NHẬN XÉT BẰNG CHỮ */}
               <div style={{ marginBottom: '22px' }}>
                 <div
@@ -1068,19 +1257,23 @@ function PostMatchRating() {
                     style={{
                       fontSize: '13px',
                       fontWeight: 800,
-                      color: '#1E293B',
+                      color: isOtherReasonSelected ? '#991B1B' : '#1E293B',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
                     }}
                   >
-                    <span>2. Viết Nhận Xét Đánh Giá (Bắt buộc)</span>
+                    <span>
+                      {isOtherReasonSelected
+                        ? '2. Viết Nhận Xét Đánh Giá (Bắt buộc nhập chữ cho Lý do 4 - Khác)'
+                        : '2. Viết Nhận Xét Đánh Giá (Bắt buộc)'}
+                    </span>
                     <span style={{ color: '#DC2626' }}>*</span>
                   </label>
                   <span
                     style={{
                       fontSize: '12px',
-                      color: writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
+                      color: hasTextLetters(writtenReview) && writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
                       fontWeight: 600,
                     }}
                   >
@@ -1091,13 +1284,21 @@ function PostMatchRating() {
                 <textarea
                   rows={4}
                   value={writtenReview}
+                  required={isOtherReasonSelected}
+                  aria-required="true"
+                  placeholder={
+                    isOtherReasonSelected
+                      ? 'Bạn đã chọn Lý do Khác — vui lòng nhập nhận xét chi tiết bằng chữ (tối thiểu 10 ký tự)...'
+                      : undefined
+                  }
                   onChange={(e) => setWrittenReview(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '14px 16px',
                     borderRadius: '14px',
                     border:
-                      writtenReview.trim().length > 0 && writtenReview.trim().length < 10
+                      (isOtherReasonSelected && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10)) ||
+                      (writtenReview.trim().length > 0 && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10))
                         ? '1.5px solid #F87171'
                         : '1.5px solid #CBD5E1',
                     fontSize: '14px',
@@ -1118,6 +1319,12 @@ function PostMatchRating() {
                     e.target.style.background = '#FAFAFA'
                   }}
                 />
+
+                {isOtherReasonSelected && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10) && (
+                  <div role="alert" style={{ marginTop: '6px', fontSize: '12px', color: '#DC2626', fontWeight: 700 }}>
+                    ⚠️ Khi chọn Lý do 4 (Khác), ô Nhận xét bắt buộc phải nhập chữ (tối thiểu 10 ký tự).
+                  </div>
+                )}
 
                 {/* Trình độ thật so với Elo (POST /api/v1/ratings/feedback) */}
                 <div style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
@@ -1228,26 +1435,24 @@ function PostMatchRating() {
 
                   <button
                     type="submit"
-                    disabled={writtenReview.trim().length < 10 || isSubmittingRating}
+                    disabled={!canSubmitRating}
                     style={{
                       padding: '11px 24px',
                       borderRadius: '12px',
-                      background:
-                        writtenReview.trim().length >= 10
-                          ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
-                          : '#CBD5E1',
+                      background: canSubmitRating
+                        ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
+                        : '#CBD5E1',
                       border: 'none',
                       color: '#ffffff',
                       fontSize: '13.5px',
                       fontWeight: 800,
-                      cursor: writtenReview.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                      cursor: canSubmitRating ? 'pointer' : 'not-allowed',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      boxShadow:
-                        writtenReview.trim().length >= 10
-                          ? '0 4px 14px rgba(22, 163, 74, 0.25)'
-                          : 'none',
+                      boxShadow: canSubmitRating
+                        ? '0 4px 14px rgba(22, 163, 74, 0.25)'
+                        : 'none',
                       transition: 'all 0.15s ease',
                     }}
                   >
@@ -1304,6 +1509,12 @@ function PostMatchRating() {
                           ))}
                         </div>
                       </div>
+
+                      {item.reasonLabel && (
+                        <div style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 700, marginBottom: '4px' }}>
+                          Lý do: {item.reasonLabel}
+                        </div>
+                      )}
 
                       <div style={{ fontSize: '13px', color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
                         "{item.content}"

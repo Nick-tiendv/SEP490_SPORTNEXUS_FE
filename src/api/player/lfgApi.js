@@ -493,23 +493,31 @@ export async function getPendingFairPlayRatings() {
  * Bước 3 (Check-in & Chấm Fair Play): Chấm điểm Fair Play sau trận
  * POST /api/v1/reviews/fair-play
  * Điểm Fair Play = trung bình số sao x 20 (chưa có đánh giá = 100), giới hạn 0-100.
+ * Đánh giá 1 - 2 sao bắt buộc truyền kèm reasonId (lấy từ GET /api/v1/reviews/fair-play/reasons).
  * @param {Object} payload
  * @param {string} payload.revieweeId - UUID người được chấm
  * @param {string} payload.contextId - UUID kèo LFG hoặc đơn đặt sân
  * @param {number} payload.score - Điểm số từ 1 đến 5 sao
  * @param {string} [payload.comment] - Nhận xét
+ * @param {string|number|null} [payload.reasonId] - ID lý do bắt buộc khi chấm 1 - 2 sao
  * @returns {Promise<Object>}
  */
 export async function rateFairPlay(payload) {
   if (!payload || !payload.revieweeId || !payload.contextId || !payload.score) {
     throw new Error('Thiếu thông tin đánh giá Fair Play (revieweeId, contextId, score)')
   }
+  const numericScore = Number(payload.score)
+  const hasReasonId = payload.reasonId != null && String(payload.reasonId).trim() !== ''
+  if ((numericScore === 1 || numericScore === 2) && !hasReasonId) {
+    throw new Error('Đánh giá 1 - 2 sao bắt buộc phải chọn lý do (reasonId)')
+  }
   try {
     const bodyPayload = {
       revieweeId: payload.revieweeId,
       contextId: payload.contextId,
-      score: Number(payload.score),
+      score: numericScore,
       comment: payload.comment ? String(payload.comment).trim() : null,
+      ...(hasReasonId ? { reasonId: payload.reasonId } : {}),
     }
     const response = await apiClient.post('/api/v1/reviews/fair-play', bodyPayload)
     const body = response.data
