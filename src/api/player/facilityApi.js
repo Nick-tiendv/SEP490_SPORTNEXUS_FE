@@ -131,6 +131,11 @@ export function transformFacilityToCourt(fac) {
   const amenitiesSummary = amenitiesList.map((a) => a.name).filter(Boolean).slice(0, 3).join(' • ')
   const lat = parseCoordOrNull(fac.latitude ?? fac.lat)
   const lng = parseCoordOrNull(fac.longitude ?? fac.lng)
+  const rawDistanceKm = fac.distanceKm ?? fac.distance_km
+  const distanceKm =
+    rawDistanceKm !== null && rawDistanceKm !== undefined && rawDistanceKm !== '' && Number.isFinite(Number(rawDistanceKm))
+      ? Number(rawDistanceKm)
+      : null
 
   return {
     id: fac.id,
@@ -148,6 +153,7 @@ export function transformFacilityToCourt(fac) {
     lng,
     latitude: lat,
     longitude: lng,
+    distanceKm,
     rating: fac.averageRating > 0 ? Number(fac.averageRating) : null,
     reviewCount: Number(fac.reviewCount) || 0,
     price: minPrice,

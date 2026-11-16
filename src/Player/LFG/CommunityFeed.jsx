@@ -26,6 +26,8 @@ import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
 import { finalReason } from './lfgReason.js'
+// Mốc khóa hủy kèo: 48 giờ trước giờ chơi (BE trả isLocked / hostCancelUntil); hủy dưới 48h chịu phạt bồi thường & Fair Play
+const HOST_CANCEL_BEFORE_MS = 48 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { useSport } from '../Context/sportContext.js'
 import { getWallet } from '../../api/player/walletApi.js'
@@ -53,9 +55,7 @@ import {
   loadLearnedSearchDesires,
   recordNewPlayerDesire,
   buildPersonalizedLfgSuggestions,
-  calculateDistanceFromRegisteredAddress,
   getDistanceRangeInfo,
-  haversineKm,
 } from './lfgSuggestionEngine.js'
 
 // Helper to remove any leftover Elo or DUPR/DURP references from match data
@@ -196,6 +196,12 @@ const toFeedMatch = (card) => {
     ? `${startClock}${endClock ? ` – ${endClock}` : ''} • ${dateDisplay}`
     : 'Chưa cập nhật thời gian'
 
+  const rawDistanceKm = card.distanceKm ?? card.distance_km
+  const distanceKm =
+    rawDistanceKm !== null && rawDistanceKm !== undefined && rawDistanceKm !== '' && Number.isFinite(Number(rawDistanceKm))
+      ? Number(rawDistanceKm)
+      : null
+
   return {
     id: card.id || card.cardId,
     facilityId: card.facilityId || card.venueId || null,
@@ -204,6 +210,7 @@ const toFeedMatch = (card) => {
     courtName: card.courtName || '',
     lat: card.latitude ?? card.lat ?? null,
     lng: card.longitude ?? card.lng ?? null,
+    distanceKm,
     startTime: card.startTime || null,
     endTime: card.endTime || null,
     fullTimeDisplay,
@@ -273,6 +280,21 @@ function CommunityFeed() {
   const [customCancelReason, setCustomCancelReason] = useState('')
   const [actionLoadingId, setActionLoadingId] = useState(null)
 
+  // Mốc T − 48 giờ (QĐ-D): dưới 48h trước giờ chơi (isLocked = true), hủy đơn phương qua POST /lfgs/{id}/cancel sẽ bị phạt 50% tiền sân bồi thường và -20 điểm FairPlay.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 15000)
+    return () => clearInterval(timer)
+  }, [])
+  const isCardLocked = (card) => {
+    if (typeof card?.isLocked === 'boolean') return card.isLocked
+    const until = card?.hostCancelUntil
+      ? new Date(card.hostCancelUntil).getTime()
+      : card?.startTime
+      ? new Date(card.startTime).getTime() - HOST_CANCEL_BEFORE_MS
+      : null
+    return until != null && nowMs >= until
+  }
   // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
   useEffect(() => {
     let cancelled = false
@@ -335,8 +357,8 @@ function CommunityFeed() {
             ? {
                 ...prev,
                 ...adapted,
-                distanceKm: prev.distanceKm,
-                rangeInfo: prev.rangeInfo,
+                distanceKm: adapted.distanceKm ?? prev.distanceKm ?? null,
+                rangeInfo: adapted.rangeInfo ?? prev.rangeInfo,
                 isLoadingDetail: false,
               }
             : prev
@@ -454,13 +476,8 @@ function CommunityFeed() {
     profileCoords: profileOrigin.coords,
     onboarding: playerArea,
   })
-  const playerCoords = resolvedOrigin.coords
   const userProfileLocation = resolvedOrigin.label
   const userLocationLabel = userProfileLocation || 'Chưa đặt khu vực'
-  // Khoảng cách thật (km) từ vị trí xuất phát tới kèo; thiếu tọa độ thì null
-  const realDistanceKm = (m) => (playerCoords && m?.lat != null && m?.lng != null
-    ? Math.round(haversineKm(playerCoords.lat, playerCoords.lng, Number(m.lat), Number(m.lng)) * 10) / 10
-    : null)
 
   // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí / môn trong Profile
   useEffect(() => {
@@ -490,9 +507,9 @@ function CommunityFeed() {
     const normU = userLoc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
     return normM.includes(normU) || normU.includes(normM)
   }
-  // Kèo gần người chơi: có tọa độ thì so với bán kính trong khảo sát (mặc định 5 km), không thì so theo tên khu vực
+  // Kèo gần người chơi: đọc trực tiếp distanceKm từ API để so với bán kính khảo sát (mặc định 5 km), không thì so theo tên khu vực
   const isNearMe = (m) => {
-    const km = realDistanceKm(m)
+    const km = m?.distanceKm != null && m.distanceKm !== '' && Number.isFinite(Number(m.distanceKm)) ? Number(m.distanceKm) : null
     if (km != null) return km <= (playerArea.radiusKm || 5)
     return isMatchNearUser(m?.location, userProfileLocation)
   }
@@ -514,6 +531,10 @@ function CommunityFeed() {
       const detail = await getLfgById(card.id)
       return {
         ...card,
+        isLocked: typeof detail?.isLocked === 'boolean' ? detail.isLocked : card?.isLocked,
+        hostCancelUntil: detail?.hostCancelUntil ?? card?.hostCancelUntil,
+        bookingTotalAmount: detail?.bookingTotalAmount ?? card?.bookingTotalAmount,
+        compensationTotal: detail?.compensationTotal ?? card?.compensationTotal,
         acceptedCount: detail?.acceptedCount,
         pendingCount: detail?.pendingCount,
         participants: (detail?.participants || []).map((p) => ({
@@ -776,14 +797,33 @@ function CommunityFeed() {
     }
   }
 
-  // Chủ kèo: Mở modal hủy kèo - 2.6 Bước 5
+  // Chủ kèo: Mở modal hủy kèo - 2.6 Bước 5 (không còn bỏ phiếu; nếu isLocked = true thì hiện cảnh báo phạt dưới 48h)
   const handleOpenCancelModal = (card) => {
-    setCancelMatchModal(card)
+    const isLocked = isCardLocked(card)
+    setCancelMatchModal({ ...card, isLocked })
     setSelectedCancelReason('')
     setCustomCancelReason('')
+    if (card?.id && card?.compensationTotal == null) {
+      getLfgById(card.id)
+        .then((detail) => {
+          if (!detail) return
+          setCancelMatchModal((prev) =>
+            prev && String(prev.id) === String(card.id)
+              ? {
+                  ...prev,
+                  isLocked: typeof detail.isLocked === 'boolean' ? detail.isLocked : prev.isLocked,
+                  hostCancelUntil: detail.hostCancelUntil ?? prev.hostCancelUntil,
+                  bookingTotalAmount: detail.bookingTotalAmount ?? prev.bookingTotalAmount,
+                  compensationTotal: detail.compensationTotal ?? prev.compensationTotal,
+                }
+              : prev
+          )
+        })
+        .catch(() => {})
+    }
   }
 
-  // Chủ kèo: Xác nhận hủy kèo - 2.6 Bước 5
+  // Chủ kèo: Xác nhận hủy kèo - 2.6 Bước 5 (POST /api/v1/lfgs/{cardId}/cancel)
   const handleConfirmCancelMatch = async () => {
     if (!cancelMatchModal) return
     const reason = finalReason(selectedCancelReason, customCancelReason)
@@ -794,13 +834,40 @@ function CommunityFeed() {
 
     setActionLoadingId(cancelMatchModal.id)
     try {
-      const result = await cancelLfg(cancelMatchModal.id, { reason })
-      setToastMessage({
-        title: 'Hủy Kèo Ghép Thành Công',
-        desc: `Đã hủy kèo. ${describeLfgCancelResult(result)}`,
-        type: 'success',
-      })
+      const res = await cancelLfg(cancelMatchModal.id, { reason })
+      const isLockedCancel =
+        typeof res?.isLocked === 'boolean' ? res.isLocked : Boolean(cancelMatchModal.isLocked)
+      const compValue = res?.compensationTotal ?? cancelMatchModal.compensationTotal
+      const compFormatted =
+        compValue != null && compValue !== '' && Number.isFinite(Number(compValue))
+          ? new Intl.NumberFormat('vi-VN').format(Number(compValue))
+          : null
+
+      if (isLockedCancel) {
+        const extraSummary = describeLfgCancelResult(res)
+        setToastMessage({
+          title: 'Đã Hủy Kèo Sát Giờ (< 48h)',
+          desc: compFormatted != null
+            ? `Hủy kèo sát giờ: Bạn bị trừ ${compFormatted} Điểm (50% tiền sân) bồi thường và -20 điểm FairPlay.`
+            : extraSummary
+              ? `Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay. ${extraSummary}`
+              : 'Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay.',
+          type: 'error',
+        })
+      } else {
+        const summary = describeLfgCancelResult(res)
+        setToastMessage({
+          title: 'Hủy Kèo Ghép Thành Công',
+          desc: summary
+            ? `Đã hủy kèo. ${summary}`
+            : 'Đã hủy kèo. Hoàn 100% Điểm cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân.',
+          type: 'success',
+        })
+      }
       setCancelMatchModal(null)
+      getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
+      window.dispatchEvent(new Event('escrow_balance_updated'))
+      window.dispatchEvent(new Event('player-ratings-updated'))
       loadMyCards()
       setLfgReload((value) => value + 1) // kèo đã hủy phải biến khỏi sàn
     } catch (err) {
@@ -945,7 +1012,6 @@ function CommunityFeed() {
   const effectiveSkillFilter = levelFilter !== 'all' ? levelFilter : selectedSkillLevel
   const suggestionData = buildPersonalizedLfgSuggestions({
     userProfileLocation,
-    userCoords: playerCoords,
     profileSports,
     habits: playerHabits,
     learnedDesires,
@@ -999,15 +1065,9 @@ function CommunityFeed() {
   const filteredMatches = matches
     .map((m) => {
       const distanceKm =
-        realDistanceKm(m) ??
-        calculateDistanceFromRegisteredAddress({
-          targetAddress: m.location || m.facilityAddress || m.title || '',
-          registeredAddress: userProfileLocation,
-          userCoords: playerCoords,
-          targetLat: m.lat ?? null,
-          targetLng: m.lng ?? null,
-          itemSeed: m.id || m.title || '',
-        })
+        m?.distanceKm != null && m.distanceKm !== '' && Number.isFinite(Number(m.distanceKm))
+          ? Number(m.distanceKm)
+          : null
       const rangeInfo = getDistanceRangeInfo(distanceKm)
       return {
         ...m,
@@ -1064,11 +1124,25 @@ function CommunityFeed() {
     <div className="w-full min-h-screen text-[#1E293B] pb-16">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 right-8 z-50 flex items-center gap-3 bg-[#1C3524] text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-[#34D399]/40 animate-bounce">
-          <span className="material-symbols-outlined text-[#34D399] text-2xl">check_circle</span>
+        <div
+          className={`fixed top-20 right-8 z-50 flex items-center gap-3 text-white px-5 py-3.5 rounded-2xl shadow-2xl border animate-bounce ${
+            toastMessage.type === 'error'
+              ? 'bg-rose-900 border-rose-400/60'
+              : 'bg-[#1C3524] border-[#34D399]/40'
+          }`}
+        >
+          <span
+            className={`material-symbols-outlined text-2xl ${
+              toastMessage.type === 'error' ? 'text-rose-300' : 'text-[#34D399]'
+            }`}
+          >
+            {toastMessage.type === 'error' ? 'warning' : 'check_circle'}
+          </span>
           <div>
             <p className="font-bold text-sm">{toastMessage.title}</p>
-            <p className="text-xs text-[#A7F3D0]">{toastMessage.desc}</p>
+            <p className={`text-xs ${toastMessage.type === 'error' ? 'text-rose-100' : 'text-[#A7F3D0]'}`}>
+              {toastMessage.desc}
+            </p>
           </div>
         </div>
       )}
@@ -1432,7 +1506,7 @@ function CommunityFeed() {
                           {isNearMe(match) && (
                             <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                               <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
-                              {realDistanceKm(match) != null ? `Gần bạn (~${realDistanceKm(match)} km)` : `Gần bạn (${userProfileLocation})`}
+                              {match.distanceKm != null ? `Gần bạn (~${Number(match.distanceKm).toFixed(1)} km)` : `Gần bạn (${userProfileLocation})`}
                             </span>
                           )}
                         </div>
@@ -1585,7 +1659,7 @@ function CommunityFeed() {
                 <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
                   <div>
-                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ 48 giờ trở lên: mọi người được hoàn 100% Điểm, chủ kèo bị trừ 10 điểm Fair Play. Hủy trong vòng 48 giờ: người tham gia được hoàn 100% kèm bồi thường, chủ kèo mất 50% tiền sân và bị trừ 20 điểm Fair Play.
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ 48 giờ trở lên: mọi người được hoàn 100% Điểm. Nếu hủy dưới 48 giờ trước giờ chơi: người tham gia được hoàn 100% Điểm và chủ kèo bị trừ 50% tiền sân bồi thường cùng -20 điểm FairPlay.
                   </div>
                 </div>
 
@@ -1815,11 +1889,15 @@ function CommunityFeed() {
                             </button>
                             )}
 
-                            {/* Hủy kèo (POST /lfgs/{id}/cancel): được tới giờ chơi; BE chặn khi đã có người check-in */}
+                            {/* Hủy kèo đơn phương (POST /lfgs/{id}/cancel): dưới 48h (isLocked = true) chịu phạt bồi thường & Fair Play; BE chặn khi đã có người check-in */}
                             {cardActive && (
                               <button
                                 onClick={() => handleOpenCancelModal(card)}
-                                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                                className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors ${
+                                  isCardLocked(card)
+                                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                    : 'bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-700'
+                                }`}
                               >
                                 <span className="material-symbols-outlined text-[17px]">cancel</span>
                                 <span>Hủy Kèo</span>
@@ -2348,7 +2426,7 @@ function CommunityFeed() {
                   {detailModal.distanceKm != null && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EAF7EE] text-[#15803D] text-[11px] font-bold whitespace-nowrap shrink-0">
                       <span className="material-symbols-outlined text-[14px]">near_me</span>
-                      Cách bạn ~{detailModal.distanceKm} km
+                      Cách bạn ~{Number(detailModal.distanceKm).toFixed(1)} km
                     </span>
                   )}
                 </div>
@@ -2858,73 +2936,102 @@ function CommunityFeed() {
         </div>
       )}
 
-      {/* ================= MODAL: HỦY KÈO GHÉP (2.6 Bước 5) ================= */}
-      {cancelMatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2 text-rose-700">
-                <span className="material-symbols-outlined text-2xl">warning</span>
-                <h3 className="font-black text-base text-[#111827]">Xác Nhận Hủy Kèo Ghép</h3>
+      {/* ================= MODAL: HỦY KÈO GHÉP (POST /api/v1/lfgs/{id}/cancel) ================= */}
+      {cancelMatchModal && (() => {
+        const isLocked = typeof cancelMatchModal.isLocked === 'boolean'
+          ? cancelMatchModal.isLocked
+          : isCardLocked(cancelMatchModal)
+        const rawComp = cancelMatchModal.compensationTotal
+          ?? (Number(cancelMatchModal.bookingTotalAmount) > 0
+            ? Math.round(Number(cancelMatchModal.bookingTotalAmount) * 0.5)
+            : null)
+        const compensationText = rawComp != null
+          ? `${Number(rawComp).toLocaleString('vi-VN')} Điểm (50% tiền sân)`
+          : '50% tiền sân'
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+            <div className={`bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 ${isLocked ? 'border-2 border-rose-500 ring-4 ring-rose-500/20' : 'border border-gray-200'}`}>
+              <div className={`flex items-center justify-between pb-3 border-b ${isLocked ? 'bg-rose-50 border-rose-200 -mx-6 -mt-6 px-6 pt-5 rounded-t-3xl' : 'border-gray-100'}`}>
+                <div className="flex items-center gap-2 text-rose-700">
+                  <span className="material-symbols-outlined text-2xl">{isLocked ? 'gpp_bad' : 'warning'}</span>
+                  <h3 className={`font-black text-base ${isLocked ? 'text-rose-800' : 'text-[#111827]'}`}>
+                    {isLocked ? 'Cảnh Báo Hủy Kèo Sát Giờ (< 48h)' : 'Xác Nhận Hủy Kèo Ghép'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setCancelMatchModal(null)}
+                  className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
               </div>
-              <button
-                onClick={() => setCancelMatchModal(null)}
-                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
 
-            <p className="text-xs text-gray-600">
-              Bạn đang hủy kèo: <strong>{cancelMatchModal.description || cancelMatchModal.title || 'Kèo ghép'}</strong>
-            </p>
+              {isLocked && (
+                <div
+                  role="alert"
+                  className="p-3.5 rounded-xl bg-rose-600 border border-rose-700 text-white text-xs leading-relaxed flex items-start gap-2.5 shadow-md shadow-rose-600/25"
+                >
+                  <span className="material-symbols-outlined text-[20px] shrink-0 mt-0.5">report</span>
+                  <div>
+                    <strong>Hủy kèo sát giờ:</strong> Bạn sẽ bị trừ <strong>{compensationText}</strong> bồi thường và <strong>-20 điểm FairPlay</strong>.
+                  </div>
+                </div>
+              )}
 
-            {/* Lý do hủy: dropdown từ GET /lfgs/cancel-reasons */}
-            <LfgReasonPicker
-              label="Lý do hủy kèo"
-              required
-              reasons={cancelReasonsList}
-              picked={selectedCancelReason}
-              onPick={setSelectedCancelReason}
-              custom={customCancelReason}
-              onCustom={setCustomCancelReason}
-            />
-            <p className="text-[11px] text-gray-500 m-0">
-              Chủ kèo hủy được kèo tới trước giờ chơi, khi chưa có ai check-in.
-            </p>
+              <p className="text-xs text-gray-600">
+                Bạn đang hủy kèo: <strong>{cancelMatchModal.description || cancelMatchModal.title || 'Kèo ghép'}</strong>
+              </p>
 
-            {/* Refund policy note (2.6 Bước 5) */}
-            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
-              <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
-              <div>
-                <strong>Chính sách hủy kèo (2.6 Bước 5):</strong>
-                <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                  <li>Trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho bạn và người tham gia; bạn bị trừ <strong>10 điểm Fair Play</strong>.</li>
-                  <li>Trong vòng 48 giờ: người tham gia được hoàn 100%; bạn bị trừ <strong>50% tiền sân</strong> (chia đều bồi thường cho người tham gia) và <strong>20 điểm Fair Play</strong>. Nếu chưa có ai vào kèo, bạn được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.</li>
-                </ul>
+              {/* Lý do hủy: dropdown từ GET /lfgs/cancel-reasons */}
+              <LfgReasonPicker
+                label="Lý do hủy kèo"
+                required
+                reasons={cancelReasonsList}
+                picked={selectedCancelReason}
+                onPick={setSelectedCancelReason}
+                custom={customCancelReason}
+                onCustom={setCustomCancelReason}
+              />
+              <p className={`text-[11px] m-0 ${isLocked ? 'text-rose-600 font-semibold' : 'text-gray-500'}`}>
+                {isLocked
+                  ? 'Kèo đã qua mốc khóa 48 tiếng trước giờ chơi (isLocked = true). Nếu vẫn hủy đơn phương, hệ thống sẽ trừ tiền bồi thường và điểm FairPlay ngay khi xác nhận.'
+                  : 'Chủ kèo có thể hủy đơn phương trước giờ chơi từ 48 tiếng trở lên mà không bị phạt sát giờ; BE chặn hủy khi đã có người check-in.'}
+              </p>
+
+              {/* Refund policy note */}
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
+                <div>
+                  <strong>Chính sách hủy kèo (2.6 Bước 5):</strong>
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                    <li>Trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho các thành viên tham gia và hoàn tiền sân cho chủ kèo theo chính sách.</li>
+                    <li>Dưới 48 giờ (sát giờ): người tham gia được hoàn 100% Điểm; chủ kèo bị trừ <strong>50% tiền sân bồi thường</strong> và <strong>-20 điểm FairPlay</strong>.</li>
+                  </ul>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setCancelMatchModal(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 cursor-pointer"
-              >
-                Giữ Kèo
-              </button>
-              <button
-                type="button"
-                disabled={actionLoadingId === cancelMatchModal.id}
-                onClick={handleConfirmCancelMatch}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50"
-              >
-                {actionLoadingId === cancelMatchModal.id ? 'Đang hủy...' : 'Xác Nhận Hủy Kèo'}
-              </button>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelMatchModal(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 cursor-pointer"
+                >
+                  Giữ Kèo
+                </button>
+                <button
+                  type="button"
+                  disabled={actionLoadingId === cancelMatchModal.id}
+                  onClick={handleConfirmCancelMatch}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoadingId === cancelMatchModal.id ? 'Đang hủy...' : (isLocked ? 'Chấp Nhận Phạt & Hủy Kèo' : 'Xác Nhận Hủy Kèo')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ================= MODAL: RỜI KÈO (2.6 Bước 4) ================= */}
       {leaveMatchModal && (
@@ -3536,10 +3643,10 @@ function CommunityFeed() {
                     <strong className="text-gray-900 font-bold">Người tham gia rời kèo:</strong> trước giờ chơi từ <strong>48 giờ</strong> trở lên được <strong>hoàn 100% Điểm</strong>; trong vòng 48 giờ <strong>không được hoàn</strong>.
                   </li>
                   <li>
-                    <strong className="text-gray-900 font-bold">Chủ kèo hủy trước 48 giờ:</strong> mọi người được <strong>hoàn 100% Điểm</strong>; chủ kèo bị <strong>trừ 10 điểm</strong> Fair Play.
+                    <strong className="text-gray-900 font-bold">Hủy kèo trước mốc 48 giờ:</strong> Chủ kèo có thể hủy kèo trước giờ chơi <strong>48 giờ</strong> mà <strong>không bị trừ điểm FairPlay</strong>; tiền cọc của các thành viên tham gia được hoàn 100% Điểm từ Escrow.
                   </li>
                   <li>
-                    <strong className="text-red-700 font-bold">Chủ kèo hủy trong vòng 48 giờ:</strong> người tham gia được hoàn 100% và nhận bồi thường; chủ kèo bị trừ <strong>50% tiền sân</strong> (chia đều cho người tham gia) và <strong>trừ 20 điểm</strong> Fair Play. Chưa có ai vào kèo thì chủ kèo được hoàn đủ tiền sân nhưng vẫn bị trừ 20 điểm.
+                    <strong className="text-red-700 font-bold">Hủy kèo đơn phương dưới 48 giờ (sát giờ):</strong> Sau mốc <strong>48 giờ</strong> trước giờ chơi (kèo đã khóa), nếu chủ kèo vẫn hủy đơn phương sẽ bị trừ <strong>50% tiền sân bồi thường</strong> (tính theo Điểm, chia bồi thường cho người tham gia) và <strong>-20 điểm FairPlay</strong>.
                   </li>
                 </ul>
               </div>
