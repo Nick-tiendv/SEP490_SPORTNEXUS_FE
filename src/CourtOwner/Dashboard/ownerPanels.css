@@ -1,0 +1,265 @@
+/* =====================================================================
+   Dashboard chủ sân: khung (panel) và thẻ con cùng phong cách Admin
+   (đối chiếu src/Admin/Dashboard/dashboard.css: admin-panel, admin-trends,
+   admin-popular-sports, admin-attention-card).
+   ===================================================================== */
+
+.owner-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .7);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 10px 30px -12px rgba(12, 40, 24, .22);
+}
+/* Biểu đồ: xanh lá góc trên, xanh dương góc dưới (như "Xu hướng nền tảng") */
+.owner-panel--trend {
+  background:
+    radial-gradient(320px 180px at 96% 0%, rgba(16, 185, 129, .14), transparent 70%),
+    radial-gradient(280px 180px at 4% 100%, rgba(59, 130, 246, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7fcf9 56%, #f2f8ff 100%);
+}
+/* Danh sách xếp hạng: xanh dương góc trên, xanh lá góc dưới (như "Môn thể thao phổ biến") */
+.owner-panel--rank {
+  background:
+    radial-gradient(260px 160px at 96% 0%, rgba(59, 130, 246, .13), transparent 70%),
+    radial-gradient(220px 150px at 4% 100%, rgba(16, 185, 129, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7faff 58%, #f3fbf7 100%);
+}
+/* Việc cần xử lý: hồng góc trên, cam góc dưới (như "Yêu cầu quản trị đang chờ xử lý") */
+.owner-panel--attention {
+  background:
+    radial-gradient(300px 160px at 98% 0%, rgba(244, 63, 94, .1), transparent 70%),
+    radial-gradient(280px 160px at 2% 100%, rgba(245, 158, 11, .09), transparent 72%),
+    linear-gradient(160deg, rgba(255, 255, 255, .97) 0%, #fafcff 58%, #fffaf5 100%);
+}
+.owner-panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 20px 20px 14px;
+}
+.owner-panel-heading h3 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: #0f172a; }
+.owner-panel-heading p { margin: 4px 0 0; font-size: 13px; font-weight: 500; color: #64748b; }
+.owner-panel-body { display: flex; flex: 1; flex-direction: column; gap: 12px; min-width: 0; padding: 0 20px 20px; }
+.owner-panel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #15803d;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.owner-panel-link .material-symbols-outlined { font-size: 16px; }
+.owner-panel-link:hover { color: #14532d; text-decoration: underline; }
+.owner-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: auto 20px 20px;
+  padding: 10px;
+  border: 1px dashed #86efac;
+  border-radius: 12px;
+  background: rgba(240, 253, 244, .7);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #166534;
+  text-decoration: none;
+}
+.owner-panel-footer:hover { background: #dcfce7; }
+.owner-panel-footer .material-symbols-outlined { font-size: 16px; }
+.owner-empty { padding: 20px 12px; font-size: 13px; font-weight: 600; color: #64748b; text-align: center; }
+
+.owner-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+  align-items: stretch;
+}
+@media (max-width: 1100px) { .owner-section-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Khung biểu đồ so sánh (OwnerDashboardCharts.jsx) dùng chung nền với panel */
+.owner-chart-panel {
+  border-color: rgba(255, 255, 255, .7);
+  border-radius: 20px;
+  background:
+    radial-gradient(320px 180px at 96% 0%, rgba(16, 185, 129, .14), transparent 70%),
+    radial-gradient(280px 180px at 4% 100%, rgba(59, 130, 246, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7fcf9 56%, #f2f8ff 100%);
+  box-shadow: 0 10px 30px -12px rgba(12, 40, 24, .22);
+}
+.owner-chart-panel.owner-panel--rank {
+  background:
+    radial-gradient(260px 160px at 96% 0%, rgba(59, 130, 246, .13), transparent 70%),
+    radial-gradient(220px 150px at 4% 100%, rgba(16, 185, 129, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7faff 58%, #f3fbf7 100%);
+}
+.owner-chart-panel__head h3 { font-size: 17px; font-weight: 700; }
+/* Ô số liệu so sánh: tông màu như các ô số liệu trong "Xu hướng nền tảng" */
+.owner-compare-stats > div { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92); }
+.owner-compare-stats > div:nth-child(1) { border-color: #86efac; background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 55%, #dcfce7 100%); }
+.owner-compare-stats > div:nth-child(1) strong { color: #14532d; }
+.owner-compare-stats > div:nth-child(2) { border-color: #93c5fd; background: linear-gradient(135deg, #ffffff 0%, #eff6ff 55%, #dbeafe 100%); }
+.owner-compare-stats > div:nth-child(2) strong { color: #1e3a8a; }
+.owner-compare-stats > div:nth-child(3) { border-color: #fcd34d; background: linear-gradient(135deg, #ffffff 0%, #fffbeb 55%, #fef3c7 100%); }
+
+/* ---------- Bảng màu cho thẻ con ---------- */
+.owner-tone--emerald { --t-surface: linear-gradient(135deg, #ffffff 0%, #f0fdf4 58%, #dcfce7 100%); --t-glow: rgba(16, 185, 129, .26); --t-border: #86efac; --t-border-hover: #22c55e; --t-shadow: rgba(21, 128, 61, .45); --t-badge: linear-gradient(135deg, #34d399 0%, #15803d 100%); --t-pill: #dcfce7; --t-accent: #166534; --t-track: rgba(22, 163, 74, .14); --t-bar: linear-gradient(90deg, #22c55e 0%, #15803d 100%); }
+.owner-tone--blue { --t-surface: linear-gradient(135deg, #ffffff 0%, #eff6ff 58%, #dbeafe 100%); --t-glow: rgba(59, 130, 246, .26); --t-border: #93c5fd; --t-border-hover: #3b82f6; --t-shadow: rgba(37, 99, 235, .45); --t-badge: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); --t-pill: #dbeafe; --t-accent: #1d4ed8; --t-track: rgba(37, 99, 235, .14); --t-bar: linear-gradient(90deg, #38bdf8 0%, #2563eb 100%); }
+.owner-tone--amber { --t-surface: linear-gradient(135deg, #ffffff 0%, #fffbeb 58%, #fef3c7 100%); --t-glow: rgba(245, 158, 11, .28); --t-border: #fcd34d; --t-border-hover: #f59e0b; --t-shadow: rgba(217, 119, 6, .45); --t-badge: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); --t-pill: #fef3c7; --t-accent: #b45309; --t-track: rgba(217, 119, 6, .15); --t-bar: linear-gradient(90deg, #fbbf24 0%, #d97706 100%); }
+.owner-tone--violet { --t-surface: linear-gradient(135deg, #ffffff 0%, #f5f3ff 58%, #ede9fe 100%); --t-glow: rgba(139, 92, 246, .26); --t-border: #c4b5fd; --t-border-hover: #8b5cf6; --t-shadow: rgba(109, 40, 217, .45); --t-badge: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%); --t-pill: #ede9fe; --t-accent: #6d28d9; --t-track: rgba(109, 40, 217, .14); --t-bar: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%); }
+.owner-tone--rose { --t-surface: linear-gradient(135deg, #ffffff 0%, #fff1f2 58%, #ffe4e6 100%); --t-glow: rgba(244, 63, 94, .26); --t-border: #fda4af; --t-border-hover: #f43f5e; --t-shadow: rgba(225, 29, 72, .45); --t-badge: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); --t-pill: #ffe4e6; --t-accent: #be123c; --t-track: rgba(225, 29, 72, .14); --t-bar: linear-gradient(90deg, #fb7185 0%, #e11d48 100%); }
+.owner-tone--teal { --t-surface: linear-gradient(135deg, #ffffff 0%, #ecfeff 58%, #ccfbf1 100%); --t-glow: rgba(20, 184, 166, .26); --t-border: #5eead4; --t-border-hover: #14b8a6; --t-shadow: rgba(13, 148, 136, .45); --t-badge: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%); --t-pill: #ccfbf1; --t-accent: #0f766e; --t-track: rgba(13, 148, 136, .14); --t-bar: linear-gradient(90deg, #2dd4bf 0%, #0f766e 100%); }
+
+/* Thẻ con có nền theo tông màu (như admin-sport-item) */
+.owner-item {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 14px;
+  border: 1px solid var(--t-border, #e2e8f0);
+  border-radius: 14px;
+  background:
+    radial-gradient(170px 100px at 100% 0%, var(--t-glow, transparent), transparent 72%),
+    var(--t-surface, #fff);
+  box-shadow: 0 10px 22px -18px var(--t-shadow, rgba(15, 23, 42, .3)), inset 0 1px 0 rgba(255, 255, 255, .92);
+  color: inherit;
+  text-decoration: none;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.owner-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--t-border-hover, var(--t-border));
+  box-shadow: 0 14px 26px -16px var(--t-shadow, rgba(15, 23, 42, .4)), inset 0 1px 0 rgba(255, 255, 255, .96);
+}
+.owner-item__badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--t-badge);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 6px 14px -6px var(--t-shadow);
+}
+.owner-item__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--t-badge);
+  color: #fff;
+  box-shadow: 0 10px 20px -10px var(--t-shadow), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+.owner-item__icon .material-symbols-outlined { font-size: 21px; }
+.owner-item__pill {
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--t-pill);
+  color: var(--t-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.owner-item__track { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--t-track); }
+.owner-item__track span { display: block; height: 100%; border-radius: inherit; background: var(--t-bar); transition: width .4s ease; }
+
+/* Việc cần xử lý: thanh màu trên đầu thẻ (như admin-attention-card) */
+.owner-todo { display: flex; align-items: center; gap: 12px; padding-top: 15px; }
+.owner-todo::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--t-bar); }
+.owner-todo__body { flex: 1; min-width: 0; }
+.owner-todo__title { font-size: 13.5px; font-weight: 700; color: #0f172a; }
+.owner-todo__desc { margin-top: 2px; font-size: 12px; font-weight: 500; color: #475569; }
+.owner-todo__go {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .88);
+  color: var(--t-accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.owner-all-good { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: #166534; }
+.owner-all-good .material-symbols-outlined { font-size: 20px; }
+
+/* Khách đặt sân hôm nay */
+.owner-guest { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.owner-guest__info { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.owner-guest__avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--t-badge);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 8px 16px -8px var(--t-shadow);
+}
+.owner-guest__name { font-size: 14px; font-weight: 700; color: #0f172a; }
+.owner-guest__name small { margin-left: 6px; font-size: 12px; font-weight: 600; color: #475569; }
+.owner-guest__meta { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--t-accent); }
+.owner-guest__time { margin-top: 2px; font-size: 12px; font-weight: 600; color: #334155; }
+.owner-guest__time strong { color: #0f172a; }
+.owner-guest__side { flex-shrink: 0; text-align: right; }
+.owner-guest__amount { font-size: 14px; font-weight: 700; color: var(--t-accent); white-space: nowrap; }
+.owner-guest__action {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--t-badge);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.owner-guest__done { display: inline-block; margin-top: 6px; padding: 3px 8px; border-radius: 999px; background: var(--t-pill); color: var(--t-accent); font-size: 11px; font-weight: 700; }
+
+/* Hiệu quả từng sân */
+.owner-court__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.owner-court__name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13.5px; font-weight: 700; color: #0f172a; }
+.owner-court__meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; font-weight: 600; color: #475569; }
+.owner-court__meta strong { color: var(--t-accent); }
+
+/* Header: chọn kỳ thống kê và trạng thái */
+.owner-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.owner-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #86efac;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #dcfce7 0%, #e0f2fe 100%);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #166534;
+  box-shadow: 0 6px 14px -10px rgba(21, 128, 61, .35);
+}
+.owner-status-pill .material-symbols-outlined { font-size: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-item, .owner-item__track span { transition: none; }
+  .owner-item:hover { transform: none; }
+}

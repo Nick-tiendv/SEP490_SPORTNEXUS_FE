@@ -91,7 +91,24 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
     checkInRate: toNumber(data.checkInRatePercent),
     refunded: toNumber(data.totalRefundedAmount),
     penalty: toNumber(data.totalPenaltyRetainedAmount),
+    // Xếp hạng cơ sở theo số đơn trong kỳ (AdminFacilityBookingRankDto, docs 11.17).
+    topFacilities: (Array.isArray(data.topFacilities) ? data.topFacilities : []).map(item => ({
+      id: String(item.facilityId ?? ''),
+      name: item.facilityName || '—',
+      ownerName: item.ownerName || '',
+      totalBookings: toNumber(item.totalBookings) ?? 0,
+      activeBookings: toNumber(item.activeBookings) ?? 0,
+      cancelledBookings: toNumber(item.cancelledBookings) ?? 0,
+    })),
   }
+}
+
+// Số đơn theo từng sân con của một cơ sở cho Admin.
+// BE CHƯA có endpoint này (chỉ có revenueByCourt ở GET /owner/dashboard cho chủ sân).
+// Khi BE bổ sung: đặt ADMIN_COURT_STATS_READY = true và gọi API trong hàm dưới, trả về [{ courtName, bookings }].
+export const ADMIN_COURT_STATS_READY = false
+export async function getAdminCourtBookingStats() {
+  return []
 }
 
 // ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------
