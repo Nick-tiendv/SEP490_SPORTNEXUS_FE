@@ -7,6 +7,7 @@ import { useApi } from '../../hooks/useApi.js'
 import { endOwnerBookingSession, getFacilityBookings, getOwnerBooking, getOwnerBookingsPage } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
+import OwnerCancelBookingModal from './OwnerCancelBookingModal.jsx'
 import { addDays, formatDateTime, formatTime, formatVND, statusBadge, toDateKey } from '../shared.js'
 
 const PAGE_SIZE = 15
@@ -26,12 +27,13 @@ function Badge({ status }) {
   return <span className={b.className}>{b.label}</span>
 }
 
-function BookingDetailModal({ bookingId, onClose }) {
+function BookingDetailModal({ bookingId, onClose, onRequestCancel }) {
   const detail = useApi(() => getOwnerBooking(bookingId), [bookingId])
   const b = detail.data
   const [ending, setEnding] = useState(false)
   // Kết thúc ca sớm: chỉ khi đơn đã có người check-in và ca chưa hết giờ
   const canEndEarly = b && String(b.bookingStatus).toUpperCase() === 'CHECKED_IN' && b.endTime && new Date(b.endTime) > new Date()
+  const canCancel = b && ['PENDING', 'PAID'].includes(String(b.bookingStatus).toUpperCase())
   const endEarly = async () => {
     if (!(await confirmDialog('Kết thúc ca sớm? Mọi người chơi đang trong sân sẽ được check-out. Không hoàn tiền cho phần thời gian còn lại.', { title: 'Kết thúc ca sớm', confirmLabel: 'Kết thúc ca' }))) return
     setEnding(true)
@@ -123,6 +125,15 @@ function BookingDetailModal({ bookingId, onClose }) {
         )}
         <div className="snx-modal-foot">
           <Link to="/owner/schedule" className="snx-btn snx-btn--secondary">Mở lịch đặt sân</Link>
+          {canCancel && (
+            <button
+              type="button"
+              className="snx-btn snx-btn--danger"
+              onClick={() => onRequestCancel({ ...b, bookingId: b.bookingId || b.id || bookingId })}
+            >
+              Hủy đơn
+            </button>
+          )}
           {canEndEarly && <button type="button" className="snx-btn snx-btn--danger" disabled={ending} onClick={endEarly}>{ending ? 'Đang kết thúc…' : 'Kết thúc ca sớm'}</button>}
           <button type="button" className="snx-btn snx-btn--primary" onClick={onClose}>Đóng</button>
         </div>
@@ -131,7 +142,7 @@ function BookingDetailModal({ bookingId, onClose }) {
   )
 }
 
-function ListView({ facilityId, onOpen }) {
+function ListView({ facilityId, reloadKey, onOpen, onRequestCancel }) {
   const [status, setStatus] = useState('')
   const [dateFrom, setDateFrom] = useState(addDays(toDateKey(), -7))
   const [dateTo, setDateTo] = useState(addDays(toDateKey(), 7))
@@ -140,7 +151,7 @@ function ListView({ facilityId, onOpen }) {
   const [page, setPage] = useState(1)
   const list = useApi(
     () => getOwnerBookingsPage({ facilityId, status, dateFrom, dateTo, search, page, pageSize: PAGE_SIZE }),
-    [facilityId, status, dateFrom, dateTo, search, page],
+    [facilityId, status, dateFrom, dateTo, search, page, reloadKey],
     { enabled: !!facilityId, initialData: { items: [], total: 0 } },
   )
   const d = list.data
@@ -176,17 +187,27 @@ function ListView({ facilityId, onOpen }) {
             <table className="snx-table">
               <thead><tr><th>Khách</th><th>Sân</th><th>Ca</th><th>Tiền</th><th>Người chơi</th><th>Trạng thái</th><th /></tr></thead>
               <tbody>
-                {d.items.map((b) => (
-                  <tr key={b.bookingId}>
-                    <td><strong>{b.customerName || '—'}</strong><div className="snx-muted">{b.customerPhone}{b.isWalkIn ? ' • Vãng lai' : ''}</div></td>
-                    <td>{b.courtName}<div className="snx-muted">{b.sportName}</div></td>
-                    <td>{formatDateTime(b.startTime)}<div className="snx-muted">đến {formatTime(b.endTime)}</div></td>
-                    <td>{formatVND(b.totalAmount)}</td>
-                    <td>{b.checkedInCount ?? 0}/{b.participantCount ?? 0} đã vào</td>
-                    <td><Badge status={b.bookingStatus} />{b.isNoShow && <div><span className="snx-badge snx-badge--red" style={{ marginTop: 4 }}>Không đến (no-show)</span></div>}</td>
-                    <td><button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => onOpen(b.bookingId)}>Chi tiết</button></td>
-                  </tr>
-                ))}
+                {d.items.map((b) => {
+                  const canCancel = ['PENDING', 'PAID'].includes(String(b.bookingStatus || '').toUpperCase())
+                  return (
+                    <tr key={b.bookingId}>
+                      <td><strong>{b.customerName || '—'}</strong><div className="snx-muted">{b.customerPhone}{b.isWalkIn ? ' • Vãng lai' : ''}</div></td>
+                      <td>{b.courtName}<div className="snx-muted">{b.sportName}</div></td>
+                      <td>{formatDateTime(b.startTime)}<div className="snx-muted">đến {formatTime(b.endTime)}</div></td>
+                      <td>{formatVND(b.totalAmount)}</td>
+                      <td>{b.checkedInCount ?? 0}/{b.participantCount ?? 0} đã vào</td>
+                      <td><Badge status={b.bookingStatus} />{b.isNoShow && <div><span className="snx-badge snx-badge--red" style={{ marginTop: 4 }}>Không đến (no-show)</span></div>}</td>
+                      <td>
+                        <div className="snx-row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                          <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => onOpen(b.bookingId)}>Chi tiết</button>
+                          {canCancel && (
+                            <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={() => onRequestCancel(b)}>Hủy đơn</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -203,10 +224,10 @@ function ListView({ facilityId, onOpen }) {
   )
 }
 
-function DayView({ facilityId, onOpen }) {
+function DayView({ facilityId, reloadKey, onOpen }) {
   const [date, setDate] = useState(toDateKey())
   const [status, setStatus] = useState('')
-  const day = useApi(() => getFacilityBookings(facilityId, { date, status }), [facilityId, date, status], { enabled: !!facilityId, initialData: [] })
+  const day = useApi(() => getFacilityBookings(facilityId, { date, status }), [facilityId, date, status, reloadKey], { enabled: !!facilityId, initialData: [] })
   const items = Array.isArray(day.data) ? day.data : []
   return (
     <div className="snx-stack">
@@ -244,9 +265,23 @@ function DayView({ facilityId, onOpen }) {
 }
 
 export default function OwnerBookings() {
-  const { facilityId, facility } = useOwnerContext()
+  const { facilityId, facility, refreshWallet } = useOwnerContext()
   const [view, setView] = useState('list')
   const [openId, setOpenId] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const handleRequestCancel = (b) => {
+    setCancelTarget({
+      bookingId: b.bookingId || b.id,
+      customerName: b.customerName ?? b.hostName,
+      courtName: b.courtName,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      totalAmount: b.totalAmount,
+      isWalkIn: b.isWalkIn,
+    })
+  }
 
   return (
     <div className="snx-stack">
@@ -264,11 +299,23 @@ export default function OwnerBookings() {
       {!facilityId ? (
         <NoFacilityState what="nhận đơn đặt sân" />
       ) : view === 'list' ? (
-        <ListView facilityId={facilityId} onOpen={setOpenId} />
+        <ListView facilityId={facilityId} reloadKey={reloadKey} onOpen={setOpenId} onRequestCancel={handleRequestCancel} />
       ) : (
-        <DayView facilityId={facilityId} onOpen={setOpenId} />
+        <DayView facilityId={facilityId} reloadKey={reloadKey} onOpen={setOpenId} />
       )}
-      {openId && <BookingDetailModal bookingId={openId} onClose={() => setOpenId(null)} />}
+      {openId && <BookingDetailModal bookingId={openId} onClose={() => setOpenId(null)} onRequestCancel={handleRequestCancel} />}
+      {cancelTarget && (
+        <OwnerCancelBookingModal
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onSuccess={() => {
+            setCancelTarget(null)
+            setOpenId(null)
+            setReloadKey((k) => k + 1)
+            refreshWallet().catch(() => {})
+          }}
+        />
+      )}
     </div>
   )
 }

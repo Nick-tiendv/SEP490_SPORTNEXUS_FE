@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { cancelOwnerBooking, checkInBooking, createWalkInBooking, getCancellationReasons, getFacilitySlots, updateSlotStatus } from '../../api/owner'
+import { checkInBooking, createWalkInBooking, getFacilitySlots, updateSlotStatus } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TimeInput24 from '../../components/common/TimeInput24.jsx'
+import OwnerCancelBookingModal from '../Bookings/OwnerCancelBookingModal.jsx'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 // Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
@@ -98,9 +99,9 @@ export default function ViewCourtBookingSchedule() {
   const calendarKey = `${facilityId}|${selectedDate}|${reloadKey}`
   const [calendar, setCalendar] = useState(null) // { key, data }
   const [calendarError, setCalendarError] = useState(null) // { key, message }
-  const [cancelReasons, setCancelReasons] = useState([])
 
   const [selectedSlot, setSelectedSlot] = useState(null) // { court, slot }
+  const [cancelBookingTarget, setCancelBookingTarget] = useState(null)
   const [walkinSlot, setWalkinSlot] = useState(null) // { court, slot } hoặc { items: [{ court, slot }] } khi đặt nhiều ca
   // Chế độ chọn nhiều ca rời nhau (gửi courtSlotIds). Danh sách chọn gắn với cơ sở + ngày.
   const [multiMode, setMultiMode] = useState(false)
@@ -110,10 +111,6 @@ export default function ViewCourtBookingSchedule() {
   const [walkinSlots, setWalkinSlots] = useState(1)
   const [walkinNote, setWalkinNote] = useState('')
   const [walkinAutoCheckIn, setWalkinAutoCheckIn] = useState(false)
-  const [cancelMode, setCancelMode] = useState(false)
-  const [cancelReasonCode, setCancelReasonCode] = useState('')
-  const [cancelReasonText, setCancelReasonText] = useState('')
-  const [lockAfterCancel, setLockAfterCancel] = useState(false)
   const [busy, setBusy] = useState(false)
   // Nhập giờ thủ công cho khách vãng lai
   const [manual, setManual] = useState({ open: false, courtId: '', from: '', to: '', error: '' })
@@ -129,10 +126,6 @@ export default function ViewCourtBookingSchedule() {
       .catch((error) => !cancelled && setCalendarError({ key, message: error.message }))
     return () => { cancelled = true }
   }, [facilityId, selectedDate, reloadKey])
-
-  useEffect(() => {
-    getCancellationReasons().then(setCancelReasons).catch(() => {})
-  }, [])
 
   const reload = () => setReloadKey((value) => value + 1)
   // Giữ dữ liệu lần tải trước của cùng cơ sở + ngày trong lúc tải lại để lưới không nháy.
@@ -250,10 +243,6 @@ export default function ViewCourtBookingSchedule() {
       return
     }
     setSelectedSlot({ court, slot })
-    setCancelMode(false)
-    setCancelReasonCode(String(cancelReasons[0]?.code ?? ''))
-    setCancelReasonText('')
-    setLockAfterCancel(false)
   }
 
   const runAction = async (action, successMessage, after) => {
@@ -334,28 +323,6 @@ export default function ViewCourtBookingSchedule() {
       () => checkInBooking(slot.bookingId, { checkInAllParticipants: true }),
       '✅ Đã check-in cho đơn đặt sân!',
       () => { setSelectedSlot(null); refreshWallet().catch(() => {}) },
-    )
-  }
-
-  // Hủy đơn: POST /bookings/owner/{id}/cancel. Người đặt được hoàn 100% + voucher 10%;
-  // chủ sân bị phạt (BE tự trừ ví): dưới 48h 20% + 10 điểm Fair Play, từ 48h 10%; đơn vãng lai trả tại quầy không phạt.
-  const handleCancelBooking = (e) => {
-    e.preventDefault()
-    const { slot } = selectedSlot
-    const reason = cancelReasons.find((item) => String(item.code) === cancelReasonCode)
-    if (reason?.isCustom && !cancelReasonText.trim()) {
-      showToast('Vui lòng nhập lý do hủy.', 'error')
-      return
-    }
-    runAction(
-      () =>
-        cancelOwnerBooking(slot.bookingId, {
-          reasonCode: reason ? reason.code : null,
-          reason: reason?.isCustom ? cancelReasonText.trim() : reason?.label || cancelReasonText.trim() || null,
-          lockSlotAfterCancel: lockAfterCancel,
-        }),
-      'Đã hủy đơn. Người đặt được hoàn 100% và nhận voucher 10%; tiền phạt hủy đơn (nếu có) đã trừ vào ví của bạn.',
-      () => setSelectedSlot(null),
     )
   }
 
@@ -906,87 +873,58 @@ export default function ViewCourtBookingSchedule() {
                     ))}
                   </div>
 
-                  {cancelMode ? (
-                    <form onSubmit={handleCancelBooking}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Lý do hủy:</label>
-                      <select value={cancelReasonCode} onChange={(e) => setCancelReasonCode(e.target.value)} style={{ ...inputStyle, marginBottom: '10px', background: '#FFFFFF' }}>
-                        {cancelReasons.map((reason) => (
-                          <option key={reason.code} value={String(reason.code)}>{reason.label}</option>
-                        ))}
-                      </select>
-                      {cancelReasons.find((item) => String(item.code) === cancelReasonCode)?.isCustom && (
-                        <input
-                          type="text"
-                          placeholder="Nhập lý do hủy..."
-                          value={cancelReasonText}
-                          onChange={(e) => setCancelReasonText(e.target.value)}
-                          style={{ ...inputStyle, marginBottom: '10px' }}
-                        />
-                      )}
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#1E293B', marginBottom: '8px' }}>
-                        <input type="checkbox" checked={lockAfterCancel} onChange={(e) => setLockAfterCancel(e.target.checked)} />
-                        Khóa ca này để bảo trì sau khi hủy
-                      </label>
-                      <div style={{ fontSize: '12px', color: '#9A3412', fontWeight: 600, margin: '0 0 16px 0', padding: '10px 12px', borderRadius: '10px', background: '#FFF7ED', border: '1px solid #FED7AA', lineHeight: 1.5 }}>
-                        <div>Người đặt được hoàn 100% và nhận voucher giảm 10%.</div>
-                        <div style={{ marginTop: '4px' }}>Bạn bị trừ tiền phạt thẳng vào ví (ví có thể bị âm):</div>
-                        <ul style={{ margin: '2px 0 0', paddingLeft: '18px' }}>
-                          <li>Hủy trong vòng 48 giờ trước giờ chơi: phạt <strong>20% giá trị đơn</strong> và trừ <strong>10 điểm Fair Play</strong>.</li>
-                          <li>Hủy trước giờ chơi từ 48 giờ trở lên: phạt <strong>10% giá trị đơn</strong>.</li>
-                          <li>Đơn khách vãng lai trả tại quầy: không phạt.</li>
-                        </ul>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    {state === 'paid' && (
+                      <button
+                        onClick={handleQuickCheckIn}
+                        disabled={busy}
+                        style={{
+                          flex: 1,
+                          background: '#10B981',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '10px',
+                          padding: '12px',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          opacity: busy ? 0.6 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>how_to_reg</span>
+                        {busy ? 'Đang check-in...' : 'Check-in thủ công'}
+                      </button>
+                    )}
+                    {state !== 'checked_in' && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCancelBookingTarget({
+                            bookingId: slot.bookingId,
+                            courtName: court.name,
+                            customerName: slot.customerName,
+                            startTime: slot.startTime,
+                            endTime: slot.endTime,
+                            totalAmount: slot.bookingTotalAmount ?? slot.totalAmount ?? null,
+                            fallbackAmount: slot.price,
+                            isWalkIn: slot.isWalkIn,
+                          })
+                        }
+                        style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', flex: state === 'paid' ? undefined : 1 }}
+                      >
+                        Hủy đặt sân
+                      </button>
+                    )}
+                    {state === 'checked_in' && (
+                      <div style={{ flex: 1, textAlign: 'center', fontSize: '13px', color: '#047857', fontWeight: 700 }}>
+                        Khách đã check-in — đơn không thể hủy.
                       </div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <button type="button" onClick={() => setCancelMode(false)} style={{ flex: 1, background: '#FFFFFF', color: '#475569', border: '1px solid #CBD5E1', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                          Quay lại
-                        </button>
-                        <button type="submit" disabled={busy} style={{ flex: 1, background: '#DC2626', color: '#FFFFFF', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                          {busy ? 'Đang hủy...' : 'Xác nhận hủy đơn'}
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      {state === 'paid' && (
-                        <button
-                          onClick={handleQuickCheckIn}
-                          disabled={busy}
-                          style={{
-                            flex: 1,
-                            background: '#10B981',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '12px',
-                            fontSize: '14px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            opacity: busy ? 0.6 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>how_to_reg</span>
-                          {busy ? 'Đang check-in...' : 'Check-in thủ công'}
-                        </button>
-                      )}
-                      {state !== 'checked_in' && (
-                        <button
-                          onClick={() => setCancelMode(true)}
-                          style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', flex: state === 'paid' ? undefined : 1 }}
-                        >
-                          Hủy đặt sân
-                        </button>
-                      )}
-                      {state === 'checked_in' && (
-                        <div style={{ flex: 1, textAlign: 'center', fontSize: '13px', color: '#047857', fontWeight: 700 }}>
-                          Khách đã check-in — đơn không thể hủy.
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </>
               )
             })()}
@@ -1118,6 +1056,19 @@ export default function ViewCourtBookingSchedule() {
             </form>
           </div>
         </div>
+      )}
+
+      {cancelBookingTarget && (
+        <OwnerCancelBookingModal
+          booking={cancelBookingTarget}
+          onClose={() => setCancelBookingTarget(null)}
+          onSuccess={() => {
+            setCancelBookingTarget(null)
+            setSelectedSlot(null)
+            refreshWallet().catch(() => {})
+            reload()
+          }}
+        />
       )}
     </div>
   )
