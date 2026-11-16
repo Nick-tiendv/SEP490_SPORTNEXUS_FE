@@ -8,6 +8,7 @@ import { getLfgQrTicket } from '../../api/player/lfgApi.js'
 import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
 import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
+import { getFacilityById } from '../../api/player/facilityApi.js'
 import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
 import { vnDateKey } from '../../utils/vnTime.js'
 
@@ -39,11 +40,12 @@ function checkInWindowOf(ticket, nowMs) {
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
+const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
   id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
   facilityId: facilityId || null,
+  facilityImageUrl: facilityImageUrl || null,
   venueName: facilityName || '—',
   address: facilityAddress || '—',
   courtName: courtName || '—',
@@ -156,12 +158,24 @@ function CheckInQR() {
               detail?.ticketCode ||
               ''
 
+            const facilityDetail = detail?.facilityId
+              ? await getFacilityById(detail.facilityId).catch(() => null)
+              : null
+            const facilityImageUrl =
+              detail?.facilityImageUrl ||
+              detail?.imageUrl ||
+              facilityDetail?.thumbnailUrl ||
+              facilityDetail?.imageItems?.find((img) => img.isThumbnail)?.url ||
+              facilityDetail?.images?.[0] ||
+              null
+
             return toTicket({
               id: bookingId,
               qrCode: rawQrCode,
               facilityId: detail?.facilityId,
               facilityName: detail?.facilityName,
               facilityAddress: detail?.facilityAddress,
+              facilityImageUrl,
               courtName: detail?.courtName,
               sportName: detail?.sportName,
               startTime: playWindow.startTime ?? detail?.startTime,
@@ -1256,7 +1270,7 @@ function CheckInQR() {
               }}
             >
               <img
-                src="https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=400&fit=crop"
+                src={ticketData?.facilityImageUrl || '/sports-bg.jpg'}
                 alt={ticketData?.courtName || '—'}
                 style={{
                   width: '100%',

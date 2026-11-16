@@ -88,9 +88,10 @@ export function transformFacilityToCourt(fac) {
   if (!fac) return null
 
   const thumbnail =
+    fac.thumbnailUrl ||
     fac.imageItems?.find((img) => img.isThumbnail)?.url ||
     fac.images?.[0] ||
-    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=400&h=300&fit=crop'
+    '/sports-bg.jpg'
 
   const rawImages = Array.isArray(fac.images)
     ? fac.images
@@ -106,18 +107,28 @@ export function transformFacilityToCourt(fac) {
   // Tìm mức giá sàn thấp nhất từ các sân con đang ACTIVE
   const activeCourts = childCourts.filter((c) => c.status === 'ACTIVE')
   const validPrices = activeCourts.map((c) => Number(c.defaultPrice)).filter((p) => !isNaN(p) && p > 0)
-  const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : (childCourts[0]?.defaultPrice || 100000)
+  const firstChildPrice = Number(childCourts[0]?.defaultPrice)
+  const rawMinPrice = Number(fac.minPrice)
+  const minPrice =
+    validPrices.length > 0
+      ? Math.min(...validPrices)
+      : firstChildPrice > 0
+      ? firstChildPrice
+      : rawMinPrice > 0
+      ? rawMinPrice
+      : 0
 
   const streetPart = fac.address?.split(',')?.[0]?.trim() || fac.name
   const districtKey = fac.district
     ? detectDistrictFromAddress(`, ${fac.district}, ${fac.province || ''}`)
     : detectDistrictFromAddress(fac.address)
 
-  const openStr = fac.openTime ? fac.openTime.slice(0, 5) : '06:00'
-  const closeStr = fac.closeTime ? fac.closeTime.slice(0, 5) : '22:00'
+  const openStr = fac.openTime ? fac.openTime.slice(0, 5) : ''
+  const closeStr = fac.closeTime ? fac.closeTime.slice(0, 5) : ''
+  const openHours = openStr && closeStr ? `${openStr} - ${closeStr}` : ''
 
   const amenitiesList = Array.isArray(fac.amenities) ? fac.amenities : []
-  const amenitiesSummary = amenitiesList.map((a) => a.name).slice(0, 3).join(' • ') || 'Đèn ban đêm • Bãi giữ xe'
+  const amenitiesSummary = amenitiesList.map((a) => a.name).filter(Boolean).slice(0, 3).join(' • ')
   const lat = parseCoordOrNull(fac.latitude ?? fac.lat)
   const lng = parseCoordOrNull(fac.longitude ?? fac.lng)
 
@@ -137,10 +148,10 @@ export function transformFacilityToCourt(fac) {
     lng,
     latitude: lat,
     longitude: lng,
-    rating: fac.averageRating > 0 ? fac.averageRating : 4.9,
-    reviewCount: fac.reviewCount || 128,
+    rating: fac.averageRating > 0 ? Number(fac.averageRating) : null,
+    reviewCount: Number(fac.reviewCount) || 0,
     price: minPrice,
-    courtCount: childCourts.length || 4,
+    courtCount: fac.courtCount ?? childCourts.length ?? 0,
     image: thumbnail,
     images: rawImages.length ? rawImages : [thumbnail],
     imageItems: Array.isArray(fac.imageItems) ? fac.imageItems : [],
@@ -148,8 +159,8 @@ export function transformFacilityToCourt(fac) {
     courts: childCourts,
     sports,
     sport: primarySport,
-    subCourt: childCourts[0]?.name || `${fac.name} - Sân 01`,
-    subCourtDesc: `${openStr} - ${closeStr} • ${amenitiesSummary}`,
+    subCourt: childCourts[0]?.name || '',
+    subCourtDesc: [openHours, amenitiesSummary].filter(Boolean).join(' • '),
     description: fac.description,
     phone: fac.phone,
     openTime: openStr,

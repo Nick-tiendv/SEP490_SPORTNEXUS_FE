@@ -32,6 +32,7 @@ import { finalReason } from './lfgReason.js'
 // Chủ kèo tự hủy được tới 24 giờ trước giờ chơi (BE trả hostCancelUntil); sau mốc này mới tạo yêu cầu hủy để bỏ phiếu
 const HOST_CANCEL_BEFORE_MS = 24 * 60 * 60 * 1000
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
+import { useSport } from '../Context/sportContext.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getBookingQrTicket } from '../../api/player/bookingApi.js'
@@ -303,8 +304,13 @@ function CommunityFeed() {
   }, [])
   const [isSubmittingCancelReq, setIsSubmittingCancelReq] = useState(false)
 
-  // Sports filter state: 'all' | 'pickleball' | 'badminton'
-  const [activeSportFilter, setActiveSportFilter] = useState('all')
+  // Bộ lọc môn thể thao dùng chung SportContext để đồng bộ với Sidebar & Hồ sơ ghép trận cá nhân
+  const { selectedSports, selectOnlySport, selectAllSports, isAllActive, SPORTS_LIST } = useSport()
+  const pickedSportKey = selectedSports.length === 1 ? selectedSports[0] : null
+  const pickedSportMeta = pickedSportKey ? SPORTS_LIST.find((s) => s.key === pickedSportKey) : null
+  const pickedSportName = pickedSportMeta?.label || pickedSportMeta?.name || ''
+  const pickedStanding = pickedSportKey ? standing.forSport(pickedSportKey) : null
+  const activeSportFilter = pickedSportKey || 'all'
   const [profileSports, setProfileSports] = useState(() => loadProfileRegisteredSports())
   const [facilitiesList, setFacilitiesList] = useState([])
   const [learnedDesires, setLearnedDesires] = useState(() => loadLearnedSearchDesires())
@@ -327,7 +333,6 @@ function CommunityFeed() {
   // Modals state
   const [detailModal, setDetailModal] = useState(null) // match object or null (xem toàn bộ thông tin chi tiết kèo)
   const [bookingModal, setBookingModal] = useState(null) // match object or null
-  const [createMatchOpen, setCreateMatchOpen] = useState(false)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [rulesModalOpen, setRulesModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
@@ -515,17 +520,6 @@ function CommunityFeed() {
     if (km != null) return km <= (playerArea.radiusKm || 5)
     return isMatchNearUser(m?.location, userProfileLocation)
   }
-
-  // New match form state
-  const [newMatch, setNewMatch] = useState({
-    sport: 'badminton',
-    title: '',
-    location: '',
-    time: '19:30 Ngày mai',
-    level: 'Trung bình - Khá',
-    slots: 2,
-    deposit: 50000,
-  })
 
   // Toast auto-hide
   useEffect(() => {
@@ -982,72 +976,6 @@ function CommunityFeed() {
     }
   }
 
-  // Create match submit handler
-  const handleCreateMatchSubmit = (e) => {
-    e.preventDefault()
-    if (!newMatch.title || !newMatch.location) {
-      toast.warning('Vui lòng nhập đầy đủ tiêu đề và địa điểm sân!')
-      return
-    }
-
-    const sportBadgeMap = {
-      badminton: 'CẦU LÔNG ĐÔI',
-      pickleball: 'PICKLEBALL ĐÔI',
-      football: 'BÓNG ĐÁ SÂN 7',
-      basketball: 'BÓNG RỔ 3x3',
-      tennis: 'QUẦN VỢT ĐÔI',
-    }
-    const sportImageMap = {
-      badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&h=600&fit=crop',
-      pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=800&h=600&fit=crop',
-  football: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&h=600&fit=crop',
-  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=600&fit=crop',
-  tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&h=600&fit=crop',
-  volleyball: 'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=800&h=600&fit=crop',
-  table_tennis: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?w=800&h=600&fit=crop',
-
-
-
-    }
-
-    const created = {
-      id: Date.now(),
-      sport: newMatch.sport,
-      sportBadge: sportBadgeMap[newMatch.sport] || 'GIAO LƯU THỂ THAO',
-      subBadge: '✓ Kèo Mới Đăng',
-      levelTag: newMatch.level,
-      slotTag: `Cần ${newMatch.slots} Người`,
-      time: newMatch.time,
-      title: newMatch.title,
-      location: newMatch.location,
-      groupDesc: `Host: ${currentUser.name || 'Bạn'}`,
-      roster: [
-        { initials: (currentUser.name || 'B').slice(0, 2).toUpperCase(), bg: '#2D5F3F', name: currentUser.name || 'Bạn' },
-        ...Array.from({ length: Number(newMatch.slots) }, (_, i) => ({
-          initials: '?',
-          bg: 'empty',
-          name: `Slot ${i + 1}`,
-        })),
-      ],
-      currentSlots: 1,
-      totalSlots: 1 + Number(newMatch.slots),
-      priceLabel: 'Tiền cọc ký quỹ:',
-      price: Number(newMatch.deposit),
-      priceDisplay: `${new Intl.NumberFormat('vi-VN').format(newMatch.deposit)} đ`,
-      buttonText: 'Chốt Slot Ngay',
-      isFlashClaim: false,
-      image: sportImageMap[newMatch.sport] || sportImageMap.badminton,
-    }
-
-    setMatches((prev) => [created, ...prev])
-    setCreateMatchOpen(false)
-    setToastMessage({
-      title: 'Đăng Kèo Thành Công!',
-      desc: 'Kèo của bạn đã được broadcast tới toàn bộ mạng lưới SportNexus.',
-      type: 'success',
-    })
-  }
-
   // Toggle time slot selection
   const toggleTimeSlot = (slot) => {
     setSelectedTimeSlots((prev) => {
@@ -1061,7 +989,7 @@ function CommunityFeed() {
 
   // Reset filters
   const handleResetFilters = () => {
-    setActiveSportFilter('all')
+    selectAllSports()
     setSelectedTimeSlots(['morning', 'afternoon', 'evening'])
     setSelectedSkillLevel('all')
     setSelectedDistance('all')
@@ -1113,14 +1041,16 @@ function CommunityFeed() {
 
   // Chọn bộ lọc môn thể thao kèm cơ chế tự học nhu cầu mới của người chơi
   const handleSelectSportFilterWithLearning = (sportKey) => {
-    setActiveSportFilter(sportKey)
-    if (sportKey && sportKey !== 'all' && sportKey !== 'profile_matched') {
-      const updated = recordNewPlayerDesire({
-        sportKey,
-        source: 'Chọn bộ lọc môn thể thao mong muốn trên Sàn Ghép Trận',
-      })
-      setLearnedDesires(updated)
+    if (!sportKey || sportKey === 'all' || sportKey === 'profile_matched') {
+      selectAllSports()
+      return
     }
+    selectOnlySport(sportKey)
+    const updated = recordNewPlayerDesire({
+      sportKey,
+      source: 'Chọn bộ lọc môn thể thao mong muốn trên Sàn Ghép Trận',
+    })
+    setLearnedDesires(updated)
   }
 
   // Chọn bộ lọc trình độ kèm cơ chế tự học nhu cầu mới
@@ -1166,8 +1096,8 @@ function CommunityFeed() {
     .filter((m) => {
       if (activeSportFilter === 'profile_matched') {
         if (allowedSportKeySet.size > 0 && !allowedSportKeySet.has(m.sport)) return false
-      } else if (activeSportFilter && activeSportFilter !== 'all') {
-        if (m.sport !== activeSportFilter) return false
+      } else if (!isAllActive && selectedSports.length > 0) {
+        if (!selectedSports.includes(m.sport)) return false
       }
       if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
       if (effectiveSkillFilter && effectiveSkillFilter !== 'all') {
@@ -1196,7 +1126,7 @@ function CommunityFeed() {
 
   void matches
     .filter((m) => {
-      if (activeSportFilter !== 'all' && m.sport !== activeSportFilter) return false
+      if (!isAllActive && selectedSports.length > 0 && !selectedSports.includes(m.sport)) return false
       if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
       if (filterFlashOnly && !m.isFlashClaim) return false
       if (levelFilter !== 'all' && m.skillTag && m.skillTag !== levelFilter) return false
@@ -1330,9 +1260,9 @@ function CommunityFeed() {
 
           {/* Tất Cả Thể Thao */}
           <button
-            onClick={() => setActiveSportFilter('all')}
+            onClick={() => selectAllSports()}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'all'
+              isAllActive
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -1345,7 +1275,7 @@ function CommunityFeed() {
           <button
             onClick={() => handleSelectSportFilterWithLearning('pickleball')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'pickleball'
+              !isAllActive && selectedSports.includes('pickleball')
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -1358,7 +1288,7 @@ function CommunityFeed() {
           <button
             onClick={() => handleSelectSportFilterWithLearning('badminton')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'badminton'
+              !isAllActive && selectedSports.includes('badminton')
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -1371,7 +1301,7 @@ function CommunityFeed() {
           <button
             onClick={() => handleSelectSportFilterWithLearning('football')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'football'
+              !isAllActive && selectedSports.includes('football')
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -1384,7 +1314,7 @@ function CommunityFeed() {
           <button
             onClick={() => handleSelectSportFilterWithLearning('basketball')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'basketball'
+              !isAllActive && selectedSports.includes('basketball')
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -1397,7 +1327,7 @@ function CommunityFeed() {
           <button
             onClick={() => handleSelectSportFilterWithLearning('tennis')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              activeSportFilter === 'tennis'
+              !isAllActive && selectedSports.includes('tennis')
                 ? 'bg-[#3B6817] text-white shadow-sm'
                 : 'bg-transparent text-gray-700 hover:bg-gray-100'
             }`}
@@ -2220,7 +2150,11 @@ function CommunityFeed() {
                 </div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#DCFCE7] to-[#BBF7D0] text-[#15803D] border border-[#86EFAC] text-[11px] font-black shadow-xs tracking-wide whitespace-nowrap shrink-0">
                   <span className="material-symbols-outlined text-[14px] text-[#15803D]">military_tech</span>
-                  {standing.best?.rank ? `Hạng ${standing.best.rank}` : 'Chưa xếp hạng'}
+                  {pickedSportKey
+                    ? pickedStanding?.rank
+                      ? `Hạng ${pickedStanding.rank}`
+                      : 'Chưa xếp hạng'
+                    : 'Chưa chọn môn'}
                 </span>
               </div>
 
@@ -2240,9 +2174,11 @@ function CommunityFeed() {
                     <h4 className="font-black text-[17px] text-[#0F172A] leading-tight break-words min-w-0">
                       {currentUser.name || 'Bạn'}
                     </h4>
-                    <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
-                      {eloText(standing.best)}
-                    </span>
+                    {pickedSportKey && (
+                      <span className="px-2 py-0.5 rounded-md bg-[#E0F2FE] text-[#0369A1] font-extrabold text-[10.5px] whitespace-nowrap">
+                        {eloText(pickedStanding, pickedSportName)}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-start gap-1.5 mt-1 text-[12px] text-gray-700 font-bold">
@@ -2317,13 +2253,19 @@ function CommunityFeed() {
                     Trận giải tính Elo:
                   </span>
                   <div className="flex items-center gap-1 text-[16px] font-black text-[#111827] whitespace-nowrap">
-                    <span>{standing.ratedMatches} Trận</span>
+                    <span>{(pickedSportKey ? pickedStanding?.ratedMatches : standing.ratedMatches) ?? 0} Trận</span>
                     <span className="material-symbols-outlined text-[16px] text-[#15803D]">
                       verified_user
                     </span>
                   </div>
                   <span className="text-[11px] text-[#15803D] font-extrabold block mt-1">
-                    {standing.personal.length ? `Elo ${standing.personal.length} môn` : 'Chưa có Elo môn nào'}
+                    {pickedSportKey
+                      ? pickedStanding?.hasRating
+                        ? `Elo ${pickedSportName}`
+                        : `Chưa có Elo ${pickedSportName}`
+                      : standing.personal.length
+                        ? `Elo ${standing.personal.length} môn`
+                        : 'Chưa có Elo môn nào'}
                   </span>
                 </div>
 
@@ -3140,149 +3082,6 @@ function CommunityFeed() {
         </div>
       )}
 
-      {/* ================= MODAL: ĐĂNG KÈO GHÉP MỚI ================= */}
-      {createMatchOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-2xl text-[#3B6817]">
-                  add_circle
-                </span>
-                <h3 className="font-extrabold text-lg text-[#111827]">
-                  Đăng Kèo Ghép &amp; Broadcast Slot
-                </h3>
-              </div>
-              <button
-                onClick={() => setCreateMatchOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500"
-              >
-                <span className="material-symbols-outlined text-xl">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateMatchSubmit} className="flex flex-col gap-3.5 text-xs">
-              {/* Chọn môn */}
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Môn thể thao:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { key: 'badminton', label: '🏸 Cầu Lông' },
-                    { key: 'pickleball', label: '🏓 Pickleball' },
-                    { key: 'football', label: '⚽ Bóng Đá' },
-                    { key: 'basketball', label: '🏀 Bóng Rổ' },
-                    { key: 'tennis', label: '🎾 Tennis' },
-                  ].map((s) => (
-                    <button
-                      key={s.key}
-                      type="button"
-                      onClick={() => setNewMatch({ ...newMatch, sport: s.key })}
-                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all ${
-                        newMatch.sport === s.key
-                          ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D]'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span>{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tiêu đề kèo */}
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Tiêu đề kèo giao lưu:</label>
-                <input
-                  type="text"
-                  value={newMatch.title}
-                  onChange={(e) => setNewMatch({ ...newMatch, title: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  required
-                />
-              </div>
-
-              {/* Địa điểm sân */}
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Sân &amp; Địa chỉ:</label>
-                <input
-                  type="text"
-                  value={newMatch.location}
-                  onChange={(e) => setNewMatch({ ...newMatch, location: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  required
-                />
-              </div>
-
-              {/* Thời gian & Trình độ */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Thời gian thi đấu:</label>
-                  <input
-                    type="text"
-                    value={newMatch.time}
-                    onChange={(e) => setNewMatch({ ...newMatch, time: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Chuẩn Trình Độ:</label>
-                  <input
-                    type="text"
-                    value={newMatch.level}
-                    onChange={(e) => setNewMatch({ ...newMatch, level: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Số slot cần & Tiền cọc */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Số slot cần tuyển:</label>
-                  <select
-                    value={newMatch.slots}
-                    onChange={(e) => setNewMatch({ ...newMatch, slots: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  >
-                    <option value={1}>1 người</option>
-                    <option value={2}>2 người</option>
-                    <option value={3}>3 người</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Tiền cọc chia đều (VNĐ):</label>
-                  <input
-                    type="number"
-                    step="5000"
-                    value={newMatch.deposit}
-                    onChange={(e) => setNewMatch({ ...newMatch, deposit: Number(e.target.value) })}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#3B6817] text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center gap-3 mt-3 pt-2 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setCreateMatchOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50"
-                >
-                  Đóng
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-bold shadow-md transition-all flex items-center justify-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[17px]">broadcast_on_personal</span>
-                  <span>Phát Sóng Kèo Ngay</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* ================= MODAL: QUY CHẾ TRỌNG TÀI & PHÂN GIẢI ================= */}
       {rulesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
@@ -3490,13 +3289,16 @@ function CommunityFeed() {
                       { key: 'all', label: 'Tất cả môn', emoji: '✨' },
                       { key: 'badminton', label: 'Cầu lông', emoji: '🏸' },
                       { key: 'pickleball', label: 'Pickleball', emoji: '🏓' },
+                      { key: 'football', label: 'Bóng đá', emoji: '⚽' },
+                      { key: 'basketball', label: 'Bóng rổ', emoji: '🏀' },
+                      { key: 'tennis', label: 'Tennis', emoji: '🎾' },
                     ].map((s) => (
                       <button
                         key={s.key}
                         type="button"
-                        onClick={() => setActiveSportFilter(s.key)}
+                        onClick={() => (s.key === 'all' ? selectAllSports() : selectOnlySport(s.key))}
                         className={`py-2.5 px-2 rounded-xl border font-bold text-center flex flex-col items-center gap-1 transition-all ${
-                          activeSportFilter === s.key
+                          (s.key === 'all' ? isAllActive : !isAllActive && selectedSports.includes(s.key))
                             ? 'border-[#3B6817] bg-[#EAF7EE] text-[#15803D] shadow-xs'
                             : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                         }`}

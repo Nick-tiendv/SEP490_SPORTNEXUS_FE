@@ -114,7 +114,7 @@ function getLfgUpcomingDays(count = 21) {
 }
 
 // Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 100000) {
+function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
   if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
 
   // Sắp xếp ca theo thứ tự thời gian tăng dần
@@ -493,7 +493,7 @@ function CreateMatch() {
   }, [currentDateStr, lfgUpcomingDays])
 
   // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
-  const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 100000
+  const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 0
   const slotsKey = selectedSubCourt?.id ? `${selectedSubCourt.id}|${currentDateStr}|${defaultCourtPrice}` : null
   const courtSlots = slotsKey && slotsResult.key === slotsKey ? slotsResult.slots : []
   const isLoadingSlots = Boolean(slotsKey) && slotsResult.key !== slotsKey
@@ -1292,7 +1292,9 @@ function CreateMatch() {
                           <div className="mt-1.5 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] w-full">
                             <span className="font-semibold text-gray-500">{facCourtsCount} sân đấu</span>
                             <span className="font-extrabold text-[#15803D]">
-                              từ {new Intl.NumberFormat('vi-VN').format(fac.price || 100000)} đ/h
+                              {Number(fac.price) > 0
+                                ? `từ ${new Intl.NumberFormat('vi-VN').format(fac.price)} đ/h`
+                                : 'Liên hệ'}
                             </span>
                           </div>
                         </button>
@@ -1335,7 +1337,9 @@ function CreateMatch() {
                                 isCourtSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
                               }`}
                             >
-                              {new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice) || 100000)} đ/h
+                              {Number(court.defaultPrice) > 0
+                                ? `${new Intl.NumberFormat('vi-VN').format(Number(court.defaultPrice))} đ/h`
+                                : 'Chưa có giá'}
                             </span>
                           </button>
                         )
@@ -1800,7 +1804,9 @@ function CreateMatch() {
                       </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-md bg-[#EAF7EE] text-[#15803D] font-black text-xs shrink-0">
-                      từ {new Intl.NumberFormat('vi-VN').format(selectedFacility?.price || 100000)} đ
+                      {Number(selectedFacility?.price) > 0
+                        ? `từ ${new Intl.NumberFormat('vi-VN').format(selectedFacility.price)} đ`
+                        : 'Chưa có giá'}
                     </span>
                   </div>
                 </div>
@@ -1853,7 +1859,10 @@ function CreateMatch() {
                       {currentUser.name || 'Bạn'} (Chủ Kèo)
                     </h4>
                     <p className="text-[10.5px] text-gray-500">
-                      {eloText(standing.best)} • <span className="text-[#15803D] font-bold">Fair Play {fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
+                      {sport
+                        ? `${eloText(standing.forSport(sport), { badminton: 'Cầu lông', pickleball: 'Pickleball', football: 'Bóng đá', basketball: 'Bóng rổ', tennis: 'Tennis' }[sport] || '')} • `
+                        : ''}
+                      <span className="text-[#15803D] font-bold">Fair Play {fairPlayScoreOf(standing.fairPlay) ?? '—'}</span>
                     </p>
                   </div>
                 </div>
@@ -1864,44 +1873,6 @@ function CreateMatch() {
                   </span>
                 </div>
               </div>
-
-              {/* Card 3: TỈ LỆ KHỚP KÈO DỰ BÁO */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 block">
-                    TỈ LỆ KHỚP KÈO DỰ BÁO
-                  </span>
-                  <p className="text-lg font-black text-[#111827] mt-0.5">~ 4.8 Phút</p>
-                  <p className="text-[10.5px] text-gray-500 mt-0.5">
-                    Đang có 18 vận động viên cùng trình độ trực tuyến
-                  </p>
-                </div>
-
-                {/* Donut progress 88% */}
-                <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path
-                      className="text-gray-100"
-                      strokeWidth="3.5"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-[#2D5F3F]"
-                      strokeDasharray="88, 100"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <span className="absolute text-xs font-black text-[#111827]">88%</span>
-                </div>
-              </div>
-
-
 
               {/* Card 4: Thông tin ca sân đã chọn / Nhắc nhở chọn ca */}
               {courtSlotId ? (
