@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
-import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
+import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getOnboarding } from '../../../api/player/ratingApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
 import { GEOCODE_DEBOUNCE_MS, geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
@@ -84,6 +84,7 @@ const areaOfCourt = (court) => {
 }
 // Khung bao quanh các điểm (nới rộng một chút để ghim không nằm sát mép)
 const boundsOfPoints = (points) => {
+  if (!points?.length) return null
   const lats = points.map((p) => p[0])
   const lngs = points.map((p) => p[1])
   const pad = 0.01
@@ -414,8 +415,9 @@ function MapBooking() {
     }
   }, [upcomingDays, selectedDateStr, todayIsoDate])
 
-  // Lấy dữ liệu cơ sở thực tế từ Backend API /api/v1/facilities
+  // Lấy dữ liệu cơ sở và khu vực thực tế từ Backend API (/api/v1/facilities, /api/v1/facilities/locations)
   const [apiFacilities, setApiFacilities] = useState([])
+  const [apiLocations, setApiLocations] = useState([])
   const [apiStatus, setApiStatus] = useState('connecting')
   const isLoadingApi = apiStatus === 'connecting'
 
@@ -453,35 +455,64 @@ function MapBooking() {
     )
   }, [])
 
-  // Khu vực gợi ý lấy từ chính các cơ sở trong hệ thống (mọi tỉnh / thành, kể cả Hà Nội):
-  // nút tỉnh / thành trước, sau đó các phường có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
+  // Khu vực gợi ý kết hợp GET /api/v1/facilities/locations và các cơ sở đang hiển thị:
+  // nút tỉnh / thành trước, sau đó các phường/quận có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
   const areaChips = useMemo(() => {
     const provinces = new Map()
-    for (const court of apiFacilities) {
-      if (!court.lat || !court.lng) continue
-      const { province, district } = areaOfCourt(court)
-      if (!province) continue
-      const p = provinces.get(province) || { label: province, value: province, ids: new Set(), points: [], courts: [], districts: new Map() }
-      p.ids.add(String(court.id))
-      p.points.push([court.lat, court.lng])
-      p.courts.push(court)
-      if (district) {
-        const value = `${district}, ${province}`
-        const d = p.districts.get(value) || { label: district, value, province, ids: new Set(), points: [], courts: [] }
-        d.ids.add(String(court.id))
-        d.points.push([court.lat, court.lng])
-        d.courts.push(court)
-        p.districts.set(value, d)
-      }
-      provinces.set(province, p)
+    const canonProvince = (raw) => {
+      const cleaned = String(raw || '').trim()
+      if (!cleaned) return ''
+      return PROVINCE_ALIASES.find((a) => a.test.test(normalizeText(cleaned)))?.label || cleaned
     }
-    const provinceList = [...provinces.values()].sort((a, b) => b.ids.size - a.ids.size)
+    const ensureProvince = (name) => {
+      const key = canonProvince(name)
+      if (!key) return null
+      if (!provinces.has(key)) provinces.set(key, { label: key, value: key, ids: new Set(), points: [], courts: [], districts: new Map() })
+      return provinces.get(key)
+    }
+    const ensureDistrict = (prov, distName) => {
+      const district = String(distName || '').trim()
+      if (!prov || !district || normalizeText(district) === normalizeText(prov.label)) return null
+      const value = `${district}, ${prov.label}`
+      if (!prov.districts.has(value)) prov.districts.set(value, { label: district, value, province: prov.label, ids: new Set(), points: [], courts: [] })
+      return prov.districts.get(value)
+    }
+
+    for (const loc of apiLocations) {
+      const p = ensureProvince(loc?.province)
+      if (!p) continue
+      for (const dist of Array.isArray(loc?.districts) ? loc.districts : []) {
+        ensureDistrict(p, dist)
+      }
+    }
+
+    for (const court of apiFacilities) {
+      const { province, district } = areaOfCourt(court)
+      const p = ensureProvince(province)
+      if (!p) continue
+      const id = String(court.id)
+      if (!p.ids.has(id)) {
+        p.ids.add(id)
+        p.courts.push(court)
+        if (court.lat && court.lng) p.points.push([court.lat, court.lng])
+      }
+      const d = ensureDistrict(p, district)
+      if (d && !d.ids.has(id)) {
+        d.ids.add(id)
+        d.courts.push(court)
+        if (court.lat && court.lng) d.points.push([court.lat, court.lng])
+      }
+    }
+    const provinceList = [...provinces.values()]
+      .filter((p) => p.ids.size > 0)
+      .sort((a, b) => b.ids.size - a.ids.size)
     const districtList = provinceList
       .flatMap((p) => [...p.districts.values()])
+      .filter((d) => d.ids.size > 0)
       .sort((a, b) => b.ids.size - a.ids.size)
       .slice(0, MAX_AREA_CHIPS)
     return { provinces: provinceList, districts: districtList, all: [...provinceList, ...districtList] }
-  }, [apiFacilities])
+  }, [apiFacilities, apiLocations])
   const selectedAreaChip = useMemo(() => {
     const text = normalizeText(customOrigin.trim())
     return text ? areaChips.all.find((chip) => normalizeText(chip.value) === text) || null : null
@@ -529,6 +560,7 @@ function MapBooking() {
     // Nút khu vực: tâm của các cơ sở trong khu vực
     if (selectedAreaChip) {
       const pts = selectedAreaChip.points
+      if (!pts.length) return null
       return { lat: pts.reduce((sum, p) => sum + p[0], 0) / pts.length, lng: pts.reduce((sum, p) => sum + p[1], 0) / pts.length }
     }
     const typed = text && customGeo.key === text ? customGeo.coords : null
@@ -655,7 +687,13 @@ function MapBooking() {
     let isMounted = true
     async function loadBackendFacilities() {
       try {
-        const rawFacilities = await getFacilities()
+        const [rawFacilities, rawLocations] = await Promise.all([
+          getFacilities(),
+          getFacilityLocations().catch(() => []),
+        ])
+        if (isMounted && Array.isArray(rawLocations)) {
+          setApiLocations(rawLocations)
+        }
         if (isMounted && Array.isArray(rawFacilities) && rawFacilities.length > 0) {
           const transformed = rawFacilities.map(transformFacilityToCourt).filter(Boolean)
           setApiFacilities(transformed)

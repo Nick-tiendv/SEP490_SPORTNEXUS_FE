@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, MapPin, Star, Clock3, Pencil, CalendarDays, ShieldCheck, Ban, BadgeCheck, Lock, LockOpen, Mail, CircleAlert } from 'lucide-react'
-import { getAdminFacility } from '../../api/admin/facilityApi.js'
+import { getAdminFacility, getFacilityCourts } from '../../api/admin/facilityApi.js'
 import { sportLabels, statusLabels, courtStatusLabels, formatNumber, statusTone, fallbackPhoto, facilityActions } from './facilityData.js'
 
 export function FacilityStatus({ status }) {
@@ -16,9 +16,20 @@ export default function FacilityDetails({ facility: base, onClose, onEdit, onAct
   const [allCourts, setAllCourts] = useState(false)
   useEffect(() => {
     let cancelled = false
-    getAdminFacility(base.id)
-      .then(detail => !cancelled && setState({ id: base.id, detail, error: '' }))
-      .catch(error => !cancelled && setState({ id: base.id, detail: null, error: error.message }))
+    Promise.allSettled([getAdminFacility(base.id), getFacilityCourts(base.id)]).then(([detailRes, courtsRes]) => {
+      if (cancelled) return
+      const detail = detailRes.status === 'fulfilled' ? detailRes.value : null
+      const liveCourts = courtsRes.status === 'fulfilled' && courtsRes.value.length ? courtsRes.value : null
+      if (!detail && !liveCourts) {
+        setState({ id: base.id, detail: null, error: detailRes.reason?.message || courtsRes.reason?.message || '' })
+        return
+      }
+      setState({
+        id: base.id,
+        detail: liveCourts ? { ...(detail || {}), courts: liveCourts } : detail,
+        error: detailRes.status === 'rejected' ? detailRes.reason?.message || '' : '',
+      })
+    })
     return () => { cancelled = true }
   }, [base.id])
   const loading = state.id !== base.id

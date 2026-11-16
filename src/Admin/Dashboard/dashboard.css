@@ -4,28 +4,175 @@
    buttons, selects, tables and StatCard come from admin-components.css.
    ===================================================================== */
 
-/* ---------- KPI row ---------- */
+/* ---------- KPI row (mỗi thẻ tổng quan một gam màu sáng sủa & hiệu ứng nền riêng) ---------- */
 .sn-admin .admin-stat-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-4);
 }
 
-/* Featured KPI: platform revenue (5th item in dashboardData.stats) */
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) {
+.sn-admin .admin-stat-grid > .admin-stat-card {
   background:
-    radial-gradient(220px 140px at 100% 0%, rgba(134, 239, 172, .35), transparent 70%),
-    linear-gradient(135deg, #1f8f4e 0%, #15803d 50%, #14532d 100%);
-  border-color: rgba(134, 239, 172, .5);
-  box-shadow: 0 18px 36px -16px rgba(20, 83, 45, .65), inset 0 1px 0 rgba(255, 255, 255, .2);
+    radial-gradient(240px 150px at 100% 0%, var(--kpi-glow-tr, rgba(74, 222, 128, .22)), transparent 68%),
+    radial-gradient(180px 120px at 0% 100%, var(--kpi-glow-bl, rgba(255, 255, 255, .6)), transparent 70%),
+    var(--kpi-surface, linear-gradient(145deg, #ffffff 0%, #f8fafc 100%));
+  border-color: var(--kpi-border, var(--glass-border));
+  box-shadow: var(--kpi-shadow, var(--glass-shadow)), inset 0 1px 0 rgba(255, 255, 255, .85);
 }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5)::after { border-color: rgba(255, 255, 255, .1); }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-heading { color: rgba(255, 255, 255, .85); }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-value { color: #fff; }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-icon { background: rgba(255, 255, 255, .18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-trend > svg { background: rgba(255, 255, 255, .2); color: #fff; }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-trend > span { color: #bbf7d0; }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-trend > small { color: rgba(255, 255, 255, .75); }
+.sn-admin .admin-stat-grid > .admin-stat-card::before {
+  content: '';
+  position: absolute;
+  inset: -40% -20% auto auto;
+  width: 170px;
+  height: 170px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--kpi-orb, rgba(59, 130, 246, .22)) 0%, transparent 68%);
+  opacity: .85;
+  pointer-events: none;
+  transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-stat-grid > .admin-stat-card::after {
+  border-color: var(--kpi-ring, rgba(34, 160, 90, .1));
+}
+.sn-admin .admin-stat-grid > .admin-stat-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--kpi-border-hover, var(--kpi-border));
+  box-shadow: var(--kpi-shadow-hover, var(--glass-shadow-hover)), inset 0 1px 0 rgba(255, 255, 255, .95);
+}
+.sn-admin .admin-stat-grid > .admin-stat-card:hover::before {
+  transform: scale(1.22) translate(-6px, 6px);
+  opacity: 1;
+}
+.sn-admin .admin-stat-grid > .admin-stat-card .admin-stat-heading { color: var(--kpi-label, var(--admin-text-muted)); }
+.sn-admin .admin-stat-grid > .admin-stat-card .admin-stat-value { color: var(--kpi-value, var(--admin-text)); }
+.sn-admin .admin-stat-grid > .admin-stat-card .admin-stat-icon {
+  background: var(--kpi-icon, var(--gradient-brand));
+  box-shadow: 0 10px 20px -10px var(--kpi-icon-shadow, rgba(21, 128, 61, .65)), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+.sn-admin .admin-stat-grid > .admin-stat-card .admin-stat-trend > small { color: var(--kpi-muted, var(--admin-text-muted)); }
+
+/* 1. Tổng người dùng — Xanh dương tươi sáng */
+.sn-admin .admin-stat-grid > .admin-stat-card--blue {
+  --kpi-surface: linear-gradient(145deg, #ffffff 0%, #eff6ff 55%, #dbeafe 100%);
+  --kpi-glow-tr: rgba(59, 130, 246, .28);
+  --kpi-glow-bl: rgba(147, 197, 253, .22);
+  --kpi-orb: rgba(59, 130, 246, .24);
+  --kpi-ring: rgba(37, 99, 235, .11);
+  --kpi-border: #93c5fd;
+  --kpi-border-hover: #3b82f6;
+  --kpi-shadow: 0 12px 26px -18px rgba(37, 99, 235, .45);
+  --kpi-shadow-hover: 0 20px 36px -18px rgba(37, 99, 235, .55);
+  --kpi-icon: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  --kpi-icon-shadow: rgba(37, 99, 235, .75);
+  --kpi-label: #1e40af;
+  --kpi-value: #1e3a8a;
+  --kpi-muted: #475569;
+}
+
+/* 2. Chủ sân — Tím oải hương thanh lịch */
+.sn-admin .admin-stat-grid > .admin-stat-card--violet {
+  --kpi-surface: linear-gradient(145deg, #ffffff 0%, #f5f3ff 55%, #ede9fe 100%);
+  --kpi-glow-tr: rgba(139, 92, 246, .28);
+  --kpi-glow-bl: rgba(196, 181, 253, .24);
+  --kpi-orb: rgba(139, 92, 246, .24);
+  --kpi-ring: rgba(109, 40, 217, .11);
+  --kpi-border: #c4b5fd;
+  --kpi-border-hover: #8b5cf6;
+  --kpi-shadow: 0 12px 26px -18px rgba(109, 40, 217, .42);
+  --kpi-shadow-hover: 0 20px 36px -18px rgba(109, 40, 217, .55);
+  --kpi-icon: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --kpi-icon-shadow: rgba(109, 40, 217, .75);
+  --kpi-label: #5b21b6;
+  --kpi-value: #4c1d95;
+  --kpi-muted: #475569;
+}
+
+/* 3. Cơ sở thể thao — Xanh ngọc trong trẻo */
+.sn-admin .admin-stat-grid > .admin-stat-card--teal {
+  --kpi-surface: linear-gradient(145deg, #ffffff 0%, #ecfeff 55%, #ccfbf1 100%);
+  --kpi-glow-tr: rgba(20, 184, 166, .28);
+  --kpi-glow-bl: rgba(103, 232, 249, .24);
+  --kpi-orb: rgba(20, 184, 166, .25);
+  --kpi-ring: rgba(13, 148, 136, .11);
+  --kpi-border: #5eead4;
+  --kpi-border-hover: #14b8a6;
+  --kpi-shadow: 0 12px 26px -18px rgba(13, 148, 136, .42);
+  --kpi-shadow-hover: 0 20px 36px -18px rgba(13, 148, 136, .55);
+  --kpi-icon: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%);
+  --kpi-icon-shadow: rgba(15, 118, 110, .75);
+  --kpi-label: #115e59;
+  --kpi-value: #134e4a;
+  --kpi-muted: #475569;
+}
+
+/* 4. Lượt đặt sân — Hổ phách ấm áp */
+.sn-admin .admin-stat-grid > .admin-stat-card--amber {
+  --kpi-surface: linear-gradient(145deg, #ffffff 0%, #fffbeb 55%, #fef3c7 100%);
+  --kpi-glow-tr: rgba(245, 158, 11, .3);
+  --kpi-glow-bl: rgba(253, 230, 138, .28);
+  --kpi-orb: rgba(245, 158, 11, .25);
+  --kpi-ring: rgba(217, 119, 6, .12);
+  --kpi-border: #fcd34d;
+  --kpi-border-hover: #f59e0b;
+  --kpi-shadow: 0 12px 26px -18px rgba(217, 119, 6, .42);
+  --kpi-shadow-hover: 0 20px 36px -18px rgba(217, 119, 6, .55);
+  --kpi-icon: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --kpi-icon-shadow: rgba(217, 119, 6, .75);
+  --kpi-label: #92400e;
+  --kpi-value: #78350f;
+  --kpi-muted: #475569;
+}
+
+/* 5. Doanh thu nền tảng — Xanh lục bảo nổi bật */
+.sn-admin .admin-stat-grid > .admin-stat-card--emerald {
+  --kpi-surface: linear-gradient(135deg, #10b981 0%, #15803d 52%, #065f46 100%);
+  --kpi-glow-tr: rgba(167, 243, 208, .42);
+  --kpi-glow-bl: rgba(52, 211, 153, .22);
+  --kpi-orb: rgba(167, 243, 208, .3);
+  --kpi-ring: rgba(255, 255, 255, .14);
+  --kpi-border: rgba(134, 239, 172, .55);
+  --kpi-border-hover: rgba(167, 243, 208, .9);
+  --kpi-shadow: 0 18px 36px -16px rgba(6, 95, 70, .65);
+  --kpi-shadow-hover: 0 24px 44px -16px rgba(6, 95, 70, .75);
+  --kpi-icon: rgba(255, 255, 255, .2);
+  --kpi-icon-shadow: rgba(6, 78, 59, .45);
+  --kpi-label: rgba(255, 255, 255, .9);
+  --kpi-value: #fff;
+  --kpi-muted: rgba(255, 255, 255, .82);
+}
+.sn-admin .admin-stat-grid > .admin-stat-card--emerald .admin-stat-icon { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
+.sn-admin .admin-stat-grid > .admin-stat-card--emerald .admin-stat-trend > svg { background: rgba(255, 255, 255, .22); color: #fff; }
+.sn-admin .admin-stat-grid > .admin-stat-card--emerald .admin-stat-trend > span { color: #dcfce7; }
+
+/* 6. Nhóm chơi đang mở — Hồng san hô rạng rỡ */
+.sn-admin .admin-stat-grid > .admin-stat-card--rose {
+  --kpi-surface: linear-gradient(145deg, #ffffff 0%, #fff1f2 55%, #ffe4e6 100%);
+  --kpi-glow-tr: rgba(244, 63, 94, .26);
+  --kpi-glow-bl: rgba(253, 164, 175, .24);
+  --kpi-orb: rgba(244, 63, 94, .22);
+  --kpi-ring: rgba(225, 29, 72, .11);
+  --kpi-border: #fda4af;
+  --kpi-border-hover: #f43f5e;
+  --kpi-shadow: 0 12px 26px -18px rgba(225, 29, 72, .42);
+  --kpi-shadow-hover: 0 20px 36px -18px rgba(225, 29, 72, .55);
+  --kpi-icon: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  --kpi-icon-shadow: rgba(225, 29, 72, .75);
+  --kpi-label: #9f1239;
+  --kpi-value: #881337;
+  --kpi-muted: #475569;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sn-admin .admin-stat-grid > .admin-stat-card,
+  .sn-admin .admin-stat-grid > .admin-stat-card::before,
+  .sn-admin .admin-trend-metric,
+  .sn-admin .admin-sport-item,
+  .sn-admin .admin-attention-card,
+  .sn-admin .admin-attention-card::after {
+    transition: none;
+  }
+}
 
 /* ---------- Generic dashboard panel ---------- */
 .sn-admin .admin-panel {
@@ -71,53 +218,138 @@
 }
 
 /* ---------- Trends chart ---------- */
-.sn-admin .admin-trends { min-height: 440px; }
+.sn-admin .admin-trends {
+  min-height: 440px;
+  background:
+    radial-gradient(320px 180px at 96% 0%, rgba(16, 185, 129, .14), transparent 70%),
+    radial-gradient(280px 180px at 4% 100%, rgba(59, 130, 246, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7fcf9 56%, #f2f8ff 100%);
+}
 .sn-admin .admin-range-tabs > button { display: inline-flex; align-items: baseline; gap: 4px; }
 .sn-admin .admin-range-tabs small { font-size: 11px; font-weight: var(--fw-regular); opacity: .75; }
 .sn-admin .admin-chart-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3) var(--sp-6);
+  align-items: stretch;
+  gap: var(--sp-3);
   margin: 0 var(--sp-5);
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius-md);
-  background: var(--admin-surface-muted);
   font-size: var(--fs-sm);
   color: var(--admin-text-secondary);
 }
-.sn-admin .admin-chart-summary > div { display: flex; align-items: center; gap: var(--sp-2); }
-.sn-admin .admin-chart-summary span small { display: block; font-size: 11px; color: var(--admin-text-muted); }
-.sn-admin .admin-chart-summary strong {
-  margin-left: var(--sp-2);
+.sn-admin .admin-trend-metric {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-2);
+  row-gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(140px 90px at 100% 0%, var(--trend-glow, rgba(16, 185, 129, .24)), transparent 70%),
+    var(--trend-surface, linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%));
+  border: 1px solid var(--trend-border, #86efac);
+  box-shadow: 0 8px 18px -14px var(--trend-shadow, rgba(21, 128, 61, .35)), inset 0 1px 0 rgba(255, 255, 255, .92);
+  transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base), box-shadow var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-trend-metric:hover {
+  transform: translateY(-2px);
+  border-color: var(--trend-border-hover, var(--trend-border));
+  box-shadow: 0 12px 22px -14px var(--trend-shadow, rgba(21, 128, 61, .45)), inset 0 1px 0 rgba(255, 255, 255, .95);
+}
+.sn-admin .admin-trend-metric > .admin-legend-dot {
+  grid-column: 1;
+  grid-row: 1;
+}
+.sn-admin .admin-trend-metric > span {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--trend-label, var(--admin-text-secondary));
+  white-space: nowrap;
+}
+.sn-admin .admin-trend-metric span small {
+  display: inline;
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+}
+.sn-admin .admin-trend-metric strong {
+  grid-column: 2;
+  grid-row: 2;
   font-family: var(--font-display);
   font-size: var(--fs-xl);
   font-weight: var(--fw-bold);
-  color: var(--admin-text);
+  line-height: 1.2;
+  color: var(--trend-value, var(--admin-text));
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.sn-admin .admin-chart-summary strong small {
-  display: inline;
-  margin-left: 6px;
-  font-family: var(--font-sans);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  color: var(--sn-success-text);
+.sn-admin .admin-trend-metric--revenue {
+  --trend-surface: linear-gradient(135deg, #ffffff 0%, #f0fdf4 55%, #dcfce7 100%);
+  --trend-glow: rgba(16, 185, 129, .26);
+  --trend-border: #86efac;
+  --trend-border-hover: #22c55e;
+  --trend-shadow: rgba(21, 128, 61, .38);
+  --trend-label: #15803d;
+  --trend-value: #14532d;
 }
-.sn-admin .admin-legend-dot { display: inline-block; width: 10px; height: 10px; flex-shrink: 0; border-radius: 50%; background: var(--sn-green-700); }
-.sn-admin .admin-legend-dot.muted { background: #9dbfa5; }
-.sn-admin .admin-legend-dot.users { background: #d08a2c; }
+.sn-admin .admin-trend-metric--bookings {
+  --trend-surface: linear-gradient(135deg, #ffffff 0%, #eff6ff 55%, #dbeafe 100%);
+  --trend-glow: rgba(14, 165, 233, .26);
+  --trend-border: #93c5fd;
+  --trend-border-hover: #3b82f6;
+  --trend-shadow: rgba(2, 132, 199, .38);
+  --trend-label: #0369a1;
+  --trend-value: #1e3a8a;
+}
+.sn-admin .admin-trend-metric--users {
+  --trend-surface: linear-gradient(135deg, #ffffff 0%, #fffbeb 55%, #fef3c7 100%);
+  --trend-glow: rgba(245, 158, 11, .28);
+  --trend-border: #fcd34d;
+  --trend-border-hover: #f59e0b;
+  --trend-shadow: rgba(217, 119, 6, .38);
+  --trend-label: #b45309;
+  --trend-value: #78350f;
+}
+.sn-admin .admin-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--sn-green-700);
+  box-shadow: 0 0 0 4px var(--dot-ring, rgba(22, 163, 74, .16));
+}
+.sn-admin .admin-legend-dot--revenue { background: #15803d; --dot-ring: rgba(22, 163, 74, .18); }
+.sn-admin .admin-legend-dot--bookings { background: #0284c7; --dot-ring: rgba(2, 132, 199, .18); }
+.sn-admin .admin-legend-dot--users { background: #ea580c; --dot-ring: rgba(234, 88, 12, .18); }
+.sn-admin .admin-chart-footer .admin-legend-dot { width: 9px; height: 9px; box-shadow: none; }
 .sn-admin .admin-chart-growth {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 6px;
   margin-left: auto;
-  padding: 4px 10px;
+  padding: 6px 12px;
+  border: 1px solid #86efac;
   border-radius: var(--radius-pill);
-  background: var(--sn-success-bg);
-  color: var(--sn-success-text);
+  background: linear-gradient(135deg, #dcfce7 0%, #e0f2fe 100%);
+  color: #166534;
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  box-shadow: 0 6px 14px -10px rgba(21, 128, 61, .35);
 }
 .sn-admin .admin-chart-wrap { display: flex; flex: 1; align-items: center; padding: var(--sp-3) var(--sp-4) 0; }
 .sn-admin .admin-chart-wrap svg { width: 100%; height: auto; min-height: 240px; }
@@ -133,13 +365,108 @@
 .sn-admin .admin-chart-footer .admin-muted { margin-left: auto; }
 
 /* ---------- Popular sports ---------- */
+.sn-admin .admin-popular-sports {
+  background:
+    radial-gradient(260px 160px at 96% 0%, rgba(59, 130, 246, .13), transparent 70%),
+    radial-gradient(220px 150px at 4% 100%, rgba(16, 185, 129, .12), transparent 72%),
+    linear-gradient(155deg, rgba(255, 255, 255, .97) 0%, #f7faff 58%, #f3fbf7 100%);
+}
 .sn-admin .admin-popular-sports ol {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  gap: var(--sp-3);
   margin: 0;
-  padding: var(--sp-1) var(--sp-5) 0;
+  padding: var(--sp-1) var(--sp-5) var(--sp-4);
   list-style: none;
+}
+.sn-admin .admin-sport-item {
+  position: relative;
+  overflow: hidden;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(170px 100px at 100% 0%, var(--sport-glow, rgba(16, 185, 129, .24)), transparent 72%),
+    var(--sport-surface, linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%));
+  border: 1px solid var(--sport-border, #86efac);
+  box-shadow: 0 10px 22px -18px var(--sport-shadow, rgba(21, 128, 61, .45)), inset 0 1px 0 rgba(255, 255, 255, .92);
+  transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base), box-shadow var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-sport-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--sport-border-hover, var(--sport-border));
+  box-shadow: 0 14px 26px -16px var(--sport-shadow, rgba(21, 128, 61, .55)), inset 0 1px 0 rgba(255, 255, 255, .96);
+}
+.sn-admin .admin-sport-item--emerald {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #f0fdf4 58%, #dcfce7 100%);
+  --sport-glow: rgba(16, 185, 129, .26);
+  --sport-border: #86efac;
+  --sport-border-hover: #22c55e;
+  --sport-shadow: rgba(21, 128, 61, .45);
+  --sport-badge: linear-gradient(135deg, #34d399 0%, #15803d 100%);
+  --sport-pill-bg: #dcfce7;
+  --sport-accent: #166534;
+  --sport-track: rgba(22, 163, 74, .14);
+  --sport-bar: linear-gradient(90deg, #22c55e 0%, #15803d 100%);
+}
+.sn-admin .admin-sport-item--blue {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #eff6ff 58%, #dbeafe 100%);
+  --sport-glow: rgba(59, 130, 246, .26);
+  --sport-border: #93c5fd;
+  --sport-border-hover: #3b82f6;
+  --sport-shadow: rgba(37, 99, 235, .45);
+  --sport-badge: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  --sport-pill-bg: #dbeafe;
+  --sport-accent: #1d4ed8;
+  --sport-track: rgba(37, 99, 235, .14);
+  --sport-bar: linear-gradient(90deg, #38bdf8 0%, #2563eb 100%);
+}
+.sn-admin .admin-sport-item--amber {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #fffbeb 58%, #fef3c7 100%);
+  --sport-glow: rgba(245, 158, 11, .28);
+  --sport-border: #fcd34d;
+  --sport-border-hover: #f59e0b;
+  --sport-shadow: rgba(217, 119, 6, .45);
+  --sport-badge: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --sport-pill-bg: #fef3c7;
+  --sport-accent: #b45309;
+  --sport-track: rgba(217, 119, 6, .15);
+  --sport-bar: linear-gradient(90deg, #fbbf24 0%, #d97706 100%);
+}
+.sn-admin .admin-sport-item--violet {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #f5f3ff 58%, #ede9fe 100%);
+  --sport-glow: rgba(139, 92, 246, .26);
+  --sport-border: #c4b5fd;
+  --sport-border-hover: #8b5cf6;
+  --sport-shadow: rgba(109, 40, 217, .45);
+  --sport-badge: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --sport-pill-bg: #ede9fe;
+  --sport-accent: #6d28d9;
+  --sport-track: rgba(109, 40, 217, .14);
+  --sport-bar: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
+}
+.sn-admin .admin-sport-item--rose {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #fff1f2 58%, #ffe4e6 100%);
+  --sport-glow: rgba(244, 63, 94, .26);
+  --sport-border: #fda4af;
+  --sport-border-hover: #f43f5e;
+  --sport-shadow: rgba(225, 29, 72, .45);
+  --sport-badge: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  --sport-pill-bg: #ffe4e6;
+  --sport-accent: #be123c;
+  --sport-track: rgba(225, 29, 72, .14);
+  --sport-bar: linear-gradient(90deg, #fb7185 0%, #e11d48 100%);
+}
+.sn-admin .admin-sport-item--teal {
+  --sport-surface: linear-gradient(135deg, #ffffff 0%, #ecfeff 58%, #ccfbf1 100%);
+  --sport-glow: rgba(20, 184, 166, .26);
+  --sport-border: #5eead4;
+  --sport-border-hover: #14b8a6;
+  --sport-shadow: rgba(13, 148, 136, .45);
+  --sport-badge: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%);
+  --sport-pill-bg: #ccfbf1;
+  --sport-accent: #0f766e;
+  --sport-track: rgba(13, 148, 136, .14);
+  --sport-bar: linear-gradient(90deg, #2dd4bf 0%, #0f766e 100%);
 }
 .sn-admin .admin-popular-sports li > div:first-child {
   display: flex;
@@ -152,30 +479,42 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  min-width: 0;
   font-weight: var(--fw-semibold);
   color: var(--admin-text);
 }
 .sn-admin .admin-sport-rank {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-xs);
-  background: var(--sn-green-50);
-  color: var(--sn-green-700);
+  background: var(--sport-badge, var(--admin-primary));
+  color: #fff;
   font-size: 11px;
   font-style: normal;
   font-weight: var(--fw-bold);
+  box-shadow: 0 6px 14px -6px var(--sport-shadow, rgba(21, 128, 61, .5));
 }
-.sn-admin .admin-popular-sports li:first-child .admin-sport-rank { background: var(--admin-primary); color: #fff; }
-.sn-admin .admin-popular-sports li > div > span { font-weight: var(--fw-semibold); color: var(--admin-text); font-variant-numeric: tabular-nums; }
-.sn-admin .admin-popular-sports li small { display: block; margin: 2px 0 var(--sp-2) 30px; font-size: var(--fs-xs); color: var(--admin-text-muted); }
-.sn-admin .admin-sport-track { height: 8px; margin-left: 30px; overflow: hidden; border-radius: var(--radius-pill); background: var(--admin-surface-sunken); }
+.sn-admin .admin-popular-sports li > div > span {
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--sport-pill-bg, var(--sn-green-50));
+  color: var(--sport-accent, var(--admin-text));
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sn-admin .admin-popular-sports li small { display: block; margin: 2px 0 var(--sp-2) 32px; font-size: var(--fs-xs); color: #475569; }
+.sn-admin .admin-sport-track { height: 9px; margin-left: 32px; overflow: hidden; border-radius: var(--radius-pill); background: var(--sport-track, var(--admin-surface-sunken)); }
 .sn-admin .admin-sport-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--sn-green-500), var(--sn-green-700));
+  background: var(--sport-bar, linear-gradient(90deg, var(--sn-green-500), var(--sn-green-700)));
   transition: width var(--dur-slow) var(--ease-out);
 }
 .sn-admin .admin-sports-footer {
@@ -195,7 +534,10 @@
 /* ---------- Pending admin requests ---------- */
 .sn-admin .admin-attention {
   padding: var(--sp-5);
-  background: var(--glass-bg-strong);
+  background:
+    radial-gradient(300px 160px at 98% 0%, rgba(244, 63, 94, .1), transparent 70%),
+    radial-gradient(280px 160px at 2% 100%, rgba(245, 158, 11, .09), transparent 72%),
+    linear-gradient(160deg, rgba(255, 255, 255, .97) 0%, #fafcff 58%, #fffaf5 100%);
   backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
   border: 1px solid var(--glass-border);
@@ -234,51 +576,196 @@
 }
 .sn-admin .admin-attention-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); }
 .sn-admin .admin-attention-card {
-  --tone: var(--sn-green-700);
-  --tone-bg: var(--sn-green-50);
+  --attn-accent: var(--sn-green-700);
+  --attn-title: var(--admin-text);
+  --attn-bar: linear-gradient(90deg, #22c55e 0%, #15803d 100%);
+  --attn-surface: linear-gradient(145deg, #ffffff 0%, #f0fdf4 58%, #dcfce7 100%);
+  --attn-glow-tr: rgba(34, 197, 94, .24);
+  --attn-glow-bl: rgba(134, 239, 172, .22);
+  --attn-orb: rgba(34, 197, 94, .22);
+  --attn-border: #86efac;
+  --attn-border-hover: #22c55e;
+  --attn-shadow: 0 12px 26px -18px rgba(21, 128, 61, .42);
+  --attn-shadow-hover: 0 20px 36px -18px rgba(21, 128, 61, .55);
+  --attn-icon: linear-gradient(135deg, #34d399 0%, #15803d 100%);
+  --attn-icon-shadow: rgba(21, 128, 61, .7);
+  --attn-footer-bg: rgba(240, 253, 244, .72);
+  --attn-footer-border: rgba(134, 239, 172, .45);
+  --attn-btn-bg: rgba(255, 255, 255, .88);
+  --attn-btn-border: #86efac;
+  --attn-btn-hover-bg: #dcfce7;
   position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border-color);
-  border-radius: var(--radius-md);
+  background:
+    radial-gradient(210px 130px at 100% 0%, var(--attn-glow-tr), transparent 68%),
+    radial-gradient(170px 110px at 0% 100%, var(--attn-glow-bl), transparent 72%),
+    var(--attn-surface);
+  border: 1px solid var(--attn-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--attn-shadow), inset 0 1px 0 rgba(255, 255, 255, .92);
   transition: border-color var(--dur-base), box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
-.sn-admin .admin-attention-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--tone); }
-.sn-admin .admin-attention-card.red { --tone: var(--sn-danger-text); --tone-bg: var(--sn-danger-bg); }
-.sn-admin .admin-attention-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--sn-green-200); }
-.sn-admin .admin-attention-card.red:hover { border-color: var(--sn-danger-border); }
+.sn-admin .admin-attention-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  z-index: 2;
+  background: var(--attn-bar);
+}
+.sn-admin .admin-attention-card::after {
+  content: '';
+  position: absolute;
+  inset: -36% -18% auto auto;
+  width: 145px;
+  height: 145px;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--attn-orb) 0%, transparent 68%);
+  opacity: .85;
+  pointer-events: none;
+  transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+.sn-admin .admin-attention-card.violet {
+  --attn-accent: #6d28d9;
+  --attn-title: #4c1d95;
+  --attn-bar: linear-gradient(90deg, #a78bfa 0%, #7c3aed 100%);
+  --attn-surface: linear-gradient(145deg, #ffffff 0%, #f5f3ff 56%, #ede9fe 100%);
+  --attn-glow-tr: rgba(139, 92, 246, .28);
+  --attn-glow-bl: rgba(196, 181, 253, .24);
+  --attn-orb: rgba(139, 92, 246, .24);
+  --attn-border: #c4b5fd;
+  --attn-border-hover: #8b5cf6;
+  --attn-shadow: 0 12px 26px -18px rgba(109, 40, 217, .42);
+  --attn-shadow-hover: 0 20px 36px -18px rgba(109, 40, 217, .55);
+  --attn-icon: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --attn-icon-shadow: rgba(109, 40, 217, .75);
+  --attn-footer-bg: rgba(245, 243, 255, .72);
+  --attn-footer-border: rgba(196, 181, 253, .55);
+  --attn-btn-bg: rgba(255, 255, 255, .88);
+  --attn-btn-border: #c4b5fd;
+  --attn-btn-hover-bg: #ede9fe;
+}
+.sn-admin .admin-attention-card.red {
+  --attn-accent: #be123c;
+  --attn-title: #881337;
+  --attn-bar: linear-gradient(90deg, #fb7185 0%, #e11d48 100%);
+  --attn-surface: linear-gradient(145deg, #ffffff 0%, #fff1f2 56%, #ffe4e6 100%);
+  --attn-glow-tr: rgba(244, 63, 94, .28);
+  --attn-glow-bl: rgba(253, 164, 175, .24);
+  --attn-orb: rgba(244, 63, 94, .24);
+  --attn-border: #fda4af;
+  --attn-border-hover: #f43f5e;
+  --attn-shadow: 0 12px 26px -18px rgba(225, 29, 72, .42);
+  --attn-shadow-hover: 0 20px 36px -18px rgba(225, 29, 72, .55);
+  --attn-icon: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  --attn-icon-shadow: rgba(225, 29, 72, .75);
+  --attn-footer-bg: rgba(255, 241, 242, .74);
+  --attn-footer-border: rgba(253, 164, 175, .55);
+  --attn-btn-bg: rgba(255, 255, 255, .88);
+  --attn-btn-border: #fda4af;
+  --attn-btn-hover-bg: #ffe4e6;
+}
+.sn-admin .admin-attention-card.amber {
+  --attn-accent: #b45309;
+  --attn-title: #78350f;
+  --attn-bar: linear-gradient(90deg, #fbbf24 0%, #d97706 100%);
+  --attn-surface: linear-gradient(145deg, #ffffff 0%, #fffbeb 56%, #fef3c7 100%);
+  --attn-glow-tr: rgba(245, 158, 11, .3);
+  --attn-glow-bl: rgba(253, 230, 138, .28);
+  --attn-orb: rgba(245, 158, 11, .25);
+  --attn-border: #fcd34d;
+  --attn-border-hover: #f59e0b;
+  --attn-shadow: 0 12px 26px -18px rgba(217, 119, 6, .42);
+  --attn-shadow-hover: 0 20px 36px -18px rgba(217, 119, 6, .55);
+  --attn-icon: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --attn-icon-shadow: rgba(217, 119, 6, .75);
+  --attn-footer-bg: rgba(255, 251, 235, .74);
+  --attn-footer-border: rgba(252, 211, 77, .55);
+  --attn-btn-bg: rgba(255, 255, 255, .88);
+  --attn-btn-border: #fcd34d;
+  --attn-btn-hover-bg: #fef3c7;
+}
+.sn-admin .admin-attention-card.teal {
+  --attn-accent: #0f766e;
+  --attn-title: #134e4a;
+  --attn-bar: linear-gradient(90deg, #2dd4bf 0%, #0f766e 100%);
+  --attn-surface: linear-gradient(145deg, #ffffff 0%, #ecfeff 56%, #ccfbf1 100%);
+  --attn-glow-tr: rgba(20, 184, 166, .28);
+  --attn-glow-bl: rgba(103, 232, 249, .24);
+  --attn-orb: rgba(20, 184, 166, .25);
+  --attn-border: #5eead4;
+  --attn-border-hover: #14b8a6;
+  --attn-shadow: 0 12px 26px -18px rgba(13, 148, 136, .42);
+  --attn-shadow-hover: 0 20px 36px -18px rgba(13, 148, 136, .55);
+  --attn-icon: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%);
+  --attn-icon-shadow: rgba(15, 118, 110, .75);
+  --attn-footer-bg: rgba(236, 254, 255, .74);
+  --attn-footer-border: rgba(94, 234, 212, .55);
+  --attn-btn-bg: rgba(255, 255, 255, .88);
+  --attn-btn-border: #5eead4;
+  --attn-btn-hover-bg: #ccfbf1;
+}
+.sn-admin .admin-attention-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--attn-shadow-hover), inset 0 1px 0 rgba(255, 255, 255, .96);
+  border-color: var(--attn-border-hover);
+}
+.sn-admin .admin-attention-card:hover::after {
+  transform: scale(1.2) translate(-5px, 5px);
+  opacity: 1;
+}
 .sn-admin a.admin-attention-card { color: inherit; text-decoration: none; cursor: pointer; }
-.sn-admin a.admin-attention-card:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
-.sn-admin .admin-attention-body { display: flex; flex: 1; gap: var(--sp-3); padding: var(--sp-5) var(--sp-4) var(--sp-4); }
+.sn-admin a.admin-attention-card:focus-visible { outline: 2px solid var(--attn-accent); outline-offset: 2px; }
+.sn-admin .admin-attention-body { position: relative; z-index: 1; display: flex; flex: 1; gap: var(--sp-3); padding: var(--sp-5) var(--sp-4) var(--sp-4); }
 .sn-admin .admin-attention-icon {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: var(--radius-md);
-  background: var(--tone-bg);
-  color: var(--tone);
+  background: var(--attn-icon);
+  color: #fff;
+  box-shadow: 0 10px 20px -10px var(--attn-icon-shadow), inset 0 1px 0 rgba(255, 255, 255, .42);
 }
-.sn-admin .admin-attention-body h3 { margin-bottom: var(--sp-1); font-size: var(--fs-base); font-weight: var(--fw-semibold); line-height: var(--lh-snug); color: var(--admin-text); }
-.sn-admin .admin-attention-body p { font-size: var(--fs-sm); color: var(--admin-text-muted); }
+.sn-admin .admin-attention-body h3 { margin-bottom: var(--sp-1); font-size: var(--fs-base); font-weight: var(--fw-bold); line-height: var(--lh-snug); color: var(--attn-title); }
+.sn-admin .admin-attention-body p { font-size: var(--fs-sm); color: #475569; }
 .sn-admin .admin-attention-footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--admin-divider);
-  background: var(--admin-surface-muted);
+  border-top: 1px solid var(--attn-footer-border);
+  background: var(--attn-footer-bg);
 }
-.sn-admin .admin-attention-footer small { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--tone); }
+.sn-admin .admin-attention-footer small { min-width: 0; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--attn-accent); }
+.sn-admin .admin-attention-footer .admin-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  --btn-bg: var(--attn-btn-bg);
+  --btn-bg-hover: var(--attn-btn-hover-bg);
+  --btn-color: var(--attn-accent);
+  --btn-border: var(--attn-btn-border);
+  --btn-border-hover: var(--attn-border-hover);
+  font-weight: var(--fw-semibold);
+}
+.sn-admin .admin-attention-card:hover .admin-attention-footer .admin-btn:not(:disabled) {
+  background: var(--attn-icon);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 16px -8px var(--attn-icon-shadow);
+}
 /* Actions are not implemented yet: keep the brand look, but clearly inactive. */
 .sn-admin .admin-attention-footer .admin-btn:disabled {
-  background: var(--tone-bg);
+  background: var(--attn-btn-bg);
   border-color: transparent;
-  color: var(--tone);
+  color: var(--attn-accent);
   opacity: .7;
 }
 .sn-admin .admin-attention-heading .admin-btn:disabled { background: transparent; border-color: transparent; color: var(--admin-text-muted); }
@@ -416,7 +903,7 @@
 @media (max-width: 1024px) {
   .sn-admin .admin-analytics-grid,
   .sn-admin .admin-bottom-grid { grid-template-columns: minmax(0, 1fr); }
-  .sn-admin .admin-popular-sports ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5) var(--sp-6); }
+  .sn-admin .admin-popular-sports ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
   .sn-admin .admin-sports-footer { margin-top: var(--sp-5); }
 }
 
@@ -440,13 +927,15 @@
   .sn-admin .admin-stat-grid { grid-template-columns: minmax(0, 1fr); }
   .sn-admin .admin-panel-heading { padding: var(--sp-4); }
   .sn-admin .admin-chart-summary { margin: 0 var(--sp-4); }
+  .sn-admin .admin-trend-metric { flex-basis: 100%; }
+  .sn-admin .admin-popular-sports ol { padding: var(--sp-1) var(--sp-4) var(--sp-3); }
   .sn-admin .admin-page-header__actions .admin-segmented { overflow-x: auto; }
 }
 
 /* ---------- Xu hướng giảm trên thẻ thống kê ---------- */
 .sn-admin .admin-stat-trend.is-down > svg { background: var(--sn-danger-bg); color: var(--sn-danger-text); }
 .sn-admin .admin-stat-trend.is-down > span { color: var(--sn-danger-text); }
-.sn-admin .admin-stat-grid > .admin-stat-card:nth-child(5) .admin-stat-trend.is-down > span { color: #fecaca; }
+.sn-admin .admin-stat-grid > .admin-stat-card--emerald .admin-stat-trend.is-down > span { color: #fecaca; }
 
 /* ---------- Nút làm mới ---------- */
 .sn-admin .admin-dashboard-refresh .is-spinning { animation: admin-dashboard-spin .9s linear infinite; }

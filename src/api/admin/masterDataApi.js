@@ -44,3 +44,7 @@ export async function restoreMasterData(kind, id) {
   const { url, map } = RESOURCES[kind]
   return withMessage((await apiClient.patch(`${url}/${path(id)}/restore`)).data, map)
 }
+// Gộp các ca trống sắp tới ngắn hơn thời lượng chuẩn của môn (POST /api/v1/admin/master-data/court-slots/merge-to-sport-length).
+export async function mergeCourtSlotsToSportLength() {
+  return withMessage((await apiClient.post('/api/v1/admin/master-data/court-slots/merge-to-sport-length')).data)
+}
