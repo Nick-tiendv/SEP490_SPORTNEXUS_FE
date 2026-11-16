@@ -291,7 +291,7 @@ export async function removeLfgParticipant(cardId, userId) {
 /**
  * Bước 5 (Chủ kèo): Hủy kèo ghép LFG
  * POST /api/v1/lfgs/{cardId}/cancel
- * Hoàn 100% cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 24h hoàn 100%).
+ * Hoàn 100% cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 48h hoàn 100%, sau đó không hoàn).
  * @param {string} cardId - UUID kèo ghép
  * @param {Object} [payload]
  * @param {string} [payload.reason] - Lý do hủy kèo

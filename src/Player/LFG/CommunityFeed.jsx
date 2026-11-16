@@ -808,7 +808,7 @@ function CommunityFeed() {
       await cancelLfg(cancelMatchModal.id, { reason })
       setToastMessage({
         title: 'Hủy Kèo Ghép Thành Công',
-        desc: 'Đã hủy kèo. Hoàn 100% tiền cho người tham gia; tiền sân của chủ kèo hoàn theo chính sách hủy đặt sân (trước 24h hoàn 100%).',
+        desc: 'Đã hủy kèo. Điểm được hoàn theo chính sách: hủy trước giờ chơi từ 48 giờ trở lên hoàn 100%, sau mốc này không hoàn.',
         type: 'success',
       })
       setCancelMatchModal(null)
@@ -1660,7 +1660,7 @@ function CommunityFeed() {
                 <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
                   <div>
-                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo: người tham gia được hoàn 100%; tiền sân của chủ kèo hoàn theo chính sách sân (trước 24h hoàn 100%).
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo: hủy trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn.
                   </div>
                 </div>
 
@@ -1927,7 +1927,7 @@ function CommunityFeed() {
                 <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs text-[#1C3524] flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px] shrink-0 mt-0.5">verified_user</span>
                   <div>
-                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo được hoàn 100% tiền (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
+                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
                   </div>
                 </div>
 
@@ -2982,7 +2982,7 @@ function CommunityFeed() {
             <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] text-blue-600 shrink-0 mt-0.5">policy</span>
               <div>
-                <strong>Chính sách hoàn tiền (2.6 Bước 5):</strong> Hoàn 100% tiền cọc cho tất cả người tham gia. Tiền sân của chủ kèo được hoàn theo chính sách hủy đặt sân của cơ sở (trước 24h hoàn 100%).
+                <strong>Chính sách hoàn Điểm (2.6 Bước 5):</strong> Hủy trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho chủ kèo và người tham gia. Hủy sau mốc này: không được hoàn.
               </div>
             </div>
 
@@ -3042,7 +3042,7 @@ function CommunityFeed() {
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5">timer</span>
               <div>
-                <strong>Quy định hoàn tiền:</strong> Hoàn 100% tiền cọc (hoặc rút yêu cầu đang chờ). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
+                <strong>Quy định hoàn Điểm:</strong> Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (rút yêu cầu đang chờ thì không mất Điểm). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
               </div>
             </div>
 
@@ -3241,8 +3241,8 @@ function CommunityFeed() {
                 <strong className="text-gray-900 block mb-1">
                   2. Cơ chế xử phạt huỷ slot &amp; No-show
                 </strong>
-                - Huỷ trước 60 phút: Hoàn 100% tiền cọc về Ví Escrow không phạt.<br />
-                - Huỷ dưới 60 phút hoặc vắng mặt: Trừ 100% tiền cọc bồi thường cho đối thủ và chủ sân.
+                - Huỷ trước giờ chơi từ 48 giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
+                - Huỷ trong vòng 48 giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.
               </div>
               <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                 <strong className="text-gray-900 block mb-1">
@@ -3749,19 +3749,13 @@ function CommunityFeed() {
               <div className="p-4 rounded-2xl bg-[#F8FAF9] border border-gray-200/80">
                 <div className="flex items-center gap-2 mb-2 font-bold text-sm text-[#111827]">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px]">assignment_return</span>
-                  <h4>4. Chính Sách Hủy Kèo &amp; Hoàn Tiền Ký Quỹ Escrow</h4>
+                  <h4>4. Chính Sách Hủy Kèo &amp; Hoàn Điểm Ký Quỹ Escrow</h4>
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    <strong className="text-gray-900 font-bold">Kèo chưa đủ người:</strong> Hủy bên LFG trước <strong>48 giờ</strong> nếu không đủ người tham gia thì được <strong>hoàn 100%</strong> tiền cọc.
+                    Hủy trước giờ chơi từ <strong>48 giờ</strong> trở lên: <strong>hoàn 100% Điểm</strong>.
                   </li>
-                  <li>
-                    <strong className="text-gray-900 font-bold">Kèo đã chốt đủ người:</strong>
-                    <ul className="list-circle pl-5 mt-1 space-y-1">
-                      <li>Hủy trước <strong>24 giờ</strong> (khi có sự đồng ý của tất cả người tham gia LFG): <strong>Được hoàn tiền cọc</strong>.</li>
-                      <li>Hủy sau <strong>24 giờ</strong> trước giờ chơi: <strong>Mất tiền cọc</strong> (100% tiền cọc bị trừ theo điều khoản hợp đồng).</li>
-                    </ul>
-                  </li>
+                  <li>Hủy trong vòng <strong>48 giờ</strong> trước giờ chơi: <strong>không được hoàn Điểm</strong>.</li>
                   <li>
                     <strong className="text-red-700 font-bold">Phạt hủy kèo người tạo:</strong> Nếu kèo LFG đã tạo mà bị hủy trong vòng <strong>sau 24h trước giờ chơi</strong>: <strong>trừ 10 điểm</strong> Fair Play.
                   </li>

@@ -407,7 +407,7 @@ function CheckInQR() {
 
   const getHoursUntilMatch = () => {
     try {
-      // Số giờ còn lại tới giờ bắt đầu thật của vé (dùng cho quy định hoàn tiền 24h)
+      // Số giờ còn lại tới giờ bắt đầu thật của vé (dùng cho quy định hoàn Điểm 48h)
       if (!ticketData?.startAt) return 0
       return (new Date(ticketData.startAt).getTime() - new Date().getTime()) / (1000 * 60 * 60)
     } catch {
@@ -450,7 +450,7 @@ function CheckInQR() {
     try {
       const bookingId = ticketData?.id
       if (!bookingId) throw new Error('Không tìm thấy đơn đặt sân để hủy.')
-      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 24h theo giờ server), không tự đoán ở FE
+      // Số tiền hoàn lấy từ kết quả BE (BE áp dụng quy định 48h theo giờ server), không tự đoán ở FE
       const result = await cancelBooking(bookingId, {
         reasonCode: selectedReasonCode,
         reason: finalReason,
@@ -487,11 +487,11 @@ function CheckInQR() {
             icon: 'cancel',
             color: '#DC2626',
             bg: '#FEE2E2',
-            title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn tiền'}`,
+            title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn Điểm'}`,
             message: `Đơn tại ${facilityLabel} đã được hủy thành công. Lý do: ${finalReason}.`,
             details: isEligibleRefund
-              ? `Hủy trước ca >= 24h: Đã hoàn ${refundText} vào Ví Escrow.`
-              : 'Hủy dưới 24h trước giờ chơi: Không đủ điều kiện hoàn tiền theo quy định.',
+              ? `Hủy trước ca >= 48h: Đã hoàn ${refundText} vào Ví Escrow.`
+              : 'Hủy dưới 48h trước giờ chơi: Không được hoàn Điểm theo quy định.',
             time: 'Vừa xong',
             unread: true,
             link: '/wallet',
@@ -503,7 +503,7 @@ function CheckInQR() {
       setToastMessage(
         isEligibleRefund
           ? `✅ Đã hủy đơn thành công! Hoàn ${refundText} vào ví Escrow.`
-          : '⚠️ Đã hủy đơn thành công. Hủy dưới 24h: Không được hoàn tiền theo quy định.'
+          : '⚠️ Đã hủy đơn thành công. Hủy dưới 48h: Không được hoàn Điểm theo quy định.'
       )
       setTimeout(() => setToastMessage(null), 5000)
     } catch (err) {
@@ -1856,7 +1856,7 @@ function CheckInQR() {
                   ? 'Chủ sân đã quét mã QR xác nhận check-in (Không thể hủy đơn)'
                   : isExpiredNoCheckIn
                   ? 'Sân đã vượt quá giờ thi đấu mà không ai check-in (Không thể hủy đơn)'
-                  : 'Chưa check-in: Bạn có thể hủy đơn đặt sân và hoàn tiền theo quy định'
+                  : 'Chưa check-in: Hủy trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm'
               }
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
@@ -3354,38 +3354,38 @@ function CheckInQR() {
               </div>
             </div>
 
-            {/* Chính sách 24h */}
+            {/* Chính sách 48h */}
             <div
               style={{
                 padding: '14px 16px',
                 borderRadius: '12px',
                 fontSize: '12.5px',
                 lineHeight: 1.5,
-                background: getHoursUntilMatch() >= 24 ? '#F0FDF4' : '#FEF2F2',
-                border: getHoursUntilMatch() >= 24 ? '1px solid #86EFAC' : '1px solid #FCA5A5',
-                color: getHoursUntilMatch() >= 24 ? '#166534' : '#991B1B',
+                background: getHoursUntilMatch() >= 48 ? '#F0FDF4' : '#FEF2F2',
+                border: getHoursUntilMatch() >= 48 ? '1px solid #86EFAC' : '1px solid #FCA5A5',
+                color: getHoursUntilMatch() >= 48 ? '#166534' : '#991B1B',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '4px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                  {getHoursUntilMatch() >= 24 ? 'check_circle' : 'warning'}
+                  {getHoursUntilMatch() >= 48 ? 'check_circle' : 'warning'}
                 </span>
                 <span>
-                  {getHoursUntilMatch() >= 24
-                    ? 'ĐỦ ĐIỀU KIỆN HOÀN TIỀN 100%'
-                    : 'KHÔNG HOÀN TIỀN (0%)'}
+                  {getHoursUntilMatch() >= 48
+                    ? 'ĐỦ ĐIỀU KIỆN HOÀN 100% ĐIỂM'
+                    : 'KHÔNG HOÀN ĐIỂM (0%)'}
                 </span>
               </div>
               <div>
-                {getHoursUntilMatch() >= 24 ? (
+                {getHoursUntilMatch() >= 48 ? (
                   <>
-                    Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 24h).
-                    Bạn sẽ nhận lại <strong>100% tiền ({new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} Điểm)</strong> vào Ví Escrow ngay sau khi hủy.
+                    Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&ge; 48h).
+                    Bạn sẽ nhận lại <strong>toàn bộ ({new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} Điểm)</strong> vào Ví Escrow ngay sau khi hủy.
                   </>
                 ) : (
                   <>
-                    Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&lt; 24h).
-                    Theo quy định SportNexus, đơn hủy trong vòng 24 giờ trước giờ thi đấu sẽ <strong>không được hoàn tiền</strong>.
+                    Thời điểm hủy cách giờ thi đấu <strong>{getHoursUntilMatch().toFixed(1)} giờ</strong> (&lt; 48h).
+                    Theo quy định SportNexus, chỉ hoàn 100% Điểm khi hủy trước giờ thi đấu từ 48 giờ trở lên; hủy sau mốc này sẽ <strong>không được hoàn Điểm</strong>.
                   </>
                 )}
               </div>

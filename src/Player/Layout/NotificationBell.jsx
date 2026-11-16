@@ -58,7 +58,7 @@ const toBellItem = (n) => {
 const formatCleanTitle = (rawTitle = '') =>
   String(rawTitle || 'Thông báo')
     .replace(/\s*\((?:Trạng thái:\s*)?(?:PAID|PENDING|CANCELLED)\)\s*/gi, '')
-    .replace(/\s*•\s*(?:Hoàn 100%|Không hoàn tiền)/gi, '')
+    .replace(/\s*•\s*(?:Hoàn 100%|Không hoàn (?:tiền|Điểm))/gi, '')
     .replace(/!+$/, '')
     .trim()
 
