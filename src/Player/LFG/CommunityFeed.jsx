@@ -42,6 +42,13 @@ import { getOnboarding } from '../../api/player/ratingApi.js'
 import { createCommunityPost } from '../../api/player/communityApi.js'
 import { reverseGeocode } from '../../utils/geolocation.js'
 import {
+  TRUSTED_GPS_ACCURACY_METERS,
+  readProfileLocation,
+  readSavedBookingOrigin,
+  resolveEffectivePlayerOrigin,
+  subscribeBookingOrigin,
+} from '../../utils/playerOrigin.js'
+import {
   SPORT_CATALOG,
   normalizeSportKey,
   normalizeSkillKey,
@@ -389,43 +396,109 @@ function CommunityFeed() {
     return () => { cancelled = true }
   }, [lfgReload, selectedFormat])
 
-  // Vị trí ghép trận lấy từ khảo sát người chơi (GET /api/auth/me/onboarding): tọa độ + bán kính sẵn sàng đi,
-  // tên khu vực tra từ tọa độ. Chưa khảo sát vị trí thì hiện 'Chưa đặt khu vực'.
+  // Vị trí thi đấu / ghép trận đồng bộ từ điểm xuất phát ở Đặt sân (custom / GPS / hồ sơ) và khảo sát người chơi.
+  const [bookingOrigin, setBookingOrigin] = useState(() => readSavedBookingOrigin())
+  const [profileOrigin, setProfileOrigin] = useState(() => readProfileLocation())
+  const [liveGps, setLiveGps] = useState({ coords: null, name: '' })
   const [playerArea, setPlayerArea] = useState({ coords: null, radiusKm: null, name: '' })
+
+  useEffect(() => subscribeBookingOrigin(setBookingOrigin), [])
+
   useEffect(() => {
     let cancelled = false
     getOnboarding()
       .then((o) => {
-        if (cancelled || o?.latitude == null || o?.longitude == null) return
-        const coords = { lat: Number(o.latitude), lng: Number(o.longitude) }
+        if (cancelled || !o) return
+        const coords = o.latitude != null && o.longitude != null ? { lat: Number(o.latitude), lng: Number(o.longitude) } : null
         setPlayerArea({ coords, radiusKm: Number(o.radiusKm) || null, name: '' })
-        reverseGeocode(coords.lat, coords.lng).then((name) => {
-          if (!cancelled && name) setPlayerArea((prev) => ({ ...prev, name }))
-        })
+        if (coords) {
+          reverseGeocode(coords.lat, coords.lng).then((name) => {
+            if (!cancelled && name) setPlayerArea((prev) => ({ ...prev, name }))
+          })
+        }
       })
       .catch((err) => console.warn('LFG: Không tải được khảo sát người chơi:', err))
     return () => { cancelled = true }
   }, [])
-  const userProfileLocation = playerArea.name
-    || (playerArea.coords ? `${playerArea.coords.lat.toFixed(4)}, ${playerArea.coords.lng.toFixed(4)}` : '')
+
+  // Nếu người chơi đã cấp quyền định vị ở Đặt sân, tự động cập nhật tọa độ GPS chính xác và giải mã tên khu vực
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) return undefined
+    let cancelled = false
+    const fetchTrustedGps = () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (cancelled) return
+          const { latitude, longitude, accuracy } = position.coords
+          if (accuracy != null && accuracy > TRUSTED_GPS_ACCURACY_METERS) return
+          const coords = { lat: latitude, lng: longitude, accuracy: Math.round(accuracy || 8) }
+          setLiveGps((prev) => ({ ...prev, coords }))
+          reverseGeocode(coords.lat, coords.lng).then((name) => {
+            if (!cancelled && name) setLiveGps((prev) => ({ ...prev, name }))
+          })
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+      )
+    }
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'geolocation' })
+        .then((status) => {
+          if (!cancelled && status.state === 'granted') fetchTrustedGps()
+        })
+        .catch(() => {})
+    }
+    return () => { cancelled = true }
+  }, [])
+
+  // Nếu điểm xuất phát lưu từ Đặt sân ở dạng GPS chưa có tên khu vực cụ thể, giải mã tọa độ sang tên khu vực
+  useEffect(() => {
+    if (bookingOrigin?.source !== 'gps' || !bookingOrigin.coords) return undefined
+    if (bookingOrigin.label && bookingOrigin.label !== 'Vị trí hiện tại của bạn') return undefined
+    let cancelled = false
+    reverseGeocode(bookingOrigin.coords.lat, bookingOrigin.coords.lng).then((name) => {
+      if (!cancelled && name) {
+        setLiveGps((prev) => (prev.coords ? prev : { coords: bookingOrigin.coords, name }))
+      }
+    })
+    return () => { cancelled = true }
+  }, [bookingOrigin])
+
+  const resolvedOrigin = resolveEffectivePlayerOrigin({
+    bookingOrigin,
+    gpsCoords: liveGps.coords,
+    gpsPlaceName: liveGps.name,
+    profileLocation: profileOrigin.location,
+    profileCoords: profileOrigin.coords,
+    onboarding: playerArea,
+  })
+  const playerCoords = resolvedOrigin.coords
+  const userProfileLocation = resolvedOrigin.label
   const userLocationLabel = userProfileLocation || 'Chưa đặt khu vực'
-  // Khoảng cách thật (km) từ vị trí khảo sát tới kèo; thiếu tọa độ thì null
-  const realDistanceKm = (m) => (playerArea.coords && m?.lat != null && m?.lng != null
-    ? Math.round(haversineKm(playerArea.coords.lat, playerArea.coords.lng, Number(m.lat), Number(m.lng)) * 10) / 10
+  // Khoảng cách thật (km) từ vị trí xuất phát tới kèo; thiếu tọa độ thì null
+  const realDistanceKm = (m) => (playerCoords && m?.lat != null && m?.lng != null
+    ? Math.round(haversineKm(playerCoords.lat, playerCoords.lng, Number(m.lat), Number(m.lng)) * 10) / 10
     : null)
 
-  // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí trong Profile
+  // Lắng nghe cập nhật khi người chơi chỉnh sửa vị trí / môn trong Profile
   useEffect(() => {
     const handleStorage = (e) => {
       if ((e.key === 'player_sports_data' || e.key === 'player_registered_sports') && e.newValue) {
         setProfileSports(loadProfileRegisteredSports())
       }
+      if (e.key === 'player_profile_data') {
+        setProfileOrigin(readProfileLocation())
+      }
     }
     const handleSportsUpdate = () => setProfileSports(loadProfileRegisteredSports())
+    const handleProfileUpdate = () => setProfileOrigin(readProfileLocation())
     window.addEventListener('player-sports-updated', handleSportsUpdate)
+    window.addEventListener('player-profile-updated', handleProfileUpdate)
     window.addEventListener('storage', handleStorage)
     return () => {
       window.removeEventListener('player-sports-updated', handleSportsUpdate)
+      window.removeEventListener('player-profile-updated', handleProfileUpdate)
       window.removeEventListener('storage', handleStorage)
     }
   }, [])
@@ -1022,7 +1095,7 @@ function CommunityFeed() {
   const effectiveSkillFilter = levelFilter !== 'all' ? levelFilter : selectedSkillLevel
   const suggestionData = buildPersonalizedLfgSuggestions({
     userProfileLocation,
-    userCoords: playerArea.coords,
+    userCoords: playerCoords,
     profileSports,
     habits: playerHabits,
     learnedDesires,
@@ -1078,7 +1151,7 @@ function CommunityFeed() {
         calculateDistanceFromRegisteredAddress({
           targetAddress: m.location || m.facilityAddress || m.title || '',
           registeredAddress: userProfileLocation,
-          userCoords: playerArea.coords,
+          userCoords: playerCoords,
           targetLat: m.lat ?? null,
           targetLng: m.lng ?? null,
           itemSeed: m.id || m.title || '',

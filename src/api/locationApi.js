@@ -3,10 +3,48 @@
 // và kiểm soát rate-limit tập trung; khi chưa cấu hình proxy BE, tự động giới hạn tốc độ (≥ 1.1s/req),
 // gộp request trùng, cache theo phiên và tự tạm dừng khi gặp HTTP 429/503 theo Nominatim Usage Policy.
 
-const STORAGE_KEY = 'snx_geocode_cache_v1'
+const STORAGE_KEY = 'snx_geocode_cache_v2'
 const MAX_CACHE_ENTRIES = 80
 const DEFAULT_MIN_INTERVAL_MS = 1100
 const DEFAULT_COOLDOWN_MS = 60_000
+export const NOMINATIM_USER_AGENT = 'SportNexus-GraduationProject/1.0'
+export const GEOCODE_DEBOUNCE_MS = 1000
+
+export function createDebouncedAsync(fn, waitMs = GEOCODE_DEBOUNCE_MS) {
+  let timerId = null
+  let pendingResolve = null
+
+  const cancel = () => {
+    if (timerId !== null) {
+      clearTimeout(timerId)
+      timerId = null
+    }
+    if (pendingResolve) {
+      pendingResolve(null)
+      pendingResolve = null
+    }
+  }
+
+  const debounced = (...args) => {
+    cancel()
+    return new Promise((resolve, reject) => {
+      pendingResolve = resolve
+      timerId = setTimeout(async () => {
+        timerId = null
+        const activeResolve = pendingResolve
+        pendingResolve = null
+        try {
+          activeResolve(await fn(...args))
+        } catch (err) {
+          reject(err)
+        }
+      }, waitMs)
+    })
+  }
+
+  debounced.cancel = cancel
+  return debounced
+}
 
 const readEnv = env => {
   if (env && typeof env === 'object') return env
@@ -72,15 +110,17 @@ export function normalizeReverseGeocodePayload(payload) {
   const unwrapped = payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload
   if (typeof unwrapped === 'string') return unwrapped.trim()
   if (!unwrapped || typeof unwrapped !== 'object') return ''
-  if (typeof unwrapped.name === 'string' && unwrapped.name.trim()) return unwrapped.name.trim()
   if (typeof unwrapped.displayName === 'string' && unwrapped.displayName.trim()) return unwrapped.displayName.trim()
 
   const a = unwrapped.address && typeof unwrapped.address === 'object' ? unwrapped.address : {}
   const parts = [a.quarter || a.suburb || a.village || a.hamlet, a.city_district || a.county || a.town || a.district, a.city || a.state || a.province].filter(
     Boolean,
   )
+  const areaName = [...new Set(parts)].join(', ')
+  if (areaName) return areaName
 
-  return [...new Set(parts)].join(', ') || String(unwrapped.display_name || '').trim()
+  if (typeof unwrapped.name === 'string' && unwrapped.name.trim()) return unwrapped.name.trim()
+  return String(unwrapped.display_name || '').trim()
 }
 
 export function createLocationClient({
@@ -90,6 +130,7 @@ export function createLocationClient({
   now = () => Date.now(),
   delay = defaultDelay,
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
+  debounceMs = GEOCODE_DEBOUNCE_MS,
 } = {}) {
   const memoryCache = new Map()
   const inFlight = new Map()
@@ -144,7 +185,13 @@ export function createLocationClient({
 
   const requestJson = async (url, { useNominatimLimit }) => {
     const execute = async () => {
-      const response = await fetchImpl(url, { headers: { Accept: 'application/json' } })
+      const headers = useNominatimLimit
+        ? { Accept: 'application/json', 'User-Agent': NOMINATIM_USER_AGENT }
+        : { Accept: 'application/json' }
+      const fetchOptions = useNominatimLimit
+        ? { headers, referrerPolicy: 'strict-origin-when-cross-origin' }
+        : { headers }
+      const response = await fetchImpl(url, fetchOptions)
       if (!response.ok) {
         if (useNominatimLimit && (response.status === 429 || response.status === 503)) {
           const retryAfterSec = Number(response.headers?.get?.('retry-after'))
@@ -243,10 +290,13 @@ export function createLocationClient({
     return promise
   }
 
-  return { geocodeAddress, reverseGeocode }
+  const debouncedGeocodeAddress = createDebouncedAsync(geocodeAddress, debounceMs)
+
+  return { geocodeAddress, debouncedGeocodeAddress, reverseGeocode }
 }
 
 const defaultLocationClient = createLocationClient()
 
 export const geocodeViaService = text => defaultLocationClient.geocodeAddress(text)
+export const debouncedGeocodeViaService = text => defaultLocationClient.debouncedGeocodeAddress(text)
 export const reverseGeocodeViaService = (latitude, longitude) => defaultLocationClient.reverseGeocode(latitude, longitude)

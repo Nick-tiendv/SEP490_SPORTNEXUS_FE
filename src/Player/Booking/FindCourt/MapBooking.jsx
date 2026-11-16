@@ -6,7 +6,8 @@ import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
 import { getOnboarding } from '../../../api/player/ratingApi.js'
 import { getCourtSlots } from '../../../api/player/bookingApi.js'
-import { geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
+import { GEOCODE_DEBOUNCE_MS, geocodeAddress, reverseGeocode } from '../../../utils/geolocation.js'
+import { clearBookingOrigin, readSavedBookingOrigin, saveBookingOrigin } from '../../../utils/playerOrigin.js'
 import { vnClock } from '../../../utils/vnTime.js'
 import AIChatModal from '../AIChat/AIChatModal.jsx'
 import InteractiveCourtMap from './InteractiveCourtMap.jsx'
@@ -372,6 +373,7 @@ function MapBooking() {
     return ''
   })
   const [onboardingArea, setOnboardingArea] = useState({ coords: null, name: '' })
+  const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   useEffect(() => {
     let cancelled = false
     getOnboarding()
@@ -384,15 +386,22 @@ function MapBooking() {
         })
       })
       .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setOnboardingLoaded(true)
+      })
     return () => { cancelled = true }
   }, [])
 
-  // Điểm xuất phát tùy chỉnh (cho phép người chơi nhập vị trí cụ thể bất kỳ để chỉ đường)
-  const [customOrigin, setCustomOrigin] = useState('')
+  // Điểm xuất phát tùy chỉnh (được đồng bộ với Ghép trận LFG qua playerOrigin)
+  const [customOrigin, setCustomOrigin] = useState(() => {
+    const saved = readSavedBookingOrigin()
+    return saved?.source === 'custom' ? saved.customText || saved.label || '' : ''
+  })
   const [isEditingOrigin, setIsEditingOrigin] = useState(false)
 
   // Tọa độ GPS thiết bị người chơi (lấy ngầm để tính khoảng cách và định vị chính xác)
   const [gpsCoords, setGpsCoords] = useState(null)
+  const [gpsPlace, setGpsPlace] = useState({ key: '', name: '' })
 
   // Tìm kiếm & Lọc
   const [query, setQuery] = useState('')
@@ -480,12 +489,6 @@ function MapBooking() {
     )
   }, [])
 
-  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến hồ sơ hoặc khảo sát
-  const effectiveOrigin = useMemo(() => {
-    if (customOrigin.trim()) return customOrigin.trim()
-    return userProfileLocation || onboardingArea.name || ''
-  }, [customOrigin, userProfileLocation, onboardingArea.name])
-
   // Khu vực gợi ý lấy từ chính các cơ sở trong hệ thống (mọi tỉnh / thành, kể cả Hà Nội):
   // nút tỉnh / thành trước, sau đó các phường có sân. Mỗi nút biết đúng danh sách cơ sở thuộc khu vực đó.
   const areaChips = useMemo(() => {
@@ -520,21 +523,43 @@ function MapBooking() {
     return text ? areaChips.all.find((chip) => normalizeText(chip.value) === text) || null : null
   }, [areaChips, customOrigin])
 
-  // Tọa độ của vị trí người dùng tự nhập (tra địa chỉ, chờ ngừng gõ 600ms); chọn nút khu vực thì không cần tra
-  const [customGeo, setCustomGeo] = useState({ key: '', coords: null })
+  // Tọa độ của vị trí người dùng tự nhập (debounce 1 giây sau khi dừng gõ mới gọi API); chọn nút khu vực thì không cần tra
+  const [customGeo, setCustomGeo] = useState(() => {
+    const saved = readSavedBookingOrigin()
+    const key = saved?.source === 'custom' ? saved.customText || saved.label || '' : ''
+    return key && saved?.coords ? { key, coords: saved.coords } : { key: '', coords: null }
+  })
   useEffect(() => {
     const text = customOrigin.trim()
-    if (!text || selectedAreaChip) return undefined
+    if (text.length < 2 || selectedAreaChip) return undefined
     let cancelled = false
     const timer = setTimeout(() => {
       geocodeAddress(text).then((coords) => { if (!cancelled) setCustomGeo({ key: text, coords }) })
-    }, 600)
+    }, GEOCODE_DEBOUNCE_MS)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [customOrigin, selectedAreaChip])
 
   // Điểm xuất phát dùng cho ghim bản đồ, khoảng cách và chỉ đường:
   // vị trí tự nhập > GPS thiết bị > tọa độ khảo sát; thiếu cả ba trả null (không gán cứng tọa độ TP.HCM)
   const trustedGps = gpsCoords && gpsCoords.accuracy <= GPS_TRUST_METERS ? gpsCoords : null
+  const gpsKey = trustedGps ? `${trustedGps.lat.toFixed(4)},${trustedGps.lng.toFixed(4)}` : ''
+  useEffect(() => {
+    if (!trustedGps) return undefined
+    let cancelled = false
+    reverseGeocode(trustedGps.lat, trustedGps.lng).then((name) => {
+      if (!cancelled && name) setGpsPlace({ key: gpsKey, name })
+    })
+    return () => { cancelled = true }
+  }, [trustedGps, gpsKey])
+  const gpsLabel = gpsKey && gpsPlace.key === gpsKey ? gpsPlace.name : ''
+
+  // Vị trí hiệu lực: ưu tiên địa chỉ người dùng tự nhập, sau đó đến GPS chính xác, hồ sơ hoặc khảo sát
+  const effectiveOrigin = useMemo(() => {
+    if (customOrigin.trim()) return customOrigin.trim()
+    if (trustedGps && gpsLabel) return gpsLabel
+    return userProfileLocation || onboardingArea.name || ''
+  }, [customOrigin, trustedGps, gpsLabel, userProfileLocation, onboardingArea.name])
+
   const originPoint = useMemo(() => {
     const text = customOrigin.trim()
     // Nút khu vực: tâm của các cơ sở trong khu vực
@@ -551,7 +576,56 @@ function MapBooking() {
   // Tên điểm xuất phát hiển thị: khớp với tọa độ đang dùng để tính khoảng cách
   const originLabel = customOrigin.trim()
     ? selectedAreaChip?.label && selectedAreaChip.province ? `${selectedAreaChip.label}, ${selectedAreaChip.province}` : customOrigin.trim()
-    : trustedGps ? 'Vị trí hiện tại của bạn' : userProfileLocation || onboardingArea.name || 'Chưa xác định vị trí'
+    : trustedGps ? (gpsLabel || 'Vị trí hiện tại của bạn') : userProfileLocation || onboardingArea.name || 'Chưa xác định vị trí'
+
+  // Đồng bộ điểm xuất phát hiện tại sang Ghép trận LFG (Hồ sơ ghép trận & Tạo kèo)
+  useEffect(() => {
+    const trimmedCustom = customOrigin.trim()
+    if (trimmedCustom) {
+      if (!selectedAreaChip && trimmedCustom.length >= 2 && customGeo.key !== trimmedCustom) return
+      saveBookingOrigin({
+        label: originLabel,
+        lat: originPoint?.lat ?? null,
+        lng: originPoint?.lng ?? null,
+        source: 'custom',
+        customText: trimmedCustom,
+      })
+      return
+    }
+    if (trustedGps) {
+      saveBookingOrigin({
+        label: gpsLabel || userProfileLocation || onboardingArea.name || 'Vị trí hiện tại của bạn',
+        lat: trustedGps.lat,
+        lng: trustedGps.lng,
+        source: 'gps',
+        customText: '',
+      })
+      return
+    }
+    if (!onboardingLoaded) return
+    if (userProfileLocation || onboardingArea.coords || onboardingArea.name) {
+      saveBookingOrigin({
+        label: userProfileLocation || onboardingArea.name || '',
+        lat: onboardingArea.coords?.lat ?? null,
+        lng: onboardingArea.coords?.lng ?? null,
+        source: userProfileLocation ? 'profile' : 'onboarding',
+        customText: '',
+      })
+      return
+    }
+    clearBookingOrigin()
+  }, [
+    customOrigin,
+    selectedAreaChip,
+    customGeo,
+    originLabel,
+    originPoint,
+    trustedGps,
+    gpsLabel,
+    userProfileLocation,
+    onboardingArea,
+    onboardingLoaded,
+  ])
 
   // Khu vực người dùng nhập ở ô "Vị trí" → chỉ hiện sân trong khu vực đó.
   // Có ranh giới khu vực (tra địa chỉ) thì lọc theo ranh giới; địa chỉ cụ thể → bán kính quanh điểm đó.
@@ -1546,7 +1620,7 @@ function MapBooking() {
         {/* ===================== RIGHT COLUMN ===================== */}
         <div className="mb-col">
           {/* Map */}
-          {/* Real Interactive Google Map */}
+          {/* Bản đồ tương tác Leaflet / OpenStreetMap */}
           <section className="mb-card mb-map-section" aria-label="Bản đồ sân">
             <InteractiveCourtMap
               courts={filteredCourts}

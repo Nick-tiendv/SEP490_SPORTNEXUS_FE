@@ -27,6 +27,7 @@ const USER_KEYS = [
   'sportnexus_browser_push_token',
   'sportnexus_browser_push_enabled',
   'sportnexus_disabled_notif_types',
+  'sportnexus_booking_origin',
 ]
 
 export function clearUserData() {
