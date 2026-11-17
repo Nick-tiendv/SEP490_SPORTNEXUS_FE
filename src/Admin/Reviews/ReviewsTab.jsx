@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Star, Search, EyeOff, Eye, MessageSquare, Building2, Users, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import StatCard from '../components/StatCard.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
 import { getFacilityReview, getFacilityReviewStatistics, hideFacilityReview, listFacilityReviews, unhideFacilityReview } from '../../api/admin/facilityReviewApi.js'
-import { getFairPlayStatistics, hideFairPlayRating, listFairPlayRatings, unhideFairPlayRating } from '../../api/admin/fairPlayApi.js'
+import { getFairPlayReasons, getFairPlayStatistics, hideFairPlayRating, listFairPlayRatings, unhideFairPlayRating } from '../../api/admin/fairPlayApi.js'
 
 const PAGE_SIZE = 20
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
@@ -15,11 +15,28 @@ const stars = value => (Number.isFinite(value) ? '★'.repeat(Math.round(value))
 const noop = () => {}
 
 // Tab "Đánh giá & Phản hồi": đánh giá cơ sở (/admin/facility-reviews) và đánh giá fair-play giữa người chơi (/admin/fair-play/ratings).
-export default function ReviewsTab() {
-  const [kind, setKind] = useState('facility')
+// focus = { userId, name }: mở sẵn Đánh giá Fair Play của một người (từ phiếu nghi đánh hội đồng).
+export default function ReviewsTab({ focus = null }) {
+  const [kind, setKind] = useState(focus ? 'fairplay' : 'facility')
   return <>
     <div className="admin-segmented" role="tablist" aria-label="Loại đánh giá" style={{ marginBottom: 18 }}>{[['facility', 'Đánh giá cơ sở'], ['fairplay', 'Đánh giá Fair Play']].map(([value, text]) => <button key={value} type="button" role="tab" aria-selected={kind === value} className={kind === value ? 'selected' : ''} onClick={() => setKind(value)}>{text}</button>)}</div>
-    {kind === 'facility' ? <FacilityReviews /> : <FairPlayRatings />}
+    {kind === 'facility' ? <FacilityReviews /> : <FairPlayRatings focus={focus} />}
+  </>
+}
+
+// Hộp chi tiết bo góc giữa màn hình (giống tab Báo cáo): nền mờ bấm để đóng, Esc đóng khi không mở hộp thoại con.
+function useEscapeClose(active, onClose) {
+  useEffect(() => {
+    if (!active) return undefined
+    const onKey = event => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [active, onClose])
+}
+function DetailModal({ label, onClose, children }) {
+  return <>
+    <div className="rr-drawer-backdrop" aria-hidden="true" onClick={onClose} />
+    <aside className="rr-inspector rr-drawer" role="dialog" aria-label={label}>{children}</aside>
   </>
 }
 
@@ -72,6 +89,8 @@ function FacilityReviews() {
   }, [detailKey])
   const review = listItem && detail.key === detailKey && detail.value ? { ...listItem, ...detail.value } : listItem
   const change = (key, value) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1) }
+  const closeDetail = useCallback(() => setSelectedId(null), [])
+  useEscapeClose(Boolean(review) && !dialog, closeDetail)
 
   return <>
     <div className="rr-stats">{[
@@ -82,11 +101,11 @@ function FacilityReviews() {
       ['Chủ sân phản hồi', percent(s.ownerReplyRate), Building2, 'Tỷ lệ đánh giá được trả lời'],
     ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={stats.loading ? '…' : value} icon={icon} supporting={supporting} />)}</div>
     {!stats.loading && s.totalReviews > 0 && <p className="rr-demo-note">Phân bổ sao: {s.distribution.map(item => `${item.star}★ ${number(item.count)}`).join(' · ')}{s.lowestRated.length ? ` · Điểm thấp nhất: ${s.lowestRated.slice(0, 3).map(item => `${item.name} (${decimal(item.rating)})`).join(', ')}` : ''}</p>}
-    <div className="rr-content"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm đánh giá" placeholder="Tìm theo nội dung, người đánh giá, cơ sở…" value={filters.search} onChange={event => change('search', event.target.value)} /></label>
+    <div className="rr-content rr-content--full"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm đánh giá" placeholder="Tìm theo nội dung, người đánh giá, cơ sở…" value={filters.search} onChange={event => change('search', event.target.value)} /></label>
       <div className="rr-filters" style={{ marginTop: 12 }}><label>Số sao<select value={filters.rating} onChange={event => change('rating', event.target.value)}><option value="">Tất cả</option>{[5, 4, 3, 2, 1].map(star => <option key={star} value={star}>{star} sao</option>)}</select></label><label>Chủ sân phản hồi<select value={filters.replied} onChange={event => change('replied', event.target.value)}><option value="">Tất cả</option><option value="true">Đã phản hồi</option><option value="false">Chưa phản hồi</option></select></label><label>Từ ngày<input type="date" value={filters.from} onChange={event => change('from', event.target.value)} /></label><label>Đến ngày<input type="date" value={filters.to} onChange={event => change('to', event.target.value)} /></label></div></div>
       <div className="rr-table-scroll"><table><thead><tr>{['Người đánh giá', 'Cơ sở', 'Số sao', 'Nội dung', 'Phản hồi', 'Hiển thị', 'Ngày'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}><td><button className="rr-row-button" onClick={() => setSelectedId(item.id)}>{item.user}</button></td><td>{item.facility}</td><td><span className={`rr-table-rating ${item.rating <= 2 ? 'low' : ''}`}><Star size={12} fill="currentColor" />{item.rating ?? '—'}</span></td><td className="rr-excerpt" title={item.comment}>{item.comment || '—'}</td><td>{item.reply ? 'Đã phản hồi' : '—'}</td><td><VisibilityBadge hidden={item.hidden} /></td><td>{date(item.createdAt)}</td></tr>)}</tbody></table></div>
       <ListState list={list} empty="Chưa có đánh giá cơ sở nào" /><Pager page={page} list={list} onPage={setPage} /></section>
-      <aside className="rr-inspector">{review ? <>
+      {review && <DetailModal label="Chi tiết đánh giá cơ sở" onClose={closeDetail}>
         <header><h2><Star size={17} />Chi tiết đánh giá</h2><button className="rr-button" aria-label="Đóng" onClick={() => setSelectedId(null)}><X size={14} /></button></header>
         <div className="rr-reviewer"><div className="rr-card-title"><small>NGƯỜI ĐÁNH GIÁ</small><VisibilityBadge hidden={review.hidden} /></div><div className="rr-person"><span className="rr-avatar">{review.user.slice(0, 1)}</span><div><strong>{review.user}</strong><small>{[review.userEmail, date(review.createdAt)].filter(Boolean).join(' · ')}</small></div></div></div>
         <div className="rr-target"><small>CƠ SỞ</small><div><Building2 size={16} /><strong>{review.facility}</strong></div>{review.ownerName && <small>Chủ sân: {review.ownerName}</small>}</div>
@@ -95,23 +114,34 @@ function FacilityReviews() {
         {review.reply && <div className="rr-note"><small>Chủ sân phản hồi · {date(review.repliedAt)}</small><p>{review.reply}</p></div>}
         {review.hidden && (review.hiddenReason || review.hiddenBy) && <div className="rr-warning">Lý do ẩn: {review.hiddenReason || '—'}{review.hiddenBy ? ` · bởi ${review.hiddenBy}` : ''}{review.hiddenAt ? ` · ${date(review.hiddenAt)}` : ''}</div>}
         <div className="rr-actions" style={{ marginTop: 16 }}><button className="rr-button" onClick={() => setDialog({ item: review, hide: !review.hidden })}>{review.hidden ? <><Eye size={14} />Hiện lại</> : <><EyeOff size={14} />Ẩn đánh giá</>}</button></div>
-      </> : <div className="rr-empty"><Star size={28} /><h2>Chọn một đánh giá</h2><p>Xem nội dung, phản hồi của chủ sân và ẩn đánh giá vi phạm.</p></div>}</aside></div>
+      </DetailModal>}</div>
     {dialog && <VisibilityDialog {...dialog} noun="đánh giá cơ sở" requireReason onHide={hideFacilityReview} onUnhide={unhideFacilityReview} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1) }} />}
   </>
 }
 
-function FairPlayRatings() {
-  const [filters, setFilters] = useState({ maxStars: '', hidden: '' })
+function FairPlayRatings({ focus }) {
+  const [filters, setFilters] = useState({ maxStars: focus ? '2' : '', hidden: '' })
+  const [user, setUser] = useState(focus?.userId ? focus : null)
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
   const [dialog, setDialog] = useState(null)
-  const params = useMemo(() => ({ maxStars: filters.maxStars, hidden: filters.hidden, page, pageSize: PAGE_SIZE }), [filters.maxStars, filters.hidden, page])
+  const params = useMemo(() => ({ userId: user?.userId, maxStars: filters.maxStars, hidden: filters.hidden, page, pageSize: PAGE_SIZE }), [user, filters.maxStars, filters.hidden, page])
   const list = usePagedList(listFairPlayRatings, params, reload)
   const stats = useStats(getFairPlayStatistics, reload)
   const s = stats.value
   const rating = list.items.find(item => item.id === selectedId)
+  const closeDetail = useCallback(() => setSelectedId(null), [])
+  useEscapeClose(Boolean(rating) && !dialog, closeDetail)
   const change = (key, value) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1) }
+  // Tên lý do chấm 1–2 sao: BE chỉ trả reasonId, tra theo GET /reviews/fair-play/reasons.
+  const [reasons, setReasons] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    getFairPlayReasons().then(list => !cancelled && setReasons(list)).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  const reasonText = item => item.reasonName || (item.reasonId != null ? reasons.find(reason => String(reason.id) === String(item.reasonId))?.label || `Lý do #${item.reasonId}` : '')
 
   return <>
     <div className="rr-stats">{[
@@ -121,19 +151,21 @@ function FairPlayRatings() {
       ['Dưới ngưỡng', number(s.belowThresholdUsers), Users, `Ngưỡng nhận slot: ${number(s.minClaimScore)} điểm`],
       ['Bị cấm nhận slot', number(s.claimBannedUsers), Users, 'Quản lý ở trang Người dùng → Fair Play'],
     ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={stats.loading ? '…' : value} icon={icon} supporting={supporting} />)}</div>
-    <div className="rr-content"><section className="rr-list"><div className="rr-toolbar"><div className="rr-filters"><label>Số sao tối đa<select value={filters.maxStars} onChange={event => change('maxStars', event.target.value)}><option value="">Tất cả</option>{[1, 2, 3, 4].map(star => <option key={star} value={star}>Từ {star} sao trở xuống</option>)}</select></label><label>Hiển thị<select value={filters.hidden} onChange={event => change('hidden', event.target.value)}><option value="">Tất cả</option><option value="false">Đang hiển thị</option><option value="true">Đã ẩn</option></select></label></div></div>
-      <div className="rr-table-scroll"><table><thead><tr>{['Người đánh giá', 'Người được đánh giá', 'Số sao', 'Nhận xét', 'Hiển thị', 'Ngày'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}><td><button className="rr-row-button" onClick={() => setSelectedId(item.id)}>{item.rater}</button></td><td>{item.target}</td><td><span className={`rr-table-rating ${item.stars <= 2 ? 'low' : ''}`}><Star size={12} fill="currentColor" />{item.stars ?? '—'}</span></td><td className="rr-excerpt" title={item.comment}>{item.comment || '—'}</td><td><VisibilityBadge hidden={item.hidden} /></td><td>{date(item.createdAt)}</td></tr>)}</tbody></table></div>
+    <div className="rr-content rr-content--full"><section className="rr-list"><div className="rr-toolbar"><div className="rr-filters"><label>Số sao tối đa<select value={filters.maxStars} onChange={event => change('maxStars', event.target.value)}><option value="">Tất cả</option>{[1, 2, 3, 4].map(star => <option key={star} value={star}>Từ {star} sao trở xuống</option>)}</select></label><label>Hiển thị<select value={filters.hidden} onChange={event => change('hidden', event.target.value)}><option value="">Tất cả</option><option value="false">Đang hiển thị</option><option value="true">Đã ẩn</option></select></label></div>
+        {user && <p className="rr-demo-note"><Users size={14} />Đang xem đánh giá dành cho <strong>{user.name}</strong>. BE chưa lọc được theo trận nên danh sách gồm mọi trận của người này.<button type="button" className="rr-reset" onClick={() => { setUser(null); setPage(1) }}>Bỏ lọc người chơi</button></p>}</div>
+      <div className="rr-table-scroll"><table><thead><tr>{['Người đánh giá', 'Người được đánh giá', 'Số sao', 'Lý do', 'Nhận xét', 'Hiển thị', 'Ngày'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}><td><button className="rr-row-button" onClick={() => setSelectedId(item.id)}>{item.rater}</button></td><td>{item.target}</td><td><span className={`rr-table-rating ${item.stars <= 2 ? 'low' : ''}`}><Star size={12} fill="currentColor" />{item.stars ?? '—'}</span></td><td className="rr-excerpt" title={reasonText(item)}>{reasonText(item) || '—'}</td><td className="rr-excerpt" title={item.comment}>{item.comment || '—'}</td><td><VisibilityBadge hidden={item.hidden} /></td><td>{date(item.createdAt)}</td></tr>)}</tbody></table></div>
       <ListState list={list} empty="Chưa có đánh giá Fair Play nào" /><Pager page={page} list={list} onPage={setPage} /></section>
-      <aside className="rr-inspector">{rating ? <>
+      {rating && <DetailModal label="Chi tiết đánh giá Fair Play" onClose={closeDetail}>
         <header><h2><Star size={17} />Đánh giá Fair Play</h2><button className="rr-button" aria-label="Đóng" onClick={() => setSelectedId(null)}><X size={14} /></button></header>
         <div className="rr-reviewer"><div className="rr-card-title"><small>NGƯỜI ĐÁNH GIÁ</small><VisibilityBadge hidden={rating.hidden} /></div><div className="rr-person"><span className="rr-avatar">{rating.rater.slice(0, 1)}</span><div><strong>{rating.rater}</strong><small>{date(rating.createdAt)}{rating.context ? ` · ${rating.context}` : ''}</small></div></div></div>
         <div className="rr-target"><small>NGƯỜI ĐƯỢC ĐÁNH GIÁ</small><div><Users size={16} /><strong>{rating.target}</strong></div></div>
         <div className="rr-rating"><span>{stars(rating.stars)}</span><strong>{rating.stars ?? '—'}<small> / 5</small></strong></div>
+        {reasonText(rating) && <p className="rr-demo-note">Lý do: <strong>{reasonText(rating)}</strong></p>}
         <blockquote>{rating.comment || 'Không có nhận xét.'}</blockquote>
         {rating.hidden && rating.hiddenReason && <div className="rr-warning">Lý do ẩn: {rating.hiddenReason}</div>}
         <p className="rr-demo-note">Đánh giá bị ẩn sẽ không được tính vào điểm Fair Play của người được đánh giá.</p>
         <div className="rr-actions"><button className="rr-button" onClick={() => setDialog({ item: rating, hide: !rating.hidden })}>{rating.hidden ? <><Eye size={14} />Hiện lại</> : <><EyeOff size={14} />Ẩn đánh giá</>}</button></div>
-      </> : <div className="rr-empty"><Star size={28} /><h2>Chọn một đánh giá</h2><p>Ẩn các đánh giá không công bằng hoặc mang tính trả đũa giữa người chơi.</p></div>}</aside></div>
+      </DetailModal>}</div>
     {dialog && <VisibilityDialog {...dialog} noun="đánh giá Fair Play" onHide={hideFairPlayRating} onUnhide={unhideFairPlayRating} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1) }} />}
   </>
 }

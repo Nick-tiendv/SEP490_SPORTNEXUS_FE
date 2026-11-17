@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { FairPlayAlertBanner, FairPlayAlertTable } from './FairPlayAlerts.jsx'
+import { useFairPlayAlerts } from './useFairPlayAlerts.js'
+import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
-import HiddenContentTab from './HiddenContentTab.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import '../Users/users.css'
 import './reviews.css'
 import ReviewsTab from './ReviewsTab.jsx'
 import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport } from '../../api/admin/reportApi.js'
-import { decisionOptions, emptyFilters, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
+import { decisionLabel, decisionOptions, emptyFilters, fairPlayDecisionOptions, formatDelta, isActiveReport, isFairPlayAlert, label, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
 
 const PAGE_SIZE = 10
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
@@ -18,18 +19,22 @@ const settled = result => (result.status === 'fulfilled' ? result.value : undefi
 function Badge({ value }) { return <span className={`rr-badge rr-${String(value || 'none').toLowerCase().replaceAll(' ', '-')}`}>{label(value)}</span> }
 
 function GuidelinesDialog({ onClose }) {
-  return <DemoDialog title="Hướng dẫn kiểm duyệt" onClose={onClose}><div className="rr-guidelines"><ol><li>Đối chiếu nội dung báo cáo với bằng chứng và phản hồi của chủ sân (nếu có).</li><li>Ưu tiên báo cáo có hành vi quấy rối, đe dọa hoặc tiết lộ thông tin cá nhân.</li><li>Chỉ hoàn tiền, trừ điểm fair-play hoặc xóa bài viết khi đã xác minh vi phạm.</li><li>Luôn ghi chú lý do quyết định để các bên có thể tra cứu.</li></ol><button className="rr-button" onClick={onClose}>Đóng hướng dẫn</button></div></DemoDialog>
+  return <DemoDialog title="Hướng dẫn kiểm duyệt" onClose={onClose}><div className="rr-guidelines"><ol><li>Đối chiếu nội dung báo cáo với bằng chứng và phản hồi của chủ sân (nếu có).</li><li>Ưu tiên báo cáo có hành vi quấy rối, đe dọa hoặc tiết lộ thông tin cá nhân.</li><li>Chỉ hoàn tiền, trừ điểm fair-play hoặc xóa bài viết khi đã xác minh vi phạm.</li><li>Luôn ghi chú lý do quyết định để các bên có thể tra cứu.</li><li>Phiếu <strong>nghi đánh hội đồng</strong> do hệ thống tạo khi một người chơi bị rớt hơn 10 điểm Fair Play trong 1 trận. Điểm đang treo chưa bị trừ: xem lại các đánh giá thấp của người đó rồi xác nhận hợp lệ (trừ điểm) hoặc gỡ bỏ (không trừ).</li></ol><button className="rr-button" onClick={onClose}>Đóng hướng dẫn</button></div></DemoDialog>
 }
 
 // POST /api/v1/reports/admin/{reportId}/resolve
 function ResolveDialog({ report, onClose, onDone }) {
-  const [values, setValues] = useState({ decision: decisionOptions[0].value, adminNote: '', refund: report.requestedRefund ? String(report.requestedRefund) : '100', lockSlot: false, deduct: '', deletePost: false })
+  // Phiếu nghi đánh hội đồng: BE tự trừ / bỏ điểm đang treo, không hoàn tiền, không nhập điểm trừ thêm.
+  const fairPlayAlert = isFairPlayAlert(report)
+  const options = fairPlayAlert ? fairPlayDecisionOptions : decisionOptions
+  const [values, setValues] = useState({ decision: options[0].value, adminNote: '', refund: report.requestedRefund ? String(report.requestedRefund) : '100', lockSlot: false, deduct: '', deletePost: false })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }))
   // REFUND cần % hoàn (1-100); trừ điểm fair-play / xóa bài chỉ áp dụng khi không bác bỏ.
   const refunding = values.decision === 'REFUND'
   const approving = values.decision !== 'REJECT'
+  const askDeduct = approving && !fairPlayAlert
   const submit = async event => {
     event.preventDefault()
     const refund = values.refund === '' ? null : Number(values.refund)
@@ -44,7 +49,7 @@ function ResolveDialog({ report, onClose, onDone }) {
         adminNote: values.adminNote.trim(),
         refundPercentage: refunding ? refund : null,
         lockSlotForMaintenance: refunding && values.lockSlot,
-        deductTargetUserFairPlayPoints: approving ? deduct : null,
+        deductTargetUserFairPlayPoints: askDeduct ? deduct : null,
         // Bài viết / bình luận bị báo cáo: BE ẩn nội dung kèm lý do (ghi chú Admin) và báo tác giả
         deleteCommunityPost: approving && ['COMMUNITY_POST', 'POST_COMMENT'].includes(report.targetType) && values.deletePost,
       })
@@ -55,14 +60,16 @@ function ResolveDialog({ report, onClose, onDone }) {
   }
   const check = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }
   return <DemoDialog title={`Xử lý báo cáo ${report.id}`} onClose={submitting ? () => {} : onClose}><form className="rr-action-form" onSubmit={submit}>
-    <p>{report.reporter} báo cáo <strong>{report.entity}</strong> · {report.reason}</p>
-    <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{decisionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-    <label>Ghi chú quản trị (bắt buộc)<textarea rows={3} maxLength={1000} value={values.adminNote} onChange={event => set('adminNote', event.target.value)} placeholder="Nhập nội dung xác minh hoặc lý do quyết định..." required /></label>
+    {fairPlayAlert
+      ? <p>Hệ thống đang treo <strong>{formatDelta(report.pendingFairPlayDelta)} điểm Fair Play</strong> của <strong>{report.entity}</strong> (chưa trừ). Xác nhận đánh giá hợp lệ sẽ trừ {Math.abs(report.pendingFairPlayDelta)} điểm; gỡ bỏ thì không trừ. Kết luận được gửi kèm thông báo cho người chơi.</p>
+      : <p>{report.reporter} báo cáo <strong>{report.entity}</strong> · {report.reason}</p>}
+    <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+    <label>{fairPlayAlert ? 'Kết luận gửi người chơi (bắt buộc)' : 'Ghi chú quản trị (bắt buộc)'}<textarea rows={3} maxLength={1000} value={values.adminNote} onChange={event => set('adminNote', event.target.value)} placeholder="Nhập nội dung xác minh hoặc lý do quyết định..." required /></label>
     {refunding && <>
       <label>Tỷ lệ hoàn tiền cho người báo cáo (%){report.requestedRefund != null && ` — người báo cáo yêu cầu ${report.requestedRefund}%`}<input type="number" min={1} max={100} step={1} value={values.refund} onChange={event => set('refund', event.target.value)} placeholder="1 – 100" /></label>
       <label style={check}><input type="checkbox" checked={values.lockSlot} onChange={event => set('lockSlot', event.target.checked)} />Khóa khung giờ để bảo trì sân</label>
     </>}
-    {approving && <>
+    {askDeduct && <>
       <label>Trừ điểm fair-play của người bị báo cáo<input type="number" min={0} step={1} value={values.deduct} onChange={event => set('deduct', event.target.value)} placeholder="Để trống nếu không trừ" /></label>
       {['COMMUNITY_POST', 'POST_COMMENT'].includes(report.targetType) && <label style={check}><input type="checkbox" checked={values.deletePost} onChange={event => set('deletePost', event.target.checked)} />Ẩn {report.targetType === 'POST_COMMENT' ? 'bình luận' : 'bài viết'} bị báo cáo (lý do = ghi chú quản trị, báo tác giả)</label>}
     </>}
@@ -71,18 +78,22 @@ function ResolveDialog({ report, onClose, onDone }) {
   </form></DemoDialog>
 }
 
-function Inspector({ report, loading, error, onResolve }) {
-  if (!report) return <aside className="rr-inspector rr-empty"><MessageSquare size={30} /><h2>Chưa chọn báo cáo</h2><p>Chọn một dòng để xem thông tin chi tiết.</p></aside>
-  return <aside className="rr-inspector" aria-busy={loading}><header><div><h2><TriangleAlert size={17} /> Báo cáo chi tiết</h2><small title={report.uuid}>{report.id}</small></div><Badge value={report.status} /></header>
+// Khung chi tiết dạng hộp bo góc lớn giữa màn hình; danh sách báo cáo luôn chiếm toàn bộ chiều ngang.
+function Inspector({ report, loading, error, onResolve, onViewRatings, onClose }) {
+  const closeButton = <button type="button" className="rr-button" aria-label="Đóng chi tiết" onClick={onClose}><X size={14} /></button>
+  if (!report) return <aside className="rr-inspector rr-drawer" role="dialog" aria-label="Báo cáo chi tiết"><header><h2><TriangleAlert size={17} /> Báo cáo chi tiết</h2>{closeButton}</header><div className="rr-empty"><MessageSquare size={30} /><h3>{error ? `Không tải được chi tiết: ${error}` : 'Đang tải chi tiết…'}</h3></div></aside>
+  const fairPlayAlert = isFairPlayAlert(report)
+  return <aside className="rr-inspector rr-drawer" role="dialog" aria-label="Báo cáo chi tiết" aria-busy={loading}><header><div><h2><TriangleAlert size={17} /> Báo cáo chi tiết</h2><small title={report.uuid}>{report.id}</small></div><div className="rr-drawer-head-actions"><Badge value={report.status} />{closeButton}</div></header>
     {loading && <p className="rr-demo-note">Đang tải chi tiết…</p>}
     {error && <p className="rr-error" role="alert">Không tải được chi tiết: {error}</p>}
-    <section className="rr-report-card"><dl><dt>Người báo cáo</dt><dd>{report.reporter}{report.reporterUsername && ` (@${report.reporterUsername})`}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Loại</dt><dd>{label(report.targetType)}</dd>{report.facility && <><dt>Cơ sở</dt><dd>{report.facility}</dd></>}{(report.bookingCode || report.bookingId) && <><dt>Đơn đặt sân</dt><dd>#{report.bookingCode || String(report.bookingId).slice(0, 8).toUpperCase()}</dd></>}<dt>Lý do</dt><dd>{report.reason}</dd>{report.requestedRefund != null && <><dt>Yêu cầu hoàn</dt><dd>{report.requestedRefund}%</dd></>}<dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl>{report.description && <p>{report.description}</p>}
+    {fairPlayAlert && <div className="rr-warning" role="note"><TriangleAlert size={16} /><span><strong>Nghi bị đánh hội đồng · {formatDelta(report.pendingFairPlayDelta)} điểm đang treo</strong><br />Hệ thống tạo phiếu vì {report.entity} bị rớt hơn 10 điểm Fair Play trong 1 trận. Điểm chưa bị trừ cho tới khi quản trị viên quyết định.</span></div>}
+    <section className="rr-report-card"><dl>{fairPlayAlert && <><dt>Điểm đang treo</dt><dd><strong>{formatDelta(report.pendingFairPlayDelta)}</strong> (chưa trừ)</dd></>}<dt>Người báo cáo</dt><dd>{report.reporter}{report.reporterUsername && ` (@${report.reporterUsername})`}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Loại</dt><dd>{label(report.targetType)}</dd>{report.facility && <><dt>Cơ sở</dt><dd>{report.facility}</dd></>}{(report.bookingCode || report.bookingId) && <><dt>Đơn đặt sân</dt><dd>#{report.bookingCode || String(report.bookingId).slice(0, 8).toUpperCase()}</dd></>}<dt>Lý do</dt><dd>{report.reason}</dd>{report.requestedRefund != null && <><dt>Yêu cầu hoàn</dt><dd>{report.requestedRefund}%</dd></>}<dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl>{report.description && <p>{report.description}</p>}
       {report.evidence.length > 0 && <div className="rr-note"><small>Bằng chứng ({report.evidence.length})</small><p>{report.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>Ảnh {index + 1}</a>)}</p></div>}
     </section>
-    <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>
-    {(report.notes || report.decision) && <div className="rr-note"><small>Quyết định của quản trị viên{report.resolvedAt && ` · ${report.resolvedAt}`}</small><p>{report.decision && <strong>{decisionOptions.find(option => option.value === report.decision)?.label || report.decision}. </strong>}{report.notes}</p></div>}
+    {!fairPlayAlert && <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>}
+    {(report.notes || report.decision) && <div className="rr-note"><small>Quyết định của quản trị viên{report.resolvedAt && ` · ${report.resolvedAt}`}</small><p>{report.decision && <strong>{decisionLabel(report, report.decision)}. </strong>}{report.notes}</p></div>}
     {report.history.length > 0 && <section className="rr-history"><h3>Lịch sử xử lý</h3>{report.history.map((entry, i) => <p key={`${entry.time}-${i}`}><span>{entry.time}</span>{entry.text}</p>)}</section>}
-    <div className="rr-actions"><button className="rr-button primary" disabled={!isActiveReport(report) || loading} onClick={onResolve}><CheckCircle2 size={14} />Xử lý báo cáo</button></div>
+    <div className="rr-actions"><button className="rr-button primary" disabled={!isActiveReport(report) || loading} onClick={onResolve}><CheckCircle2 size={14} />Xử lý báo cáo</button>{fairPlayAlert && report.targetUserId && <button className="rr-button" onClick={onViewRatings}><Star size={14} />Xem đánh giá thấp</button>}</div>
   </aside>
 }
 
@@ -99,6 +110,16 @@ export default function ReviewsReportsPage() {
   const [selected, setSelected] = useState(null)
   const [detailState, setDetailState] = useState({ key: '', data: null, error: '' })
   const [dialog, setDialog] = useState(null)
+  // Mở tab Đánh giá Fair Play lọc sẵn theo người bị xem xét (từ phiếu nghi đánh hội đồng).
+  const [ratingFocus, setRatingFocus] = useState(null)
+  // Ticket cảnh báo bạo lực mạng đang chờ (bảng riêng + băng đỏ); tải lại cùng nút Làm mới / sau khi xử lý.
+  const alerts = useFairPlayAlerts(reload)
+  const location = useLocation()
+  const scrollToAlerts = () => document.getElementById('fairplay-alerts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // Từ băng đỏ ở Tổng quan (/admin/reviews-reports#fairplay-alerts): cuộn tới bảng khi đã tải xong.
+  useEffect(() => {
+    if (location.hash === '#fairplay-alerts' && !alerts.loading) document.getElementById('fairplay-alerts')?.scrollIntoView({ block: 'start' })
+  }, [location.hash, alerts.loading])
 
   const invalidRange = filters.from && filters.to && filters.from > filters.to
   const params = invalidRange ? null : { SearchKeyword: search, Status: filters.status, TargetType: filters.targetType, HasOwnerResponded: filters.responded, FromDate: filters.from, ToDate: filters.to, PageIndex: page, PageSize: PAGE_SIZE }
@@ -138,8 +159,16 @@ export default function ReviewsReportsPage() {
       .catch(error => !cancelled && setDetailState({ key: detailKey, data: null, error: error.message }))
     return () => { cancelled = true }
   }, [detailKey])
+  // Esc đóng ngăn chi tiết (khi không mở hộp thoại xử lý, hộp thoại tự xử lý Esc của nó).
+  useEffect(() => {
+    if (!selected || dialog) return
+    const onKey = event => { if (event.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, dialog])
 
-  const listItem = list.items.find(item => item.uuid === selected)
+  // Dòng đã có (danh sách trang hiện tại hoặc bảng ticket cảnh báo), gộp với chi tiết tải từ API.
+  const listItem = list.items.find(item => item.uuid === selected) || alerts.items.find(item => item.uuid === selected)
   const fetched = detailState.key === detailKey ? detailState.data : null
   const report = listItem || fetched ? { ...listItem, ...Object.fromEntries(Object.entries(fetched || {}).filter(([, value]) => value !== '' && value != null && value !== '—' && !(Array.isArray(value) && !value.length))) } : null
   const pages = Math.max(1, list.totalPages || Math.ceil(list.total / PAGE_SIZE))
@@ -159,24 +188,31 @@ export default function ReviewsReportsPage() {
   const selectFilter = (key, title, options) => <label>{title}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả</option>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
 
   return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
-    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play'], ['hidden', 'Nội dung bị ẩn', 'Bài viết · Bình luận']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
+    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => { setTab(key); setRatingFocus(null) }}>{text}<span>{count}</span></button>)}</div>
     {tab === 'reports' && <div className="rr-stats">{[
       ['Tổng báo cáo', number(stats.total), TriangleAlert, 'Toàn nền tảng'],
       ['Đang chờ xử lý', number(stats.pending), MessageSquare, 'Cần quản trị viên xem xét'],
       ['Đã giải quyết', number(stats.resolved), CheckCircle2, 'Báo cáo được chấp nhận'],
       ['Đã bác bỏ', number(stats.rejected), CircleX, closedRate == null ? '' : `Tỷ lệ đóng: ${closedRate.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`],
     ].map(([title, value, icon, supporting]) => <StatCard key={title} label={title} value={statsLoading ? '…' : value} icon={icon} supporting={supporting} />)}</div>}
+    {tab === 'reports' && <FairPlayAlertBanner count={alerts.items.length} onAction={scrollToAlerts} />}
     {tab === 'reports' && !statsLoading && stats.pending > 0 && <div className="rr-priority"><TriangleAlert size={20} /><p><strong>{number(stats.pending)} báo cáo</strong> đang chờ xử lý</p><button className="rr-button" onClick={showPending}>Xử lý ngay <ArrowRight size={14} /></button></div>}
 
-    {tab === 'hidden' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-hidden"><HiddenContentTab /></div>
-      : tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
-      : <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
-        <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do', 'Chủ sân', 'Trạng thái', 'Ngày tạo'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.uuid} className={selected === item.uuid ? 'selected' : ''} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.targetType} /></td><td className="rr-excerpt" title={item.reason}>{item.reason}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td></tr>)}</tbody></table></div>
+    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab focus={ratingFocus} /></div>
+      : <div className="rr-content rr-content--full" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports">
+        <FairPlayAlertTable alerts={alerts.items} loading={alerts.loading} error={alerts.error} onOpen={item => setSelected(item.uuid)} />
+        <section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
+        <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do', 'Chủ sân', 'Trạng thái', 'Ngày tạo'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.uuid} className={`${selected === item.uuid ? 'selected' : ''} ${isFairPlayAlert(item) ? 'rr-row-alert' : ''}`} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td>{isFairPlayAlert(item) ? <span className="rr-badge rr-fairplay-alert" title="Phiếu hệ thống: điểm Fair Play đang treo, chưa trừ"><TriangleAlert size={12} />Nghi đánh hội đồng · {formatDelta(item.pendingFairPlayDelta)} điểm</span> : <Badge value={item.targetType} />}</td><td className="rr-excerpt" title={item.reason}>{item.reason}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td></tr>)}</tbody></table></div>
         {loading && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Đang tải báo cáo…</h3></div>}
         {!loading && list.error && <div className="rr-empty" role="alert"><TriangleAlert size={28} /><h3>Không tải được báo cáo</h3><p>{list.error}</p></div>}
         {!loading && !list.error && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Không có báo cáo</h3><p>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</p></div>}
         <footer className="rr-pagination"><span>Hiển thị {list.items.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + list.items.length} trên {number(list.total)} kết quả</span><div><button className="rr-button" aria-label="Trang trước" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page} / {pages}</span><button className="rr-button" aria-label="Trang sau" disabled={loading || page >= pages} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></footer>
-      </section><Inspector report={report} loading={Boolean(selected) && detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onResolve={() => setDialog({ type: 'resolve', report })} /></div>}
+      </section>
+        {selected && <>
+          <div className="rr-drawer-backdrop" aria-hidden="true" onClick={() => setSelected(null)} />
+          <Inspector report={report} loading={detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onClose={() => setSelected(null)} onResolve={() => setDialog({ type: 'resolve', report })} onViewRatings={() => { setRatingFocus({ userId: report.targetUserId, name: report.entity }); setSelected(null); setTab('reviews') }} />
+        </>}
+      </div>}
     {dialog?.type === 'rules' && <GuidelinesDialog onClose={() => setDialog(null)} />}
     {dialog?.type === 'resolve' && <ResolveDialog report={dialog.report} onClose={() => setDialog(null)} onDone={done} />}
   </div>

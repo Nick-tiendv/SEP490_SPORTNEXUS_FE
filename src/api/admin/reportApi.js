@@ -1,5 +1,5 @@
 import apiClient from '../apiClient.js'
-import { pick, toList, unwrap } from './dashboardApi.js'
+import { fetchAllPages, pick, toList, unwrap } from './dashboardApi.js'
 
 const toIsoDate = value => {
   if (!value) return ''
@@ -18,6 +18,7 @@ const clean = params => Object.fromEntries(Object.entries(params || {}).filter((
 export function toReport(raw) {
   const uuid = String(pick(raw, 'id', 'reportId') ?? '')
   const ownerResponse = pick(raw, 'ownerResponse', 'ownerResponseNote', 'ownerReply', 'ownerNote', 'ownerResponse.note')
+  const pendingDelta = Number(pick(raw, 'pendingFairPlayDelta'))
   return {
     uuid,
     id: String(pick(raw, 'reportCode', 'code') ?? (uuid.length > 12 ? uuid.slice(0, 8).toUpperCase() : uuid)),
@@ -25,6 +26,9 @@ export function toReport(raw) {
     reporterUsername: pick(raw, 'reporterUsername', 'reporter.username') || '',
     targetType: String(pick(raw, 'targetType', 'type') ?? '').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
     entity: pick(raw, 'targetName', 'targetUserName', 'targetUser.fullName', 'targetObjectName', 'facilityName', 'facility.name') || '—',
+    targetUserId: String(pick(raw, 'targetUserId', 'targetUser.id') ?? ''),
+    // Phiếu nghi "đánh hội đồng" do hệ thống tạo: có số điểm Fair Play đang treo (chưa trừ), vd -12.
+    pendingFairPlayDelta: Number.isFinite(pendingDelta) && pick(raw, 'pendingFairPlayDelta') != null ? pendingDelta : null,
     facility: pick(raw, 'facilityName', 'facility.name') || '',
     bookingId: pick(raw, 'bookingId', 'booking.id') || '',
     bookingCode: pick(raw, 'bookingCode', 'booking.bookingCode', 'booking.code') || '',
@@ -50,6 +54,12 @@ export function toReport(raw) {
 export async function listAdminReports(params) {
   const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/reports/admin', { params: clean(params) })).data))
   return { items: items.map(toReport), total, totalPages }
+}
+// Ticket cảnh báo bạo lực mạng (review bombing) đang chờ: BE chưa có bộ lọc riêng nên lấy mọi báo cáo PENDING
+// rồi giữ những phiếu có pendingFairPlayDelta (điểm Fair Play đang treo). Tối đa 5 trang × 100.
+export async function listFairPlayAlertReports() {
+  const items = await fetchAllPages((page, size) => listAdminReports({ Status: 'PENDING', PageIndex: page, PageSize: size }), 5)
+  return items.filter(report => report.pendingFairPlayDelta != null)
 }
 export async function countAdminReports(params) {
   return (await listAdminReports({ ...params, PageIndex: 1, PageSize: 1 })).total
