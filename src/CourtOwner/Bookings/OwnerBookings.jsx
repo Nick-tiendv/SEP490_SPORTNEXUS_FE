@@ -160,7 +160,7 @@ function ListView({ facilityId, reloadKey, onOpen, onRequestCancel }) {
 
   return (
     <div className="snx-stack">
-      <div className="snx-stats">
+      <div className="snx-stats snx-stats--lg">
         <div className="snx-stat"><div className="snx-stat-label">Số đơn</div><div className="snx-stat-value">{d.total ?? 0}</div></div>
         <div className="snx-stat"><div className="snx-stat-label">Doanh thu (đơn còn hiệu lực)</div><div className="snx-stat-value" style={{ fontSize: 18 }}>{formatVND(d.revenue)}</div></div>
         <div className="snx-stat"><div className="snx-stat-label">Đã thanh toán</div><div className="snx-stat-value">{d.paidCount ?? 0}</div></div>

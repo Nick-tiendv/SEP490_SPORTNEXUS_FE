@@ -388,35 +388,27 @@ export default function ViewCourtBookingSchedule() {
       </div>
 
       {/* Analytics KPI Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Tỷ lệ lấp đầy trong ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#0F172A', margin: '4px 0' }}>{occupancyRate}%</div>
-          <div style={{ fontSize: '12px', color: '#047857', fontWeight: 700 }}>
-            {bookedCount}/{totalSlotsCount} ca đã có khách
-          </div>
+      {/* Thẻ thống kê dùng chung kiểu snx-stat (màu theo bảng KPI, ui-kit.css) */}
+      <div className="snx-stats snx-stats--lg" style={{ marginBottom: '24px' }}>
+        <div className="snx-stat">
+          <div className="snx-stat-label">Tỷ lệ lấp đầy trong ngày</div>
+          <div className="snx-stat-value">{occupancyRate}%</div>
+          <div className="snx-stat-sub">{bookedCount}/{totalSlotsCount} ca đã có khách</div>
         </div>
-
-        <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Đã check-in & vào sân</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#047857', margin: '4px 0' }}>{checkedInCount} ca</div>
-          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>
-            {bookedCount - checkedInCount} ca đang chờ khách tới
-          </div>
+        <div className="snx-stat">
+          <div className="snx-stat-label">Đã check-in & vào sân</div>
+          <div className="snx-stat-value">{checkedInCount} ca</div>
+          <div className="snx-stat-sub">{bookedCount - checkedInCount} ca đang chờ khách tới</div>
         </div>
-
-        <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Doanh thu dự kiến trong ngày</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#1D4ED8', margin: '4px 0' }}>{formatVND(expectedRevenue)}</div>
-          <div style={{ fontSize: '12px', color: '#1D4ED8', fontWeight: 700 }}>Tổng giá các ca đã có khách</div>
+        <div className="snx-stat">
+          <div className="snx-stat-label">Doanh thu dự kiến trong ngày</div>
+          <div className="snx-stat-value">{formatVND(expectedRevenue)}</div>
+          <div className="snx-stat-sub">Tổng giá các ca đã có khách</div>
         </div>
-
-        <div style={panelStyle}>
-          <div style={{ fontSize: '12.5px', color: '#0F172A', fontWeight: 600 }}>Sân sẵn sàng phục vụ</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: '#047857', margin: '4px 0' }}>
-            {activeCourtCount}/{filteredCourts.length} sân
-          </div>
-          <div style={{ fontSize: '12px', color: '#1E293B', fontWeight: 700 }}>Sân con đang hoạt động</div>
+        <div className="snx-stat">
+          <div className="snx-stat-label">Sân sẵn sàng phục vụ</div>
+          <div className="snx-stat-value">{activeCourtCount}/{filteredCourts.length} sân</div>
+          <div className="snx-stat-sub">Sân con đang hoạt động</div>
         </div>
       </div>
 
