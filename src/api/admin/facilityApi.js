@@ -111,6 +111,47 @@ export async function getFacilityCourts(facilityId) {
   return toList(unwrap((await apiClient.get(`/api/v1/facilities/${path(facilityId)}/courts`)).data)).items.map(toCourt)
 }
 
+export function toCourtStatisticsItem(raw = {}) {
+  const bookings = toNumber(pick(raw, 'bookings', 'totalBookings', 'bookingCount', 'activeBookings', 'count')) ?? 0
+  const bookedSlots = toNumber(pick(raw, 'bookedSlots', 'usedSlots'))
+  const sellableSlots = toNumber(pick(raw, 'sellableSlots', 'totalSlots'))
+  const rawOccupancy = toNumber(pick(raw, 'occupancyRate', 'occupancyPercent'))
+  const occupancyRate =
+    rawOccupancy != null
+      ? rawOccupancy
+      : bookedSlots != null && sellableSlots
+      ? (bookedSlots / sellableSlots) * 100
+      : null
+  const revenue = toNumber(pick(raw, 'revenue', 'totalRevenue', 'activeRevenue', 'grossRevenue', 'amount')) ?? 0
+  return {
+    courtId: String(pick(raw, 'courtId', 'id') ?? ''),
+    courtName: pick(raw, 'courtName', 'name') || '—',
+    sportName: nameOf(pick(raw, 'sportName', 'categoryName', 'sport')) || '',
+    bookings,
+    bookedSlots,
+    sellableSlots,
+    occupancyRate,
+    revenue,
+  }
+}
+
+export async function getAdminFacilityCourtStatistics(facilityId, { from, to } = {}) {
+  const data = unwrap(
+    (await apiClient.get(`/api/v1/admin/facilities/${path(facilityId)}/courts/statistics`, { params: clean({ from, to }) })).data,
+  )
+  const rawList = Array.isArray(data)
+    ? data
+    : pick(data, 'courts', 'courtStatistics', 'revenueByCourt', 'items', 'data', 'results') || []
+  const items = (Array.isArray(rawList) ? rawList : []).map(toCourtStatisticsItem)
+  const totalRevenue =
+    toNumber(pick(data, 'totalRevenue', 'activeRevenue')) ??
+    items.reduce((sum, item) => sum + (Number(item.revenue) || 0), 0)
+  const totalBookings =
+    toNumber(pick(data, 'totalBookings')) ??
+    items.reduce((sum, item) => sum + (Number(item.bookings) || 0), 0)
+  return { items, totalRevenue, totalBookings }
+}
+
 export const approveFacility = async id => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/approve`)).data)
 export const rejectFacility = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/facilities/${path(id)}/reject`, { reason })).data)
 export const lockFacility = async (id, { reason, cancelUpcomingBookings }) =>

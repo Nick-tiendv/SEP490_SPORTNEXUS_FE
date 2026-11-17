@@ -282,3 +282,76 @@ export async function getWalletTransactions({ type, from, to, page = 1, pageSize
     throw normalizeApiError(error)
   }
 }
+
+export const VOUCHER_STATUS = {
+  AVAILABLE: 'AVAILABLE',
+  USED: 'USED',
+  EXPIRED: 'EXPIRED',
+}
+
+export function normalizeVoucherStatus(raw) {
+  const status = String(raw?.status ?? raw?.voucherStatus ?? '').trim().toUpperCase()
+  if (status === 'USED' || status === 'REDEEMED' || raw?.isUsed === true) return VOUCHER_STATUS.USED
+  if (status === 'EXPIRED' || raw?.isExpired === true) return VOUCHER_STATUS.EXPIRED
+  if (raw?.expiresAt || raw?.expiredAt || raw?.validUntil) {
+    const exp = Date.parse(raw.expiresAt || raw.expiredAt || raw.validUntil)
+    if (!Number.isNaN(exp) && exp < Date.now() && status !== 'AVAILABLE' && status !== 'ACTIVE') {
+      return VOUCHER_STATUS.EXPIRED
+    }
+  }
+  return VOUCHER_STATUS.AVAILABLE
+}
+
+export function toWalletVoucher(raw = {}) {
+  const id = String(raw.id ?? raw.voucherId ?? raw.userVoucherId ?? '')
+  const code = String(raw.code ?? raw.voucherCode ?? raw.promoCode ?? (id ? id.slice(0, 8).toUpperCase() : '')).trim()
+  const rawPercent = raw.discountPercent ?? raw.discountPercentage ?? raw.percent ?? raw.discountRate
+  const discountPercent = rawPercent !== undefined && rawPercent !== null && rawPercent !== '' && Number.isFinite(Number(rawPercent))
+    ? Number(rawPercent)
+    : null
+  const rawAmount = raw.discountAmount ?? raw.amount ?? raw.value
+  const discountAmount = rawAmount !== undefined && rawAmount !== null && rawAmount !== '' && Number.isFinite(Number(rawAmount))
+    ? Number(rawAmount)
+    : null
+  const rawMax = raw.maxDiscountAmount ?? raw.maxDiscount
+  const maxDiscountAmount = rawMax !== undefined && rawMax !== null && rawMax !== '' && Number.isFinite(Number(rawMax))
+    ? Number(rawMax)
+    : null
+  return {
+    ...raw,
+    id: id || code,
+    code,
+    title: raw.title || raw.name || raw.label || (discountPercent != null ? `Voucher giảm ${discountPercent}%` : 'Mã giảm giá'),
+    description: raw.description || raw.reason || raw.sourceDescription || raw.note || '',
+    discountPercent,
+    discountAmount,
+    maxDiscountAmount,
+    status: normalizeVoucherStatus(raw),
+    facilityName: raw.facilityName || raw.facility?.name || '',
+    bookingCode: raw.bookingCode || raw.sourceBookingCode || '',
+    createdAt: raw.createdAt || raw.issuedAt || raw.createdDate || null,
+    expiresAt: raw.expiresAt || raw.expiredAt || raw.validUntil || raw.endDate || null,
+    usedAt: raw.usedAt || null,
+  }
+}
+
+/**
+ * Danh sách voucher / mã giảm giá trong ví
+ * GET /api/v1/wallet/vouchers?status=...
+ * @param {{status?:string}} [params]
+ * @returns {Promise<Array>}
+ */
+export async function getWalletVouchers({ status } = {}) {
+  const params = status ? { status } : undefined
+  try {
+    const response = await apiClient.get('/api/v1/wallet/vouchers', { params })
+    const raw = unwrap(response.data)
+    const list = Array.isArray(raw)
+      ? raw
+      : raw?.items || raw?.vouchers || raw?.data || raw?.results || []
+    return (Array.isArray(list) ? list : []).map(toWalletVoucher)
+  } catch (error) {
+    console.warn('[walletApi] Lỗi lấy danh sách voucher:', error)
+    throw normalizeApiError(error)
+  }
+}

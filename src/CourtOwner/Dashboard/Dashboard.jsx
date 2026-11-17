@@ -471,6 +471,147 @@ export default function Dashboard() {
           </Link>
         </section>
       </div>
+
+      {/* SECTION 3: BẢNG THỐNG KÊ DOANH THU TỪNG SÂN CON (?from&to) */}
+      {facilityId && (
+        <CourtRevenueTablePanel
+          facilityId={facilityId}
+          periodDays={periodDays}
+          dashboardCourts={data?.revenueByCourt}
+          dashboardLoading={!data && !statsLoadError}
+          dashboardError={statsLoadError}
+          formatVND={formatVND}
+        />
+      )}
     </div>
+  )
+}
+
+function CourtRevenueTablePanel({ facilityId, periodDays, dashboardCourts, dashboardLoading, dashboardError, formatVND }) {
+  const defaultFrom = daysAgoVN(periodDays - 1)
+  const defaultTo = todayVN()
+  const [rangeState, setRangeState] = useState({ periodDays, from: defaultFrom, to: defaultTo })
+  const activeFrom = rangeState.periodDays === periodDays ? rangeState.from : defaultFrom
+  const activeTo = rangeState.periodDays === periodDays ? rangeState.to : defaultTo
+  const isCustomRange = activeFrom !== defaultFrom || activeTo !== defaultTo
+  const invalidRange = Boolean(activeFrom && activeTo && activeFrom > activeTo)
+
+  const customKey = isCustomRange && !invalidRange ? `${facilityId}|${activeFrom}|${activeTo}` : ''
+  const [customResult, setCustomResult] = useState({ key: '', courts: [], error: '' })
+
+  useEffect(() => {
+    if (!customKey) return undefined
+    let cancelled = false
+    getOwnerDashboard({ facilityId, from: activeFrom || undefined, to: activeTo || undefined })
+      .then((res) => !cancelled && setCustomResult({ key: customKey, courts: res?.revenueByCourt || [], error: '' }))
+      .catch((error) => !cancelled && setCustomResult({ key: customKey, courts: [], error: error.message }))
+    return () => {
+      cancelled = true
+    }
+  }, [customKey, facilityId, activeFrom, activeTo])
+
+  const loading = isCustomRange ? Boolean(customKey) && customResult.key !== customKey : dashboardLoading
+  const error = invalidRange
+    ? 'Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.'
+    : isCustomRange
+    ? customResult.key === customKey
+      ? customResult.error
+      : ''
+    : dashboardError
+  const rawCourts = isCustomRange ? (customResult.key === customKey ? customResult.courts : []) : dashboardCourts || []
+  const rows = rawCourts.slice().sort((a, b) => (Number(b.revenue) || 0) - (Number(a.revenue) || 0))
+  const totalBookings = rows.reduce((sum, item) => sum + (Number(item.bookings) || 0), 0)
+  const totalBookedSlots = rows.reduce((sum, item) => sum + (Number(item.bookedSlots) || 0), 0)
+  const totalSellableSlots = rows.reduce((sum, item) => sum + (Number(item.sellableSlots) || 0), 0)
+  const totalRevenue = rows.reduce((sum, item) => sum + (Number(item.revenue) || 0), 0)
+  const totalOccupancy = totalSellableSlots ? Math.round((totalBookedSlots / totalSellableSlots) * 100) : 0
+
+  return (
+    <section className="owner-panel owner-panel--trend" aria-label="Bảng thống kê doanh thu từng sân con">
+      <div className="owner-panel-heading">
+        <div>
+          <h3>Thống kê doanh thu từng sân con</h3>
+          <p>
+            Chi tiết số đơn, tỷ lệ lấp đầy và doanh thu từng sân từ {activeFrom || '—'} đến {activeTo || '—'}
+          </p>
+        </div>
+        <div className="owner-court-table-filters">
+          <label>
+            Từ ngày
+            <input
+              type="date"
+              value={activeFrom}
+              onChange={(e) => setRangeState({ periodDays, from: e.target.value, to: activeTo })}
+            />
+          </label>
+          <label>
+            Đến ngày
+            <input
+              type="date"
+              value={activeTo}
+              onChange={(e) => setRangeState({ periodDays, from: activeFrom, to: e.target.value })}
+            />
+          </label>
+          {isCustomRange && (
+            <button
+              type="button"
+              className="owner-court-table-reset"
+              onClick={() => setRangeState({ periodDays, from: defaultFrom, to: defaultTo })}
+            >
+              Theo kỳ ({periodDays} ngày)
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="owner-panel-body">
+        {error ? (
+          <div className="owner-empty" style={{ color: '#B91C1C' }} role="alert">
+            {error}
+          </div>
+        ) : loading && !rows.length ? (
+          <div className="owner-empty">Đang tải thống kê doanh thu từng sân con...</div>
+        ) : rows.length === 0 ? (
+          <div className="owner-empty">Chưa có dữ liệu doanh thu từng sân trong khoảng thời gian này.</div>
+        ) : (
+          <div className="owner-court-table-wrap">
+            <table className="owner-court-table">
+              <thead>
+                <tr>
+                  <th>Sân con</th>
+                  <th>Số đơn</th>
+                  <th>Ca đã đặt / Mở bán</th>
+                  <th>Tỷ lệ lấp đầy</th>
+                  <th>Doanh thu</th>
+                </tr>
+              </thead>
+              <tbody style={loading ? { opacity: 0.55 } : undefined}>
+                {rows.map((court, idx) => {
+                  const occ = court.sellableSlots ? Math.round((Number(court.bookedSlots || 0) / court.sellableSlots) * 100) : 0
+                  return (
+                    <tr key={court.courtId || `${court.courtName}-${idx}`}>
+                      <td><strong>{court.courtName || '—'}</strong></td>
+                      <td>{Number(court.bookings || 0).toLocaleString('vi-VN')}</td>
+                      <td>{Number(court.bookedSlots || 0).toLocaleString('vi-VN')} / {Number(court.sellableSlots || 0).toLocaleString('vi-VN')}</td>
+                      <td>{occ}%</td>
+                      <td><strong>{formatVND(court.revenue)}</strong></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th>Tổng cộng ({rows.length} sân)</th>
+                  <th>{totalBookings.toLocaleString('vi-VN')}</th>
+                  <th>{totalBookedSlots.toLocaleString('vi-VN')} / {totalSellableSlots.toLocaleString('vi-VN')}</th>
+                  <th>{totalOccupancy}%</th>
+                  <th>{formatVND(totalRevenue)}</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }

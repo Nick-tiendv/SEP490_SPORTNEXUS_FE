@@ -242,6 +242,20 @@
 .owner-court__meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; font-weight: 600; color: #475569; }
 .owner-court__meta strong { color: var(--t-accent); }
 
+/* Bảng thống kê doanh thu từng sân con */
+.owner-court-table-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.owner-court-table-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; font-weight: 700; color: #475569; }
+.owner-court-table-filters input { min-height: 34px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 12.5px; font-weight: 600; color: #0f172a; }
+.owner-court-table-reset { min-height: 34px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; color: #15803d; cursor: pointer; }
+.owner-court-table-reset:hover { background: #f0fdf4; border-color: #86efac; }
+.owner-court-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; }
+.owner-court-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.owner-court-table th, .owner-court-table td { padding: 11px 14px; border-bottom: 1px solid #f1f5f9; }
+.owner-court-table th:not(:first-child), .owner-court-table td:not(:first-child) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.owner-court-table thead th { background: #f8fafc; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.owner-court-table tbody tr:hover { background: #f8fafc; }
+.owner-court-table tfoot th { background: #f0fdf4; color: #14532d; border-bottom: 0; font-weight: 800; }
+
 /* Header: chọn kỳ thống kê và trạng thái */
 .owner-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .owner-status-pill {

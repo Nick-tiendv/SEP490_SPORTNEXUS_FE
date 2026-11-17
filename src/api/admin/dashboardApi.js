@@ -103,12 +103,21 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
   }
 }
 
-// Số đơn theo từng sân con của một cơ sở cho Admin.
-// BE CHƯA có endpoint này (chỉ có revenueByCourt ở GET /owner/dashboard cho chủ sân).
-// Khi BE bổ sung: đặt ADMIN_COURT_STATS_READY = true và gọi API trong hàm dưới, trả về [{ courtName, bookings }].
-export const ADMIN_COURT_STATS_READY = false
-export async function getAdminCourtBookingStats() {
-  return []
+// Số đơn & doanh thu theo từng sân con của một cơ sở cho Admin: GET /api/v1/admin/facilities/{facilityId}/courts/statistics?from&to
+export const ADMIN_COURT_STATS_READY = true
+export async function getAdminCourtBookingStats({ facilityId, fromDate, toDate } = {}) {
+  if (!facilityId) return []
+  const data = await get(`/api/v1/admin/facilities/${encodeURIComponent(facilityId)}/courts/statistics`, {
+    from: fromDate,
+    to: toDate,
+  })
+  const list = Array.isArray(data) ? data : pick(data, 'courts', 'courtStatistics', 'revenueByCourt', 'items', 'data', 'results') || []
+  return (Array.isArray(list) ? list : []).map(item => ({
+    courtId: String(pick(item, 'courtId', 'id') ?? ''),
+    courtName: pick(item, 'courtName', 'name') || 'Sân',
+    bookings: toNumber(pick(item, 'bookings', 'totalBookings', 'bookingCount', 'activeBookings')) ?? 0,
+    revenue: toNumber(pick(item, 'revenue', 'totalRevenue', 'activeRevenue', 'amount')) ?? 0,
+  }))
 }
 
 // ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------

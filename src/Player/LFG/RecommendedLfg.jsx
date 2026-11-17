@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../../hooks/useApi.js'
 import { getRecommendedLfgs } from '../../api/player/recommendationApi.js'
-import { lfgSkillLabel } from '../../api/player/lfgApi.js'
+import { extractLfgTeamInfo, lfgSkillLabel } from '../../api/player/lfgApi.js'
 
 // "Kèo phù hợp với bạn": GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
 // Điểm phù hợp tính theo khảo sát người chơi (môn, trình độ, lịch rảnh, khu vực, nội dung hay chơi) và hành vi.
@@ -21,6 +21,7 @@ export function RecommendedLfgCard({ item, compact = false }) {
   const navigate = useNavigate()
   const c = item.card || {}
   const score = Math.round(Number(item.score) || 0)
+  const teamInfo = extractLfgTeamInfo(c)
   return (
     <article className="snx-card snx-stack" style={{ gap: 8, padding: compact ? 14 : 18 }}>
       <div className="snx-row" style={{ alignItems: 'flex-start', gap: 8 }}>
@@ -31,8 +32,10 @@ export function RecommendedLfgCard({ item, compact = false }) {
         <span className={`snx-badge snx-badge--${scoreTone(score)}`} title="Mức độ phù hợp">{score}% phù hợp</span>
       </div>
       <div className="snx-muted">
-        Còn {c.remainingSlots}/{c.totalSlots} suất · {money(c.pricePerPerson)}/người{c.skillLevelTag ? ` · ${lfgSkillLabel(c.skillLevelTag)}` : ''} · Chủ kèo {c.hostName}
-        {c.hostFairPlayScore != null ? ` (Fair Play ${c.hostFairPlayScore})` : ''}
+        Còn {c.remainingSlots}/{c.totalSlots} suất · {money(c.pricePerPerson)}/người{c.skillLevelTag ? ` · ${lfgSkillLabel(c.skillLevelTag)}` : ''} ·{' '}
+        {teamInfo.isTeamMatch
+          ? `${teamInfo.hostTeamName || 'Đội chủ kèo'} vs ${teamInfo.challengerTeamName || 'Chờ đối thủ'}`
+          : `Chủ kèo ${c.hostName}${c.hostFairPlayScore != null ? ` (Fair Play ${c.hostFairPlayScore})` : ''}`}
       </div>
       {item.reasons?.length > 0 && (
         <div className="snx-row" style={{ gap: 6 }}>

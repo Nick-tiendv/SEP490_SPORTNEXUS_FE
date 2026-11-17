@@ -13,6 +13,12 @@ export const decisionOptions = [
 export const toEnumKey = value => String(value ?? '').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
 export const label = value => reportStatusLabels[value] || targetTypeLabels[value] || value || '—'
 export const isActiveReport = report => ['PENDING', 'OWNER_RESPONDED'].includes(report.status)
+export const hasPendingFairPlayPenalty = report => report?.pendingFairPlayDelta !== null && report?.pendingFairPlayDelta !== undefined
+export const formatPendingFairPlayDelta = delta => {
+  if (delta === null || delta === undefined || !Number.isFinite(Number(delta))) return ''
+  const num = Number(delta)
+  return `${num > 0 ? `+${num}` : num} điểm`
+}
 
 export const emptyFilters = { search: '', status: '', targetType: '', responded: '', from: '', to: '' }
 

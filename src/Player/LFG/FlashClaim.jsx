@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { claimLfgSlot, getLfgById, lfgSkillLabel } from '../../api/player/lfgApi.js'
+import { claimLfgSlot, extractLfgTeamInfo, getLfgById, isCaptainOfTeam, lfgSkillLabel } from '../../api/player/lfgApi.js'
+import { getMyTeams } from '../../api/player/teamApi.js'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { vnClock } from '../../utils/vnTime.js'
 import { getWallet } from '../../api/player/walletApi.js'
 
 function FlashClaim() {
+  const currentUser = useCurrentUser()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -34,9 +37,30 @@ function FlashClaim() {
   })
 
   const [selectedSide, setSelectedSide] = useState('any')
+  const [myTeams, setMyTeams] = useState([])
+  const [claimMode, setClaimMode] = useState('solo')
+  const [selectedClaimTeamId, setSelectedClaimTeamId] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState(null)
   const [successInfo, setSuccessInfo] = useState(null)
+
+  const teamInfo = extractLfgTeamInfo(cardDetail || matchFromState || {})
+  const captainTeams = myTeams.filter(
+    (t) => isCaptainOfTeam(t, currentUser?.id) && !t.isLocked && (!teamInfo.hostTeamId || t.id !== teamInfo.hostTeamId),
+  )
+
+  useEffect(() => {
+    let active = true
+    getMyTeams()
+      .then((teams) => {
+        if (!active || !Array.isArray(teams)) return
+        setMyTeams(teams)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   // Thông tin kèo hiển thị: lấy từ chi tiết BE, thiếu thì dùng dữ liệu bảng tin; không dùng giá trị mẫu
   const loadingText = cardLoading ? 'Đang tải…' : '—'
@@ -84,6 +108,10 @@ function FlashClaim() {
       setErrorMessage(cardError || 'Chưa xác định được phí giữ slot của kèo. Vui lòng thử lại.')
       return
     }
+    if (claimMode === 'team' && !selectedClaimTeamId) {
+      setErrorMessage('Vui lòng chọn đội đại diện để nhận kèo bằng đội.')
+      return
+    }
     if (walletBalance < depositFee) {
       setErrorMessage('Số dư ví Escrow hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
       return
@@ -95,6 +123,7 @@ function FlashClaim() {
         side: hasSides ? selectedSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
+        challengerTeamId: claimMode === 'team' ? selectedClaimTeamId : null,
       })
 
       // Image 2:
@@ -180,6 +209,18 @@ function FlashClaim() {
               {info.title}
             </h4>
 
+            {teamInfo.isTeamMatch && (
+              <div className="mb-3 p-2.5 rounded-xl bg-gradient-to-r from-[#F0FDF4] via-white to-[#EFF6FF] border border-[#BBF7D0] flex items-center justify-between gap-2">
+                <span className="font-extrabold text-xs text-[#14532D] truncate">
+                  {teamInfo.hostTeamName || 'Đội chủ kèo'}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-[#111827] text-white text-[10px] font-black shrink-0">VS</span>
+                <span className={`font-extrabold text-xs truncate ${teamInfo.challengerTeamName ? 'text-[#1E40AF]' : 'text-amber-700 italic'}`}>
+                  {teamInfo.challengerTeamName || 'Đang chờ đội đối thủ'}
+                </span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-gray-600">
               <div className="flex items-start gap-2">
                 <span className="material-symbols-outlined text-[17px] text-[#2D5F3F] shrink-0 mt-0.5">location_on</span>
@@ -224,6 +265,54 @@ function FlashClaim() {
                 ))}
               </div>
             </div>
+            )}
+
+            {captainTeams.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200/60 flex flex-col gap-2 text-xs">
+                <span className="text-[#14532D] font-extrabold">Hình thức nhận kèo:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClaimMode('solo')}
+                    className={`py-2 px-2.5 rounded-xl font-bold border transition-all cursor-pointer ${
+                      claimMode === 'solo'
+                        ? 'bg-white text-[#111827] border-[#15803D] ring-2 ring-[#15803D]/20'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    Cá nhân
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClaimMode('team')
+                      if (!selectedClaimTeamId && captainTeams[0]) setSelectedClaimTeamId(captainTeams[0].id)
+                    }}
+                    className={`py-2 px-2.5 rounded-xl font-bold border transition-all cursor-pointer ${
+                      claimMode === 'team'
+                        ? 'bg-[#15803D] text-white border-[#15803D]'
+                        : 'bg-[#F0FDF4] text-[#15803D] border-[#86EFAC]'
+                    }`}
+                  >
+                    Nhận kèo bằng Đội
+                  </button>
+                </div>
+                {claimMode === 'team' && (
+                  <select
+                    aria-label="Chọn đội nhận kèo"
+                    value={selectedClaimTeamId}
+                    onChange={(e) => setSelectedClaimTeamId(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none"
+                  >
+                    {captainTeams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                        {team.sportName ? ` — ${team.sportName}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             )}
           </div>
 

@@ -25,6 +25,7 @@ const PAGE_TITLES = {
   '/post-match-rating': 'Đánh giá sau trận',
   '/tournament': 'Giải đấu & Đội',
   '/wallet': 'Ví Escrow',
+  '/wallet/vouchers': 'Mã giảm giá',
   '/wallet/deposit-success': 'Nạp tiền thành công',
   '/wallet/deposit-cancel': 'Đã hủy nạp tiền',
   '/profile': 'Hồ sơ cá nhân',
