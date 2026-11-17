@@ -104,9 +104,9 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
 }
 
 // Doanh thu, số đơn của từng sân con trong một cơ sở: GET /api/v1/admin/facilities/{facilityId}/courts/statistics.
-// Phần tử courts[] chưa có mô tả riêng: đọc theo DashboardCourtItem (docs 99) kèm vài tên dự phòng.
+// Query theo swagger: from, to. Phần tử courts[] chưa có mô tả riêng: đọc theo DashboardCourtItem (docs 99) kèm vài tên dự phòng.
 export async function getAdminCourtBookingStats({ facilityId, fromDate, toDate }) {
-  const data = await get(`/api/v1/admin/facilities/${facilityId}/courts/statistics`, { fromDate, toDate }) || {}
+  const data = await get(`/api/v1/admin/facilities/${facilityId}/courts/statistics`, { from: fromDate, to: toDate }) || {}
   return {
     totalBookings: toNumber(data.totalBookings) ?? 0,
     cancelledBookings: toNumber(data.cancelledBookings) ?? 0,
