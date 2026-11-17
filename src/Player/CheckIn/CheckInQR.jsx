@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { uid } from '../../utils/ids.js'
 import { QRCodeSVG } from 'qrcode.react'
@@ -40,8 +40,9 @@ function checkInWindowOf(ticket, nowMs) {
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
+const toTicket = ({ id, queryId, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
   id,
+  queryId: queryId || id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
   facilityId: facilityId || null,
@@ -67,6 +68,56 @@ const toTicket = ({ id, qrCode, facilityId, facilityName, facilityAddress, facil
   groupedBookingIds: Array.isArray(groupedBookingIds) ? groupedBookingIds : [],
 })
 
+const resolveBookingCheckInState = ({
+  detail,
+  currentUserId,
+  bookingId,
+  groupedBookingIds = [],
+  groupedSlots = [],
+  siblingBookings = [],
+}) => {
+  const participants = detail?.participants || []
+  const me =
+    participants.find((p) => String(p.userId) === String(currentUserId)) ||
+    participants.find((p) => p.isHost) ||
+    {}
+  const groupIdsLower = new Set(
+    [bookingId, ...(Array.isArray(groupedBookingIds) ? groupedBookingIds : [])]
+      .filter(Boolean)
+      .map((id) => String(id).trim().toLowerCase())
+  )
+  const matchedSiblings = siblingBookings.filter((s) =>
+    groupIdsLower.has(String(s?.bookingId || s?.id || '').trim().toLowerCase())
+  )
+  const anyParticipantCheckedIn =
+    Boolean(me.isCheckedIn) ||
+    participants.some((p) => Boolean(p?.isCheckedIn)) ||
+    Number(detail?.checkedInCount) > 0 ||
+    matchedSiblings.some(
+      (s) =>
+        Number(s?.checkedInCount) > 0 ||
+        (Array.isArray(s?.participants) && s.participants.some((p) => Boolean(p?.isCheckedIn)))
+    )
+  const rawDetailStatus = String(detail?.bookingStatus || detail?.status || '').toUpperCase()
+  const siblingCheckedIn =
+    (Array.isArray(groupedSlots) &&
+      groupedSlots.some((s) => ['CHECKED_IN', 'COMPLETED'].includes(String(s?.status || '').toUpperCase()))) ||
+    matchedSiblings.some((s) =>
+      ['CHECKED_IN', 'COMPLETED'].includes(String(s?.bookingStatus || s?.status || '').toUpperCase())
+    )
+  const isBookingCheckedIn =
+    anyParticipantCheckedIn ||
+    ['CHECKED_IN', 'COMPLETED'].includes(rawDetailStatus) ||
+    siblingCheckedIn
+
+  return {
+    rawDetailStatus,
+    isBookingCheckedIn,
+    status: isBookingCheckedIn ? 'CHECKED_IN' : (detail?.bookingStatus || detail?.status),
+    isNoShow: Boolean(detail?.isNoShow) || rawDetailStatus === 'NO_SHOW',
+  }
+}
+
 function CheckInQR() {
   const [copied, setCopied] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
@@ -76,20 +127,27 @@ function CheckInQR() {
     const timer = setTimeout(() => setToastMessage(null), 4000)
     return () => clearTimeout(timer)
   }, [toastMessage])
-  const [showCheckInModal, setShowCheckInModal] = useState(false)
 
   // 2.7 Bước 1: Quản lý loại vé QR (đặt sân / kèo LFG / giải đấu)
   const [searchParams, setSearchParams] = useSearchParams()
   const [ticketType, setTicketType] = useState(() => searchParams.get('type') || 'booking')
   const [ticketData, setTicketData] = useState(null)
-  // Kết quả tải vé gắn với hàm tải đang dùng; đang tải khi hàm hiện tại chưa trả kết quả
-  const [ticketLoad, setTicketLoad] = useState({ fetcher: null, error: null })
-  const [scanError, setScanError] = useState(null)
-  const [isScanningCheckIn, setIsScanningCheckIn] = useState(false)
+  // Kết quả tải vé gắn với khóa truy vấn đang dùng; đang tải khi khóa hiện tại chưa trả kết quả
+  const [ticketLoad, setTicketLoad] = useState({ key: null, error: null })
+  // Giữ cố định mã QR theo từng vé (bookingId / cardId / tournamentId) trong phiên xem, tránh gọi lại đổi mã
+  const qrCodeCacheRef = useRef(new Map())
 
-
-  // Bước 1: Tải vé từ API qr-ticket tương ứng (dùng lại cho nút "Kiểm tra trạng thái" và tự hỏi lại)
+  // Bước 1: Tải vé từ API qr-ticket tương ứng (lấy mã QR cố định một lần cho từng vé)
   const currentUser = useCurrentUser()
+  const loadKey = `${ticketType}|${searchParams.toString()}|${currentUser.id || 'anon'}`
+  const prevUserIdRef = useRef(currentUser.id)
+  useEffect(() => {
+    if (prevUserIdRef.current && prevUserIdRef.current !== currentUser.id) {
+      qrCodeCacheRef.current.clear()
+    }
+    prevUserIdRef.current = currentUser.id
+  }, [currentUser.id])
+
   const fetchTicket = useCallback(async () => {
     if (ticketType === 'booking') {
           // Đặt sân: GET /api/v1/bookings/{bookingId}/qr-ticket
@@ -106,14 +164,14 @@ function CheckInQR() {
             bookingId = enrichedMy[0]?.id || enrichedMy[0]?.bookingId || myList[0]?.id || myList[0]?.bookingId || null
           }
           if (!bookingId) throw new Error('Bạn chưa có đơn đặt sân sắp tới nào.')
+          const cacheKey = `booking:${bookingId}`
+          const cachedQrCode = qrCodeCacheRef.current.get(cacheKey) || ''
           // qr-ticket trả về chuỗi mã QR; chi tiết đơn lấy từ GET /api/v1/bookings/{bookingId}
           const [qr, detail] = await Promise.all([
-            getBookingQrTicket(bookingId).catch(() => null),
+            cachedQrCode ? Promise.resolve(cachedQrCode) : getBookingQrTicket(bookingId).catch(() => null),
             getBookingById(bookingId),
           ])
           {
-            const participants = detail?.participants || []
-            const me = participants.find((p) => String(p.userId) === String(currentUser.id)) || participants.find((p) => p.isHost) || {}
             const [upcomingSiblings, mySiblings] = await Promise.all([
               getUpcomingBookings().catch(() => []),
               getMyBookings().catch(() => []),
@@ -125,38 +183,22 @@ function CheckInQR() {
               myBookings: mySiblings,
             })
 
-            const groupIdsLower = new Set(
-              [bookingId, ...(Array.isArray(playWindow?.groupedBookingIds) ? playWindow.groupedBookingIds : [])]
-                .filter(Boolean)
-                .map((id) => String(id).trim().toLowerCase())
-            )
-            const matchedSiblings = [...upcomingSiblings, ...mySiblings].filter((s) =>
-              groupIdsLower.has(String(s?.bookingId || s?.id || '').trim().toLowerCase())
-            )
-            const anyParticipantCheckedIn =
-              Boolean(me.isCheckedIn) ||
-              participants.some((p) => Boolean(p?.isCheckedIn)) ||
-              Number(detail?.checkedInCount) > 0 ||
-              matchedSiblings.some(
-                (s) =>
-                  Number(s?.checkedInCount) > 0 ||
-                  (Array.isArray(s?.participants) && s.participants.some((p) => Boolean(p?.isCheckedIn)))
-              )
-            const rawDetailStatus = String(detail?.bookingStatus || detail?.status || '').toUpperCase()
-            const siblingCheckedIn =
-              (Array.isArray(playWindow?.groupedSlots) &&
-                playWindow.groupedSlots.some((s) => ['CHECKED_IN', 'COMPLETED'].includes(String(s?.status || '').toUpperCase()))) ||
-              matchedSiblings.some((s) => ['CHECKED_IN', 'COMPLETED'].includes(String(s?.bookingStatus || s?.status || '').toUpperCase()))
-            const isBookingCheckedIn =
-              anyParticipantCheckedIn ||
-              ['CHECKED_IN', 'COMPLETED'].includes(rawDetailStatus) ||
-              siblingCheckedIn
+            const checkInState = resolveBookingCheckInState({
+              detail,
+              currentUserId: currentUser.id,
+              bookingId,
+              groupedBookingIds: playWindow?.groupedBookingIds,
+              groupedSlots: playWindow?.groupedSlots,
+              siblingBookings: [...upcomingSiblings, ...mySiblings],
+            })
 
             const rawQrCode =
+              cachedQrCode ||
               (typeof qr === 'string' ? qr : (qr?.qrCode || qr?.qrToken || qr?.code)) ||
               detail?.qrCode ||
               detail?.ticketCode ||
               ''
+            if (rawQrCode) qrCodeCacheRef.current.set(cacheKey, rawQrCode)
 
             const facilityDetail = detail?.facilityId
               ? await getFacilityById(detail.facilityId).catch(() => null)
@@ -171,6 +213,7 @@ function CheckInQR() {
 
             return toTicket({
               id: bookingId,
+              queryId: bookingId,
               qrCode: rawQrCode,
               facilityId: detail?.facilityId,
               facilityName: detail?.facilityName,
@@ -180,9 +223,9 @@ function CheckInQR() {
               sportName: detail?.sportName,
               startTime: playWindow.startTime ?? detail?.startTime,
               endTime: playWindow.endTime ?? detail?.endTime,
-              status: isBookingCheckedIn ? 'CHECKED_IN' : (detail?.bookingStatus || detail?.status),
-              isNoShow: Boolean(detail?.isNoShow) || rawDetailStatus === 'NO_SHOW',
-              anyCheckedIn: isBookingCheckedIn,
+              status: checkInState.status,
+              isNoShow: checkInState.isNoShow,
+              anyCheckedIn: checkInState.isBookingCheckedIn,
               amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
               timeRangeLabel: playWindow.timeRangeLabel,
               groupedBookingIds: playWindow.groupedBookingIds,
@@ -195,10 +238,15 @@ function CheckInQR() {
           const res = await getLfgQrTicket(cardId)
 
           {
+            const ticketId = res?.lfgCardId || cardId
+            const cacheKey = `lfg:${ticketId}`
+            const fixedQrCode = qrCodeCacheRef.current.get(cacheKey) || res?.qrCode || ''
+            if (fixedQrCode) qrCodeCacheRef.current.set(cacheKey, fixedQrCode)
             const lfgCheckedIn = Boolean(res?.isCheckedIn) || ['CHECKED_IN', 'COMPLETED'].includes(String(res?.status || '').toUpperCase())
             return toTicket({
-              id: res?.lfgCardId || cardId,
-              qrCode: res?.qrCode,
+              id: ticketId,
+              queryId: cardId,
+              qrCode: fixedQrCode,
               facilityName: res?.facilityName,
               courtName: res?.courtName,
               startTime: res?.startTime,
@@ -216,10 +264,15 @@ function CheckInQR() {
           const res = await getTournamentQrTicket(tournamentId)
 
           {
+            const ticketId = res?.tournamentId || tournamentId
+            const cacheKey = `tournament:${ticketId}`
+            const fixedQrCode = qrCodeCacheRef.current.get(cacheKey) || res?.qrCode || ''
+            if (fixedQrCode) qrCodeCacheRef.current.set(cacheKey, fixedQrCode)
             const tournamentCheckedIn = Boolean(res?.isCheckedIn) || String(res?.tournamentStatus || '').toUpperCase() === 'CHECKED_IN'
             return toTicket({
-              id: res?.tournamentId || tournamentId,
-              qrCode: res?.qrCode,
+              id: ticketId,
+              queryId: tournamentId,
+              qrCode: fixedQrCode,
               facilityId: res?.facilityId,
               facilityName: res?.facilityName,
               facilityAddress: res?.facilityAddress,
@@ -235,7 +288,7 @@ function CheckInQR() {
     return null
   }, [ticketType, searchParams, currentUser.id])
 
-  const isLoadingTicket = ticketLoad.fetcher !== fetchTicket
+  const isLoadingTicket = ticketLoad.key !== loadKey
   const ticketError = isLoadingTicket ? null : ticketLoad.error
 
   useEffect(() => {
@@ -243,16 +296,21 @@ function CheckInQR() {
     fetchTicket()
       .then((ticket) => {
         if (!isMounted) return
-        setTicketData(ticket)
-        setTicketLoad({ fetcher: fetchTicket, error: null })
+        setTicketData((prev) => {
+          if (prev && ticket && String(prev.id) === String(ticket.id) && prev.qrCode) {
+            return { ...ticket, qrCode: prev.qrCode }
+          }
+          return ticket
+        })
+        setTicketLoad({ key: loadKey, error: null })
       })
       .catch((err) => {
         if (!isMounted) return
         setTicketData(null)
-        setTicketLoad({ fetcher: fetchTicket, error: err?.message || 'Không tải được vé check-in.' })
+        setTicketLoad({ key: loadKey, error: err?.message || 'Không tải được vé check-in.' })
       })
     return () => { isMounted = false }
-  }, [fetchTicket])
+  }, [fetchTicket, loadKey])
 
   // Danh sách vé của tôi: GET /api/v1/bookings/my-bookings và GET /api/v1/bookings/upcoming
   const [myBookingsList, setMyBookingsList] = useState([])
@@ -352,65 +410,6 @@ function CheckInQR() {
 
   // Mã QR bị làm mờ và vô hiệu hóa khi sân đã được check-in hoặc đã vượt quá giờ mà không người chơi nào check-in (hoặc đã hủy)
   const isQrDisabled = checkInDone || isExpiredNoCheckIn || isCancelled
-
-  // 2.7 Bước 2: Chủ sân quét QR trên máy của họ (POST /checkin/scan là API của chủ sân).
-  // Người chơi chỉ kiểm tra lại trạng thái vé từ BE.
-  const handleGateScanCheckIn = async () => {
-    if (checkInDone) {
-      setScanError('Sân này đã được check-in trước đó. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
-      return
-    }
-    if (isExpiredNoCheckIn) {
-      setScanError('Sân đã vượt quá giờ thi đấu mà không có người chơi nào check-in. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
-      return
-    }
-    if (isCancelled) {
-      setScanError('Đơn đặt sân đã bị hủy. Mã QR đã bị vô hiệu hóa.')
-      return
-    }
-    setIsScanningCheckIn(true)
-    setScanError(null)
-    try {
-      const ticket = await fetchTicket()
-      if (ticket) setTicketData(ticket)
-      const fetchedStatus = String(ticket?.status || '').toUpperCase()
-      const fetchedEndMs = ticket?.endAt ? new Date(ticket.endAt).getTime() : NaN
-      const fetchedExpired =
-        fetchedStatus !== 'CHECKED_IN' &&
-        fetchedStatus !== 'COMPLETED' &&
-        !ticket?.anyCheckedIn &&
-        ((Number.isFinite(fetchedEndMs) && nowMs > fetchedEndMs) ||
-          Boolean(ticket?.isNoShow) ||
-          fetchedStatus === 'NO_SHOW' ||
-          fetchedStatus === 'EXPIRED')
-      if (fetchedExpired) {
-        setScanError('Sân đã vượt quá giờ thi đấu mà không có người chơi nào check-in. Mã QR đã bị vô hiệu hóa và không thể check-in được nữa.')
-        return
-      }
-      if (fetchedStatus !== 'CHECKED_IN' && fetchedStatus !== 'COMPLETED' && !ticket?.anyCheckedIn) {
-        setScanError('Vé chưa được check-in. Hãy đưa mã QR (hoặc mã vé dự phòng) cho chủ sân quét tại quầy.')
-        return
-      }
-      const cleanCode = (ticket.ticketCode || '').replace('#', '').trim()
-      // Phiên chơi lưu trên máy để mở phần đánh giá sau trận
-      localStorage.setItem('sportnexus_last_checkout_session', JSON.stringify({
-        courtId: ticket.gate || '—',
-        courtName: ticket.courtName || '—',
-        sport: ticket.sport || '—',
-        ticketCode: cleanCode,
-        checkInDone: true,
-        checkInTime: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        checkOutDone: false,
-        checkOutTime: null,
-        coPlayers: matchParticipants.map((p) => ({ id: p.id, name: p.name || p.email.split('@')[0], email: p.email, role: p.role || 'Bạn chơi cùng sân' })),
-      }))
-      setToastMessage('🎉 Vé đã được check-in. Chúc bạn chơi vui!')
-    } catch (err) {
-      setScanError(err?.message || 'Không kiểm tra được trạng thái vé, vui lòng thử lại.')
-    } finally {
-      setIsScanningCheckIn(false)
-    }
-  }
 
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancellationReasons, setCancellationReasons] = useState([])
@@ -542,22 +541,87 @@ function CheckInQR() {
   }, [checkInDone, currentTicketCode])
   const checkOutDone = checkInDone && Boolean(currentTicketCode) && (checkedOutCode === currentTicketCode || storedCheckOutDone)
 
-  // Tự hỏi lại BE mỗi 20 giây khi vé còn hiệu lực check-in (chủ sân quét trên máy của họ)
+  // Chỉ kiểm tra trạng thái vé (đã check-in / hủy / quá giờ), tuyệt đối không ghi đè hay đổi mã QR của vé
+  const pollTicketStatus = useCallback(async ({ ticketId, queryId, type, groupedBookingIds }) => {
+    if (type === 'booking') {
+      const detail = await getBookingById(ticketId)
+      const hasSiblings = Array.isArray(groupedBookingIds) && groupedBookingIds.length > 1
+      const [upcomingSiblings, mySiblings] = hasSiblings
+        ? await Promise.all([
+            getUpcomingBookings().catch(() => []),
+            getMyBookings().catch(() => []),
+          ])
+        : [[], []]
+      return resolveBookingCheckInState({
+        detail,
+        currentUserId: currentUser.id,
+        bookingId: ticketId,
+        groupedBookingIds,
+        siblingBookings: [...upcomingSiblings, ...mySiblings],
+      })
+    }
+    if (type === 'lfg') {
+      const res = await getLfgQrTicket(queryId || ticketId)
+      const lfgCheckedIn =
+        Boolean(res?.isCheckedIn) ||
+        ['CHECKED_IN', 'COMPLETED'].includes(String(res?.status || '').toUpperCase())
+      return {
+        isBookingCheckedIn: lfgCheckedIn,
+        status: lfgCheckedIn ? 'CHECKED_IN' : (res?.status || 'PENDING_CHECKIN'),
+        isNoShow: Boolean(res?.isNoShow),
+      }
+    }
+    if (type === 'tournament') {
+      const res = await getTournamentQrTicket(queryId || ticketId)
+      const tournamentCheckedIn =
+        Boolean(res?.isCheckedIn) ||
+        String(res?.tournamentStatus || '').toUpperCase() === 'CHECKED_IN'
+      return {
+        isBookingCheckedIn: tournamentCheckedIn,
+        status: tournamentCheckedIn ? 'CHECKED_IN' : res?.tournamentStatus,
+        isNoShow: false,
+      }
+    }
+    return null
+  }, [currentUser.id])
+
+  const activeTicketId = ticketData?.id || null
+  const activeTicketQueryId = ticketData?.queryId || activeTicketId
+  const activeGroupedIdsKey = Array.isArray(ticketData?.groupedBookingIds)
+    ? ticketData.groupedBookingIds.join(',')
+    : ''
+
+  // Tự hỏi lại BE mỗi 20 giây khi vé còn hiệu lực check-in (chủ sân quét trên máy của họ), giữ cố định mã QR
   useEffect(() => {
-    if (!ticketData?.id || isQrDisabled) return undefined
+    if (!activeTicketId || isQrDisabled) return undefined
+    const groupedIds = activeGroupedIdsKey ? activeGroupedIdsKey.split(',') : []
     const timer = setInterval(() => {
-      fetchTicket()
-        .then((ticket) => {
-          if (!ticket) return
-          setTicketData(ticket)
-          if (String(ticket.status).toUpperCase() === 'CHECKED_IN' || ticket.anyCheckedIn) {
+      pollTicketStatus({
+        ticketId: activeTicketId,
+        queryId: activeTicketQueryId,
+        type: ticketType,
+        groupedBookingIds: groupedIds,
+      })
+        .then((nextState) => {
+          if (!nextState) return
+          setTicketData((prev) => {
+            if (!prev || String(prev.id) !== String(activeTicketId)) return prev
+            return {
+              ...prev,
+              status: nextState.status || prev.status,
+              isNoShow: Boolean(nextState.isNoShow),
+              anyCheckedIn: Boolean(nextState.isBookingCheckedIn),
+              qrCode: prev.qrCode,
+            }
+          })
+          if (String(nextState.status).toUpperCase() === 'CHECKED_IN' || nextState.isBookingCheckedIn) {
             setToastMessage('🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
           }
         })
         .catch(() => { /* lỗi mạng tạm thời: thử lại ở lượt sau */ })
     }, 20000)
     return () => clearInterval(timer)
-  }, [ticketData?.id, isQrDisabled, fetchTicket])
+  }, [activeTicketId, activeTicketQueryId, activeGroupedIdsKey, ticketType, isQrDisabled, pollTicketStatus])
 
   // Modal Check-out và Đánh giá sau trận
   const [showCheckOutModal, setShowCheckOutModal] = useState(false)
@@ -1358,7 +1422,7 @@ function CheckInQR() {
             </div>
           </div>
 
-          {/* Card 2: Interactive Dynamic QR Code */}
+          {/* Card 2: Fixed Booking Check-in QR Code */}
           <div
             style={{
               background: '#ffffff',
@@ -1375,9 +1439,8 @@ function CheckInQR() {
 
             {/* Stylized QR Code Graphic matching screenshot */}
             <div
-              onClick={isQrDisabled ? undefined : () => setShowCheckInModal(true)}
               style={{
-                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
+                cursor: isQrDisabled ? 'not-allowed' : 'default',
                 padding: '12px',
                 background: isQrDisabled ? '#F8FAFC' : '#ffffff',
                 borderRadius: '16px',
@@ -1386,16 +1449,6 @@ function CheckInQR() {
                 position: 'relative',
                 transition: 'transform 0.2s, box-shadow 0.2s',
               }}
-              onMouseEnter={(e) => {
-                if (isQrDisabled) return
-                e.currentTarget.style.transform = 'scale(1.02)'
-                e.currentTarget.style.boxShadow = '0 8px 26px rgba(22, 163, 74, 0.16)'
-              }}
-              onMouseLeave={(e) => {
-                if (isQrDisabled) return
-                e.currentTarget.style.transform = 'scale(1)'
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.04)'
-              }}
               title={
                 checkInDone
                   ? 'Sân đã được check-in • Mã QR đã bị vô hiệu hóa và không thể check-in lại'
@@ -1403,7 +1456,7 @@ function CheckInQR() {
                   ? 'Sân đã vượt quá giờ mà không có người chơi check-in • Mã QR đã bị vô hiệu hóa'
                   : isCancelled
                   ? 'Đơn đặt sân đã bị hủy • Mã QR đã bị vô hiệu hóa'
-                  : 'Nhấn để mô phỏng quét QR vào cổng'
+                  : 'Đưa mã QR này cho chủ sân quét khi tới sân'
               }
             >
               {/* Laser scan line effect (chỉ hiển thị khi mã QR còn hiệu lực) */}
@@ -1680,53 +1733,7 @@ function CheckInQR() {
               </div>
             </div>
 
-            {/* Buttons: Check-in / Check-out / Đánh giá bạn chơi */}
-            <button
-              type="button"
-              disabled={isQrDisabled}
-              onClick={isQrDisabled ? undefined : () => setShowCheckInModal(true)}
-              style={{
-                marginTop: '10px',
-                width: '100%',
-                maxWidth: '360px',
-                padding: '9px 16px',
-                borderRadius: '12px',
-                border: isQrDisabled
-                  ? '1.5px dashed #CBD5E1'
-                  : '1.5px dashed #10B981',
-                background: isQrDisabled ? '#F1F5F9' : '#F0FDF4',
-                color: isQrDisabled ? '#94A3B8' : '#15803D',
-                fontSize: '12.5px',
-                fontWeight: 700,
-                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
-                opacity: isQrDisabled ? 0.65 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                if (!isQrDisabled) e.currentTarget.style.background = '#DCFCE7'
-              }}
-              onMouseLeave={(e) => {
-                if (!isQrDisabled) e.currentTarget.style.background = '#F0FDF4'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                {checkInDone ? 'lock' : isExpiredNoCheckIn ? 'timer_off' : isCancelled ? 'block' : 'qr_code_scanner'}
-              </span>
-              <span>
-                {checkInDone
-                  ? 'Sân đã check-in • Mã QR đã bị vô hiệu hóa'
-                  : isExpiredNoCheckIn
-                  ? 'Quá giờ check-in • Không thể check-in được nữa'
-                  : isCancelled
-                  ? 'Đơn đã hủy • Không thể check-in'
-                  : 'Mô phỏng quét mã vào cổng (Check-in)'}
-              </span>
-            </button>
-
+            {/* Buttons: Check-out / Đánh giá bạn chơi / Hủy đơn */}
             {checkInDone && !checkOutDone && (
               <button
                 type="button"
@@ -2471,279 +2478,6 @@ function CheckInQR() {
           </div>
         </div>
       </div>
-
-      {/* ===================== MODAL: QUÉT CHECK-IN QUA CỔNG TỰ ĐỘNG (BƯỚC 2) ===================== */}
-      {showCheckInModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.55)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            animation: 'fadeIn 0.2s ease-out',
-          }}
-          onClick={() => !isScanningCheckIn && setShowCheckInModal(false)}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '460px',
-              background: '#ffffff',
-              borderRadius: '24px',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-              padding: '28px',
-              textAlign: 'center',
-              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {checkInDone ? (
-              <>
-                <div
-                  style={{
-                    width: '68px',
-                    height: '68px',
-                    borderRadius: '50%',
-                    background: '#DCFCE7',
-                    color: '#16A34A',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px auto',
-                    boxShadow: '0 8px 20px rgba(22, 163, 74, 0.2)',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '38px', fontWeight: 700 }}>
-                    check
-                  </span>
-                </div>
-
-                <h3
-                  style={{
-                    fontSize: '20px',
-                    fontWeight: 800,
-                    color: '#111827',
-                    margin: '0 0 6px 0',
-                  }}
-                >
-                  Check-in {ticketData?.gate || '—'} Thành Công!
-                </h3>
-                <p
-                  style={{
-                    fontSize: '13.5px',
-                    color: '#4B5563',
-                    margin: '0 0 18px 0',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Hệ thống đã xác thực vé #{ticketData?.ticketCode || '—'}. Barie {ticketData?.gate || '—'} đã mở, chúc bạn có trận đấu bùng nổ!
-                </p>
-
-                {/* Escrow Release info box */}
-                <div
-                  style={{
-                    background: '#F0FDF4',
-                    border: '1px solid #BBF7D0',
-                    borderRadius: '16px',
-                    padding: '14px 16px',
-                    textAlign: 'left',
-                    marginBottom: '22px',
-                    fontSize: '12.5px',
-                    color: '#166534',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  <div style={{ fontWeight: 800, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#15803D' }}>
-                      lock_open
-                    </span>
-                    Giải ngân ký quỹ Escrow thành công
-                  </div>
-                  <div>
-                    Số tiền <strong>{new Intl.NumberFormat('vi-VN').format(ticketData?.escrowAmount || 0)} Điểm</strong> đã được giải tỏa an toàn và ghi nhận doanh thu cho {ticketData?.courtName || '—'}.
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCheckInModal(false)}
-                  style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '14px',
-                    padding: '12px 0',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.3)',
-                  }}
-                >
-                  Hoàn tất &amp; Vào sân thi đấu
-                </button>
-              </>
-            ) : (
-              <>
-                <div
-                  style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    background: '#E0F2FE',
-                    color: '#0284C7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px auto',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>
-                    qr_code_scanner
-                  </span>
-                </div>
-
-                <h3
-                  style={{
-                    fontSize: '19px',
-                    fontWeight: 800,
-                    color: '#111827',
-                    margin: '0 0 6px 0',
-                  }}
-                >
-                  Xác Thực Check-in Qua Cổng Barie
-                </h3>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: '#6B7280',
-                    margin: '0 0 16px 0',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Quét mã vé <strong>#{ticketData?.ticketCode || '—'}</strong> tại máy quét barie để mở cổng vào sân thi đấu.
-                </p>
-
-                {/* Info Card */}
-                <div
-                  style={{
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '14px',
-                    padding: '12px 14px',
-                    textAlign: 'left',
-                    marginBottom: '16px',
-                    fontSize: '12px',
-                    color: '#334155',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: '#64748B' }}>Loại vé:</span>
-                    <strong style={{ color: '#0284C7' }}>{ticketData?.sportType || '—'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: '#64748B' }}>Sân:</span>
-                    <strong style={{ color: '#1E293B' }}>{ticketData?.courtName}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: '#64748B' }}>Cơ sở:</span>
-                    <strong style={{ color: '#1E293B' }}>{ticketData?.venueName}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: '#64748B' }}>Giờ thi đấu:</span>
-                    <strong style={{ color: '#15803D' }}>{ticketData?.startTime} - {ticketData?.endTime}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #CBD5E1', paddingTop: '6px', marginTop: '6px' }}>
-                    <span style={{ color: '#64748B' }}>Khung check-in hợp lệ:</span>
-                    <strong style={{ color: '#D97706' }}>{ticketData?.allowedCheckInStart} - {ticketData?.allowedCheckInEnd}</strong>
-                  </div>
-                </div>
-
-                {/* Error Banner if API returned 400 or 403 */}
-                {scanError && (
-                  <div
-                    style={{
-                      background: '#FEF2F2',
-                      border: '1px solid #FECACA',
-                      borderRadius: '12px',
-                      padding: '10px 14px',
-                      color: '#DC2626',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      textAlign: 'left',
-                      marginBottom: '16px',
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    {scanError}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowCheckInModal(false)}
-                    style={{
-                      flex: 1,
-                      padding: '11px 0',
-                      borderRadius: '12px',
-                      background: '#F1F5F9',
-                      border: 'none',
-                      color: '#475569',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isScanningCheckIn || isQrDisabled}
-                    onClick={handleGateScanCheckIn}
-                    style={{
-                      flex: 2,
-                      padding: '11px 0',
-                      borderRadius: '12px',
-                      background:
-                        isScanningCheckIn || isQrDisabled
-                          ? '#94A3B8'
-                          : 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)',
-                      color: '#ffffff',
-                      border: 'none',
-                      fontSize: '13.5px',
-                      fontWeight: 800,
-                      cursor: isScanningCheckIn || isQrDisabled ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      boxShadow: isQrDisabled ? 'none' : '0 4px 12px rgba(22, 163, 74, 0.3)',
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                      {isQrDisabled ? 'block' : isScanningCheckIn ? 'sync' : 'sensors'}
-                    </span>
-                    <span>
-                      {isQrDisabled
-                        ? 'Mã QR đã bị vô hiệu hóa'
-                        : isScanningCheckIn
-                          ? 'Đang kiểm tra...'
-                          : 'Kiểm tra trạng thái check-in'}
-                    </span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ===================== POPUP: GỬI MÃ CHECK-IN CHO BẠN CHƠI ===================== */}
       {showShareModal && (
