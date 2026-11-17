@@ -33,6 +33,8 @@ const TYPE_STYLES = {
 
 // Mở đúng màn hình theo referenceType + referenceId của thông báo
 const linkFor = (n, style) => {
+  // Thông báo đền bù voucher khi chủ sân hủy ca: BE chưa có type riêng nên nhận theo nội dung.
+  if (/mã giảm/i.test(`${n.title} ${n.message}`)) return '/vouchers'
   if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
   if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
   if (n.referenceType === 'TOURNAMENT') return '/tournament'

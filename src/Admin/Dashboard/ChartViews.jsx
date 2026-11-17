@@ -1,12 +1,12 @@
 // Các kiểu xem bổ sung cho khung "Xu hướng nền tảng" (TrendsChart.jsx).
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ADMIN_COURT_STATS_READY, getAdminCourtBookingStats, getAdminDashboard, getBookingStatistics } from '../../api/admin/dashboardApi.js'
+import { getAdminCourtBookingStats, getAdminDashboard, getBookingStatistics } from '../../api/admin/dashboardApi.js'
 import { getFacilityOptions } from '../../api/admin/bookingApi.js'
 import PeriodComparisonChart from '../../components/charts/PeriodComparisonChart.jsx'
 import RankBarChart from '../../components/charts/RankBarChart.jsx'
 import { COMPARE_KINDS, buildComparisonRows, comparePeriods, summarizeComparison } from '../../utils/periodCompare.js'
-import { formatNumber, growth } from './dashboardData.js'
+import { formatCurrency, formatNumber, growth } from './dashboardData.js'
 
 const Empty = ({ children }) => <p className="admin-empty">{children}</p>
 
@@ -91,7 +91,8 @@ export function FacilityCompareView({ range, rangeLabel, reloadKey }) {
   )
 }
 
-// 4. So sánh số đơn giữa các sân con của một cơ sở. Chờ BE có API (xem getAdminCourtBookingStats).
+// 4. So sánh số đơn, doanh thu giữa các sân con của một cơ sở: GET /admin/facilities/{id}/courts/statistics.
+const percent = value => (Number.isFinite(value) ? `${Math.round(value * 10) / 10}%` : '—')
 export function CourtCompareView({ range, rangeLabel, reloadKey }) {
   const [facilities, setFacilities] = useState(null)
   const [facilityId, setFacilityId] = useState('')
@@ -107,20 +108,24 @@ export function CourtCompareView({ range, rangeLabel, reloadKey }) {
   }, [])
 
   useEffect(() => {
-    if (!facilityId || !ADMIN_COURT_STATS_READY) return
+    if (!facilityId) return
     let cancelled = false
     getAdminCourtBookingStats({ facilityId, fromDate: range.fromDate, toDate: range.toDate })
-      .then(items => !cancelled && setState({ key: requestKey, items }))
+      .then(stats => !cancelled && setState({ key: requestKey, stats }))
       .catch(error => !cancelled && setState({ key: requestKey, error: error.message }))
     return () => { cancelled = true }
   }, [facilityId, range.fromDate, range.toDate, requestKey])
 
-  const items = (state.items || []).map(item => ({ name: item.courtName || 'Sân', value: Number(item.bookings) || 0 })).sort((a, b) => b.value - a.value)
+  const ready = facilityId && state.key === requestKey && !state.error
+  const stats = ready ? state.stats : null
+  const items = (stats?.courts || [])
+    .map(court => ({ name: court.name, value: court.bookings, hint: `${formatCurrency(court.revenue)} · lấp đầy ${percent(court.occupancyRate)}${court.cancelled ? ` · ${formatNumber(court.cancelled)} hủy` : ''}` }))
+    .sort((a, b) => b.value - a.value)
   let body
-  if (!ADMIN_COURT_STATS_READY) body = <Empty>Chưa có API thống kê số đơn theo sân con cho Admin. Biểu đồ sẽ hiển thị khi BE bổ sung endpoint.</Empty>
-  else if (!facilityId) body = <Empty>Chọn một cơ sở để so sánh số đơn giữa các sân con.</Empty>
+  if (!facilityId) body = <Empty>Chọn một cơ sở để so sánh số đơn giữa các sân con.</Empty>
   else if (state.key !== requestKey) body = <Empty>Đang tải dữ liệu sân con…</Empty>
   else if (state.error) body = <Empty>{state.error}</Empty>
+  else if (!items.length) body = <Empty>Cơ sở này chưa có sân con.</Empty>
   else if (!items.some(item => item.value > 0)) body = <Empty>Cơ sở này chưa có lượt đặt sân trong {rangeLabel} gần nhất.</Empty>
   else body = <div className="admin-chart-canvas admin-chart-canvas--scroll"><RankBarChart items={items} /></div>
 
@@ -131,6 +136,7 @@ export function CourtCompareView({ range, rangeLabel, reloadKey }) {
           <option value="">{facilities == null ? 'Đang tải cơ sở…' : facilities.length ? 'Chọn cơ sở…' : 'Không có cơ sở'}</option>
           {(facilities || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
+        {stats && <span className="admin-chart-view__note">Tổng: <strong>{formatNumber(stats.totalBookings)}</strong> đơn · <strong>{formatNumber(stats.cancelledBookings)}</strong> hủy · doanh thu <strong>{formatCurrency(stats.totalRevenue)}</strong> · lấp đầy <strong>{percent(stats.occupancyRate)}</strong></span>}
       </div>
       {body}
     </div>

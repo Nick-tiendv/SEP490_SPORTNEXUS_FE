@@ -14,6 +14,7 @@ const myItems = [
   { label: 'Đánh giá sau trận', path: '/post-match-rating', icon: 'star' },
   { label: 'Đơn mua tại sân', path: '/shop-orders', icon: 'shopping_bag' },
   { label: 'Ví Escrow', path: '/wallet', icon: 'account_balance_wallet', match: ['/wallet/deposit-success', '/wallet/deposit-cancel'] },
+  { label: 'Voucher của tôi', path: '/vouchers', icon: 'confirmation_number' },
   { label: 'Elo & khảo sát trình độ', path: '/assessment', icon: 'military_tech' },
   { label: 'Hồ sơ cá nhân', path: '/profile', icon: 'badge' },
 ]

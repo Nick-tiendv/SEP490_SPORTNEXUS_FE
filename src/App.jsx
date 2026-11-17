@@ -33,6 +33,7 @@ const Profile = lazy(() => import('./Player/Profile/Profile.jsx'))
 const SplitPayment = lazy(() => import('./Player/Booking/Payment/SplitPayment.jsx'))
 const TournamentList = lazy(() => import('./Player/Tournament/TournamentList.jsx'))
 const WalletEscrow = lazy(() => import('./Player/Wallet/WalletEscrow.jsx'))
+const MyVouchers = lazy(() => import('./Player/Wallet/MyVouchers.jsx'))
 const DepositSuccess = lazy(() => import('./Player/Wallet/DepositSuccess.jsx'))
 const DepositCancel = lazy(() => import('./Player/Wallet/DepositCancel.jsx'))
 
@@ -123,6 +124,7 @@ function App() {
             <Route path="/dashboard" element={<Page><Dashboard /></Page>} />
             <Route path="/profile" element={<Page><Profile /></Page>} />
             <Route path="/wallet" element={<Page><WalletEscrow /></Page>} />
+            <Route path="/vouchers" element={<Page><MyVouchers /></Page>} />
             {/* PayOS returnUrl / cancelUrl (BE cấu hình PayOS__ReturnUrl / PayOS__CancelUrl) */}
             <Route path="/wallet/deposit-success" element={<Page><DepositSuccess /></Page>} />
             <Route path="/wallet/deposit-cancel" element={<Page><DepositCancel /></Page>} />

@@ -103,12 +103,24 @@ export async function getBookingStatistics({ DateFrom, DateTo, OwnerId, Facility
   }
 }
 
-// Số đơn theo từng sân con của một cơ sở cho Admin.
-// BE CHƯA có endpoint này (chỉ có revenueByCourt ở GET /owner/dashboard cho chủ sân).
-// Khi BE bổ sung: đặt ADMIN_COURT_STATS_READY = true và gọi API trong hàm dưới, trả về [{ courtName, bookings }].
-export const ADMIN_COURT_STATS_READY = false
-export async function getAdminCourtBookingStats() {
-  return []
+// Doanh thu, số đơn của từng sân con trong một cơ sở: GET /api/v1/admin/facilities/{facilityId}/courts/statistics.
+// Phần tử courts[] chưa có mô tả riêng: đọc theo DashboardCourtItem (docs 99) kèm vài tên dự phòng.
+export async function getAdminCourtBookingStats({ facilityId, fromDate, toDate }) {
+  const data = await get(`/api/v1/admin/facilities/${facilityId}/courts/statistics`, { fromDate, toDate }) || {}
+  return {
+    totalBookings: toNumber(data.totalBookings) ?? 0,
+    cancelledBookings: toNumber(data.cancelledBookings) ?? 0,
+    totalRevenue: toNumber(data.totalRevenue) ?? 0,
+    occupancyRate: toNumber(data.occupancyRate),
+    courts: (Array.isArray(data.courts) ? data.courts : []).map(court => ({
+      id: String(pick(court, 'courtId', 'id') ?? ''),
+      name: pick(court, 'courtName', 'name') || 'Sân',
+      bookings: toNumber(pick(court, 'totalBookings', 'bookings', 'bookingCount')) ?? 0,
+      cancelled: toNumber(pick(court, 'cancelledBookings')),
+      revenue: toNumber(pick(court, 'totalRevenue', 'revenue')),
+      occupancyRate: toNumber(pick(court, 'occupancyRate')),
+    })),
+  }
 }
 
 // ---------- Admin dashboard: GET /api/v1/admin/dashboard?fromDate&toDate ----------

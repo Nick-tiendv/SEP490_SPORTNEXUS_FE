@@ -121,6 +121,32 @@ export async function getWallet() {
   }
 }
 
+/** Trạng thái voucher BE trả về (mã ACTIVE quá hạn được BE trả thành EXPIRED). */
+export const VOUCHER_STATUSES = ['ACTIVE', 'USED', 'EXPIRED']
+
+/**
+ * Voucher đền bù của tôi (cấp khi chủ sân hủy đơn).
+ * GET /api/v1/wallet/vouchers?status=ACTIVE|USED|EXPIRED
+ * @returns {Promise<Array<{id, discountPercent, status, expiredDate, sourceBookingId, createdAt}>>}
+ */
+export async function getMyVouchers(status) {
+  try {
+    const response = await apiClient.get('/api/v1/wallet/vouchers', { params: status ? { status } : {} })
+    const data = unwrap(response.data)
+    const items = Array.isArray(data) ? data : data?.items || []
+    return items.map((item) => ({
+      id: String(item.id ?? ''),
+      discountPercent: Number(item.discountPercent) || 0,
+      status: String(item.status || '').toUpperCase(),
+      expiredDate: item.expiredDate || null,
+      sourceBookingId: item.sourceBookingId || null,
+      createdAt: item.createdAt || null,
+    }))
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
 /**
  * Tạo lệnh nạp
  * POST /api/v1/wallet/deposit  body { amount, returnUrl, cancelUrl }
