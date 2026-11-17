@@ -18,7 +18,11 @@ const clean = params => Object.fromEntries(Object.entries(params || {}).filter((
 export function toReport(raw) {
   const uuid = String(pick(raw, 'id', 'reportId') ?? '')
   const ownerResponse = pick(raw, 'ownerResponse', 'ownerResponseNote', 'ownerReply', 'ownerNote', 'ownerResponse.note')
-  const pendingDelta = Number(pick(raw, 'pendingFairPlayDelta'))
+  const rawPendingDelta = pick(raw, 'pendingFairPlayDelta', 'fairPlayPendingDelta', 'pendingDelta')
+  const pendingFairPlayDelta =
+    rawPendingDelta !== undefined && rawPendingDelta !== null && rawPendingDelta !== '' && Number.isFinite(Number(rawPendingDelta))
+      ? Number(rawPendingDelta)
+      : null
   return {
     uuid,
     id: String(pick(raw, 'reportCode', 'code') ?? (uuid.length > 12 ? uuid.slice(0, 8).toUpperCase() : uuid)),
@@ -27,8 +31,6 @@ export function toReport(raw) {
     targetType: String(pick(raw, 'targetType', 'type') ?? '').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
     entity: pick(raw, 'targetName', 'targetUserName', 'targetUser.fullName', 'targetObjectName', 'facilityName', 'facility.name') || '—',
     targetUserId: String(pick(raw, 'targetUserId', 'targetUser.id') ?? ''),
-    // Phiếu nghi "đánh hội đồng" do hệ thống tạo: có số điểm Fair Play đang treo (chưa trừ), vd -12.
-    pendingFairPlayDelta: Number.isFinite(pendingDelta) && pick(raw, 'pendingFairPlayDelta') != null ? pendingDelta : null,
     facility: pick(raw, 'facilityName', 'facility.name') || '',
     bookingId: pick(raw, 'bookingId', 'booking.id') || '',
     bookingCode: pick(raw, 'bookingCode', 'booking.bookingCode', 'booking.code') || '',
@@ -36,6 +38,7 @@ export function toReport(raw) {
     description: pick(raw, 'description', 'content', 'detail') || '',
     evidence: asArray(pick(raw, 'evidenceImageUrls', 'evidenceUrls', 'images')).filter(url => typeof url === 'string'),
     requestedRefund: pick(raw, 'requestedRefundPercentage'),
+    pendingFairPlayDelta,
     hasOwnerResponded: Boolean(pick(raw, 'hasOwnerResponded') ?? ownerResponse),
     ownerResponse: ownerResponse || '',
     status: String(pick(raw, 'status', 'reportStatus') ?? 'PENDING').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),

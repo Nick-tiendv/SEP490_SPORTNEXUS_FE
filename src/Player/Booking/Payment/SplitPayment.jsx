@@ -1,4 +1,4 @@
-// SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Động 30s
+// SplitPayment.jsx — Xác Nhận Đặt Sân, Thanh Toán Ví / PayOS VietQR & Xuất Vé QR Check-In Cố Định
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { uid, nowMs } from '../../../utils/ids.js'
 import { vnClock } from '../../../utils/vnTime.js'
@@ -319,9 +319,8 @@ function SplitPayment() {
     return () => { isMounted = false }
   }, [])
 
-  // Mã QR Check-in Pass sau khi đặt sân thành công
+  // Mã QR Check-in Pass cố định sau khi đặt sân thành công
   const [qrToken, setQrToken] = useState('') // lấy từ GET /bookings/{id}/qr-ticket sau khi đặt thành công
-  const [qrVersion] = useState(1)
 
   // Notification modal state
   const [modalData, setModalData] = useState(null)
@@ -2402,7 +2401,6 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                 <div
                   className="sp-qr-svg-wrap"
-                  key={qrVersion}
                   style={{
                     filter: isTicketQrDisabled ? 'blur(5px) grayscale(100%)' : 'none',
                     opacity: isTicketQrDisabled ? 0.28 : 1,

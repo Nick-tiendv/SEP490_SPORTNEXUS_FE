@@ -99,7 +99,7 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <FairPlayAlertBanner count={fairPlayAlerts.items.length} to="/admin/reviews-reports#fairplay-alerts" />
+      <FairPlayAlertBanner count={fairPlayAlerts.items.length} to="/admin/reviews-reports" />
       {!periodLoading && periodData.error && <div className="admin-alert admin-alert--warning" role="alert"><TriangleAlert size={16} /><span>Không tải được số liệu tổng quan: {periodData.error}</span></div>}
 
       <section className="admin-stat-grid" aria-label="Thống kê nền tảng" aria-busy={periodLoading}>{stats.map(item => <StatCard key={item.label} {...item} />)}</section>

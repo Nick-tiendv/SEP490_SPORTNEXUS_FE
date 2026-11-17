@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SplitPayment.css — Xác Nhận Đặt Sân, Thanh Toán VietQR & Vé QR Check-In Động
+   SplitPayment.css — Xác Nhận Đặt Sân, Thanh Toán VietQR & Vé QR Check-In Cố Định
    SportNexus Design System
    ========================================================================== */
 
@@ -1257,7 +1257,7 @@
 }
 
 /* ==========================================================================
-   DYNAMIC TICKET QR PASS VIEW (XUẤT MÃ QR CHECK-IN ĐỘNG 30S)
+   FIXED TICKET QR PASS VIEW (XUẤT MÃ QR CHECK-IN CỐ ĐỊNH)
    ========================================================================== */
 .sp-pass-grid {
   display: grid;
@@ -1266,7 +1266,7 @@
   align-items: start;
 }
 
-/* Cột Trái: Thẻ Vé QR Động */
+/* Cột Trái: Thẻ Vé QR Cố Định */
 .sp-ticket-card {
   background: #ffffff;
   border: 1.5px solid var(--sp-green-border);
@@ -1372,7 +1372,7 @@
   transition: opacity 0.25s ease;
 }
 
-/* Thanh đếm ngược 30 giây */
+/* Thanh trạng thái vé QR cố định */
 .sp-ticket-timer-bar {
   margin-top: 18px;
   width: 100%;

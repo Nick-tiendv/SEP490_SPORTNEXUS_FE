@@ -92,7 +92,7 @@ export function FacilityCompareView({ range, rangeLabel, reloadKey }) {
 }
 
 // 4. So sánh số đơn, doanh thu giữa các sân con của một cơ sở: GET /admin/facilities/{id}/courts/statistics.
-const percent = value => (Number.isFinite(value) ? `${Math.round(value * 10) / 10}%` : '—')
+// getAdminCourtBookingStats trả mảng [{ courtId, courtName, bookings, revenue }]; tổng cộng do FE cộng lại.
 export function CourtCompareView({ range, rangeLabel, reloadKey }) {
   const [facilities, setFacilities] = useState(null)
   const [facilityId, setFacilityId] = useState('')
@@ -111,15 +111,16 @@ export function CourtCompareView({ range, rangeLabel, reloadKey }) {
     if (!facilityId) return
     let cancelled = false
     getAdminCourtBookingStats({ facilityId, fromDate: range.fromDate, toDate: range.toDate })
-      .then(stats => !cancelled && setState({ key: requestKey, stats }))
+      .then(courts => !cancelled && setState({ key: requestKey, courts }))
       .catch(error => !cancelled && setState({ key: requestKey, error: error.message }))
     return () => { cancelled = true }
   }, [facilityId, range.fromDate, range.toDate, requestKey])
 
   const ready = facilityId && state.key === requestKey && !state.error
-  const stats = ready ? state.stats : null
-  const items = (stats?.courts || [])
-    .map(court => ({ name: court.name, value: court.bookings, hint: `${formatCurrency(court.revenue)} · lấp đầy ${percent(court.occupancyRate)}${court.cancelled ? ` · ${formatNumber(court.cancelled)} hủy` : ''}` }))
+  const courts = ready ? state.courts || [] : []
+  const totals = ready ? { bookings: courts.reduce((sum, court) => sum + court.bookings, 0), revenue: courts.reduce((sum, court) => sum + court.revenue, 0) } : null
+  const items = courts
+    .map(court => ({ name: court.courtName, value: court.bookings, hint: formatCurrency(court.revenue) }))
     .sort((a, b) => b.value - a.value)
   let body
   if (!facilityId) body = <Empty>Chọn một cơ sở để so sánh số đơn giữa các sân con.</Empty>
@@ -136,7 +137,7 @@ export function CourtCompareView({ range, rangeLabel, reloadKey }) {
           <option value="">{facilities == null ? 'Đang tải cơ sở…' : facilities.length ? 'Chọn cơ sở…' : 'Không có cơ sở'}</option>
           {(facilities || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        {stats && <span className="admin-chart-view__note">Tổng: <strong>{formatNumber(stats.totalBookings)}</strong> đơn · <strong>{formatNumber(stats.cancelledBookings)}</strong> hủy · doanh thu <strong>{formatCurrency(stats.totalRevenue)}</strong> · lấp đầy <strong>{percent(stats.occupancyRate)}</strong></span>}
+        {totals && courts.length > 0 && <span className="admin-chart-view__note">Tổng: <strong>{formatNumber(totals.bookings)}</strong> đơn · doanh thu <strong>{formatCurrency(totals.revenue)}</strong></span>}
       </div>
       {body}
     </div>

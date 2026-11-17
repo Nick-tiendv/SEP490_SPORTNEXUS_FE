@@ -16,11 +16,7 @@
 .rr-pending{background:var(--sn-warning-bg);color:var(--sn-warning-text)}
 .rr-resolved_refunded,.rr-resolved_no_refund{background:var(--mint-100);color:var(--sn-green-700)}
 .rr-rejected,.rr-withdrawn{background:var(--sn-gray-100);color:var(--sn-gray-600)}
-/* Phiếu hệ thống nghi "đánh hội đồng" (có điểm Fair Play đang treo) */
-.rr-fairplay-alert{display:inline-flex;align-items:center;gap:4px;background:var(--sn-warning-bg);color:var(--sn-danger-text);font-weight:700;border:1px solid var(--sn-warning-border)}
-.rr-list tbody tr.rr-row-alert td{background:var(--sn-warning-bg)}
-.rr-list tbody tr.rr-row-alert:hover td{background:var(--sn-warning-bg);filter:brightness(.98)}
-/* Tab Báo cáo: danh sách full ngang, chi tiết là hộp bo góc lớn giữa màn hình (dưới hộp thoại xử lý) */
+/* Tab Đánh giá & Phản hồi: danh sách full ngang, chi tiết là hộp bo góc lớn giữa màn hình (dưới hộp thoại ẩn / hiện) */
 .rr-content.rr-content--full{display:block}
 .rr-content--full .rr-list table{white-space:normal}
 .rr-content--full .rr-excerpt{max-width:none}
@@ -36,3 +32,19 @@
 @keyframes rr-pop-in{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%)}}
 @keyframes rr-fade{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.rr-drawer-backdrop,.rr-inspector.rr-drawer{animation:none}}
+
+/* Ticket Cảnh Báo (Review Bombing / Bạo lực mạng): tô viền Đỏ cho Row có pendingFairPlayDelta !== null */
+.sn-admin .rr-list tbody tr.rr-row-warning td{background:#fef2f2;border-top:2px solid #dc2626;border-bottom:2px solid #dc2626}
+.sn-admin .rr-list tbody tr.rr-row-warning td:first-child{border-left:4px solid #dc2626}
+.sn-admin .rr-list tbody tr.rr-row-warning td:last-child{border-right:2px solid #dc2626}
+.sn-admin .rr-list tbody tr.rr-row-warning:hover td,.sn-admin .rr-list tbody tr.rr-row-warning.selected td{background:#fee2e2}
+.rr-warning-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:18px;border:1.5px solid #fca5a5;border-left:4px solid #dc2626;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:13px}
+.rr-warning-banner>div{display:flex;align-items:center;gap:10px}
+.rr-warning-banner svg{flex-shrink:0;color:#dc2626}
+.rr-warning-pill{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;border-radius:6px;border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;font-size:11.5px;font-weight:700;white-space:nowrap}
+.rr-warning-actions{display:flex;flex-wrap:wrap;gap:6px}
+.rr-warning-actions .rr-button{min-height:30px;padding:4px 9px;font-size:11.5px}
+.rr-warning-box{display:flex;flex-direction:column;gap:6px;padding:12px;margin-top:12px;border:1.5px solid #dc2626;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:12.5px}
+.rr-warning-box strong{color:#7f1d1d}
+.rr-inspector .rr-actions{grid-template-columns:1fr}
+.rr-inspector .rr-actions-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}

@@ -107,7 +107,7 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
         aria-modal="true"
         aria-labelledby="owner-cancel-warning-title"
         style={{
-          maxWidth: 480,
+          maxWidth: 540,
           border: penaltyInfo.hasPenalty ? '2px solid #EF4444' : '1px solid #CBD5E1',
         }}
       >
@@ -171,7 +171,7 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
                 lineHeight: 1.55,
               }}
             >
-              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 8, textWrap: 'balance' }}>
                 {penaltyInfo.warningMessage}
               </div>
 

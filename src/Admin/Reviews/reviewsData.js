@@ -9,18 +9,16 @@ export const decisionOptions = [
   { value: 'RESOLVE_NO_REFUND', label: 'Chấp nhận, không hoàn tiền' },
   { value: 'REJECT', label: 'Bác bỏ báo cáo (không vi phạm)' },
 ]
-// Phiếu nghi "đánh hội đồng" (hệ thống tạo, có pendingFairPlayDelta): chỉ 2 quyết định, BE tự trừ / bỏ điểm đang treo.
-export const isFairPlayAlert = report => report?.pendingFairPlayDelta != null
-export const fairPlayDecisionOptions = [
-  { value: 'RESOLVE_NO_REFUND', label: 'Đánh giá hợp lệ: trừ điểm đang treo' },
-  { value: 'REJECT', label: 'Bị đánh hội đồng: gỡ bỏ, không trừ điểm' },
-]
-export const decisionLabel = (report, decision) => ((isFairPlayAlert(report) ? fairPlayDecisionOptions : decisionOptions).find(option => option.value === decision)?.label || decision)
-export const formatDelta = value => (value > 0 ? `+${value}` : String(value).replace('-', '−'))
 // 'OwnerResponded' / 'owner_responded' -> 'OWNER_RESPONDED'
 export const toEnumKey = value => String(value ?? '').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
 export const label = value => reportStatusLabels[value] || targetTypeLabels[value] || value || '—'
 export const isActiveReport = report => ['PENDING', 'OWNER_RESPONDED'].includes(report.status)
+export const hasPendingFairPlayPenalty = report => report?.pendingFairPlayDelta !== null && report?.pendingFairPlayDelta !== undefined
+export const formatPendingFairPlayDelta = delta => {
+  if (delta === null || delta === undefined || !Number.isFinite(Number(delta))) return ''
+  const num = Number(delta)
+  return `${num > 0 ? `+${num}` : num} điểm`
+}
 
 export const emptyFilters = { search: '', status: '', targetType: '', responded: '', from: '', to: '' }
 
