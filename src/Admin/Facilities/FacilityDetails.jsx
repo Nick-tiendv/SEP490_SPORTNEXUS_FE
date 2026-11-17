@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
-import { X, MapPin, Star, Clock3, Pencil, CalendarDays, ShieldCheck, Ban, BadgeCheck, Lock, LockOpen, Mail, CircleAlert } from 'lucide-react'
-import { getAdminFacility, getFacilityCourts } from '../../api/admin/facilityApi.js'
+import { X, MapPin, Star, Clock3, Pencil, CalendarDays, ShieldCheck, Ban, BadgeCheck, Lock, LockOpen, Mail, CircleAlert, BarChart3 } from 'lucide-react'
+import { getAdminFacility, getAdminFacilityCourtStatistics, getFacilityCourts } from '../../api/admin/facilityApi.js'
 import { sportLabels, statusLabels, courtStatusLabels, formatNumber, statusTone, fallbackPhoto, facilityActions } from './facilityData.js'
+
+const VN_TZ = 'Asia/Ho_Chi_Minh'
+const todayVN = () => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TZ }).format(new Date())
+const daysAgoVN = days => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TZ }).format(new Date(Date.now() - days * 86400000))
 
 export function FacilityStatus({ status }) {
   return <span className={`facilities-status ${statusTone(status)}`}><i />{statusLabels[status] || status}</span>
@@ -14,6 +18,8 @@ const actionIcons = { approve: BadgeCheck, reject: Ban, lock: Lock, unlock: Lock
 export default function FacilityDetails({ facility: base, onClose, onEdit, onAction, onBookings, onPhoto }) {
   const [state, setState] = useState({ id: '', detail: null, error: '' })
   const [allCourts, setAllCourts] = useState(false)
+  const [statsRange, setStatsRange] = useState(() => ({ from: daysAgoVN(29), to: todayVN() }))
+  const [courtStats, setCourtStats] = useState({ key: '', items: [], totalRevenue: 0, totalBookings: 0, error: '' })
   useEffect(() => {
     let cancelled = false
     Promise.allSettled([getAdminFacility(base.id), getFacilityCourts(base.id)]).then(([detailRes, courtsRes]) => {
@@ -32,6 +38,18 @@ export default function FacilityDetails({ facility: base, onClose, onEdit, onAct
     })
     return () => { cancelled = true }
   }, [base.id])
+
+  const invalidStatsRange = Boolean(statsRange.from && statsRange.to && statsRange.from > statsRange.to)
+  const statsRequestKey = invalidStatsRange ? '' : `${base.id}|${statsRange.from}|${statsRange.to}`
+  useEffect(() => {
+    if (!statsRequestKey) return undefined
+    let cancelled = false
+    getAdminFacilityCourtStatistics(base.id, { from: statsRange.from || undefined, to: statsRange.to || undefined })
+      .then(result => !cancelled && setCourtStats({ key: statsRequestKey, ...result, error: '' }))
+      .catch(error => !cancelled && setCourtStats({ key: statsRequestKey, items: [], totalRevenue: 0, totalBookings: 0, error: error.message }))
+    return () => { cancelled = true }
+  }, [base.id, statsRange.from, statsRange.to, statsRequestKey])
+  const statsLoading = Boolean(statsRequestKey) && courtStats.key !== statsRequestKey
   const loading = state.id !== base.id
   const facility = merge(base, state.id === base.id ? state.detail : null)
   const { courts } = facility
@@ -57,6 +75,59 @@ export default function FacilityDetails({ facility: base, onClose, onEdit, onAct
         const tone = statusTone(court.status)
         return <div key={court.id} className="facilities-court"><i className={tone} /><div><strong>{court.name}</strong><small>{[sportLabels[court.sport] || court.sport, court.price != null && `${court.price.toLocaleString('vi-VN')} Điểm/giờ`].filter(Boolean).join(' · ')}</small></div><span className={`facilities-court-status ${tone}`}>{courtStatusLabels[court.status] || court.status}</span></div>
       })}{!courts.length && !loading && <p className="facilities-detail-muted">Cơ sở chưa có sân nào.</p>}{courts.length > 4 && <button className="facilities-text-button" onClick={() => setAllCourts(!allCourts)}>{allCourts ? 'Thu gọn danh sách sân' : `Xem tất cả ${courts.length} sân`}</button>}</section>
+
+      <section className="facilities-court-stats" aria-label="Thống kê doanh thu từng sân con">
+        <h4>
+          <span className="facilities-court-stats__title"><BarChart3 size={13} /> Thống kê doanh thu sân con</span>
+          <small>{statsLoading ? 'Đang tải…' : `${courtStats.items.length} sân`}</small>
+        </h4>
+        <div className="facilities-court-stats__filters">
+          <label>Từ ngày<input type="date" value={statsRange.from} onChange={e => setStatsRange(r => ({ ...r, from: e.target.value }))} /></label>
+          <label>Đến ngày<input type="date" value={statsRange.to} onChange={e => setStatsRange(r => ({ ...r, to: e.target.value }))} /></label>
+        </div>
+        {invalidStatsRange && <p className="users-form-error" role="alert">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}
+        {!invalidStatsRange && courtStats.error && <p className="users-form-error" role="alert">Không tải được thống kê: {courtStats.error}</p>}
+        {!invalidStatsRange && !courtStats.error && (
+          statsLoading && !courtStats.items.length ? (
+            <p className="facilities-detail-muted">Đang tải thống kê doanh thu từng sân…</p>
+          ) : !courtStats.items.length ? (
+            <p className="facilities-detail-muted">Chưa có dữ liệu doanh thu trong khoảng thời gian này.</p>
+          ) : (
+            <div className="facilities-court-stats__table-wrap">
+              <table className="facilities-court-stats__table">
+                <thead>
+                  <tr>
+                    <th>Sân con</th>
+                    <th>Số đơn</th>
+                    <th>Doanh thu</th>
+                  </tr>
+                </thead>
+                <tbody style={statsLoading ? { opacity: 0.55 } : undefined}>
+                  {courtStats.items.map((item, idx) => (
+                    <tr key={item.courtId || `${item.courtName}-${idx}`}>
+                      <td>
+                        <strong>{item.courtName}</strong>
+                        {item.occupancyRate != null && (
+                          <small>Lấp đầy {Number(item.occupancyRate).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>
+                        )}
+                      </td>
+                      <td>{formatNumber(item.bookings)}</td>
+                      <td>{formatNumber(item.revenue)} Điểm</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th>Tổng</th>
+                    <th>{formatNumber(courtStats.totalBookings)}</th>
+                    <th>{formatNumber(courtStats.totalRevenue)} Điểm</th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        )}
+      </section>
     </div>
     <footer>{actions.map(([key, action]) => { const Icon = actionIcons[key]; return <button key={key} className={`users-button ${action.danger ? 'users-danger' : 'primary'}`} onClick={() => onAction(key)}><Icon size={12} />{action.label.replace(' cơ sở', '')}</button> })}<button className="users-button" onClick={() => onEdit(facility)}><Pencil size={12} />Chỉnh sửa</button><button className="users-button" onClick={onBookings}><CalendarDays size={12} />Đơn đặt sân</button></footer>
   </aside>

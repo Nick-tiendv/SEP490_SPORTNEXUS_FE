@@ -9,12 +9,14 @@ import {
   DEPOSIT_MIN,
   DEPOSIT_STATUS,
   TRANSACTION_TYPES,
+  VOUCHER_STATUS,
   cancelDeposit,
   clearPendingDeposit,
   createDeposit,
   getDepositByOrderCode,
   getWallet,
   getWalletTransactions,
+  getWalletVouchers,
   normalizeDepositStatus,
   readPendingDeposit,
   savePendingDeposit,
@@ -117,6 +119,80 @@ export default function WalletEscrow() {
   const [wallet, setWallet] = useState(null)
   const [walletLoading, setWalletLoading] = useState(true)
   const [walletError, setWalletError] = useState('')
+
+  /* ------------------------------ Menu Ví & Mã giảm giá ------------------------------ */
+  const routeWantsVouchers =
+    location.pathname === '/wallet/vouchers' ||
+    new URLSearchParams(location.search).get('tab') === 'vouchers'
+  const walletSection = routeWantsVouchers ? 'vouchers' : 'wallet'
+
+  const switchWalletSection = (section) => {
+    if (section === 'vouchers' && location.pathname !== '/wallet/vouchers') {
+      navigate('/wallet/vouchers')
+    } else if (section === 'wallet' && location.pathname !== '/wallet') {
+      navigate('/wallet')
+    }
+  }
+
+  /* ------------------------------ Voucher / Mã giảm giá ------------------------------ */
+  const [vouchersReloadKey, setVouchersReloadKey] = useState(0)
+  const [vouchersState, setVouchersState] = useState({ loadedKey: -1, items: [], error: '' })
+  const [voucherFilter, setVoucherFilter] = useState('ALL')
+
+  const vouchers = vouchersState.items
+  const vouchersLoading =
+    isAuthenticated && !isMockSession && vouchersState.loadedKey !== vouchersReloadKey
+  const vouchersError = vouchersLoading ? '' : vouchersState.error
+
+  const reloadVouchers = useCallback(() => {
+    if (!isAuthenticated || isMockSession) return
+    setVouchersReloadKey((k) => k + 1)
+  }, [isAuthenticated, isMockSession])
+
+  useEffect(() => {
+    if (!isAuthenticated || isMockSession) return undefined
+    let active = true
+    getWalletVouchers()
+      .then((list) => {
+        if (!active) return
+        setVouchersState({
+          loadedKey: vouchersReloadKey,
+          items: Array.isArray(list) ? list : [],
+          error: '',
+        })
+      })
+      .catch((err) => {
+        if (!active) return
+        setVouchersState((prev) => ({
+          loadedKey: vouchersReloadKey,
+          items: prev.items,
+          error: err?.message || 'Không thể tải danh sách mã giảm giá.',
+        }))
+      })
+    return () => {
+      active = false
+    }
+  }, [isAuthenticated, isMockSession, vouchersReloadKey])
+
+  const availableVoucherCount = useMemo(
+    () => vouchers.filter((v) => v.status === VOUCHER_STATUS.AVAILABLE).length,
+    [vouchers],
+  )
+
+  const filteredVouchers = useMemo(() => {
+    if (voucherFilter === 'ALL') return vouchers
+    return vouchers.filter((v) => v.status === voucherFilter)
+  }, [vouchers, voucherFilter])
+
+  const copyVoucherCode = async (code) => {
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(code)
+      toast.success(`Đã sao chép mã ${code}`)
+    } catch {
+      toast.info(`Mã giảm giá: ${code}`)
+    }
+  }
 
   const fetchWallet = useCallback(
     () =>
@@ -548,13 +624,57 @@ export default function WalletEscrow() {
             onClick={() => {
               loadWallet()
               reloadTransactions()
+              reloadVouchers()
             }}
             className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-sm font-bold text-[#374151] transition"
           >
-            <span className={`material-symbols-outlined text-[18px] ${walletLoading ? 'animate-spin' : ''}`}>refresh</span>
+            <span className={`material-symbols-outlined text-[18px] ${walletLoading || vouchersLoading ? 'animate-spin' : ''}`}>refresh</span>
             Làm mới
           </button>
         </header>
+
+        {/* ---------- Menu phần Ví ---------- */}
+        <nav className="mb-6 flex flex-wrap items-center gap-2 bg-white/90 p-1.5 rounded-2xl border border-[#E2E8F0] shadow-xs w-fit" role="tablist" aria-label="Menu phần Ví">
+          <button
+            id="wallet-tab-overview"
+            type="button"
+            role="tab"
+            aria-selected={walletSection === 'wallet'}
+            onClick={() => switchWalletSection('wallet')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              walletSection === 'wallet'
+                ? 'bg-[#15803D] text-white shadow-sm'
+                : 'text-[#475569] hover:text-[#111827] hover:bg-[#F8FAFC]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+            <span>Ví &amp; Nạp tiền</span>
+          </button>
+          <button
+            id="wallet-tab-vouchers"
+            type="button"
+            role="tab"
+            aria-selected={walletSection === 'vouchers'}
+            onClick={() => switchWalletSection('vouchers')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center gap-2 cursor-pointer ${
+              walletSection === 'vouchers'
+                ? 'bg-[#15803D] text-white shadow-sm'
+                : 'text-[#475569] hover:text-[#111827] hover:bg-[#F8FAFC]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">confirmation_number</span>
+            <span>Mã giảm giá</span>
+            {availableVoucherCount > 0 && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
+                  walletSection === 'vouchers' ? 'bg-white text-[#15803D]' : 'bg-[#DCFCE7] text-[#15803D]'
+                }`}
+              >
+                {availableVoucherCount}
+              </span>
+            )}
+          </button>
+        </nav>
 
         {/* ---------- Banner cảnh báo DEV Mock Session ---------- */}
         {isMockSession && (
@@ -689,6 +809,188 @@ export default function WalletEscrow() {
           )}
         </section>
 
+        {walletSection === 'vouchers' ? (
+          /* ---------- Danh sách thẻ Voucher: GET /api/v1/wallet/vouchers ---------- */
+          <section aria-label="Mã giảm giá của tôi" className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+            <div className="p-6 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#F1F5F9] bg-[#FAFAFA]">
+              <div>
+                <h2 className="text-lg font-extrabold text-[#111827] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#15803D] text-[22px]">confirmation_number</span>
+                  <span>Kho Mã giảm giá (Voucher)</span>
+                </h2>
+                <p className="text-xs text-[#64748B] mt-1">
+                  Voucher bồi thường 10% do chủ sân hủy đơn bị phạt và các ưu đãi dành riêng cho tài khoản của bạn.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { key: 'ALL', label: `Tất cả (${vouchers.length})` },
+                  { key: VOUCHER_STATUS.AVAILABLE, label: `Còn hiệu lực (${availableVoucherCount})` },
+                  { key: VOUCHER_STATUS.USED, label: 'Đã sử dụng' },
+                  { key: VOUCHER_STATUS.EXPIRED, label: 'Hết hạn' },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setVoucherFilter(opt.key)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      voucherFilter === opt.key
+                        ? 'bg-[#15803D] text-white shadow-xs'
+                        : 'bg-white border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6">
+              {vouchersLoading && vouchers.length === 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="h-36 rounded-2xl border border-gray-100 bg-gray-50 animate-pulse" />
+                  ))}
+                </div>
+              ) : vouchersError ? (
+                <div className="py-10 text-center" role="alert">
+                  <span className="material-symbols-outlined text-[36px] text-rose-400">error</span>
+                  <p className="mt-2 text-sm text-rose-700 font-semibold">{vouchersError}</p>
+                  <button
+                    type="button"
+                    onClick={reloadVouchers}
+                    className="mt-3 px-4 py-2 rounded-xl bg-[#15803D] text-white text-xs font-bold cursor-pointer"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              ) : filteredVouchers.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-[#15803D] flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-outlined text-[30px]">confirmation_number</span>
+                  </div>
+                  <p className="text-sm font-bold text-[#111827]">
+                    {vouchers.length === 0 ? 'Bạn chưa có mã giảm giá nào' : 'Không có mã giảm giá ở trạng thái này'}
+                  </p>
+                  <p className="text-xs text-[#64748B] mt-1 max-w-md mx-auto">
+                    Khi chủ sân hủy đơn đặt sân của bạn và bị phạt, hệ thống sẽ tự động gửi tặng Voucher giảm 10% vào mục này.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredVouchers.map((v) => {
+                    const isAvailable = v.status === VOUCHER_STATUS.AVAILABLE
+                    const isUsed = v.status === VOUCHER_STATUS.USED
+                    const statusBadge = isAvailable
+                      ? { label: 'Còn hiệu lực', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                      : isUsed
+                      ? { label: 'Đã sử dụng', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
+                      : { label: 'Hết hạn', cls: 'bg-rose-50 text-rose-700 border-rose-200' }
+                    const discountHeadline =
+                      v.discountPercent != null
+                        ? `-${v.discountPercent}%`
+                        : v.discountAmount != null
+                        ? `-${formatVND(v.discountAmount)}`
+                        : 'VOUCHER'
+
+                    return (
+                      <article
+                        key={v.id}
+                        className={`rounded-2xl border overflow-hidden flex transition-all ${
+                          isAvailable
+                            ? 'bg-white border-[#BBF7D0] shadow-sm hover:shadow-md'
+                            : 'bg-[#F8FAFC] border-[#E2E8F0] opacity-75'
+                        }`}
+                      >
+                        {/* Cuống vé trái */}
+                        <div
+                          className={`w-28 sm:w-32 shrink-0 p-4 flex flex-col items-center justify-center text-center border-r-2 border-dashed relative ${
+                            isAvailable
+                              ? 'bg-gradient-to-br from-[#14532D] via-[#15803D] to-[#0D9488] text-white border-emerald-200'
+                              : 'bg-slate-200 text-slate-600 border-slate-300'
+                          }`}
+                        >
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85">Giảm giá</span>
+                          <strong className="text-2xl sm:text-[26px] font-black leading-tight mt-1">{discountHeadline}</strong>
+                          {v.discountPercent != null && v.maxDiscountAmount != null && (
+                            <span className="text-[10px] mt-1 opacity-90 font-semibold">
+                              Tối đa {formatVND(v.maxDiscountAmount)}đ
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Thông tin thẻ voucher */}
+                        <div className="flex-1 min-w-0 p-4 flex flex-col justify-between gap-2.5">
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-sm font-extrabold text-[#111827] leading-snug">{v.title}</h3>
+                              <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${statusBadge.cls}`}>
+                                {statusBadge.label}
+                              </span>
+                            </div>
+
+                            {v.description && (
+                              <p className="text-xs text-[#475569] mt-1 leading-relaxed">{v.description}</p>
+                            )}
+
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#64748B]">
+                              {v.facilityName && (
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[13px] text-[#15803D]">stadium</span>
+                                  {v.facilityName}
+                                </span>
+                              )}
+                              {v.bookingCode && (
+                                <span className="inline-flex items-center gap-1 font-mono">
+                                  Đơn #{v.bookingCode}
+                                </span>
+                              )}
+                              {v.expiresAt && (
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                  HSD: {formatDateTime(v.expiresAt)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                            {v.code ? (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F1F5F9] border border-[#E2E8F0]">
+                                <span className="font-mono text-xs font-extrabold text-[#0F172A]">{v.code}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyVoucherCode(v.code)}
+                                  className="text-[11px] font-bold text-[#15803D] hover:underline cursor-pointer"
+                                  title="Sao chép mã giảm giá"
+                                >
+                                  Sao chép
+                                </button>
+                              </div>
+                            ) : (
+                              <span />
+                            )}
+
+                            {isAvailable && (
+                              <button
+                                type="button"
+                                onClick={() => navigate('/court-finder')}
+                                className="px-3 py-1.5 rounded-xl bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold transition cursor-pointer"
+                              >
+                                Đặt sân ngay
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <>
         {/* ---------- Form nạp tiền ---------- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-7 space-y-6">
@@ -1275,6 +1577,8 @@ export default function WalletEscrow() {
             </div>
           )}
         </section>
+          </>
+        )}
       </div>
 
       {/* ==================== MODAL VIETQR (qrCode từ BE) ==================== */}

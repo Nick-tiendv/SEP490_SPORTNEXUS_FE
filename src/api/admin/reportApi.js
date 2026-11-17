@@ -18,6 +18,11 @@ const clean = params => Object.fromEntries(Object.entries(params || {}).filter((
 export function toReport(raw) {
   const uuid = String(pick(raw, 'id', 'reportId') ?? '')
   const ownerResponse = pick(raw, 'ownerResponse', 'ownerResponseNote', 'ownerReply', 'ownerNote', 'ownerResponse.note')
+  const rawPendingDelta = pick(raw, 'pendingFairPlayDelta', 'fairPlayPendingDelta', 'pendingDelta')
+  const pendingFairPlayDelta =
+    rawPendingDelta !== undefined && rawPendingDelta !== null && rawPendingDelta !== '' && Number.isFinite(Number(rawPendingDelta))
+      ? Number(rawPendingDelta)
+      : null
   return {
     uuid,
     id: String(pick(raw, 'reportCode', 'code') ?? (uuid.length > 12 ? uuid.slice(0, 8).toUpperCase() : uuid)),
@@ -32,6 +37,7 @@ export function toReport(raw) {
     description: pick(raw, 'description', 'content', 'detail') || '',
     evidence: asArray(pick(raw, 'evidenceImageUrls', 'evidenceUrls', 'images')).filter(url => typeof url === 'string'),
     requestedRefund: pick(raw, 'requestedRefundPercentage'),
+    pendingFairPlayDelta,
     hasOwnerResponded: Boolean(pick(raw, 'hasOwnerResponded') ?? ownerResponse),
     ownerResponse: ownerResponse || '',
     status: String(pick(raw, 'status', 'reportStatus') ?? 'PENDING').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),

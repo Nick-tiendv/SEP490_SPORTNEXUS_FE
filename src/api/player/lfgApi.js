@@ -12,6 +12,69 @@ function toSkillTag(value) {
 }
 
 /**
+ * Kiểm tra người dùng hiện tại có phải Đội trưởng của đội hay không.
+ */
+export function isCaptainOfTeam(team, userId) {
+  if (!team || !userId || !team.captainId) return false
+  return String(team.captainId).trim().toLowerCase() === String(userId).trim().toLowerCase()
+}
+
+/**
+ * Chuẩn hóa thông tin Kèo Đội (Team vs Team) từ dữ liệu thẻ LFG trả về bởi BE.
+ */
+export function extractLfgTeamInfo(card = {}) {
+  const participants = Array.isArray(card.participants) ? card.participants : []
+  const hostTeamId = card.hostTeamId ?? card.hostTeam?.id ?? card.teamAId ?? null
+  const hostTeamName = String(
+    card.hostTeamName || card.hostTeam?.name || card.teamAName || card.teamA?.name || ''
+  ).trim()
+  const hostTeamLogoUrl = card.hostTeamLogoUrl || card.hostTeam?.logoUrl || null
+
+  const participantOpponent = participants.find((p) => {
+    const tId = p?.teamId ?? p?.team?.id
+    const tName = p?.teamName || p?.team?.name
+    if (!tName && !tId) return false
+    return !hostTeamId || String(tId || '') !== String(hostTeamId)
+  })
+
+  const challengerTeamId =
+    card.challengerTeamId ??
+    card.challengerTeam?.id ??
+    card.opponentTeamId ??
+    card.teamBId ??
+    participantOpponent?.teamId ??
+    participantOpponent?.team?.id ??
+    null
+  const challengerTeamName = String(
+    card.challengerTeamName ||
+      card.challengerTeam?.name ||
+      card.opponentTeamName ||
+      card.guestTeamName ||
+      card.teamBName ||
+      card.teamB?.name ||
+      participantOpponent?.teamName ||
+      participantOpponent?.team?.name ||
+      ''
+  ).trim()
+  const challengerTeamLogoUrl =
+    card.challengerTeamLogoUrl ||
+    card.challengerTeam?.logoUrl ||
+    participantOpponent?.teamLogoUrl ||
+    null
+
+  const isTeamMatch = Boolean(hostTeamId || hostTeamName || challengerTeamId || challengerTeamName)
+  return {
+    isTeamMatch,
+    hostTeamId: hostTeamId ? String(hostTeamId) : null,
+    hostTeamName,
+    hostTeamLogoUrl,
+    challengerTeamId: challengerTeamId ? String(challengerTeamId) : null,
+    challengerTeamName,
+    challengerTeamLogoUrl,
+  }
+}
+
+/**
  * Kèo phù hợp với bạn: GET /api/v1/lfgs/recommended → [{ card, score (0–100), reasons[] }]
  */
 export async function getRecommendedLfgs() {
@@ -129,6 +192,7 @@ export async function createLfg(payload) {
       sideSize: payload.sideSize ? Number(payload.sideSize) : null,
       friendIds: Array.isArray(payload.friendIds) ? payload.friendIds : null,
       friendPayMode: payload.friendPayMode || null,
+      hostTeamId: payload.hostTeamId ? String(payload.hostTeamId).trim() : null,
     }
     const response = await apiClient.post(LFGS_ENDPOINT, bodyPayload)
     const body = response.data
@@ -203,6 +267,7 @@ export async function claimLfgSlot(cardId, payload = {}) {
       friendIds: payload.friendIds || [],
       friendPayMode: payMode === 'me' || payMode === 'payer' ? 'PAYER' : 'SELF',
       side: side === 'A' || side === 'B' ? side : undefined,
+      challengerTeamId: payload.challengerTeamId ? String(payload.challengerTeamId).trim() : null,
     }
     const response = await apiClient.post(`${LFGS_ENDPOINT}/${cardId}/claim`, bodyPayload)
     const body = response.data

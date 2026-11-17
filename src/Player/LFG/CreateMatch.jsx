@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { createLfg, updateLfg, getLfgById } from '../../api/player/lfgApi.js'
+import { createLfg, updateLfg, getLfgById, isCaptainOfTeam } from '../../api/player/lfgApi.js'
+import { getMyTeams } from '../../api/player/teamApi.js'
 import { getWallet } from '../../api/player/walletApi.js'
 import { searchFacilities } from '../../api/player/facilityApi.js'
 import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
@@ -358,6 +359,29 @@ function CreateMatch() {
   const [description, setDescription] = useState('')
   const [courtFee, setCourtFee] = useState(() => Number(location.state?.total || location.state?.price) || 0) // 100% tiền sân của ca đã chọn
   const [createError, setCreateError] = useState(null)
+  const [myTeams, setMyTeams] = useState([])
+  const [hostTeamId, setHostTeamId] = useState('')
+
+  useEffect(() => {
+    let active = true
+    getMyTeams()
+      .then((list) => {
+        if (active && Array.isArray(list)) setMyTeams(list)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const captainTeams = useMemo(
+    () => myTeams.filter((team) => isCaptainOfTeam(team, currentUser?.id)),
+    [myTeams, currentUser?.id],
+  )
+  const selectedHostTeam = useMemo(
+    () => captainTeams.find((team) => team.id === hostTeamId) || null,
+    [captainTeams, hostTeamId],
+  )
 
   // Danh sách cơ sở thể thao & ca sân khả dụng
   // Chỉ dùng cơ sở thật từ API; không có facilityId/courtId truyền sang thì để người dùng tự chọn
@@ -738,6 +762,7 @@ function CreateMatch() {
         description: description.trim() || undefined,
         requireApproval: Boolean(requireApproval),
         sideSize: sideSize || undefined,
+        hostTeamId: selectedHostTeam?.id || null,
       })
     } catch (apiErr) {
       console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
@@ -1512,6 +1537,42 @@ function CreateMatch() {
                   {isEditMode && <p className="text-[10.5px] text-gray-500 mt-1">Không đổi được thể thức sau khi đã tạo kèo.</p>}
                 </div>
 
+                {/* Team vs Team: Chỉ hiển thị khi User là Đội trưởng của ít nhất 1 đội */}
+                {!isEditMode && captainTeams.length > 0 && (
+                  <div className="mb-4 p-4 rounded-2xl bg-[#F0FDF4] border border-[#86EFAC]">
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                      <label htmlFor="create-match-host-team" className="text-xs font-extrabold text-[#14532D] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[17px] text-[#15803D]">groups</span>
+                        <span>Chọn Đội Đại Diện (Kèo Đội — Team vs Team)</span>
+                      </label>
+                      <span className="px-2 py-0.5 rounded-full bg-white text-[#15803D] border border-[#86EFAC] text-[10.5px] font-bold">
+                        Bạn là Đội trưởng ({captainTeams.length} đội)
+                      </span>
+                    </div>
+                    <select
+                      id="create-match-host-team"
+                      value={hostTeamId}
+                      onChange={(e) => setHostTeamId(e.target.value)}
+                      className="w-full h-11 px-3.5 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
+                    >
+                      <option value="">Cá nhân (Không đại diện đội)</option>
+                      {captainTeams.map((team) => (
+                        <option key={team.id} value={team.id} disabled={team.isLocked}>
+                          {team.name}
+                          {team.sportName ? ` — ${team.sportName}` : ''}
+                          {team.totalMembers ? ` (${team.totalMembers} thành viên)` : ''}
+                          {team.isLocked ? ' [Đang khóa]' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-[#166534] mt-1.5 leading-relaxed">
+                      {selectedHostTeam
+                        ? `Kèo sẽ hiển thị tên đội "${selectedHostTeam.name}" để thách đấu với đội khác ngoài bảng tin.`
+                        : 'Chọn một đội bạn làm Đội trưởng nếu muốn tạo kèo giao đấu Team vs Team.'}
+                    </p>
+                  </div>
+                )}
+
                 {/* Yêu cầu Trình độ Người chơi */}
                 <div className="mb-4">
                   <p className="text-xs font-bold text-gray-700 mb-2">Yêu cầu Trình độ:</p>
@@ -1965,6 +2026,7 @@ function CreateMatch() {
           ['Ngày', dateLabel],
           ['Giờ chơi', preferredTimeRange || '—'],
           ['Số ca', `${slotCount} ca`],
+          ...(selectedHostTeam ? [['Đội đại diện', selectedHostTeam.name]] : []),
         ]
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closePaymentConfirm}>
@@ -1982,6 +2044,29 @@ function CreateMatch() {
               <p className="text-xs text-gray-500 mb-4">
                 Khi xác nhận, hệ thống đặt ca sân và trừ 100% tiền sân từ ví của bạn. Người tham gia sẽ trả lại phần của họ khi nhận suất.
               </p>
+
+              {!isEditMode && captainTeams.length > 0 && (
+                <div className="mb-3 p-3 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0]">
+                  <label htmlFor="modal-host-team-select" className="block text-[11px] font-extrabold uppercase tracking-wider text-[#14532D] mb-1.5">
+                    Chọn Đội Đại Diện (Team vs Team)
+                  </label>
+                  <select
+                    id="modal-host-team-select"
+                    value={hostTeamId}
+                    onChange={(e) => setHostTeamId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
+                  >
+                    <option value="">Cá nhân (Không đại diện đội)</option>
+                    {captainTeams.map((team) => (
+                      <option key={team.id} value={team.id} disabled={team.isLocked}>
+                        {team.name}
+                        {team.sportName ? ` — ${team.sportName}` : ''}
+                        {team.isLocked ? ' [Đang khóa]' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <dl className="text-[13px] divide-y divide-gray-100 border border-gray-100 rounded-xl px-3.5 mb-3">
                 {rows.map(([k, v]) => (

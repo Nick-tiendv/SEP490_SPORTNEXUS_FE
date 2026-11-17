@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getLfgById, lfgSkillLabel } from '../../api/player/lfgApi.js'
+import { extractLfgTeamInfo, getLfgById, lfgSkillLabel } from '../../api/player/lfgApi.js'
 import { vnClock } from '../../utils/vnTime.js'
 
 // Chi tiết một kèo LFG (GET /api/v1/lfgs/{cardId}): thông tin sân, giờ, giá, trạng thái và người tham gia.
@@ -55,6 +55,7 @@ export default function LfgDetailModal({ cardId, onClose }) {
   const status = CARD_STATUS[String(card?.status || '').toUpperCase()]
   const participants = Array.isArray(card?.participants) ? card.participants : []
   const sideSize = Number(card?.sideSize) || 0
+  const teamInfo = extractLfgTeamInfo(card || {})
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -95,7 +96,13 @@ export default function LfgDetailModal({ cardId, onClose }) {
               <Row label="Sân">{[card.courtName, card.facilityName].filter(Boolean).join(' • ') || '—'}</Row>
               <Row label="Địa chỉ">{card.facilityAddress || '—'}</Row>
               <Row label="Giờ chơi">{card.startTime ? `${vnClock(card.startTime)} - ${vnClock(card.endTime)}, ${dateVN(card.startTime)}` : '—'}</Row>
-              <Row label="Chủ kèo">{card.hostName || '—'}{card.hostFairPlayScore != null ? ` (Fair Play ${card.hostFairPlayScore})` : ''}</Row>
+              {teamInfo.isTeamMatch ? (
+                <Row label="Kèo đội">
+                  {teamInfo.hostTeamName || 'Đội chủ kèo'} vs {teamInfo.challengerTeamName || 'Đang chờ đội đối thủ'}
+                </Row>
+              ) : (
+                <Row label="Chủ kèo">{card.hostName || '—'}{card.hostFairPlayScore != null ? ` (Fair Play ${card.hostFairPlayScore})` : ''}</Row>
+              )}
               <Row label="Trình độ">{lfgSkillLabel(card.skillLevelTag) || 'Mọi trình độ'}</Row>
               <Row label="Thể thức">{sideSize > 0 ? `${sideSize} vs ${sideSize}` : 'Giao lưu'}</Row>
               <Row label="Số người">{card.totalSlots != null ? `Cần ${card.totalSlots} • còn ${card.remainingSlots ?? '—'} suất` : '—'}</Row>

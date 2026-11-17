@@ -123,6 +123,7 @@ function App() {
             <Route path="/dashboard" element={<Page><Dashboard /></Page>} />
             <Route path="/profile" element={<Page><Profile /></Page>} />
             <Route path="/wallet" element={<Page><WalletEscrow /></Page>} />
+            <Route path="/wallet/vouchers" element={<Page><WalletEscrow /></Page>} />
             {/* PayOS returnUrl / cancelUrl (BE cấu hình PayOS__ReturnUrl / PayOS__CancelUrl) */}
             <Route path="/wallet/deposit-success" element={<Page><DepositSuccess /></Page>} />
             <Route path="/wallet/deposit-cancel" element={<Page><DepositCancel /></Page>} />

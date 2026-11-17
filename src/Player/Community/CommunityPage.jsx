@@ -9,6 +9,7 @@ import { useApi } from '../../hooks/useApi.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getSportCategories, readLocalAvatar } from '../../api/player/profileApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
+import { extractLfgTeamInfo } from '../../api/player/lfgApi.js'
 import {
   normalizeSportKey,
   recordNewPlayerDesire,
@@ -890,19 +891,26 @@ function PostCard({
         </div>
       )}
 
-      {lfg && (
-        <Link to="/community" className="snx-feed-share">
-          <span className="material-symbols-outlined">group</span>
-          <div>
-            <strong>Kèo LFG · {lfg.sportName}</strong>
-            <div className="snx-muted">
-              {lfg.facilityName} ·{' '}
-              {lfg.startTime ? new Date(lfg.startTime).toLocaleString('vi-VN') : ''} · còn{' '}
-              {lfg.remainingSlots}/{lfg.totalSlots} suất · {money(lfg.pricePerPerson)}/người
+      {lfg && (() => {
+        const lfgTeam = extractLfgTeamInfo(lfg)
+        return (
+          <Link to="/community" className="snx-feed-share">
+            <span className="material-symbols-outlined">group</span>
+            <div>
+              <strong>
+                {lfgTeam.isTeamMatch
+                  ? `${lfgTeam.hostTeamName || 'Đội chủ kèo'} vs ${lfgTeam.challengerTeamName || 'Đang tìm đối thủ'} · ${lfg.sportName}`
+                  : `Kèo LFG · ${lfg.sportName}`}
+              </strong>
+              <div className="snx-muted">
+                {lfg.facilityName} ·{' '}
+                {lfg.startTime ? new Date(lfg.startTime).toLocaleString('vi-VN') : ''} · còn{' '}
+                {lfg.remainingSlots}/{lfg.totalSlots} suất · {money(lfg.pricePerPerson)}/người
+              </div>
             </div>
-          </div>
-        </Link>
-      )}
+          </Link>
+        )
+      })()}
       {tour && (
         <Link to="/tournament" className="snx-feed-share">
           <span className="material-symbols-outlined">emoji_events</span>

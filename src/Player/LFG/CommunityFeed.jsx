@@ -21,7 +21,10 @@ import {
   declineLfgInvitation,
   removeLfgGroupMember,
   lfgSkillLabel,
+  extractLfgTeamInfo,
+  isCaptainOfTeam,
 } from '../../api/player/lfgApi.js'
+import { getMyTeams } from '../../api/player/teamApi.js'
 import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
@@ -202,6 +205,11 @@ const toFeedMatch = (card) => {
       ? Number(rawDistanceKm)
       : null
 
+  const teamInfo = extractLfgTeamInfo(card)
+  const teamMatchupLabel = teamInfo.isTeamMatch
+    ? `${teamInfo.hostTeamName || 'Đội chủ kèo'} vs ${teamInfo.challengerTeamName || 'Đang chờ đội đối thủ'}`
+    : ''
+
   return {
     id: card.id || card.cardId,
     facilityId: card.facilityId || card.venueId || null,
@@ -221,20 +229,33 @@ const toFeedMatch = (card) => {
     format: card.format || (Number(card.sideSize) > 0 ? `${card.sideSize} vs ${card.sideSize}` : ''),
     sideSize: Number(card.sideSize) > 0 ? Number(card.sideSize) : null,
     status: card.status || 'OPEN',
-    subBadge: [card.format || (card.sideSize === undefined ? null : Number(card.sideSize) > 0 ? `${card.sideSize} vs ${card.sideSize}` : 'Giao lưu'), card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay'].filter(Boolean).join(' • '),
+    subBadge: [
+      teamInfo.isTeamMatch
+        ? 'Team vs Team'
+        : card.format || (card.sideSize === undefined ? null : Number(card.sideSize) > 0 ? `${card.sideSize} vs ${card.sideSize}` : 'Giao lưu'),
+      card.requireApproval ? 'Cần chủ kèo duyệt' : 'Tham gia ngay',
+    ]
+      .filter(Boolean)
+      .join(' • '),
     levelTag: lfgSkillLabel(card.skillLevelTag || card.skillLevel) || 'Mọi trình độ',
     skillTag: String(card.skillLevelTag || '').toUpperCase(),
     slotTag: `Cần ${remainingSlots} người`,
     remainingSlots,
     time: start ? start.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '—',
     timeSlot: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening',
-    title: card.title || card.description || `Kèo ${sportName || 'ghép trận'}`,
+    title: card.title || card.description || (teamInfo.isTeamMatch ? teamMatchupLabel : `Kèo ${sportName || 'ghép trận'}`),
     description: card.description || '',
     hostId: card.hostId || null,
     hostName: resolvedHostName,
     hostFairPlayScore: resolvedHostFp,
+    ...teamInfo,
+    teamMatchupLabel,
     location: [card.courtName, card.facilityName, card.facilityAddress].filter(Boolean).join(', ') || '—',
-    groupDesc: resolvedHostName ? `Chủ kèo: ${resolvedHostName}${resolvedHostFp != null ? ` (Fair Play ${resolvedHostFp})` : ''}` : (card.description || ''),
+    groupDesc: teamInfo.isTeamMatch
+      ? `Kèo đội: ${teamMatchupLabel}`
+      : resolvedHostName
+      ? `Chủ kèo: ${resolvedHostName}${resolvedHostFp != null ? ` (Fair Play ${resolvedHostFp})` : ''}`
+      : card.description || '',
     requireApproval: Boolean(card.requireApproval),
     participants: participantsList,
     roster,
@@ -269,6 +290,9 @@ function CommunityFeed() {
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimError, setClaimError] = useState(null)
   const [selectedClaimSide, setSelectedClaimSide] = useState('any')
+  const [myTeams, setMyTeams] = useState([])
+  const [claimMode, setClaimMode] = useState('solo') // 'solo' | 'team'
+  const [selectedClaimTeamId, setSelectedClaimTeamId] = useState('')
   const [qrTicketModal, setQrTicketModal] = useState(null)
   const [detailCardId, setDetailCardId] = useState(null) // kèo đang xem chi tiết (LfgDetailModal)
   const [cancelMatchModal, setCancelMatchModal] = useState(null)
@@ -669,9 +693,34 @@ function CommunityFeed() {
         setFacilitiesList(transformed)
       })
       .catch((err) => console.warn('[CommunityFeed] Không tải được danh sách sân:', err))
+    getMyTeams()
+      .then((teams) => {
+        if (Array.isArray(teams)) setMyTeams(teams)
+      })
+      .catch(() => {})
     // Chỉ chạy một lần khi mở trang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const captainTeams = myTeams.filter((team) => isCaptainOfTeam(team, currentUser?.id))
+  const eligibleTeamsForMatch = (match) =>
+    captainTeams.filter((team) => !team.isLocked && (!match?.hostTeamId || team.id !== match.hostTeamId))
+
+  const openClaimModal = (match, preferredMode = null) => {
+    if (!match) return
+    const eligible = eligibleTeamsForMatch(match)
+    const shouldUseTeam =
+      preferredMode === 'team'
+        ? eligible.length > 0
+        : preferredMode === 'solo'
+        ? false
+        : Boolean(match.isTeamMatch && eligible.length > 0)
+    setClaimError(null)
+    setSelectedClaimSide('any')
+    setClaimMode(shouldUseTeam ? 'team' : 'solo')
+    setSelectedClaimTeamId(eligible[0]?.id || '')
+    setBookingModal(match)
+  }
 
   // Confirm Slot Claim Handler - 2.6 Người tham gia Bước 2
   const handleConfirmClaim = async () => {
@@ -679,6 +728,12 @@ function CommunityFeed() {
 
     setIsClaiming(true)
     setClaimError(null)
+
+    if (claimMode === 'team' && !selectedClaimTeamId) {
+      toast.error('Vui lòng chọn đội đại diện để nhận kèo bằng đội!')
+      setIsClaiming(false)
+      return
+    }
 
     if (walletBalance < (bookingModal.price || 0)) {
       toast.error('Số dư ví hiện tại không đủ để giữ slot. Vui lòng nạp thêm tiền!')
@@ -692,6 +747,7 @@ function CommunityFeed() {
         side: bookingModal.sideSize > 0 ? selectedClaimSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
+        challengerTeamId: claimMode === 'team' ? selectedClaimTeamId : null,
       })
 
       // Image 2: Kèo không cần duyệt: trừ tiền ngay, vào kèo luôn. Kèo cần duyệt: chỉ gửi yêu cầu, tiền bị giữ khi chủ kèo duyệt.
@@ -1503,6 +1559,11 @@ function CommunityFeed() {
                           >
                             {match.slotTag}
                           </span>
+                          {match.isTeamMatch && (
+                            <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200 whitespace-nowrap shrink-0">
+                              Team vs Team
+                            </span>
+                          )}
                           {isNearMe(match) && (
                             <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0">
                               <span className="material-symbols-outlined text-[13px] text-[#16A34A]">near_me</span>
@@ -1531,6 +1592,27 @@ function CommunityFeed() {
                       >
                         {match.title}
                       </h2>
+
+                      {/* Team vs Team Matchup Strip (hiển thị 2 tên đội thay vì cá nhân) */}
+                      {match.isTeamMatch && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-gradient-to-r from-[#F0FDF4] via-white to-[#EFF6FF] border border-[#BBF7D0] flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <span className="material-symbols-outlined text-[16px] text-[#15803D] shrink-0">shield</span>
+                            <span className="font-extrabold text-xs text-[#14532D] truncate">
+                              {match.hostTeamName || 'Đội chủ kèo'}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md bg-[#111827] text-white text-[10px] font-black tracking-wider shrink-0">
+                            VS
+                          </span>
+                          <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 text-right">
+                            <span className={`font-extrabold text-xs truncate ${match.challengerTeamName ? 'text-[#1E40AF]' : 'text-amber-700 italic'}`}>
+                              {match.challengerTeamName || 'Đang tìm đội đối thủ'}
+                            </span>
+                            <span className="material-symbols-outlined text-[16px] text-[#1E40AF] shrink-0">swords</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Location & Group Info */}
                       <div className="flex flex-col gap-1 mt-2.5 text-xs text-gray-600">
@@ -1597,17 +1679,30 @@ function CommunityFeed() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => setBookingModal(match)}
-                        className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0 ${
-                          match.isFlashClaim
-                            ? 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
-                            : 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[17px]">bolt</span>
-                        <span>{match.buttonText}</span>
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {eligibleTeamsForMatch(match).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openClaimModal(match, 'team')}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">groups</span>
+                            <span>Nhận kèo bằng Đội</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openClaimModal(match)}
+                          className={`flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0 cursor-pointer ${
+                            match.isFlashClaim
+                              ? 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
+                              : 'bg-[#3B6817] hover:bg-[#315613] shadow-[0_4px_14px_rgba(59,104,23,0.35)]'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[17px]">bolt</span>
+                          <span>{match.buttonText}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1701,6 +1796,7 @@ function CommunityFeed() {
                     // Kèo còn thao tác được: chưa hủy và chưa tới giờ chơi
                     const cardActive = card.status !== 'CANCELLED' && !card.isStarted
                     const acceptedCount = card.acceptedCount ?? (card.participants || []).filter((p) => p.status === 'ACCEPTED').length
+                    const cardTeamInfo = extractLfgTeamInfo(card)
 
                     return (
                       <div
@@ -1717,6 +1813,11 @@ function CommunityFeed() {
                               <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#1E40AF]">
                                 {card.sportName || card.sport?.toUpperCase() || 'THỂ THAO'}
                               </span>
+                              {cardTeamInfo.isTeamMatch && (
+                                <span className="px-2.5 py-0.5 rounded-md text-xs font-extrabold bg-purple-50 text-purple-800 border border-purple-200">
+                                  {cardTeamInfo.hostTeamName || 'Đội chủ kèo'} vs {cardTeamInfo.challengerTeamName || 'Chờ đối thủ'}
+                                </span>
+                              )}
                               <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                 {card.requireApproval ? '🛡️ Cần Duyệt Người' : '⚡ Tự Động Vào'}
                               </span>
@@ -2029,16 +2130,32 @@ function CommunityFeed() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 p-3 rounded-xl flex-wrap gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-gray-400">person</span>
-                            <span>Chủ kèo: <strong>{card.hostName || 'Chủ kèo'}</strong></span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-gray-400">schedule</span>
-                            <span>Giờ thi đấu: <strong>{card.startTime ? new Date(card.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</strong></span>
-                          </div>
-                        </div>
+                        {(() => {
+                          const joinedTeamInfo = extractLfgTeamInfo(card)
+                          return (
+                            <div className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 p-3 rounded-xl flex-wrap gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px] text-gray-400">
+                                  {joinedTeamInfo.isTeamMatch ? 'groups' : 'person'}
+                                </span>
+                                {joinedTeamInfo.isTeamMatch ? (
+                                  <span>
+                                    Kèo đội:{' '}
+                                    <strong>
+                                      {joinedTeamInfo.hostTeamName || 'Đội chủ kèo'} vs {joinedTeamInfo.challengerTeamName || 'Đang tìm đối thủ'}
+                                    </strong>
+                                  </span>
+                                ) : (
+                                  <span>Chủ kèo: <strong>{card.hostName || 'Chủ kèo'}</strong></span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[16px] text-gray-400">schedule</span>
+                                <span>Giờ thi đấu: <strong>{card.startTime ? new Date(card.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</strong></span>
+                              </div>
+                            </div>
+                          )
+                        })()}
 
                         {/* Actions for Participant */}
                         <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 flex-wrap">
@@ -2367,10 +2484,19 @@ function CommunityFeed() {
                   {detailModal.title}
                 </h3>
                 <p className="text-xs text-emerald-200 font-semibold mt-0.5 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[15px]">person</span>
+                  <span className="material-symbols-outlined text-[15px]">{detailModal.isTeamMatch ? 'groups' : 'person'}</span>
                   <span>
-                    Chủ kèo: <strong>{detailModal.hostName || 'Chủ kèo'}</strong>
-                    {detailModal.hostFairPlayScore != null ? ` • Fair Play ${detailModal.hostFairPlayScore}/100` : ''}
+                    {detailModal.isTeamMatch ? (
+                      <>
+                        Kèo đội: <strong>{detailModal.hostTeamName || 'Đội chủ kèo'}</strong> vs{' '}
+                        <strong>{detailModal.challengerTeamName || 'Đang tìm đối thủ'}</strong>
+                      </>
+                    ) : (
+                      <>
+                        Chủ kèo: <strong>{detailModal.hostName || 'Chủ kèo'}</strong>
+                        {detailModal.hostFairPlayScore != null ? ` • Fair Play ${detailModal.hostFairPlayScore}/100` : ''}
+                      </>
+                    )}
                   </span>
                 </p>
               </div>
@@ -2601,7 +2727,7 @@ function CommunityFeed() {
                 onClick={() => {
                   const targetMatch = detailModal
                   setDetailModal(null)
-                  setBookingModal(targetMatch)
+                  openClaimModal(targetMatch)
                 }}
                 className="px-6 py-2.5 rounded-xl bg-[#3B6817] hover:bg-[#315613] text-white font-extrabold text-xs shadow-md shadow-[#3B6817]/30 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
               >
@@ -2757,6 +2883,86 @@ function CommunityFeed() {
                 </span>
               </div>
             </div>
+
+            {/* Chọn hình thức Nhận kèo: Cá nhân hoặc Nhận kèo bằng Đội (bắn challengerTeamId) */}
+            {(() => {
+              const eligibleTeams = eligibleTeamsForMatch(bookingModal)
+              if (!eligibleTeams.length && !bookingModal.isTeamMatch) return null
+              return (
+                <div className="p-3.5 rounded-2xl bg-[#F0FDF4] border border-[#BBF7D0] flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[11px] font-black uppercase text-[#14532D] tracking-wider flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-[#15803D]">groups</span>
+                      Hình thức nhận kèo (Team vs Team)
+                    </span>
+                    {bookingModal.isTeamMatch && (
+                      <span className="text-[10.5px] font-bold text-[#15803D] bg-white px-2 py-0.5 rounded-full border border-[#86EFAC]">
+                        {bookingModal.hostTeamName || 'Đội chủ kèo'} vs {bookingModal.challengerTeamName || 'Đội thách đấu'}
+                      </span>
+                    )}
+                  </div>
+
+                  {eligibleTeams.length > 0 ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setClaimMode('solo')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            claimMode === 'solo'
+                              ? 'bg-white text-[#111827] border-[#15803D] ring-2 ring-[#15803D]/20'
+                              : 'bg-white/60 text-gray-600 border-gray-200 hover:bg-white'
+                          }`}
+                        >
+                          Cá nhân
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClaimMode('team')
+                            if (!selectedClaimTeamId && eligibleTeams[0]) setSelectedClaimTeamId(eligibleTeams[0].id)
+                          }}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            claimMode === 'team'
+                              ? 'bg-[#15803D] text-white border-[#15803D] shadow-xs'
+                              : 'bg-white/60 text-[#15803D] border-[#86EFAC] hover:bg-white'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[15px]">shield</span>
+                          <span>Nhận kèo bằng Đội</span>
+                        </button>
+                      </div>
+
+                      {claimMode === 'team' && (
+                        <div>
+                          <label htmlFor="claim-challenger-team" className="block text-[11px] font-bold text-[#14532D] mb-1">
+                            Chọn đội của bạn (bạn là Đội trưởng):
+                          </label>
+                          <select
+                            id="claim-challenger-team"
+                            value={selectedClaimTeamId}
+                            onChange={(e) => setSelectedClaimTeamId(e.target.value)}
+                            className="w-full h-10 px-3 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
+                          >
+                            {eligibleTeams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
+                                {team.sportName ? ` — ${team.sportName}` : ''}
+                                {team.totalMembers ? ` (${team.totalMembers} thành viên)` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-relaxed">
+                      Đây là kèo Đội (Team vs Team). Để sử dụng tùy chọn &quot;Nhận kèo bằng Đội&quot;, bạn cần là Đội trưởng của ít nhất 1 đội tại mục Giải đấu &amp; Đội.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Chọn phe A / B: chỉ kèo đối kháng (sideSize) mới có phe thật; kèo giao lưu không chọn phe */}
             {bookingModal.sideSize > 0 && (
