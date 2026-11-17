@@ -50,17 +50,23 @@ export async function getMyGivenRatings(page = 1, pageSize = 10) {
  * Kiểm tra điều kiện được phép đánh giá cơ sở (đã chơi tại sân)
  * GET /api/v1/facility-reviews/eligibility/{facilityId}
  * @param {string} facilityId
- * @returns {Promise<{ isEligible: boolean, message?: string }>}
+ * BE trả FacilityReviewEligibilityResponse { canReview, reason?, existingReviewId? } (docs 14.1).
+ * @returns {Promise<{ isEligible: boolean, message: string, existingReviewId: string|null }>}
  */
 export async function checkFacilityReviewEligibility(facilityId) {
-  if (!facilityId) return { isEligible: false }
+  if (!facilityId) return { isEligible: false, message: '', existingReviewId: null }
   try {
     const response = await apiClient.get(`/api/v1/facility-reviews/eligibility/${facilityId}`)
-    const body = response.data
-    return body?.data || body?.result || body || { isEligible: true }
+    const data = response.data?.data ?? response.data?.result ?? response.data ?? {}
+    return {
+      isEligible: Boolean(data.canReview ?? data.isEligible),
+      message: data.reason || data.message || '',
+      existingReviewId: data.existingReviewId || null,
+    }
   } catch (error) {
-    console.warn(`[reviewApi] Lỗi kiểm tra điều kiện đánh giá cơ sở ${facilityId}:`, error)
-    return { isEligible: true }
+    // Không tự cho phép khi lỗi: hiện lỗi để người dùng biết, BE vẫn kiểm tra lại khi gửi.
+    const normalized = normalizeApiError(error)
+    return { isEligible: false, message: normalized.message || 'Không kiểm tra được điều kiện đánh giá cơ sở.', existingReviewId: null }
   }
 }
 

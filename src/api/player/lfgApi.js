@@ -492,7 +492,8 @@ export async function getPendingFairPlayRatings() {
 /**
  * Bước 3 (Check-in & Chấm Fair Play): Chấm điểm Fair Play sau trận
  * POST /api/v1/reviews/fair-play
- * Điểm Fair Play = trung bình số sao x 20 (chưa có đánh giá = 100), giới hạn 0-100.
+ * BE cộng điểm theo từng phiếu (1★ -3, 2★ -1, 3★ 0, 4★ +1, 5★ +2; người chấm dưới 5 lượt check-in tính 1/3).
+ * Một trận rớt quá 10 điểm thì BE treo điểm và tạo phiếu cho Admin xét (xem docs/api/50-cap-nhat-be-thang-11-2026.md).
  * Đánh giá 1 - 2 sao bắt buộc truyền kèm reasonId (lấy từ GET /api/v1/reviews/fair-play/reasons).
  * @param {Object} payload
  * @param {string} payload.revieweeId - UUID người được chấm

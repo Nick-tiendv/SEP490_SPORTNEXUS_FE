@@ -17,6 +17,7 @@ import {
   checkFacilityReviewEligibility,
   createFacilityReview,
 } from '../../api/player/reviewApi.js'
+import { getBookingById, getMyBookings } from '../../api/player/bookingApi.js'
 
 // Lấy danh sách lý do bắt buộc khi chấm Fair Play 1 - 2 sao: GET /api/v1/reviews/fair-play/reasons
 async function fetchFairPlayReasons() {
@@ -26,6 +27,21 @@ async function fetchFairPlayReasons() {
 
 const fmtTime = (v) => (v ? new Date(v).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '')
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('vi-VN') : '')
+
+// Cơ sở của các đơn đặt sân đã check-in (CHECKED_IN, hoặc COMPLETED sau khi kết thúc trận), mới nhất trước, mỗi cơ sở một dòng.
+// BookingSummaryResponse không có facilityId nên lấy từ chi tiết đơn (GET /bookings/{id}), giới hạn 10 đơn gần nhất.
+const PLAYED_BOOKING_STATUSES = ['CHECKEDIN', 'COMPLETED'] // so khớp sau khi bỏ dấu _ (CHECKED_IN / CheckedIn)
+async function loadCheckedInFacilities() {
+  const bookings = (await getMyBookings())
+    .filter((booking) => PLAYED_BOOKING_STATUSES.includes(String(booking.bookingStatus || booking.status || '').toUpperCase().replace(/[^A-Z]/g, '')))
+    .sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0))
+    .slice(0, 10)
+  const rows = await Promise.all(bookings.map(async (booking) => {
+    const facilityId = booking.facilityId || (await getBookingById(booking.bookingId || booking.id).catch(() => null))?.facilityId
+    return facilityId ? { facilityId, facilityName: booking.facilityName, courtName: booking.courtName, startTime: booking.startTime } : null
+  }))
+  return rows.filter(Boolean).filter((item, index, list) => list.findIndex((other) => String(other.facilityId) === String(item.facilityId)) === index)
+}
 
 function PostMatchRating() {
   const navigate = useNavigate()
@@ -139,9 +155,26 @@ function PostMatchRating() {
   /* ------------------- Tab Switcher: Người chơi (Fair Play) vs Cơ sở (Facility) ------------------- */
   const [activeRatingTab, setActiveRatingTab] = useState('player') // 'player' | 'facility'
 
-  /* ------------------- Đánh giá cơ sở thể thao (cơ sở của trận đang chọn) ------------------- */
-  const currentFacilityId = selectedMatch?.facilityId || null
-  const currentFacilityName = selectedMatch?.facilityName || 'Chưa có trận đã check-in'
+  /* ------------------- Đánh giá cơ sở thể thao ------------------- */
+  // Nguồn cơ sở đã chơi: đơn đặt sân đã check-in (GET /bookings/my-bookings?status=CHECKED_IN) + các trận chờ chấm Fair Play.
+  // Không chỉ dựa vào pending-ratings: trận không có ai khác check-in sẽ không nằm trong danh sách đó.
+  const [checkedInFacilities, setCheckedInFacilities] = useState(null) // null = đang tải
+  const [pickedFacilityId, setPickedFacilityId] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    loadCheckedInFacilities()
+      .then((list) => !cancelled && setCheckedInFacilities(list))
+      .catch(() => !cancelled && setCheckedInFacilities([]))
+    return () => { cancelled = true }
+  }, [])
+  const facilityChoices = [
+    ...(selectedMatch?.facilityId ? [{ facilityId: selectedMatch.facilityId, facilityName: selectedMatch.facilityName, courtName: selectedMatch.courtName, startTime: selectedMatch.startTime }] : []),
+    ...pendingRatings.filter((m) => m.facilityId).map((m) => ({ facilityId: m.facilityId, facilityName: m.facilityName, courtName: m.courtName, startTime: m.startTime })),
+    ...(checkedInFacilities || []),
+  ].filter((item, index, list) => list.findIndex((other) => String(other.facilityId) === String(item.facilityId)) === index)
+  const currentFacility = facilityChoices.find((item) => String(item.facilityId) === String(pickedFacilityId)) || facilityChoices[0] || null
+  const currentFacilityId = currentFacility?.facilityId || null
+  const currentFacilityName = currentFacility?.facilityName || 'Chưa có trận đã check-in'
   const [facilityRating, setFacilityRating] = useState(5)
   const [facilityHoverRating, setFacilityHoverRating] = useState(0)
   const [facilityComment, setFacilityComment] = useState('')
@@ -152,6 +185,22 @@ function PostMatchRating() {
   const setFacilityEligibility = (value) => setEligibilityResult({ facilityId: currentFacilityId, ...value })
   const [submittingFacilityReview, setSubmittingFacilityReview] = useState(false)
   const [submittedFacilityReviews, setSubmittedFacilityReviews] = useState([])
+  // Nhận xét cơ sở (BE: tối đa 1000 ký tự) chỉ bắt buộc khi chấm 1 - 2 sao, để chủ sân biết cần cải thiện gì.
+  const FACILITY_COMMENT_MAX = 1000
+  const facilityNeedsComment = facilityRating >= 1 && facilityRating <= 2
+  const facilityCommentMissing = facilityNeedsComment && (facilityComment.trim().length < 10 || !hasTextLetters(facilityComment))
+  const facilityBlockReason = !currentFacilityId
+    ? checkedInFacilities === null
+      ? 'Đang tải các trận đã check-in...'
+      : 'Bạn cần check-in một trận tại sân trước khi đánh giá cơ sở.'
+    : checkingEligibility
+      ? 'Đang kiểm tra điều kiện đánh giá...'
+      : !facilityEligibility?.isEligible
+        ? facilityEligibility?.message || 'Bạn chưa đủ điều kiện đánh giá cơ sở này.'
+        : facilityCommentMissing
+          ? `Chấm ${facilityRating} sao cần viết nhận xét (tối thiểu 10 ký tự) để chủ sân biết cần cải thiện gì.`
+          : ''
+  const canSubmitFacility = !facilityBlockReason && facilityRating >= 1 && !submittingFacilityReview
 
   // Kiểm tra điều kiện đánh giá cơ sở: GET /api/v1/facility-reviews/eligibility/{facilityId}
   useEffect(() => {
@@ -178,8 +227,8 @@ function PostMatchRating() {
       triggerToast('⚠️ Vui lòng chọn số sao đánh giá cơ sở (1 - 5 sao)!')
       return
     }
-    if (!facilityComment || facilityComment.trim().length < 10) {
-      triggerToast('⚠️ Vui lòng viết nhận xét tối thiểu 10 ký tự cho cơ sở!')
+    if (facilityBlockReason) {
+      triggerToast(`⚠️ ${facilityBlockReason}`)
       return
     }
 
@@ -221,6 +270,16 @@ function PostMatchRating() {
   }
 
   const isEligibleToRate = Boolean(selectedMatch)
+  // Khung "Trạng thái check-in": trận chờ chấm Fair Play, hoặc đơn đặt sân đã check-in gần nhất.
+  const latestCheckedIn = checkedInFacilities?.[0] || null
+  const hasCheckedIn = isEligibleToRate || Boolean(latestCheckedIn)
+  const checkInStatusText = isEligibleToRate
+    ? `Đã check-in (${checkoutSession.checkInTime}) • Hợp lệ để đánh giá`
+    : latestCheckedIn
+      ? `Đã check-in (${[latestCheckedIn.courtName, latestCheckedIn.startTime && `${fmtTime(latestCheckedIn.startTime)} ${fmtDate(latestCheckedIn.startTime)}`].filter(Boolean).join(' • ')}) • Chưa có bạn chơi để chấm`
+      : checkedInFacilities === null
+        ? 'Đang kiểm tra check-in…'
+        : 'Chưa check-in • Đang khóa đánh giá'
   const selectedPlayer = coPlayers.find((p) => p.id === selectedPlayerId) || coPlayers[0] || { name: '', role: '' }
   const isAlreadyReviewed = reviewedPlayers.includes(`${selectedMatch?.contextId}:${selectedPlayer.id}`)
   const isLowRating = rating === 1 || rating === 2
@@ -448,11 +507,11 @@ function PostMatchRating() {
           </p>
         </div>
 
-        {/* Trạng thái check-in */}
+        {/* Trạng thái check-in: có trận chờ chấm Fair Play, hoặc có đơn đã check-in (kể cả khi không có ai để chấm) */}
         <div
           style={{
-            background: isEligibleToRate ? '#F0FDF4' : '#FEF2F2',
-            border: isEligibleToRate ? '1px solid #BBF7D0' : '1px solid #FECACA',
+            background: hasCheckedIn ? '#F0FDF4' : '#FEF2F2',
+            border: hasCheckedIn ? '1px solid #BBF7D0' : '1px solid #FECACA',
             borderRadius: '14px',
             padding: '12px 18px',
             display: 'flex',
@@ -464,17 +523,17 @@ function PostMatchRating() {
             className="material-symbols-outlined"
             style={{
               fontSize: '22px',
-              color: isEligibleToRate ? '#15803D' : '#DC2626',
+              color: hasCheckedIn ? '#15803D' : '#DC2626',
             }}
           >
-            {isEligibleToRate ? 'verified' : 'lock_clock'}
+            {hasCheckedIn ? 'verified' : 'lock_clock'}
           </span>
           <div>
             <div
               style={{
                 fontSize: '10.5px',
                 fontWeight: 800,
-                color: isEligibleToRate ? '#166534' : '#991B1B',
+                color: hasCheckedIn ? '#166534' : '#991B1B',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
               }}
@@ -485,12 +544,10 @@ function PostMatchRating() {
               style={{
                 fontSize: '13px',
                 fontWeight: 800,
-                color: isEligibleToRate ? '#15803D' : '#DC2626',
+                color: hasCheckedIn ? '#15803D' : '#DC2626',
               }}
             >
-              {isEligibleToRate
-                ? `Đã check-in (${checkoutSession.checkInTime}) • Hợp lệ để đánh giá`
-                : 'Chưa check-in • Đang khóa đánh giá'}
+              {checkInStatusText}
             </div>
           </div>
         </div>
@@ -1147,6 +1204,8 @@ function PostMatchRating() {
                     border: '1.5px solid #FCA5A5',
                     padding: '18px 20px',
                     margin: '0 0 22px 0',
+                    transformOrigin: 'top',
+                    animation: 'snx-slide-down 0.28s ease-out',
                   }}
                 >
                   <legend
@@ -1266,26 +1325,28 @@ function PostMatchRating() {
                     <span>
                       {isOtherReasonSelected
                         ? '2. Viết Nhận Xét Đánh Giá (Bắt buộc nhập chữ cho Lý do 4 - Khác)'
-                        : '2. Viết Nhận Xét Đánh Giá (Bắt buộc)'}
+                        : '2. Viết Nhận Xét Đánh Giá (Không bắt buộc)'}
                     </span>
-                    <span style={{ color: '#DC2626' }}>*</span>
+                    {isOtherReasonSelected && <span style={{ color: '#DC2626' }}>*</span>}
                   </label>
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      color: hasTextLetters(writtenReview) && writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {writtenReview.trim().length}/10 ký tự tối thiểu
-                  </span>
+                  {isOtherReasonSelected && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: hasTextLetters(writtenReview) && writtenReview.trim().length >= 10 ? '#15803D' : '#94A3B8',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {writtenReview.trim().length}/10 ký tự tối thiểu
+                    </span>
+                  )}
                 </div>
 
                 <textarea
                   rows={4}
                   value={writtenReview}
                   required={isOtherReasonSelected}
-                  aria-required="true"
+                  aria-required={isOtherReasonSelected}
                   placeholder={
                     isOtherReasonSelected
                       ? 'Bạn đã chọn Lý do Khác — vui lòng nhập nhận xét chi tiết bằng chữ (tối thiểu 10 ký tự)...'
@@ -1297,8 +1358,7 @@ function PostMatchRating() {
                     padding: '14px 16px',
                     borderRadius: '14px',
                     border:
-                      (isOtherReasonSelected && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10)) ||
-                      (writtenReview.trim().length > 0 && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10))
+                      isOtherReasonSelected && (!hasTextLetters(writtenReview) || writtenReview.trim().length < 10)
                         ? '1.5px solid #F87171'
                         : '1.5px solid #CBD5E1',
                     fontSize: '14px',
@@ -1581,8 +1641,20 @@ function PostMatchRating() {
                   {currentFacilityName}
                 </h2>
                 <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                  Sân: <span className="font-semibold">{selectedMatch ? `${selectedMatch.courtName} • ${checkoutSession.checkInTime}` : 'Chọn một trận đã check-in ở trên'}</span>
+                  Sân: <span className="font-semibold">{currentFacility ? [currentFacility.courtName, currentFacility.startTime && `${fmtTime(currentFacility.startTime)} ${fmtDate(currentFacility.startTime)}`].filter(Boolean).join(' • ') || '—' : 'Bạn chưa check-in trận nào'}</span>
                 </div>
+                {facilityChoices.length > 1 && (
+                  <select
+                    aria-label="Chọn cơ sở muốn đánh giá"
+                    value={currentFacilityId || ''}
+                    onChange={(e) => setPickedFacilityId(e.target.value)}
+                    style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '10px', border: '1.5px solid #CBD5E1', fontSize: '12.5px', fontWeight: 600, color: '#1E293B', background: '#FFFFFF' }}
+                  >
+                    {facilityChoices.map((item) => (
+                      <option key={item.facilityId} value={item.facilityId}>{item.facilityName || 'Cơ sở'}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -1699,10 +1771,13 @@ function PostMatchRating() {
             {/* Nhận xét bằng chữ */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: '#1E293B', marginBottom: '8px' }}>
-                3. Viết cảm nhận chi tiết về sân đấu (Tối thiểu 10 ký tự) *
+                {facilityNeedsComment
+                  ? <>3. Viết cảm nhận chi tiết về sân đấu (Bắt buộc khi chấm 1 - 2 sao, tối thiểu 10 ký tự) <span style={{ color: '#DC2626' }}>*</span></>
+                  : '3. Viết cảm nhận chi tiết về sân đấu (Không bắt buộc)'}
               </label>
               <textarea
                 rows={4}
+                maxLength={FACILITY_COMMENT_MAX}
                 value={facilityComment}
                 onChange={(e) => setFacilityComment(e.target.value)}
                 placeholder="Chia sẻ trải nghiệm của bạn về chất lượng mặt sân, hệ thống chiếu sáng, không gian và thái độ phục vụ..."
@@ -1710,7 +1785,7 @@ function PostMatchRating() {
                   width: '100%',
                   padding: '12px 14px',
                   borderRadius: '12px',
-                  border: '1.5px solid #CBD5E1',
+                  border: facilityCommentMissing ? '1.5px solid #F87171' : '1.5px solid #CBD5E1',
                   fontSize: '13.5px',
                   outline: 'none',
                   boxSizing: 'border-box',
@@ -1718,32 +1793,36 @@ function PostMatchRating() {
                 }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
-                <span>Độ dài: {facilityComment.length} ký tự (Tối thiểu 10)</span>
+                <span>Độ dài: {facilityComment.length}/{FACILITY_COMMENT_MAX} ký tự</span>
               </div>
             </div>
 
             {/* Action Submit */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
+              {facilityBlockReason && !submittingFacilityReview && (
+                <span role="status" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 600, color: '#92400E', marginRight: 'auto' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>info</span>
+                  {facilityBlockReason}
+                </span>
+              )}
               <button
                 type="submit"
-                disabled={submittingFacilityReview || facilityComment.trim().length < 10}
+                disabled={!canSubmitFacility}
                 style={{
                   padding: '12px 28px',
                   borderRadius: '14px',
-                  background:
-                    facilityComment.trim().length >= 10
-                      ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
-                      : '#CBD5E1',
+                  background: canSubmitFacility
+                    ? 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)'
+                    : '#CBD5E1',
                   border: 'none',
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: 800,
-                  cursor: facilityComment.trim().length >= 10 ? 'pointer' : 'not-allowed',
+                  cursor: canSubmitFacility ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  boxShadow:
-                    facilityComment.trim().length >= 10 ? '0 4px 14px rgba(22, 163, 74, 0.25)' : 'none',
+                  boxShadow: canSubmitFacility ? '0 4px 14px rgba(22, 163, 74, 0.25)' : 'none',
                 }}
               >
                 {submittingFacilityReview ? (
