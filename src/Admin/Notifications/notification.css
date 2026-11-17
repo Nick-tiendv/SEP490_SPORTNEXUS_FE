@@ -24,8 +24,6 @@
 .nt-stats .admin-stat-heading > span:first-child { max-width: none; color: var(--sn-gray-500); font-size: 13px; }
 .nt-stats .admin-stat-value { font-size: 29px; color: var(--sn-gray-800); margin: 8px 0; }
 .nt-stats .admin-stat-trend { font-size: 12px; }
-.nt-stats .admin-stat-card:nth-child(2) .admin-stat-icon { background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); color: #fff; }
-.nt-stats .admin-stat-card:nth-child(4) .admin-stat-value { color: var(--sn-green-700); }
 .nt-tabs { gap: 24px; margin-bottom: 18px; }
 .nt-tabs > button { justify-content: center; gap: 7px; border-bottom: 2px solid transparent; }
 .nt-tabs > button.active { border-bottom-color: var(--sn-green-700); }

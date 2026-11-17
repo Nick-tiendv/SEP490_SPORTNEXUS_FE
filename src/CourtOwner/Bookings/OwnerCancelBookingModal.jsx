@@ -4,7 +4,6 @@ import {
   cancelOwnerBooking,
   getCancellationReasons,
   getOwnerBooking,
-  previewOwnerBookingCancel,
 } from '../../api/owner'
 import { formatDateTime, formatTime, formatVND } from '../shared.js'
 import {
@@ -14,8 +13,8 @@ import {
 
 /**
  * Popup cảnh báo và xác nhận Chủ sân hủy đơn đặt sân.
- * Tự động gọi API Preview Hủy (nếu BE có); nếu BE trả lỗi (vd 400/404) tự kiểm tra mốc 48h
- * và hiển thị cảnh báo phạt tiền + trừ uy tín theo quy tắc trước khi gọi POST /cancel.
+ * BE không có API preview hủy: FE tự kiểm tra mốc 48h và hiển thị cảnh báo phạt tiền + trừ uy tín
+ * theo quy tắc trước khi gọi POST /cancel.
  */
 export default function OwnerCancelBookingModal({ booking, onClose, onSuccess }) {
   const bookingId = booking?.bookingId ? String(booking.bookingId) : ''
@@ -26,13 +25,8 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
   const [lockSlotAfterCancel, setLockSlotAfterCancel] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Gắn kết quả preview với bookingId để không chớp dữ liệu cũ và tránh setState đồng bộ trong effect
-  const [previewState, setPreviewState] = useState({
-    bookingId: '',
-    preview: null,
-    detail: null,
-    previewFallback: false,
-  })
+  // Gắn chi tiết đơn với bookingId để không chớp dữ liệu cũ và tránh setState đồng bộ trong effect
+  const [previewState, setPreviewState] = useState({ bookingId: '', detail: null })
 
   useEffect(() => {
     let cancelled = false
@@ -52,20 +46,11 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
     let cancelled = false
 
     const needDetail = booking?.totalAmount == null || booking?.startTime == null
-    Promise.allSettled([
-      previewOwnerBookingCancel(bookingId),
-      needDetail ? getOwnerBooking(bookingId) : Promise.resolve(null),
-    ]).then(([previewRes, detailRes]) => {
-      if (cancelled) return
-      const preview = previewRes.status === 'fulfilled' ? previewRes.value : null
-      const detail = detailRes.status === 'fulfilled' ? detailRes.value : null
-      setPreviewState({
-        bookingId,
-        preview,
-        detail,
-        previewFallback: previewRes.status === 'rejected' || !preview,
+    ;(needDetail ? getOwnerBooking(bookingId) : Promise.resolve(null))
+      .catch(() => null)
+      .then((detail) => {
+        if (!cancelled) setPreviewState({ bookingId, detail })
       })
-    })
 
     return () => { cancelled = true }
   }, [bookingId, booking?.totalAmount, booking?.startTime])
@@ -74,8 +59,6 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
 
   const loadingPreview = previewState.bookingId !== bookingId
   const resolvedDetail = loadingPreview ? null : previewState.detail
-  const resolvedPreview = loadingPreview ? null : previewState.preview
-  const previewFallback = loadingPreview ? false : previewState.previewFallback
 
   const startTime = resolvedDetail?.startTime ?? booking.startTime
   const endTime = resolvedDetail?.endTime ?? booking.endTime
@@ -86,8 +69,6 @@ export default function OwnerCancelBookingModal({ booking, onClose, onSuccess })
     startTime,
     totalAmount,
     isWalkIn,
-    preview: resolvedPreview,
-    previewFallback,
   })
 
   const pickedReason = reasons.find((item) => String(item.code) === String(reasonCode)) || null

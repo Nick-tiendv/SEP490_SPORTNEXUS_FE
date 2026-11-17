@@ -107,6 +107,7 @@ export function validateFairPlayRating({ score, reasonId, reasons = [], comment 
     }
   }
 
+  // Nhận xét chỉ bắt buộc khi chọn Lý do "Khác" (BE trả 400 nếu thiếu); 3 - 5 sao và các lý do khác không bắt buộc.
   if (isOtherReason && !hasTextLetters(trimmedComment)) {
     return {
       valid: false,
@@ -116,12 +117,10 @@ export function validateFairPlayRating({ score, reasonId, reasons = [], comment 
     }
   }
 
-  if (trimmedComment.length < 10 || !hasTextLetters(trimmedComment)) {
+  if (isOtherReason && trimmedComment.length < 10) {
     return {
       valid: false,
-      error: isOtherReason
-        ? 'Khi chọn Lý do 4 (Khác), vui lòng nhập nhận xét bằng chữ tối thiểu 10 ký tự!'
-        : 'Vui lòng viết nhận xét bằng chữ (tối thiểu 10 ký tự) cho người chơi cùng sân!',
+      error: 'Khi chọn Lý do 4 (Khác), vui lòng nhập nhận xét bằng chữ tối thiểu 10 ký tự!',
       isLowRating,
       isOtherReason,
     }

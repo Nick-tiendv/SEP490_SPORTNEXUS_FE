@@ -247,6 +247,50 @@
 .sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:hover > div > svg,
 .sn-admin article.admin-stat-card:hover .admin-stat-icon { transform: none; }
 
+/* ---------- 3c. Màu cho thẻ tóm tắt (cùng bảng màu KPI ở Tổng quan) ----------
+   Thẻ vẫn phẳng, không hiệu ứng rê chuột (mục 3b), chỉ thêm nền pastel, viền và icon theo tông.
+   Tông lặp theo thứ tự thẻ: xanh dương, tím, ngọc, hổ phách, hồng, xanh lá. Thẻ mang nghĩa trạng thái
+   (hủy / thất bại, chờ duyệt / bảo trì) giữ tông riêng ở cuối mục. Thẻ nổi bật (.revenue / .volume) giữ nguyên. */
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):not(.revenue):not(.volume) {
+  --t-from: #eff6ff; --t-to: #dbeafe; --t-border: #93c5fd; --t-icon: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); --t-label: #1e40af; --t-value: #1e3a8a;
+  background: linear-gradient(145deg, #ffffff 0%, var(--t-from) 55%, var(--t-to) 100%);
+  border-color: var(--t-border);
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):not(.revenue):not(.volume):hover { border-color: var(--t-border); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):nth-child(6n+2):not(.revenue):not(.volume) {
+  --t-from: #f5f3ff; --t-to: #ede9fe; --t-border: #c4b5fd; --t-icon: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%); --t-label: #5b21b6; --t-value: #4c1d95;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):nth-child(6n+3):not(.revenue):not(.volume) {
+  --t-from: #ecfeff; --t-to: #ccfbf1; --t-border: #5eead4; --t-icon: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%); --t-label: #115e59; --t-value: #134e4a;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):nth-child(6n+4):not(.revenue):not(.volume) {
+  --t-from: #fffbeb; --t-to: #fef3c7; --t-border: #fcd34d; --t-icon: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); --t-label: #92400e; --t-value: #78350f;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):nth-child(6n+5):not(.revenue):not(.volume) {
+  --t-from: #fff1f2; --t-to: #ffe4e6; --t-border: #fda4af; --t-icon: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); --t-label: #9f1239; --t-value: #881337;
+}
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis, .rr-stats, .nt-stats, .md-stats) > :is(article, .admin-stat-card):nth-child(6n):not(.revenue):not(.volume) {
+  --t-from: #f0fdf4; --t-to: #dcfce7; --t-border: #86efac; --t-icon: linear-gradient(135deg, #4ade80 0%, #15803d 100%); --t-label: #166534; --t-value: #14532d;
+}
+/* Thẻ mang nghĩa trạng thái: giữ tông theo ý nghĩa thay vì theo thứ tự */
+.sn-admin :is(.users-kpis > .users-kpi.red, .bookings-kpis > .cancelled, .lfg-kpis > .cancelled, .payments-kpis > .failed):not(.revenue) {
+  --t-from: #fff1f2; --t-to: #ffe4e6; --t-border: #fda4af; --t-icon: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); --t-label: #9f1239; --t-value: #881337;
+}
+.sn-admin :is(.owners-kpis > .pending, .payments-kpis > .pending, .facilities-kpis > .maintenance) {
+  --t-from: #fffbeb; --t-to: #fef3c7; --t-border: #fcd34d; --t-icon: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); --t-label: #92400e; --t-value: #78350f;
+}
+/* Chữ và icon theo tông */
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume) small,
+.sn-admin :is(.rr-stats, .nt-stats, .md-stats) > .admin-stat-card .admin-stat-heading > span:first-child { color: var(--t-label); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume) strong,
+.sn-admin :is(.rr-stats, .nt-stats, .md-stats) > .admin-stat-card .admin-stat-value { color: var(--t-value); }
+.sn-admin :is(.users-kpis, .owners-kpis, .facilities-kpis, .bookings-kpis, .lfg-kpis, .tournaments-kpis, .payments-kpis) > article:not(.revenue):not(.volume) > div > svg,
+.sn-admin :is(.rr-stats, .nt-stats, .md-stats) > .admin-stat-card .admin-stat-icon {
+  background: var(--t-icon);
+  color: #fff;
+  box-shadow: 0 8px 16px -10px rgba(15, 23, 42, .45), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+
 /* ---------- 4. Filter toolbars ---------- */
 .sn-admin :is(.users-toolbar, .owners-toolbar, .facilities-toolbar, .bookings-toolbar, .lfg-toolbar, .tournaments-toolbar, .payments-toolbar, .nt-toolbar) {
   padding: var(--sp-4) var(--sp-5);

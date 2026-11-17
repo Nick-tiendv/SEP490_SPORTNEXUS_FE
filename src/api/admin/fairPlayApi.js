@@ -1,5 +1,6 @@
 import apiClient from '../apiClient.js'
 import { pick, toList, unwrap } from './dashboardApi.js'
+import { normalizeFairPlayReasons } from '../../Player/Rating/fairPlayReasons.js'
 
 const clean = params => Object.fromEntries(Object.entries(params || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''))
 const path = value => encodeURIComponent(value)
@@ -68,6 +69,9 @@ export function toRating(raw) {
     target: pick(raw, 'targetName', 'ratedUserName', 'toUserName', 'revieweeName', 'targetUser.fullName', 'ratedUser.fullName') || '—',
     targetId: String(pick(raw, 'targetUserId', 'ratedUserId', 'toUserId', 'revieweeId') ?? ''),
     stars: toNumber(pick(raw, 'stars', 'rating', 'score')),
+    // Lý do bắt buộc khi chấm 1–2 sao (BE trả ReasonId); tên lý do tra từ getFairPlayReasons.
+    reasonId: pick(raw, 'reasonId') ?? null,
+    reasonName: pick(raw, 'reasonName', 'reasonLabel') || '',
     comment: pick(raw, 'comment', 'content', 'note') || '',
     hidden: pick(raw, 'isHidden', 'hidden') === true,
     hiddenReason: pick(raw, 'hiddenReason', 'hideReason') || '',
@@ -75,6 +79,9 @@ export function toRating(raw) {
     createdAt: pick(raw, 'createdAt') || '',
   }
 }
+// Danh sách lý do chấm Fair Play 1–2 sao (dùng chung với người chơi): GET /api/v1/reviews/fair-play/reasons.
+export const getFairPlayReasons = async () => normalizeFairPlayReasons((await apiClient.get('/api/v1/reviews/fair-play/reasons')).data)
+
 // Query: userId, maxStars, hidden, page, pageSize.
 export async function listFairPlayRatings(params) {
   const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/admin/fair-play/ratings', { params: clean(params) })).data))

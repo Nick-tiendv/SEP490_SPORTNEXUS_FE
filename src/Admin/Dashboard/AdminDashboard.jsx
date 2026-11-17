@@ -7,6 +7,8 @@ import RecentBookings from './RecentBookings.jsx'
 import PlatformSummary from './PlatformSummary.jsx'
 import { MAX_PAGE_SIZE, getAdminBookings, getAdminDashboard } from '../../api/admin/dashboardApi.js'
 import { AGGREGATE_MAX_PAGES, PERIODS, buildSportShares, dashboardCsvRows, downloadCsv, formatCurrency, formatDateTime, formatNumber, formatPercent, growth, periodRange } from './dashboardData.js'
+import { FairPlayAlertBanner } from '../Reviews/FairPlayAlerts.jsx'
+import { useFairPlayAlerts } from '../Reviews/useFairPlayAlerts.js'
 import './dashboard.css'
 
 const settledValue = result => (result.status === 'fulfilled' ? result.value : undefined)
@@ -26,6 +28,8 @@ export default function AdminDashboard() {
   const { profile } = useOutletContext() || {}
   const [period, setPeriod] = useState('Tháng này')
   const [reloadKey, setReloadKey] = useState(0)
+  // Ticket cảnh báo bạo lực mạng chờ xử lý: băng đỏ dẫn tới bảng ticket ở trang Đánh giá & Báo cáo.
+  const fairPlayAlerts = useFairPlayAlerts(reloadKey)
   const [periodData, setPeriodData] = useState({})
   const requestKey = `${period}|${reloadKey}`
 
@@ -95,6 +99,7 @@ export default function AdminDashboard() {
         </div>
       </header>
 
+      <FairPlayAlertBanner count={fairPlayAlerts.items.length} to="/admin/reviews-reports" />
       {!periodLoading && periodData.error && <div className="admin-alert admin-alert--warning" role="alert"><TriangleAlert size={16} /><span>Không tải được số liệu tổng quan: {periodData.error}</span></div>}
 
       <section className="admin-stat-grid" aria-label="Thống kê nền tảng" aria-busy={periodLoading}>{stats.map(item => <StatCard key={item.label} {...item} />)}</section>

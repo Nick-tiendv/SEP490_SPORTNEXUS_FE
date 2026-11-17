@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { Download, ShieldCheck, MessageSquare, TriangleAlert, CheckCircle2, Search, ArrowRight, ChevronLeft, ChevronRight, RefreshCw, CircleX } from 'lucide-react'
 import { toast } from 'sonner'
 import StatCard from '../components/StatCard.jsx'
-import HiddenContentTab from './HiddenContentTab.jsx'
 import { DemoDialog } from '../Users/UserDialogs.jsx'
 import '../Users/users.css'
 import './reviews.css'
@@ -272,7 +271,7 @@ export default function ReviewsReportsPage() {
   const selectFilter = (key, title, options) => <label>{title}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả</option>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
 
   return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
-    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play'], ['hidden', 'Nội dung bị ẩn', 'Bài viết · Bình luận']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
+    <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
     {tab === 'reports' && <div className="rr-stats">{[
       ['Tổng báo cáo', number(stats.total), TriangleAlert, 'Toàn nền tảng'],
       ['Đang chờ xử lý', number(stats.pending), MessageSquare, 'Cần quản trị viên xem xét'],
@@ -299,8 +298,7 @@ export default function ReviewsReportsPage() {
       </div>
     )}
 
-    {tab === 'hidden' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-hidden"><HiddenContentTab /></div>
-      : tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
+    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
       : <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
         <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do & Điểm treo', 'Chủ sân', 'Trạng thái', 'Ngày tạo', 'Xử lý nhanh'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{visibleItems.map(item => {
           const isWarning = hasPendingFairPlayPenalty(item)

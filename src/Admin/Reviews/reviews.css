@@ -16,6 +16,22 @@
 .rr-pending{background:var(--sn-warning-bg);color:var(--sn-warning-text)}
 .rr-resolved_refunded,.rr-resolved_no_refund{background:var(--mint-100);color:var(--sn-green-700)}
 .rr-rejected,.rr-withdrawn{background:var(--sn-gray-100);color:var(--sn-gray-600)}
+/* Tab Đánh giá & Phản hồi: danh sách full ngang, chi tiết là hộp bo góc lớn giữa màn hình (dưới hộp thoại ẩn / hiện) */
+.rr-content.rr-content--full{display:block}
+.rr-content--full .rr-list table{white-space:normal}
+.rr-content--full .rr-excerpt{max-width:none}
+.rr-drawer-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.28);z-index:calc(var(--z-modal) - 20);animation:rr-fade .18s ease-out}
+.rr-inspector.rr-drawer{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(1080px,calc(100vw - 32px));min-height:min(560px,calc(100vh - 48px));max-height:calc(100vh - 48px);overflow-y:auto;display:flex;flex-direction:column;padding:28px 36px;border-radius:18px;box-shadow:0 24px 64px rgba(15,23,42,.24);z-index:calc(var(--z-modal) - 10);animation:rr-pop-in .2s ease-out}
+.rr-drawer .rr-report-card dl{grid-template-columns:180px 1fr;gap:12px;font-size:14px}
+.rr-drawer .rr-report-card>p,.rr-drawer .rr-linked p,.rr-drawer .rr-note p{font-size:14px}
+.rr-drawer h2{font-size:19px}
+.rr-drawer .rr-report-card dd{text-align:left}
+.rr-drawer .rr-actions{grid-template-columns:repeat(auto-fit,minmax(200px,max-content));justify-content:end;margin-top:auto;padding-top:18px}
+.rr-drawer>header{position:sticky;top:-28px;background:white;z-index:1;margin:-28px -36px 0;padding:28px 36px 16px}
+.rr-drawer-head-actions{display:flex;align-items:center;gap:8px}
+@keyframes rr-pop-in{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes rr-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.rr-drawer-backdrop,.rr-inspector.rr-drawer{animation:none}}
 
 /* Ticket Cảnh Báo (Review Bombing / Bạo lực mạng): tô viền Đỏ cho Row có pendingFairPlayDelta !== null */
 .sn-admin .rr-list tbody tr.rr-row-warning td{background:#fef2f2;border-top:2px solid #dc2626;border-bottom:2px solid #dc2626}

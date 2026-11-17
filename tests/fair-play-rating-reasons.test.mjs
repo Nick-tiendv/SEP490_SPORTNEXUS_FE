@@ -104,6 +104,21 @@ test('Đánh giá Fair Play 1 - 2 sao: GET /reviews/fair-play/reasons, Radio UI,
     })
     assert.equal(highRatingValid.valid, true)
     assert.equal(highRatingValid.reasonId, null)
+
+    // 3 - 5 sao: nhận xét không bắt buộc -> nút Gửi sáng ngay
+    for (const score of [3, 4, 5]) {
+      const noComment = validateFairPlayRating({ score, reasonId: null, reasons: normalized, comment: '' })
+      assert.equal(noComment.valid, true, `${score} sao không cần nhận xét`)
+    }
+
+    // 1 - 2 sao chọn lý do thường (không phải Khác): nhận xét không bắt buộc
+    const reasonNoComment = validateFairPlayRating({ score: 2, reasonId: 1, reasons: normalized, comment: '' })
+    assert.equal(reasonNoComment.valid, true)
+    assert.equal(reasonNoComment.reasonId, 1)
+
+    // Lý do Khác vẫn bắt nhận xét đủ 10 ký tự chữ
+    const otherShort = validateFairPlayRating({ score: 1, reasonId: 4, reasons: normalized, comment: 'Xấu' })
+    assert.equal(otherShort.valid, false)
   })
 
   await t.test('PostMatchRating.jsx gọi GET /api/v1/reviews/fair-play/reasons, render Radio UI 1-2 sao và SSR an toàn', async () => {

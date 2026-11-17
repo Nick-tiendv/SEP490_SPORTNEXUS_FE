@@ -105,36 +105,16 @@ test('Chủ sân hủy đơn: API Preview Hủy, check mốc 48h, ownerPenaltyAm
     assert.match(resultMsg, /10 điểm Fair Play/)
   })
 
-  await t.test('previewOwnerBookingCancel gọi API preview, fallback khi BE trả 400 và cancelOwnerBooking hoạt động đúng', async () => {
+  await t.test('cancelOwnerBooking gọi POST /cancel (BE không có API preview hủy)', async () => {
     const [ownerApi, clientMod] = await Promise.all([
       server.ssrLoadModule('/src/api/owner/bookingApi.js'),
       server.ssrLoadModule('/src/api/apiClient.js'),
     ])
 
     const prevAdapter = clientMod.default.defaults.adapter
-    let previewMode = 'ok'
     const calls = []
     clientMod.default.defaults.adapter = async (config) => {
       calls.push({ method: config.method?.toUpperCase(), url: config.url })
-      if (config.url === '/api/v1/bookings/owner/bk-1/cancel-preview') {
-        if (previewMode === 'bad_request') {
-          const err = new Error('Preview chưa hỗ trợ')
-          err.response = {
-            status: 400,
-            data: { statusCode: 400, message: 'Preview error' },
-          }
-          throw err
-        }
-        return {
-          status: 200,
-          data: {
-            statusCode: 200,
-            data: { ownerPenaltyAmount: 50000, ownerFairPlayPenalty: -10, totalAmount: 250000 },
-          },
-          headers: {},
-          config,
-        }
-      }
       return {
         status: 200,
         data: {
@@ -149,12 +129,7 @@ test('Chủ sân hủy đơn: API Preview Hủy, check mốc 48h, ownerPenaltyAm
       clientMod.default.defaults.adapter = prevAdapter
     })
 
-    const previewOk = await ownerApi.previewOwnerBookingCancel('bk-1')
-    assert.equal(previewOk.ownerPenaltyAmount, 50000)
-    assert.equal(previewOk.ownerFairPlayPenalty, -10)
-
-    previewMode = 'bad_request'
-    await assert.rejects(() => ownerApi.previewOwnerBookingCancel('bk-1'))
+    assert.equal(ownerApi.previewOwnerBookingCancel, undefined)
 
     const cancelRes = await ownerApi.cancelOwnerBooking('bk-1', {
       reasonCode: 1,
@@ -177,7 +152,7 @@ test('Chủ sân hủy đơn: API Preview Hủy, check mốc 48h, ownerPenaltyAm
         readFile(new URL('../src/CourtOwner/Schedule/BookingSchedule.jsx', import.meta.url), 'utf8'),
       ])
 
-    assert.match(modalSrc, /previewOwnerBookingCancel/)
+    assert.doesNotMatch(modalSrc, /previewOwnerBookingCancel|cancel-preview/)
     assert.match(modalSrc, /ownerPenaltyAmount/)
     assert.match(modalSrc, /fairPlayDeducted/)
     assert.match(bookingsSrc, /OwnerCancelBookingModal/)
