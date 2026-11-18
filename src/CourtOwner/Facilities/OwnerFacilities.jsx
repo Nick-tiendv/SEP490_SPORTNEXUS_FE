@@ -49,6 +49,7 @@ const EMPTY_FORM = {
   description: '',
   rules: '',
   autoGenerateSlots: true,
+  isBulkDiscountEnabled: false,
 }
 const formFromFacility = f => {
   const parsed = parseFacilityAddress({
@@ -71,6 +72,7 @@ const formFromFacility = f => {
     description: f.description || '',
     rules: f.rules || '',
     autoGenerateSlots: !!f.autoGenerateSlots,
+    isBulkDiscountEnabled: !!f.isBulkDiscountEnabled,
   }
 }
 const toPayload = form => ({
@@ -86,6 +88,8 @@ const toPayload = form => ({
   description: form.description.trim() || null,
   rules: form.rules.trim() || null,
   autoGenerateSlots: !!form.autoGenerateSlots,
+  // Giảm 10% khi người chơi đặt từ 4 ca (gói tháng / định kỳ); chủ sân chịu phần giảm
+  isBulkDiscountEnabled: !!form.isBulkDiscountEnabled,
 })
 
 const validateOwnerForm = form => {
@@ -238,6 +242,13 @@ function FacilityForm({ form, setForm, showErrors = false }) {
       <label className="snx-row" style={{ fontSize: 13 }}>
         <input type="checkbox" checked={form.autoGenerateSlots} onChange={e => setForm(prev => ({ ...prev, autoGenerateSlots: e.target.checked }))} />
         Tự sinh ca hằng ngày theo giờ mở cửa
+      </label>
+      <label className="snx-row" style={{ fontSize: 13, alignItems: 'flex-start' }}>
+        <input type="checkbox" checked={form.isBulkDiscountEnabled} onChange={e => setForm(prev => ({ ...prev, isBulkDiscountEnabled: e.target.checked }))} />
+        <span>
+          Giảm 10% cho người chơi đặt gói (từ 4 ca trở lên, vd đặt định kỳ hằng tuần)
+          <small className="snx-muted" style={{ display: 'block' }}>Phần giảm 10% do chủ sân chịu, phí nền tảng tính trên số tiền sau giảm.</small>
+        </span>
       </label>
     </div>
   )
@@ -482,6 +493,10 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
             <div>
               <div className="snx-muted">Tự sinh ca</div>
               <strong>{f.autoGenerateSlots ? 'Bật' : 'Tắt'}</strong>
+            </div>
+            <div>
+              <div className="snx-muted">Giảm 10% đặt gói</div>
+              <strong>{f.isBulkDiscountEnabled ? 'Bật' : 'Tắt'}</strong>
             </div>
           </div>
         )}

@@ -33,6 +33,7 @@ import {
   DEPOSIT_MAX,
 } from '../../../api/player/walletApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
+import { BULK_DISCOUNT_PERCENT, bulkDiscount } from '../Recurring/recurringBooking.js'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
@@ -255,6 +256,10 @@ function SplitPayment() {
     : (state.slot || 'Chưa chọn ca')
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
   const totalAmount = Number(state.total) || Number(activeSlotData?.price) || 0
+  // Giảm giá đặt gói: cơ sở bật + đơn từ 4 ca thì FE trừ 10% (BE tính lại khi đặt). orderAmount = số phải trả cả đơn.
+  const discountInfo = bulkDiscount(totalAmount, Number(state.slotCount) || resolvedNumberOfSlots, state.bulkDiscountEnabled)
+  const orderAmount = discountInfo.payable
+  const recurring = state.recurring || null
   const hourlyRate = state.hourlyRate || (hours > 0 ? Math.round(totalAmount / hours) : 0)
   const unitPrice = state.unitPrice || (courtCount > 0 ? Math.round(totalAmount / courtCount) : 0)
   const courtImage = state.image || '/sports-bg.jpg'
@@ -456,9 +461,9 @@ function SplitPayment() {
   // Đảm bảo chia hợp lý (ca thể thao tối thiểu 2 người)
   const totalParticipantCount = paymentMode === 'split' ? Math.max(1, invitedFriends.length + 1) : 1
   const displaySplitCount = invitedFriends.length > 0 ? (invitedFriends.length + 1) : 2
-  const splitAmount = Math.round(totalAmount / (totalParticipantCount || 1))
-  const displaySplitAmount = Math.round(totalAmount / displaySplitCount)
-  const payableAmount = paymentMode === 'full' ? totalAmount : splitAmount
+  const splitAmount = Math.round(orderAmount / (totalParticipantCount || 1))
+  const displaySplitAmount = Math.round(orderAmount / displaySplitCount)
+  const payableAmount = paymentMode === 'full' ? orderAmount : splitAmount
 
   // Chọn chế độ thanh toán
   const handleSelectPaymentMode = (mode) => {
@@ -1550,7 +1555,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   </div>
                   <div className="sp-mode-amount-row">
                     <small>SỐ ĐIỂM:</small>
-                    <strong>{formatVnd(totalAmount)}</strong>
+                    <strong>{formatVnd(orderAmount)}</strong>
                   </div>
                 </div>
 
@@ -1701,7 +1706,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   {/* Bảng tóm tắt chia tiền */}
                   <div className="sp-split-summary-box">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong>Tổng Điểm: {formatVnd(totalAmount)} ÷ {invitedFriends.length + 1} người</strong>
+                      <strong>Tổng Điểm: {formatVnd(orderAmount)} ÷ {invitedFriends.length + 1} người</strong>
                       <strong style={{ fontSize: 14, color: '#15803D' }}>= {formatVnd(splitAmount)} / người</strong>
                     </div>
                   </div>
@@ -1918,13 +1923,22 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     <strong>{slotTime}</strong>
                     <span>• {displayBookingDate} {courtCount > 1 ? `(${courtCount} sân × ${formatVnd(unitPrice)})` : ''}</span>
                   </div>
+                  {recurring && (
+                    <div className="sp-receipt-recurring">
+                      <strong>Đặt định kỳ: {recurring.weekdays.join(', ')} · {recurring.weeks} tuần ({recurring.dates.length} buổi)</strong>
+                      <span>{recurring.dates.join(' · ')}</span>
+                      <span className="sp-receipt-recurring-note">Đơn đặt định kỳ không thể hủy sau khi đặt.</span>
+                    </div>
+                  )}
                 </div>
-                <div className="sp-receipt-line">
-                  <span className="sp-receipt-line-left sp-receipt-line-discount">
-                    Ưu đãi giờ vàng thành viên
-                  </span>
-                  <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-0 Điểm</span>
-                </div>
+                {discountInfo.applies && (
+                  <div className="sp-receipt-line">
+                    <span className="sp-receipt-line-left sp-receipt-line-discount">
+                      Giảm {BULK_DISCOUNT_PERCENT}% khi đặt gói tháng
+                    </span>
+                    <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-{formatVnd(discountInfo.amount)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="sp-receipt-divider" />

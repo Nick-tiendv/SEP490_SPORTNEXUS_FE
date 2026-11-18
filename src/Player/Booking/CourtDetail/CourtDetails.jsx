@@ -6,13 +6,13 @@ import { getCourtSlots, getFacilityAvailability } from '../../../api/player/book
 import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
+import { BULK_DISCOUNT_PERCENT, BULK_MIN_SLOTS, bulkDiscount } from '../Recurring/recurringBooking.js'
+import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
+import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
+import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 
 // Chu kỳ tải lại lưới ca ngầm để thấy ca vừa bị người khác đặt
 const SLOT_REFRESH_MS = 20000
-
-// Ca còn đặt được (khung 2 tiếng đã ghép)
-const isSlotOpen = (slot) =>
-  Boolean(slot) && String(slot.status || '').toLowerCase() === 'available' && slot.isBookable !== false && !slot.isPast
 
 // Tạo danh sách 7 ngày từ hôm nay (định dạng YYYY-MM-DD cho backend)
 function getNext7Days() {
@@ -37,57 +37,8 @@ function getNext7Days() {
   return days
 }
 
-// Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
-  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
-
-  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-
-  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
-  if (firstSlotDiffHours >= 1.8) {
-    return sorted.map((s) => ({
-      ...s,
-      slotIds: [s.id],
-      durationHours: 2,
-      rawSlots: [s],
-      formattedStart: vnClock(s.startTime) || '',
-      formattedEnd: vnClock(s.endTime) || '',
-    }))
-  }
-
-  const twoHourSlots = []
-  for (let i = 0; i < sorted.length; i += 2) {
-    const slotA = sorted[i]
-    const slotB = sorted[i + 1]
-    if (!slotB) break // Không nhận ca lẻ 1 tiếng vì quy chuẩn là 2 tiếng
-
-    const isAvailA = String(slotA.status || '').toLowerCase() === 'available' && slotA.isBookable !== false && !slotA.isPast
-    const isAvailB = String(slotB.status || '').toLowerCase() === 'available' && slotB.isBookable !== false && !slotB.isPast
-    const isAvail = isAvailA && isAvailB
-    const isPast = Boolean(slotA.isPast || slotB.isPast)
-    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
-    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
-
-    twoHourSlots.push({
-      id: slotA.id,
-      slotIds: [slotA.id, slotB.id],
-      courtId: slotA.courtId,
-      startTime: slotA.startTime,
-      endTime: slotB.endTime,
-      price: priceA + priceB,
-      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
-      isBookable: isAvail,
-      isPast,
-      durationHours: 2,
-      rawSlots: [slotA, slotB],
-      formattedStart: vnClock(slotA.startTime) || '',
-      formattedEnd: vnClock(slotB.endTime) || '',
-      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
-    })
-  }
-
-  return twoHourSlots
-}
+// "1 tiếng", "1,5 tiếng", "90 phút"…
+const formatDuration = (hours) => (Number.isInteger(hours) ? `${hours} tiếng` : hours > 1 ? `${String(hours).replace('.', ',')} tiếng` : `${Math.round(hours * 60)} phút`)
 
 function CourtDetails() {
   const navigate = useNavigate()
@@ -209,7 +160,7 @@ function CourtDetails() {
       }
       const slotsData = await getCourtSlots(courtId, dateStr)
       if (latestSlotsKey.current !== requestKey) return
-      const slots = buildTwoHourSlots(Array.isArray(slotsData) ? slotsData : [], activeCourtPrice)
+      const slots = normalizeCourtSlots(Array.isArray(slotsData) ? slotsData : [], activeCourtPrice)
       setCourtSlots(slots)
       setSlotsError(null)
       setSlotsCheckedAt(new Date())
@@ -391,7 +342,7 @@ function CourtDetails() {
       return { courtSlotId: null, numberOfSlots: 0, courtSlotIds: [], isConsecutive: false }
     }
 
-    // Lấy danh sách ca gốc từ các khung giờ 2 tiếng đã chọn
+    // Lấy danh sách ca gốc đã chọn
     const allRawSlots = selectedSlots.flatMap((s) => s.rawSlots || [s])
     const sorted = [...allRawSlots].sort(
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
@@ -430,6 +381,27 @@ function CourtDetails() {
     return selectedSlots.reduce((sum, slot) => sum + (Number(slot.price) || 0), 0)
   }, [selectedSlots])
 
+  // ---------- Đặt định kỳ: lặp lại các ca đã chọn vào các thứ đã chọn trong N tuần ----------
+  // Chỉ lặp lại khi các ca đang chọn cùng một ngày (ngày gốc). Mặc định lặp đúng thứ của ngày gốc.
+  const repeatBaseDate =
+    selectedSlots.length > 0 && selectedSlots.every((s) => vnDateKey(s.startTime) === vnDateKey(selectedSlots[0].startTime))
+      ? vnDateKey(selectedSlots[0].startTime)
+      : null
+  const repeat = useRepeatBooking(
+    selectedSlots.map((s) => ({
+      courtId: s.courtId,
+      courtName: s.courtName,
+      sportName: s.sportName,
+      start: s.formattedStart,
+      end: s.formattedEnd,
+      price: courtsList.find((c) => c.id === s.courtId)?.defaultPrice || 0,
+    })),
+    repeatBaseDate,
+  )
+  const repeatSlots = repeat.slots
+  const orderSlotCount = selectedSlots.length + repeatSlots.length
+  const orderTotal = totalAmountVnd + repeatSlots.reduce((sum, slot) => sum + (Number(slot.price) || 0), 0)
+  const orderDiscount = bulkDiscount(orderTotal, orderSlotCount, facility?.isBulkDiscountEnabled)
   // Tên các sân con được chọn
   const uniqueCourtNames = useMemo(() => {
     return Array.from(new Set(selectedSlots.map((s) => s.courtName)))
@@ -454,7 +426,7 @@ function CourtDetails() {
     for (const { courtId, dateStr } of groups.values()) {
       const price = courtsList.find((c) => c.id === courtId)?.defaultPrice || 0
       const raw = await getCourtSlots(courtId, dateStr)
-      const fresh = buildTwoHourSlots(Array.isArray(raw) ? raw : [], price)
+      const fresh = normalizeCourtSlots(Array.isArray(raw) ? raw : [], price)
       if (courtId === activeCourt?.id && dateStr === selectedDateStr) setCourtSlots(fresh)
       dropped += dropTakenSelections(courtId, dateStr, fresh)
     }
@@ -474,6 +446,17 @@ function CourtDetails() {
     if (validSlots.length === 0) {
       toast.error('Ca sân được chọn không có mã định danh (GUID) hợp lệ từ máy chủ. Vui lòng chọn ca sân trong danh sách ca trống!')
       return
+    }
+
+    if (repeat.enabled) {
+      if (!repeat.baseDate) {
+        toast.warning('Chỉ đặt lặp lại được khi các ca đã chọn cùng một ngày.')
+        return
+      }
+      if (!repeat.ready) {
+        toast.warning(repeat.loading ? 'Đang kiểm tra lịch các tuần tiếp theo, vui lòng chờ.' : 'Có buổi lặp lại không đặt được. Vui lòng đổi giờ hoặc bỏ bớt thứ / số tuần.')
+        return
+      }
     }
 
     setCheckingOut(true)
@@ -499,10 +482,13 @@ function CourtDetails() {
       .join(', ')
 
     const firstId = bookingPayloadConfig.courtSlotId || validSlots[0]?.id
-    const allIds =
+    const baseIds =
       Array.isArray(bookingPayloadConfig.courtSlotIds) && bookingPayloadConfig.courtSlotIds.length > 0
         ? bookingPayloadConfig.courtSlotIds.filter((id) => GUID_REGEX.test(id))
         : validSlots.map((s) => s.id)
+    // Đặt định kỳ: gửi thêm ca của các ngày lặp lại (BE nhận courtSlotIds nhiều ngày, lỗi 1 ca thì hủy cả đơn)
+    const allIds = [...baseIds, ...repeatSlots.map((s) => s.id).filter((id) => GUID_REGEX.test(id))]
+    const recurring = repeat.recurring
 
     // Lưu cache để SplitPayment không bao giờ bị thiếu ID
     try {
@@ -533,16 +519,19 @@ function CourtDetails() {
         sport: primarySport,
         date: selectedDateStr,
         slot: timeSummary,
-        slotCount: selectedSlots.length,
-        hours: selectedSlots.length * 2.0,
-        total: totalAmountVnd,
-        unitPrice: activeCourt?.defaultPrice ? activeCourt.defaultPrice * 2 : totalAmountVnd,
+        slotCount: orderSlotCount,
+        hours: [...selectedSlots, ...repeatSlots].reduce((sum, s) => sum + (s.durationHours || 1), 0),
+        total: orderTotal,
+        // Giảm giá đặt gói: trang thanh toán tự trừ % khi cơ sở bật và đơn đủ số ca
+        bulkDiscountEnabled: Boolean(facility?.isBulkDiscountEnabled),
+        recurring,
+        unitPrice: activeCourt?.defaultPrice || totalAmountVnd,
         // Dữ liệu Bước 3: Đảm bảo luôn có ít nhất 1 ca sân
         courtSlotId: firstId,
-        numberOfSlots: bookingPayloadConfig.numberOfSlots || allIds.length || 2,
+        numberOfSlots: recurring ? allIds.length : bookingPayloadConfig.numberOfSlots || allIds.length || 2,
         courtSlotIds: allIds,
-        isConsecutive: bookingPayloadConfig.isConsecutive,
-        selectedSlots: selectedSlots.flatMap((s) => s.rawSlots || [s]),
+        isConsecutive: recurring ? false : bookingPayloadConfig.isConsecutive,
+        selectedSlots: [...selectedSlots, ...repeatSlots].flatMap((s) => s.rawSlots || [s]),
       },
     })
   }
@@ -783,12 +772,9 @@ function CourtDetails() {
                     <span className="material-symbols-outlined text-primary">schedule</span>
                     Lưới Ca Sân: {activeCourt?.name || 'Sân con'} (Ngày {selectedDateStr})
                   </h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
-                    Quy chuẩn: 2 tiếng / ca
-                  </span>
                 </div>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> • Mỗi khung giờ thi đấu kéo dài 2 tiếng chuẩn
+                  <span className="text-secondary-container font-semibold">Chỉ ca trạng thái Available mới đặt được</span> • Độ dài mỗi ca theo cài đặt của chủ sân, chọn nhiều ca liền nhau để chơi lâu hơn
                 </p>
               </div>
 
@@ -861,7 +847,7 @@ function CourtDetails() {
             {!slotsLoading && !slotsError && courtSlots.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-space-sm pt-space-xs">
                 {courtSlots.map((slot) => {
-                  const isAvailable = slot.status === 'Available' && slot.isBookable && !slot.isPast
+                  const isAvailable = isSlotOpen(slot)
                   const isSelected = selectedSlots.some((s) => s.id === slot.id)
                   const startStr = formatTimeSlot(slot.startTime)
                   const endStr = formatTimeSlot(slot.endTime)
@@ -887,7 +873,7 @@ function CourtDetails() {
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase ${
                       isSelected ? 'bg-secondary-container/30 text-secondary-container' : 'bg-primary/10 text-primary border border-primary/20'
                     }`}>
-                      2 tiếng
+                      {formatDuration(slot.durationHours)}
                     </span>
                   </div>
                   {isSelected ? (
@@ -1123,8 +1109,11 @@ function CourtDetails() {
               )}
             </div>
 
+            {/* Đặt định kỳ: lặp lại các ca đã chọn vào các thứ đã chọn trong N tuần */}
+            {selectedSlots.length > 0 && <RepeatBookingPanel repeat={repeat} />}
+
             {/* Chế độ đặt theo Bước 3 */}
-            {selectedSlots.length > 0 && (
+            {selectedSlots.length > 0 && !repeatSlots.length && (
               <div className="p-3 rounded-xl bg-surface-container text-xs text-on-surface-variant flex items-center justify-between">
                 <span>Chế độ đặt (Bước 3):</span>
                 <strong className="text-primary">
@@ -1133,6 +1122,23 @@ function CourtDetails() {
                     : `Cách 2: ${bookingPayloadConfig.courtSlotIds.length} ca rời nhau`}
                 </strong>
               </div>
+            )}
+
+            {/* Giảm giá đặt gói (cơ sở bật isBulkDiscountEnabled, đơn từ BULK_MIN_SLOTS ca) */}
+            {orderDiscount.applies && (
+              <div className="flex items-center justify-between text-body-sm">
+                <span className="text-on-surface-variant">Tạm tính ({orderSlotCount} ca)</span>
+                <span className="font-bold text-on-surface">{orderTotal.toLocaleString('vi-VN')} Điểm</span>
+              </div>
+            )}
+            {orderDiscount.applies && (
+              <div className="flex items-center justify-between text-body-sm">
+                <span className="text-emerald-300 font-bold">Giảm {BULK_DISCOUNT_PERCENT}% khi đặt gói tháng</span>
+                <span className="font-bold text-emerald-300">−{orderDiscount.amount.toLocaleString('vi-VN')} Điểm</span>
+              </div>
+            )}
+            {!orderDiscount.applies && facility?.isBulkDiscountEnabled && selectedSlots.length > 0 && (
+              <p className="text-xs text-emerald-300">Đặt từ {BULK_MIN_SLOTS} ca trở lên (vd lặp lại mỗi tuần) để được giảm {BULK_DISCOUNT_PERCENT}%.</p>
             )}
 
             {/* Total Amount */}
@@ -1147,7 +1153,7 @@ function CourtDetails() {
               </div>
               <div className="flex items-baseline gap-1">
                 <span className="font-display-lg text-display-lg font-extrabold text-primary leading-none tracking-tight">
-                  {totalAmountVnd.toLocaleString('vi-VN')}
+                  {orderDiscount.payable.toLocaleString('vi-VN')}
                 </span>
                 <span className="font-headline-sm text-headline-sm text-primary font-bold">Điểm</span>
               </div>
@@ -1155,7 +1161,7 @@ function CourtDetails() {
 
             <button
               type="button"
-              disabled={selectedSlots.length === 0 || checkingOut}
+              disabled={selectedSlots.length === 0 || checkingOut || !repeat.ready}
               className="w-full py-space-md rounded-xl bg-primary-container hover:bg-primary-fixed text-on-primary font-headline-sm text-headline-sm font-extrabold flex items-center justify-center gap-space-sm transition-all shadow-[0_0_28px_rgba(0,229,255,0.45)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               onClick={handleCheckout}
             >
@@ -1163,7 +1169,7 @@ function CourtDetails() {
                 {checkingOut
                   ? 'Đang kiểm tra ca còn trống…'
                   : selectedSlots.length > 0
-                  ? `Xác Nhận & Tiếp Tục Thanh Toán (${selectedSlots.length} Ca)`
+                  ? `Xác Nhận & Tiếp Tục Thanh Toán (${orderSlotCount} Ca)`
                   : 'Vui Lòng Chọn Ít Nhất 1 Ca Sân'}
               </span>
               <span className="material-symbols-outlined text-[22px]">arrow_forward</span>
