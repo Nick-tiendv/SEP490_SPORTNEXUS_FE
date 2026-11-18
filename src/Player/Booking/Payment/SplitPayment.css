@@ -2553,3 +2553,6 @@
 }
 .sp-receipt-recurring strong { font-size: 12.5px; color: #14532d; }
 .sp-receipt-recurring-note { color: #b45309; font-weight: 600; }
+
+/* Gói định kỳ: khóa "Thanh Toán Từng Người" (chia tiền không áp dụng) */
+.sp-mode-box.sp-mode-locked { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.4); }

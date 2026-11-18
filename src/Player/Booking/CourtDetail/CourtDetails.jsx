@@ -6,7 +6,8 @@ import { getCourtSlots, getFacilityAvailability } from '../../../api/player/book
 import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
-import { BULK_DISCOUNT_PERCENT, BULK_MIN_SLOTS, bulkDiscount } from '../Recurring/recurringBooking.js'
+import { bulkDiscount, isBulkPackage } from '../Recurring/recurringBooking.js'
+import { BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
 import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
@@ -401,7 +402,9 @@ function CourtDetails() {
   const repeatSlots = repeat.slots
   const orderSlotCount = selectedSlots.length + repeatSlots.length
   const orderTotal = totalAmountVnd + repeatSlots.reduce((sum, slot) => sum + (Number(slot.price) || 0), 0)
-  const orderDiscount = bulkDiscount(orderTotal, orderSlotCount, facility?.isBulkDiscountEnabled)
+  // Gói định kỳ (luật BE): cùng ca, cùng sân, cùng thứ, đặt liên tiếp từ 4 tuần → giảm giá (nếu cơ sở bật) + không chia tiền
+  const orderIsPackage = isBulkPackage([...selectedSlots, ...repeatSlots])
+  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, facility?.isBulkDiscountEnabled)
   // Tên các sân con được chọn
   const uniqueCourtNames = useMemo(() => {
     return Array.from(new Set(selectedSlots.map((s) => s.courtName)))
@@ -524,6 +527,7 @@ function CourtDetails() {
         total: orderTotal,
         // Giảm giá đặt gói: trang thanh toán tự trừ % khi cơ sở bật và đơn đủ số ca
         bulkDiscountEnabled: Boolean(facility?.isBulkDiscountEnabled),
+        bulkPackage: orderIsPackage,
         recurring,
         unitPrice: activeCourt?.defaultPrice || totalAmountVnd,
         // Dữ liệu Bước 3: Đảm bảo luôn có ít nhất 1 ca sân
@@ -765,6 +769,7 @@ function CourtDetails() {
 
           {/* BƯỚC 2: BẢNG LƯỚI CA CỦA SÂN CON (GET /api/v1/courts/{courtId}/slots) */}
           <div className="flex flex-col gap-space-md p-space-lg rounded-2xl bg-surface-container-low shadow-xl border border-outline-variant/15">
+            {facility?.isBulkDiscountEnabled && <BulkDiscountBanner />}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1124,22 +1129,8 @@ function CourtDetails() {
               </div>
             )}
 
-            {/* Giảm giá đặt gói (cơ sở bật isBulkDiscountEnabled, đơn từ BULK_MIN_SLOTS ca) */}
-            {orderDiscount.applies && (
-              <div className="flex items-center justify-between text-body-sm">
-                <span className="text-on-surface-variant">Tạm tính ({orderSlotCount} ca)</span>
-                <span className="font-bold text-on-surface">{orderTotal.toLocaleString('vi-VN')} Điểm</span>
-              </div>
-            )}
-            {orderDiscount.applies && (
-              <div className="flex items-center justify-between text-body-sm">
-                <span className="text-emerald-300 font-bold">Giảm {BULK_DISCOUNT_PERCENT}% khi đặt gói tháng</span>
-                <span className="font-bold text-emerald-300">−{orderDiscount.amount.toLocaleString('vi-VN')} Điểm</span>
-              </div>
-            )}
-            {!orderDiscount.applies && facility?.isBulkDiscountEnabled && selectedSlots.length > 0 && (
-              <p className="text-xs text-emerald-300">Đặt từ {BULK_MIN_SLOTS} ca trở lên (vd lặp lại mỗi tuần) để được giảm {BULK_DISCOUNT_PERCENT}%.</p>
-            )}
+            {/* Giảm giá đặt gói: đủ ca thì gạch giá cũ + giá mới; chưa đủ thì gợi ý chọn thêm N ca */}
+            {selectedSlots.length > 0 && <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} enabled={facility?.isBulkDiscountEnabled} />}
 
             {/* Total Amount */}
             <div className="pt-space-md flex items-baseline justify-between border-t border-outline-variant/20">

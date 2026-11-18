@@ -33,7 +33,8 @@ import {
   DEPOSIT_MAX,
 } from '../../../api/player/walletApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
-import { BULK_DISCOUNT_PERCENT, bulkDiscount } from '../Recurring/recurringBooking.js'
+import { bulkDiscount } from '../Recurring/recurringBooking.js'
+import { BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
@@ -257,8 +258,9 @@ function SplitPayment() {
   const hours = state.hours || (state.slotCount ? state.slotCount * 1.0 : 1.0)
   const totalAmount = Number(state.total) || Number(activeSlotData?.price) || 0
   // Giảm giá đặt gói: cơ sở bật + đơn từ 4 ca thì FE trừ 10% (BE tính lại khi đặt). orderAmount = số phải trả cả đơn.
-  const discountInfo = bulkDiscount(totalAmount, Number(state.slotCount) || resolvedNumberOfSlots, state.bulkDiscountEnabled)
-  const orderAmount = discountInfo.payable
+  // Gói định kỳ (cùng ca, cùng sân, cùng thứ, ≥ 4 tuần liên tiếp): giảm giá nếu cơ sở bật, không cho chia tiền
+  const isPackage = Boolean(state.bulkPackage)
+  const orderAmount = bulkDiscount(totalAmount, isPackage, state.bulkDiscountEnabled).payable
   const recurring = state.recurring || null
   const hourlyRate = state.hourlyRate || (hours > 0 ? Math.round(totalAmount / hours) : 0)
   const unitPrice = state.unitPrice || (courtCount > 0 ? Math.round(totalAmount / courtCount) : 0)
@@ -466,7 +468,12 @@ function SplitPayment() {
   const payableAmount = paymentMode === 'full' ? orderAmount : splitAmount
 
   // Chọn chế độ thanh toán
+  const SPLIT_LOCKED_TEXT = 'Tính năng chia tiền không áp dụng cho Gói đặt lịch định kỳ.'
   const handleSelectPaymentMode = (mode) => {
+    if (mode === 'split' && isPackage) {
+      toast.info(SPLIT_LOCKED_TEXT)
+      return
+    }
     setPaymentMode(mode)
   }
 
@@ -1561,10 +1568,12 @@ Xem vé QR: ${window.location.origin}/qr-pass`
 
                 {/* Option: Thanh Toán Từng Người */}
                 <div
-                  className={`sp-mode-box ${paymentMode === 'split' ? 'sp-mode-active' : ''}`}
+                  className={`sp-mode-box ${paymentMode === 'split' ? 'sp-mode-active' : ''} ${isPackage ? 'sp-mode-locked' : ''}`}
                   onClick={() => handleSelectPaymentMode('split')}
                   role="button"
                   tabIndex={0}
+                  aria-disabled={isPackage}
+                  title={isPackage ? SPLIT_LOCKED_TEXT : undefined}
                 >
                   <div className="sp-mode-top">
                     <span className="sp-mode-radio-icon">
@@ -1574,13 +1583,13 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     </span>
                     <span className="sp-mode-title">Thanh Toán Từng Người</span>
                     <span className="sp-badge-count">
-                      {invitedFriends.length > 0 ? `${invitedFriends.length + 1} người` : 'Chia 2 người'}
+                      {isPackage ? 'Không áp dụng' : invitedFriends.length > 0 ? `${invitedFriends.length + 1} người` : 'Chia 2 người'}
                     </span>
                   </div>
                   <div className="sp-mode-amount-row">
                     <small>SỐ ĐIỂM:</small>
                     <strong className="sp-split-color">
-                      {formatVnd(invitedFriends.length > 0 ? splitAmount : displaySplitAmount)} / người
+                      {isPackage ? 'Gói định kỳ thanh toán một lần' : `${formatVnd(invitedFriends.length > 0 ? splitAmount : displaySplitAmount)} / người`}
                     </strong>
                   </div>
                 </div>
@@ -1931,21 +1940,15 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                     </div>
                   )}
                 </div>
-                {discountInfo.applies && (
-                  <div className="sp-receipt-line">
-                    <span className="sp-receipt-line-left sp-receipt-line-discount">
-                      Giảm {BULK_DISCOUNT_PERCENT}% khi đặt gói tháng
-                    </span>
-                    <span className="sp-receipt-price-nowrap sp-receipt-line-discount">-{formatVnd(discountInfo.amount)}</span>
-                  </div>
-                )}
+                {/* Giảm giá đặt gói: gạch giá cũ + giá mới màu đỏ, hoặc gợi ý chọn thêm N ca */}
+                <BulkDiscountNote total={totalAmount} isPackage={isPackage} enabled={state.bulkDiscountEnabled} />
               </div>
 
               <div className="sp-receipt-divider" />
 
               <div className="sp-receipt-total-row">
                 <div className="sp-total-labels">
-                  <span className="sp-total-head">TỔNG THANH TOÁN KỲ NÀY</span>
+                  <span className="sp-total-head">{isPackage ? 'TỔNG TIỀN CẦN THANH TOÁN TRẢ TRƯỚC' : 'TỔNG THANH TOÁN KỲ NÀY'}</span>
                   <span className="sp-total-sub">
                     {paymentMode === 'full' ? 'Ký quỹ 100% toàn bộ phí sân' : `Ký quỹ phần của bạn (1/${totalParticipantCount}) phí sân`}
                   </span>
@@ -1965,7 +1968,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   {isSubmitting ? 'sync' : 'check_circle'}
                 </span>
                 <span>
-                  {isSubmitting ? 'Đang gửi yêu cầu đặt sân (POST /bookings)...' : 'Xác nhận thanh toán & lấy vé QR'}
+                  {isSubmitting ? 'Đang gửi yêu cầu đặt sân (POST /bookings)...' : isPackage ? `Thanh toán ngay ${formatVnd(payableAmount)}` : 'Xác nhận thanh toán & lấy vé QR'}
                 </span>
               </button>
 

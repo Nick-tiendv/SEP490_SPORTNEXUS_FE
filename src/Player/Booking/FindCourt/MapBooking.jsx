@@ -4,7 +4,8 @@ import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 import MonthCalendarPicker from './MonthCalendarPicker.jsx'
-import { BULK_DISCOUNT_PERCENT, BULK_MIN_SLOTS, bulkDiscount } from '../Recurring/recurringBooking.js'
+import { bulkDiscount, isBulkPackage } from '../Recurring/recurringBooking.js'
+import { BulkDiscountBadge, BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
@@ -1124,7 +1125,13 @@ function MapBooking() {
   const orderSlotCount = selectedSlots.length + extraCourtSlots.length + repeat.slots.length
   const orderTotal = totalBookingPrice + repeat.slots.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
   // Giảm giá đặt gói: cơ sở bật isBulkDiscountEnabled và đơn từ 4 ca (FE hiển thị tạm tính, BE tính lại khi đặt)
-  const orderDiscount = bulkDiscount(orderTotal, orderSlotCount, selectedCourt?.rawFacility?.isBulkDiscountEnabled)
+  // Gói định kỳ (luật BE): cùng ca, cùng sân, cùng thứ, đặt liên tiếp từ 4 tuần → giảm giá (nếu cơ sở bật) + không chia tiền
+  const orderIsPackage = isBulkPackage([
+    ...selectedSlots.flatMap((s) => s.allRawSlots),
+    ...extraCourtSlots.flatMap((s) => s.rawSlots),
+    ...repeat.slots.flatMap((s) => s.rawSlots),
+  ])
+  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, selectedCourt?.rawFacility?.isBulkDiscountEnabled)
 
   // Đếm ngược thời gian khóa giữ chỗ
   // Hết thời gian giữ chỗ → tự động nhả khung giờ (không tự chọn lại ca khác)
@@ -1281,6 +1288,7 @@ function MapBooking() {
         slotCount: orderSlotCount,
         // Giảm giá đặt gói và đặt định kỳ: trang thanh toán tự trừ % và liệt kê các buổi
         bulkDiscountEnabled: Boolean(selectedCourt?.rawFacility?.isBulkDiscountEnabled),
+        bulkPackage: orderIsPackage,
         recurring: repeat.recurring,
         unitPrice: selectedSlot.price,
         hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 2)),
@@ -1779,6 +1787,7 @@ function MapBooking() {
                       {court.address}
                     </p>
                     <div className="mb-court-meta" style={{ flexWrap: 'wrap', gap: 5 }}>
+                      {court.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBadge />}
                       {court.isFromApi && (
                         <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 700 }}>
                           ✦ Cụm sân hệ thống
@@ -1878,6 +1887,8 @@ function MapBooking() {
                 </span>
               </div>
             </div>
+
+            {selectedCourt?.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBanner />}
 
             {/* Thanh chọn ngày trực quan: Hôm nay, Ngày mai, và các ngày tiếp theo */}
             <div className="mb-date-bar">
@@ -2137,7 +2148,7 @@ function MapBooking() {
                   <div className="mb-summary-multicourt-note">
                     <span className="material-symbols-outlined">layers</span>
                     <span>
-                      Đang chọn <strong>{courtQuantity} sân cùng khung giờ</strong> ({formatVnd(selectedSlot.price)}/sân)
+                      Đang chọn <strong>{courtQuantity} sân cùng khung giờ</strong>
                     </span>
                   </div>
                 )}
@@ -2145,24 +2156,15 @@ function MapBooking() {
               <div className="mb-summary-total">
                 <small>{repeat.slots.length ? `Tổng tiền ${orderSlotCount} ca:` : `Tổng tiền ${courtQuantity} sân:`}</small>
                 <strong>{selectedSlot ? formatVnd(orderDiscount.payable) : '0 Điểm'}</strong>
-                {orderDiscount.applies && (
-                  <span className="mb-summary-unit-calc">
-                    Tạm tính {formatVnd(orderTotal)} · Giảm {BULK_DISCOUNT_PERCENT}% khi đặt gói tháng (−{formatVnd(orderDiscount.amount)})
-                  </span>
-                )}
-                {courtQuantity > 1 && (
-                  <span className="mb-summary-unit-calc">
-                    ({courtQuantity} sân × {formatVnd(selectedSlot.price)})
-                  </span>
-                )}
+
               </div>
             </div>
 
             {selectedSlot && (
               <RepeatBookingPanel repeat={repeat} disabledReason={courtQuantity > 1 ? 'Đặt định kỳ áp dụng khi chọn 1 sân. Vui lòng bỏ bớt sân trong cụm.' : ''} />
             )}
-            {selectedSlot && !orderDiscount.applies && selectedCourt?.rawFacility?.isBulkDiscountEnabled && (
-              <p className="mb-secure-note">Đặt từ {BULK_MIN_SLOTS} ca trở lên (vd lặp lại mỗi tuần) để được giảm {BULK_DISCOUNT_PERCENT}%.</p>
+            {selectedSlot && (
+              <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} enabled={selectedCourt?.rawFacility?.isBulkDiscountEnabled} />
             )}
             <button
               id="mb-confirm-booking"
