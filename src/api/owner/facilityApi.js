@@ -1,8 +1,9 @@
 import { del, get, getList, patch, path, post, put, upload } from './request.js'
+import { withLegacyAddress } from '../../utils/vnAddress.js'
 
 // ---------- Cơ sở của chủ sân ----------
-export const getMyFacilities = async () => (await getList('/api/v1/facilities/my-facilities')).items
-export const getFacility = id => get(`/api/v1/facilities/${path(id)}`)
+export const getMyFacilities = async () => (await getList('/api/v1/facilities/my-facilities')).items.map(withLegacyAddress)
+export const getFacility = async id => withLegacyAddress(await get(`/api/v1/facilities/${path(id)}`))
 // CreateFacilityRequest: name, address, latitude, longitude, description, phone, openTime, closeTime, amenityIds, imageUrls.
 export const createFacility = payload => post('/api/v1/facilities', payload)
 // UpdateFacilityRequest: như trên + status. Field null thì BE giữ nguyên.

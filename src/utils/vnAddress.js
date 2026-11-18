@@ -123,6 +123,17 @@ export const composeFacilityAddress = ({ street, district, province }) => {
   return [cleanStreet, String(district || '').trim(), String(province || '').trim()].filter(Boolean).join(', ')
 }
 
+// BE trả địa chỉ tách 3 trường streetAddress + wardName + provinceName; các màn hình vẫn đọc address / district / province.
+export const withLegacyAddress = facility =>
+  facility && typeof facility === 'object' && 'streetAddress' in facility
+    ? {
+        ...facility,
+        address: composeFacilityAddress({ street: facility.streetAddress, district: facility.wardName, province: facility.provinceName }),
+        district: facility.wardName || '',
+        province: facility.provinceName || '',
+      }
+    : facility
+
 export const parseFacilityAddress = ({ address, province, district } = {}) => {
   const rawAddress = String(address || '').trim()
   const rawProvince = String(province || '').trim()

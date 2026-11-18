@@ -1,5 +1,6 @@
 import apiClient from '../apiClient.js'
 import { pick, toList, unwrap } from './dashboardApi.js'
+import { withLegacyAddress } from '../../utils/vnAddress.js'
 
 const asArray = value => (Array.isArray(value) ? value : [])
 const toNumber = value => (value === undefined || value === null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value))
@@ -30,7 +31,7 @@ function displayStatus({ approval, locked, deleted, status }) {
 
 // Chuẩn hóa cơ sở từ GET /api/v1/admin/facilities và /{facilityId}. Swagger không mô tả schema response nên vẫn thử vài tên field.
 export function toAdminFacility(input) {
-  const raw = input?.facility && typeof input.facility === 'object' ? { ...input, ...input.facility } : input
+  const raw = withLegacyAddress(input?.facility && typeof input.facility === 'object' ? { ...input, ...input.facility } : input)
   const courts = asArray(pick(raw, 'courts')).map(toCourt)
   const sports = [...new Set([...asArray(pick(raw, 'sports', 'sportNames', 'categories')).map(nameOf), ...courts.map(court => court.sport)].filter(Boolean))]
   const approval = String(pick(raw, 'approvalStatus') ?? '')
