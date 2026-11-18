@@ -1,4 +1,5 @@
 import apiClient, { normalizeApiError } from '../apiClient.js'
+import { withLegacyAddress } from '../../utils/vnAddress.js'
 
 export const FACILITIES_ENDPOINT = '/api/v1/facilities'
 
@@ -11,10 +12,10 @@ export async function getFacilities() {
     const response = await apiClient.get(FACILITIES_ENDPOINT, { skipAuth: true })
     const body = response.data
     if (body?.statusCode === 200 && Array.isArray(body?.data)) {
-      return body.data
+      return body.data.map(withLegacyAddress)
     }
     if (Array.isArray(body)) {
-      return body
+      return body.map(withLegacyAddress)
     }
     return []
   } catch (error) {
@@ -34,9 +35,9 @@ export async function getFacilityById(facilityId) {
     const response = await apiClient.get(`${FACILITIES_ENDPOINT}/${facilityId}`, { skipAuth: true })
     const body = response.data
     if (body?.statusCode === 200 && body?.data) {
-      return body.data
+      return withLegacyAddress(body.data)
     }
-    return body
+    return withLegacyAddress(body)
   } catch (error) {
     console.warn(`[facilityApi] Không thể tải chi tiết cơ sở ${facilityId}:`, error)
     throw normalizeApiError(error)
@@ -220,8 +221,8 @@ export async function searchFacilities(params = {}) {
     })
     const body = response.data
     const data = body?.data || body?.result || body
-    if (data && Array.isArray(data.items)) return data
-    if (Array.isArray(data)) return { items: data, totalItems: data.length, page: 1, pageSize: data.length }
+    if (data && Array.isArray(data.items)) return { ...data, items: data.items.map(withLegacyAddress) }
+    if (Array.isArray(data)) return { items: data.map(withLegacyAddress), totalItems: data.length, page: 1, pageSize: data.length }
     return { items: [], totalItems: 0, page: 1, pageSize: 20 }
   } catch (error) {
     console.warn('[facilityApi] Lỗi khi tìm kiếm cơ sở:', error)
