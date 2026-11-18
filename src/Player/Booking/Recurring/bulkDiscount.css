@@ -1,0 +1,60 @@
+/* Giảm giá đặt gói: nhãn trên thẻ cơ sở, banner khu đặt sân, dòng giá trong tóm tắt / thanh toán */
+.snx-bulk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px -4px rgba(220, 38, 38, 0.7);
+}
+
+.snx-bulk-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.snx-bulk-banner strong { color: #b91c1c; }
+
+.snx-bulk-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff5f5;
+  font-size: 12.5px;
+  color: #991b1b;
+}
+.snx-bulk-prices { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.snx-bulk-prices s { color: #9ca3af; font-weight: 600; }
+.snx-bulk-prices strong { color: #dc2626; font-size: 18px; font-weight: 800; }
+.snx-bulk-note > span { font-weight: 700; }
+
+.snx-bulk-hint {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed #fca5a5;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12.5px;
+}
+.snx-bulk-hint strong { color: #dc2626; }
+
+.snx-bulk-package { margin: 0; font-size: 12px; font-weight: 600; color: #1d4ed8; }

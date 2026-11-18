@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
+import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
+import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
+import MonthCalendarPicker from './MonthCalendarPicker.jsx'
+import { bulkDiscount, isBulkPackage } from '../Recurring/recurringBooking.js'
+import { BulkDiscountBadge, BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
@@ -217,11 +222,6 @@ const calculateRoute = (court, origin) => {
   }
 }
 
-// Thời lượng ca tính từ giờ bắt đầu / kết thúc thật (giờ, có thể lẻ: 0.25 = 15 phút)
-const slotHours = (startIso, endIso) => {
-  const ms = new Date(endIso).getTime() - new Date(startIso).getTime()
-  return ms > 0 ? ms / 3600000 : 0
-}
 const splitHours = (h) => {
   const total = Math.round((Number(h) || 0) * 60)
   return { hh: Math.floor(total / 60), mm: total % 60 }
@@ -239,87 +239,40 @@ const shortHours = (h) => {
 }
 const formatTimer = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-// Ghép ca thành các khung giờ 2 tiếng chuẩn toàn hệ thống (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
-  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
+const pad2 = (n) => String(n).padStart(2, '0')
+const localDateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 
-  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-
-  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
-  if (firstSlotDiffHours >= 1.8) {
-    return sorted.map((s) => ({
-      ...s,
-      slotIds: [s.id],
-      durationHours: slotHours(s.startTime, s.endTime),
-      rawSlots: [s],
-      formattedStart: vnClock(s.startTime) || '',
-      formattedEnd: vnClock(s.endTime) || '',
-    }))
-  }
-
-  const twoHourSlots = []
-  for (let i = 0; i < sorted.length; i += 2) {
-    const slotA = sorted[i]
-    const slotB = sorted[i + 1]
-    if (!slotB) break // Không nhận ca lẻ 1 tiếng
-
-    const isAvailA = String(slotA.status || '').toLowerCase() === 'available' && slotA.isBookable !== false && !slotA.isPast
-    const isAvailB = String(slotB.status || '').toLowerCase() === 'available' && slotB.isBookable !== false && !slotB.isPast
-    const isAvail = isAvailA && isAvailB
-    const isPast = Boolean(slotA.isPast || slotB.isPast)
-    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
-    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
-
-    twoHourSlots.push({
-      id: slotA.id,
-      slotIds: [slotA.id, slotB.id],
-      courtId: slotA.courtId,
-      startTime: slotA.startTime,
-      endTime: slotB.endTime,
-      price: priceA + priceB,
-      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
-      isBookable: isAvail,
-      isPast,
-      durationHours: slotHours(slotA.startTime, slotB.endTime),
-      rawSlots: [slotA, slotB],
-      formattedStart: vnClock(slotA.startTime) || '',
-      formattedEnd: vnClock(slotB.endTime) || '',
-      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
-    })
-  }
-
-  return twoHourSlots
-}
-
-function getUpcomingDays(count = 7) {
-  const days = []
+// Dải 7 ngày trên lưới ca = tuần (Thứ 2 → Chủ nhật) chứa ngày đang chọn. Ngày đã qua đánh dấu isPast.
+function getWeekDays(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const base = new Date(y, m - 1, d)
+  const monday = new Date(base)
+  monday.setDate(base.getDate() - ((base.getDay() + 6) % 7))
   const now = new Date()
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now)
-    d.setDate(now.getDate() + i)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const dateStr = `${year}-${month}-${day}`
-
-    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
-    const dayOfWeek = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : dayNames[d.getDay()]
-    const shortLabel = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : `${d.getDay() === 0 ? 'CN' : `T${d.getDay() + 1}`}, ${day}/${month}`
-    const fullLabel = i === 0 ? `Hôm nay (${day}/${month}/${year})` : i === 1 ? `Ngày mai (${day}/${month}/${year})` : `${dayOfWeek} (${day}/${month}/${year})`
-
-    days.push({
-      dateStr,
-      dayNum: d.getDate(),
-      monthNum: d.getMonth() + 1,
-      year: d.getFullYear(),
+  const todayKey = localDateKey(now)
+  const tomorrowKey = localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+  const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+    const key = localDateKey(day)
+    const dd = pad2(day.getDate())
+    const mm = pad2(day.getMonth() + 1)
+    const isToday = key === todayKey
+    const isTomorrow = key === tomorrowKey
+    const dayOfWeek = isToday ? 'Hôm nay' : isTomorrow ? 'Ngày mai' : dayNames[day.getDay()]
+    return {
+      dateStr: key,
+      dayNum: day.getDate(),
+      monthNum: day.getMonth() + 1,
+      year: day.getFullYear(),
       dayOfWeek,
-      shortLabel,
-      fullLabel,
-      isToday: i === 0,
-      isTomorrow: i === 1,
-    })
-  }
-  return days
+      shortLabel: isToday || isTomorrow ? dayOfWeek : `${day.getDay() === 0 ? 'CN' : `T${day.getDay() + 1}`}, ${dd}/${mm}`,
+      fullLabel: `${dayOfWeek} (${dd}/${mm}/${day.getFullYear()})`,
+      isToday,
+      isTomorrow,
+      isPast: key < todayKey,
+    }
+  })
 }
 
 function MapBooking() {
@@ -376,13 +329,13 @@ function MapBooking() {
   const [maxPriceInput, setMaxPriceInput] = useState('')
 
   // Chọn ngày đặt sân (Hôm nay, Ngày mai, và các ngày tiếp theo)
-  const upcomingDays = useMemo(() => getUpcomingDays(7), [])
-  const todayIsoDate = upcomingDays[0]?.dateStr || new Date().toISOString().slice(0, 10)
+  const todayIsoDate = useMemo(() => localDateKey(new Date()), [])
   const [selectedDateStr, setSelectedDateStr] = useState(() => todayIsoDate)
+  const weekDays = useMemo(() => getWeekDays(selectedDateStr), [selectedDateStr])
   const [isLoadingSlots, setIsLoadingSlots] = useState(false)
 
   const selectedDateInfo = useMemo(() => {
-    const found = upcomingDays.find((d) => d.dateStr === selectedDateStr)
+    const found = weekDays.find((d) => d.dateStr === selectedDateStr)
     if (found) return found
     try {
       const parts = selectedDateStr.split('-').map(Number)
@@ -413,7 +366,7 @@ function MapBooking() {
         isTomorrow: false,
       }
     }
-  }, [upcomingDays, selectedDateStr, todayIsoDate])
+  }, [weekDays, selectedDateStr, todayIsoDate])
 
   // Lấy dữ liệu cơ sở và khu vực thực tế từ Backend API (/api/v1/facilities, /api/v1/facilities/locations)
   const [apiFacilities, setApiFacilities] = useState([])
@@ -425,8 +378,8 @@ function MapBooking() {
   const [courtPick, setCourtPick] = useState({ id: null, origin: null })
 
   // Ca người dùng chọn: null = tự chọn ca trống đầu tiên, '' = đã nhả chỗ khi hết giờ giữ
-  const [selectedSlotId, setSelectedSlotId] = useState(null)
-  const [detailSlot, setDetailSlot] = useState(null)
+  // Các ca đang chọn trong ngày (chọn nhiều ca liền nhau / rời nhau). null = tự chọn ca trống đầu tiên, [] = đã bỏ chọn hết
+  const [pickedSlotIds, setPickedSlotIds] = useState(null)
   const [holdLeft, setHoldLeft] = useState(HOLD_SECONDS)
   const [mapType, setMapType] = useState('m')
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
@@ -890,7 +843,7 @@ function MapBooking() {
     if (!courtId) return
     setCourtPick({ id: courtId, origin: effectiveOrigin })
     if (slotId) {
-      setSelectedSlotId(slotId)
+      setPickedSlotIds([slotId])
       setHoldLeft(HOLD_SECONDS)
     }
     setTimeout(() => {
@@ -991,35 +944,36 @@ function MapBooking() {
     }
   }
 
+  // Chọn sân chính + mọi sân cùng môn có ca trống đúng giờ đã chọn
   const handleSelectAllSubCourts = () => {
-    const availableIds = venueSubCourts.filter((c) => !c.isBooked).map((c) => c.id)
-    if (availableIds.length > 0) {
-      setSelectedSubCourtIds(availableIds)
-    }
+    if (!primaryCourt) return
+    const okIds = venueSubCourts
+      .filter((c) => c.id !== primaryCourt.id && c.categoryName === primaryCourt.categoryName && courtCheck(c).state === 'ok')
+      .map((c) => c.id)
+    setSelectedSubCourtIds([primaryCourt.id, ...okIds])
   }
 
+  // Chọn đúng 1 sân (đổi sân chính → lưới ca chuyển sang sân đó, bỏ các ca đã chọn của sân cũ)
   const handleSelectSingleSubCourt = (courtId) => {
     const courtItem = venueSubCourts.find((c) => c.id === courtId)
     if (!courtItem || courtItem.isBooked) return
+    if (courtId !== effectiveSubCourtIds[0]) setPickedSlotIds(null)
     setSelectedSubCourtIds([courtId])
   }
 
-  const activeSubCourts = useMemo(
-    () => venueSubCourts.filter((c) => effectiveSubCourtIds.includes(c.id)),
-    [venueSubCourts, effectiveSubCourtIds]
-  )
-  const courtQuantity = activeSubCourts.length || 1
+  // Sân chính = sân chọn đầu tiên: lưới ca hiển thị theo sân này.
+  // Sân thêm (đặt nhiều sân cùng giờ) phải cùng môn và có ca trống đúng giờ đã chọn (kiểm tra bên dưới).
+  const primaryCourt = venueSubCourts.find((c) => c.id === effectiveSubCourtIds[0]) || null
 
   // Tải danh sách ca thật từ API cho sân con đang chọn
   const [liveCourtSlots, setLiveCourtSlots] = useState([])
   const [slotsError, setSlotsError] = useState('')
-  const activeSubCourtId = useMemo(() => {
+  const activeSubCourtId = (() => {
     const isGuid = (val) =>
       typeof val === 'string' &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim())
 
-    const fromActive = activeSubCourts.find((c) => isGuid(c.id))
-    if (fromActive) return fromActive.id
+    if (primaryCourt && isGuid(primaryCourt.id)) return primaryCourt.id
     const fromVenue = venueSubCourts.find((c) => isGuid(c.id) && !c.isBooked)
     if (fromVenue) return fromVenue.id
     if (Array.isArray(selectedCourt?.courts) && selectedCourt.courts.length > 0) {
@@ -1029,7 +983,26 @@ function MapBooking() {
       if (anyCourt) return anyCourt.id
     }
     return null
-  }, [activeSubCourts, venueSubCourts, selectedCourt])
+  })()
+
+  // Lưới ca của các sân cùng môn khác trong cụm (để kiểm tra có ca trống đúng giờ đã chọn hay không)
+  const sameSportCourtIds = primaryCourt
+    ? venueSubCourts.filter((c) => c.id !== primaryCourt.id && !c.isBooked && c.categoryName === primaryCourt.categoryName).map((c) => c.id)
+    : []
+  const extraKey = sameSportCourtIds.length ? `${selectedDateStr}|${sameSportCourtIds.join(',')}` : ''
+  const [extraSlots, setExtraSlots] = useState({ key: '', byCourt: {} })
+  useEffect(() => {
+    if (!extraKey) return undefined
+    let cancelled = false
+    const [date, ids] = extraKey.split('|')
+    Promise.all(ids.split(',').map((id) =>
+      getCourtSlots(id, date)
+        .then((raw) => [id, normalizeCourtSlots(Array.isArray(raw) ? raw : [], 0)])
+        .catch(() => [id, null])))
+      .then((entries) => !cancelled && setExtraSlots({ key: extraKey, byCourt: Object.fromEntries(entries) }))
+    return () => { cancelled = true }
+  }, [extraKey])
+  const extrasLoading = Boolean(extraKey) && extraSlots.key !== extraKey
 
   useEffect(() => {
     let isMounted = true
@@ -1067,13 +1040,10 @@ function MapBooking() {
   }, [activeSubCourtId, selectedDateStr])
 
   // Đơn giá của sân con đang chọn (đồng bộ chính xác theo từng sân con hoặc cụm sân)
-  const currentSubCourtPrice = useMemo(() => {
-    const firstActive = activeSubCourts[0]
-    if (firstActive && Number(firstActive.price) > 0) return Number(firstActive.price)
-    return Number(selectedCourt?.price) || 0
-  }, [activeSubCourts, selectedCourt])
+  const currentSubCourtPrice =
+    primaryCourt && Number(primaryCourt.price) > 0 ? Number(primaryCourt.price) : Number(selectedCourt?.price) || 0
 
-  const slots = useMemo(() => {
+  const slots = (() => {
     if (!selectedCourt) return []
     // Kiểm tra xem liveCourtSlots có thuộc về đúng sân con hiện tại không
     const isMatchingCurrentCourt =
@@ -1083,7 +1053,7 @@ function MapBooking() {
 
     if (!isMatchingCurrentCourt) return []
 
-    const grouped2h = buildTwoHourSlots(liveCourtSlots, currentSubCourtPrice)
+    const grouped2h = normalizeCourtSlots(liveCourtSlots, currentSubCourtPrice)
     // Đang lọc khung giờ: chỉ hiện các ca nằm trọn trong khung
     const inWindow = (s) => {
       const start = s.formattedStart || vnClock(s.startTime) || '00:00'
@@ -1107,7 +1077,7 @@ function MapBooking() {
         allRawSlots: s.rawSlots || [s],
       }
     })
-  }, [selectedCourt, liveCourtSlots, activeSubCourtId, currentSubCourtPrice, fromTime, toTime])
+  })()
 
   // Nhãn độ dài ca trên tiêu đề lưới: theo ca thật; các ca dài khác nhau thì không ghi 1 con số chung
   const slotDurationLabel = useMemo(() => {
@@ -1118,11 +1088,50 @@ function MapBooking() {
   }, [slots])
 
   const firstAvailableSlotId = slots.find((s) => s.status === 'available')?.id || null
-  const isPickedSlotValid = slots.some((s) => s.id === selectedSlotId && s.status === 'available')
-  const effectiveSlotId = isPickedSlotValid ? selectedSlotId : selectedSlotId === '' ? null : firstAvailableSlotId
-  const selectedSlot = slots.find((s) => s.id === effectiveSlotId && s.status !== 'booked') || null
+  const pickedIds = pickedSlotIds === null ? (firstAvailableSlotId ? [firstAvailableSlotId] : []) : pickedSlotIds
+  // Ca đang chọn theo thứ tự giờ (tự bỏ ca vừa bị người khác đặt)
+  const selectedSlots = slots.filter((s) => pickedIds.includes(s.id) && s.status === 'available')
+  const selectedSlot = selectedSlots[0] || null
+  const selectedHours = selectedSlots.reduce((sum, s) => sum + (Number(s.hours) || 0), 0)
+  const selectedTimeText = selectedSlots.map((s) => `${s.start} - ${s.end}`).join(', ')
+  // Sân cùng môn: có ca trống đúng giờ của mọi ca đã chọn ở sân chính không. state: 'loading' | 'ok' | 'none'
+  const courtCheck = (court) => {
+    if (extrasLoading) return { state: 'loading', slots: [] }
+    const list = extraSlots.byCourt[court.id]
+    const matched = selectedSlots.map((s) => (list || []).find((x) => x.formattedStart === s.start && x.formattedEnd === s.end))
+    if (!list || !selectedSlots.length || matched.some((m) => !isSlotOpen(m))) return { state: 'none', slots: [] }
+    return { state: 'ok', slots: matched.map((m) => ({ ...m, price: Number(m.price) > 0 ? Number(m.price) : court.price })) }
+  }
+  // Sân thêm đã chọn và còn hợp lệ (cùng môn, có ca trống đúng giờ)
+  const extraCourts = effectiveSubCourtIds
+    .slice(1)
+    .map((id) => venueSubCourts.find((c) => c.id === id))
+    .filter((c) => c && primaryCourt && c.categoryName === primaryCourt.categoryName)
+    .map((c) => ({ ...c, check: courtCheck(c) }))
+    .filter((c) => c.check.state === 'ok')
+  const activeSubCourts = primaryCourt ? [primaryCourt, ...extraCourts] : []
+  const courtQuantity = activeSubCourts.length || 1
+  const extraCourtSlots = extraCourts.flatMap((c) => c.check.slots)
+  const totalBookingPrice =
+    selectedSlots.reduce((sum, s) => sum + (Number(s.price) || 0), 0) + extraCourtSlots.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
 
-  const totalBookingPrice = selectedSlot ? selectedSlot.price * courtQuantity : 0
+  // Đặt định kỳ (lặp lại mỗi tuần): áp dụng cho 1 sân con, là sân đang xem lưới ca
+  const repeat = useRepeatBooking(
+    courtQuantity === 1 && activeSubCourtId
+      ? selectedSlots.map((s) => ({ courtId: activeSubCourtId, courtName: activeSubCourts[0]?.name || selectedCourt?.name || '', sportName: selectedCourt?.sport || '', start: s.start, end: s.end, price: currentSubCourtPrice }))
+      : [],
+    selectedSlots.length ? selectedDateStr : null,
+  )
+  const orderSlotCount = selectedSlots.length + extraCourtSlots.length + repeat.slots.length
+  const orderTotal = totalBookingPrice + repeat.slots.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
+  // Giảm giá đặt gói: cơ sở bật isBulkDiscountEnabled và đơn từ 4 ca (FE hiển thị tạm tính, BE tính lại khi đặt)
+  // Gói định kỳ (luật BE): cùng ca, cùng sân, cùng thứ, đặt liên tiếp từ 4 tuần → giảm giá (nếu cơ sở bật) + không chia tiền
+  const orderIsPackage = isBulkPackage([
+    ...selectedSlots.flatMap((s) => s.allRawSlots),
+    ...extraCourtSlots.flatMap((s) => s.rawSlots),
+    ...repeat.slots.flatMap((s) => s.rawSlots),
+  ])
+  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, selectedCourt?.rawFacility?.isBulkDiscountEnabled)
 
   // Đếm ngược thời gian khóa giữ chỗ
   // Hết thời gian giữ chỗ → tự động nhả khung giờ (không tự chọn lại ca khác)
@@ -1136,7 +1145,7 @@ function MapBooking() {
       setHoldLeft(remaining)
       if (remaining === 0) {
         clearInterval(timer)
-        setSelectedSlotId('')
+        setPickedSlotIds([])
       }
     }, 1000)
     return () => clearInterval(timer)
@@ -1146,8 +1155,7 @@ function MapBooking() {
     const isSameCourt = court.id === selectedCourt?.id
     if (!isSameCourt) {
       selectCourt(court.id)
-      setSelectedSlotId(null)
-      setDetailSlot(null)
+      setPickedSlotIds(null)
       setLiveCourtSlots([]) // Reset ngay ca của sân cũ để đồng bộ ngay giá mới
       setIsLoadingSlots(true)
 
@@ -1162,28 +1170,14 @@ function MapBooking() {
     }
   }
 
+  // Bấm ca: chọn thêm / bỏ chọn (chọn nhiều ca liền nhau để chơi lâu hơn, hoặc ca rời nhau trong ngày)
   const handleSelectSlot = (slot) => {
     if (slot.status === 'booked') return
-    setSelectedSlotId(slot.id)
+    const current = pickedSlotIds ?? []
+    setPickedSlotIds(current.includes(slot.id) ? current.filter((id) => id !== slot.id) : [...current, slot.id])
     setHoldLeft(HOLD_SECONDS)
   }
 
-  const handleSlotClick = (slot) => {
-    if (slot.status === 'booked') return
-    handleSelectSlot(slot)
-    setDetailSlot(slot)
-  }
-
-  // Phím Esc đóng modal chi tiết khung giờ
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setDetailSlot(null)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
 
   // Quản lý giá tự do & nút chọn "Mọi mức giá"
   const handleSelectAllPrices = () => {
@@ -1254,6 +1248,10 @@ function MapBooking() {
 
   const handleConfirm = () => {
     if (!selectedCourt || !selectedSlot || activeSubCourts.length === 0) return
+    if (repeat.enabled && !repeat.ready) {
+      toast.warning(repeat.loading ? 'Đang kiểm tra lịch các tuần tiếp theo, vui lòng chờ.' : 'Có buổi lặp lại không đặt được. Vui lòng đổi giờ hoặc bỏ bớt thứ / số tuần.')
+      return
+    }
     const subCourtNames = activeSubCourts.map((c) => c.name)
     const isGuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     // Chỉ cho đặt khi ca lấy từ API (id là GUID thật), không tự gán ca mặc định.
@@ -1284,15 +1282,22 @@ function MapBooking() {
         sport: selectedCourt.sport,
         date: selectedDateStr,
         dateLabel: selectedDateInfo.fullLabel,
-        slot: `${selectedSlot.start} - ${selectedSlot.end}`,
-        hours: selectedSlot.hours || 2,
-        total: totalBookingPrice,
+        slot: selectedTimeText,
+        hours: selectedHours + repeat.slots.reduce((sum, s) => sum + (s.durationHours || 1), 0),
+        total: orderTotal,
+        slotCount: orderSlotCount,
+        // Giảm giá đặt gói và đặt định kỳ: trang thanh toán tự trừ % và liệt kê các buổi
+        bulkDiscountEnabled: Boolean(selectedCourt?.rawFacility?.isBulkDiscountEnabled),
+        bulkPackage: orderIsPackage,
+        recurring: repeat.recurring,
         unitPrice: selectedSlot.price,
         hourlyRate: selectedSlot.hourlyRate || Math.round(selectedSlot.price / (selectedSlot.hours || 2)),
         courtSlotId: slotId,
-        courtSlotIds: selectedSlot.slotIds || [slotId],
-        selectedSlots: selectedSlot.allRawSlots || [selectedSlot.rawSlot || selectedSlot],
-        numberOfSlots: selectedSlot.slotIds?.length || 2,
+        // Ca của sân chính + ca cùng giờ ở các sân thêm + ca các tuần lặp lại
+        courtSlotIds: [...selectedSlots.flatMap((s) => s.slotIds), ...extraCourtSlots.map((s) => s.id), ...repeat.slots.map((s) => s.id)].filter((id) => isGuidRegex.test(id)),
+        selectedSlots: [...selectedSlots.flatMap((s) => s.allRawSlots), ...extraCourtSlots.flatMap((s) => s.rawSlots), ...repeat.slots.flatMap((s) => s.rawSlots)],
+        numberOfSlots: selectedSlots.length + extraCourtSlots.length + repeat.slots.length,
+        ...(repeat.recurring ? { isConsecutive: false } : {}),
       },
     })
   }
@@ -1782,6 +1787,7 @@ function MapBooking() {
                       {court.address}
                     </p>
                     <div className="mb-court-meta" style={{ flexWrap: 'wrap', gap: 5 }}>
+                      {court.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBadge />}
                       {court.isFromApi && (
                         <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 700 }}>
                           ✦ Cụm sân hệ thống
@@ -1882,20 +1888,23 @@ function MapBooking() {
               </div>
             </div>
 
+            {selectedCourt?.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBanner />}
+
             {/* Thanh chọn ngày trực quan: Hôm nay, Ngày mai, và các ngày tiếp theo */}
             <div className="mb-date-bar">
               <div className="mb-date-scroll">
-                {upcomingDays.map((d) => {
+                {weekDays.map((d) => {
                   const isSelected = d.dateStr === selectedDateStr
                   return (
                     <button
                       key={d.dateStr}
                       type="button"
                       className={`mb-date-pill ${isSelected ? 'is-active' : ''}`}
+                      disabled={d.isPast}
+                      title={d.isPast ? 'Ngày đã qua' : undefined}
                       onClick={() => {
                         setSelectedDateStr(d.dateStr)
-                        setSelectedSlotId(null)
-                        setDetailSlot(null)
+                        setPickedSlotIds(null)
                       }}
                     >
                       <span className="mb-date-pill-day">{d.dayOfWeek}</span>
@@ -1906,23 +1915,14 @@ function MapBooking() {
                   )
                 })}
               </div>
-              <label className="mb-date-custom-picker" title="Chọn ngày khác từ lịch">
-                <span className="material-symbols-outlined">calendar_month</span>
-                <span>Chọn lịch</span>
-                <input
-                  type="date"
-                  className="mb-date-native-input"
-                  value={selectedDateStr}
-                  min={todayIsoDate}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      setSelectedDateStr(e.target.value)
-                      setSelectedSlotId(null)
-                      setDetailSlot(null)
-                    }
-                  }}
-                />
-              </label>
+              <MonthCalendarPicker
+                value={selectedDateStr}
+                minDate={todayIsoDate}
+                onChange={(dateStr) => {
+                  setSelectedDateStr(dateStr)
+                  setPickedSlotIds(null)
+                }}
+              />
             </div>
 
             {isLoadingSlots ? (
@@ -1966,7 +1966,7 @@ function MapBooking() {
                     )
                   }
 
-                  const isSelected = slot.id === selectedSlot?.id
+                  const isSelected = selectedSlots.some((s) => s.id === slot.id)
 
                   // Ô ĐANG CHỌN hoặc ĐANG TRỐNG (Kích thước nhỏ gọn đồng nhất 52px, click để xem popup chi tiết)
                   return (
@@ -1976,8 +1976,8 @@ function MapBooking() {
                       type="button"
                       className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'}`}
                       style={delay}
-                      onClick={() => handleSlotClick(slot)}
-                      title={`Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để xem chi tiết`}
+                      onClick={() => handleSelectSlot(slot)}
+                      title={`Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để chọn / bỏ chọn`}
                     >
                       <div className="mb-slot-compact-head">
                         <span className="mb-slot-time">{slot.start} - {slot.end}</span>
@@ -2028,7 +2028,7 @@ function MapBooking() {
                     <button
                       type="button"
                       className="mb-subcourt-action-btn mb-subcourt-action-btn--ghost"
-                      onClick={() => handleSelectSingleSubCourt('court-sub-1')}
+                      onClick={() => primaryCourt && setSelectedSubCourtIds([primaryCourt.id])}
                       title="Chỉ chọn 1 sân duy nhất"
                     >
                       Chỉ chọn 1 sân
@@ -2039,41 +2039,55 @@ function MapBooking() {
                 <div className="mb-subcourts-tip">
                   <span className="material-symbols-outlined">tips_and_updates</span>
                   <span>
-                    💡 <strong>Tính năng Đa Sân:</strong> Bạn có thể bấm chọn <strong>nhiều sân cùng lúc</strong> trong khung giờ {selectedSlot.start} - {selectedSlot.end} cho nhóm bạn đông người, giao lưu câu lạc bộ hoặc tổ chức giải đấu.
+                    💡 <strong>Tính năng Đa Sân:</strong> Bạn có thể chọn thêm <strong>các sân cùng môn {primaryCourt?.categoryName || ''}</strong> còn trống trong khung giờ {selectedSlot.start} - {selectedSlot.end} cho nhóm bạn đông người, giao lưu câu lạc bộ hoặc tổ chức giải đấu.
                   </span>
                 </div>
 
                 <div className="mb-subcourts-grid">
                   {venueSubCourts.length === 0 && (
-                    <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: 13, color: '#6b7280' }}>Cơ sở chưa công bố danh sách sân con. Bấm "Xem chi tiết" để xem ca trống theo từng sân.</p>
+                    <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: 13, color: '#6b7280' }}>Cơ sở chưa công bố danh sách sân con.</p>
                   )}
-                  {venueSubCourts.map((court) => {
-                    const isSelected = effectiveSubCourtIds.includes(court.id)
-                    const isBooked = court.isBooked
+                  {/* Chỉ các sân cùng môn với sân chính; sân thêm phải có ca trống đúng giờ đã chọn */}
+                  {venueSubCourts.filter((court) => primaryCourt && court.categoryName === primaryCourt.categoryName).map((court) => {
+                    const isPrimary = court.id === primaryCourt.id
+                    const check = isPrimary ? { state: 'ok', slots: selectedSlots } : courtCheck(court)
+                    const isSelected = isPrimary || extraCourts.some((c) => c.id === court.id)
+                    const isBlocked = court.isBooked || check.state !== 'ok'
+                    const statusText = court.isBooked
+                      ? court.note
+                      : isPrimary
+                        ? 'Sân đang xem lịch'
+                        : isSelected
+                          ? 'Đang chọn'
+                          : check.state === 'loading'
+                            ? 'Đang kiểm tra…'
+                            : check.state === 'ok'
+                              ? 'Trống'
+                              : 'Không có ca trống giờ này'
 
                     return (
                       <div
                         key={court.id}
-                        className={`mb-subcourt-card ${
-                          isBooked ? 'is-booked' : isSelected ? 'is-selected' : 'is-available'
-                        }`}
-                        onClick={() => handleToggleSubCourt(court.id)}
+                        className={`mb-subcourt-card ${isSelected ? 'is-selected' : isBlocked ? 'is-booked' : 'is-available'}`}
+                        onClick={() => !isPrimary && !isBlocked && handleToggleSubCourt(court.id)}
                         role="button"
-                        tabIndex={isBooked ? -1 : 0}
-                        aria-disabled={isBooked}
+                        tabIndex={isPrimary || isBlocked ? -1 : 0}
+                        aria-disabled={isPrimary || isBlocked}
                         title={
-                          isBooked
-                            ? `${court.name} đã kín lịch trong khung giờ này`
-                            : isSelected
-                            ? `Đang chọn ${court.name}. Bấm để bỏ chọn`
-                            : `Bấm để chọn ${court.name} (+${formatVnd(selectedSlot.price)})`
+                          isPrimary
+                            ? `${court.name} là sân đang xem lịch. Đổi sân ở mục "Xem lịch sân khác" bên dưới`
+                            : isBlocked
+                              ? `${court.name}: ${statusText}`
+                              : isSelected
+                                ? `Đang chọn ${court.name}. Bấm để bỏ chọn`
+                                : `Bấm để chọn thêm ${court.name}`
                         }
                       >
                         <div className="mb-subcourt-row-top">
                           <div className="mb-subcourt-checkbox">
                             {isSelected ? (
                               <span className="material-symbols-outlined">check_circle</span>
-                            ) : isBooked ? (
+                            ) : isBlocked ? (
                               <span className="material-symbols-outlined">lock</span>
                             ) : (
                               <span className="material-symbols-outlined">radio_button_unchecked</span>
@@ -2083,23 +2097,28 @@ function MapBooking() {
                         </div>
 
                         <div className="mb-subcourt-row-bottom">
-                          <span
-                            className={`mb-subcourt-status ${
-                              isBooked ? 'status-booked' : isSelected ? 'status-selected' : 'status-avail'
-                            }`}
-                          >
-                            {isBooked ? 'Đã kín' : isSelected ? 'Đang chọn' : 'Trống'}
-                          </span>
-                          <span className="mb-subcourt-rate">
-                            {(court.price || selectedSlot?.price || selectedCourt.price) > 0
-                              ? `${formatVnd(court.price || selectedSlot?.price || selectedCourt.price)}/sân`
-                              : 'Liên hệ'}
+                          <span className={`mb-subcourt-status ${isSelected ? 'status-selected' : isBlocked ? 'status-booked' : 'status-avail'}`}>
+                            {statusText}
                           </span>
                         </div>
                       </div>
                     )
                   })}
                 </div>
+
+                {/* Đổi sân đang xem lịch (kể cả sân khác môn: không đặt chung được với sân khác môn) */}
+                {primaryCourt && venueSubCourts.some((c) => c.id !== primaryCourt.id && !c.isBooked) && (
+                  <div className="mb-subcourts-other">
+                    <span>Xem lịch sân khác:</span>
+                    {venueSubCourts
+                      .filter((c) => c.id !== primaryCourt.id && !c.isBooked)
+                      .map((c) => (
+                        <button key={c.id} type="button" onClick={() => handleSelectSingleSubCourt(c.id)}>
+                          {c.name} · {c.categoryName}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -2122,39 +2141,39 @@ function MapBooking() {
                 <p>
                   <span className="material-symbols-outlined">schedule</span>
                   {selectedSlot
-                    ? `${selectedSlot.start} - ${selectedSlot.end} (${selectedDateInfo.fullLabel}) • ${formatHours(
-                        selectedSlot.hours
-                      )} • ${selectedCourt?.name}`
-                    : 'Vui lòng chọn một khung giờ còn trống trên lưới lịch'}
+                    ? `${selectedTimeText} (${selectedDateInfo.fullLabel}) • ${selectedSlots.length} ca, ${formatHours(selectedHours)} • ${selectedCourt?.name}`
+                    : 'Vui lòng chọn khung giờ còn trống trên lưới lịch (bấm nhiều ca để đặt liên tiếp)'}
                 </p>
                 {courtQuantity > 1 && (
                   <div className="mb-summary-multicourt-note">
                     <span className="material-symbols-outlined">layers</span>
                     <span>
-                      Đang chọn <strong>{courtQuantity} sân cùng khung giờ</strong> ({formatVnd(selectedSlot.price)}/sân)
+                      Đang chọn <strong>{courtQuantity} sân cùng khung giờ</strong>
                     </span>
                   </div>
                 )}
               </div>
               <div className="mb-summary-total">
-                <small>Tổng tiền {courtQuantity} sân:</small>
-                <strong>{selectedSlot ? formatVnd(totalBookingPrice) : '0 Điểm'}</strong>
-                {courtQuantity > 1 && (
-                  <span className="mb-summary-unit-calc">
-                    ({courtQuantity} sân × {formatVnd(selectedSlot.price)})
-                  </span>
-                )}
+                <small>{repeat.slots.length ? `Tổng tiền ${orderSlotCount} ca:` : `Tổng tiền ${courtQuantity} sân:`}</small>
+                <strong>{selectedSlot ? formatVnd(orderDiscount.payable) : '0 Điểm'}</strong>
+
               </div>
             </div>
 
+            {selectedSlot && (
+              <RepeatBookingPanel repeat={repeat} disabledReason={courtQuantity > 1 ? 'Đặt định kỳ áp dụng khi chọn 1 sân. Vui lòng bỏ bớt sân trong cụm.' : ''} />
+            )}
+            {selectedSlot && (
+              <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} enabled={selectedCourt?.rawFacility?.isBulkDiscountEnabled} />
+            )}
             <button
               id="mb-confirm-booking"
               type="button"
               className="mb-btn mb-btn--primary mb-confirm"
-              disabled={!selectedSlot || activeSubCourts.length === 0}
+              disabled={!selectedSlot || activeSubCourts.length === 0 || (repeat.enabled && !repeat.ready)}
               onClick={handleConfirm}
             >
-              Xác Nhận Đặt {courtQuantity} Sân
+              {orderSlotCount > 1 ? `Xác Nhận Đặt ${orderSlotCount} Ca` : `Xác Nhận Đặt ${courtQuantity} Sân`}
             </button>
             <p className="mb-secure-note">
               <span className="material-symbols-outlined">verified_user</span>
@@ -2164,139 +2183,6 @@ function MapBooking() {
         </div>
       </div>
 
-      {/* ===================== POPUP CHI TIẾT KHUNG GIỜ ===================== */}
-      {detailSlot && selectedCourt && typeof document !== 'undefined' && createPortal(
-        <div
-          className="mb-slot-modal-backdrop"
-          onClick={() => setDetailSlot(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="slot-modal-title"
-        >
-          <div className="mb-slot-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-slot-modal-head">
-              <div className="mb-slot-modal-head-left">
-                <div className="mb-slot-modal-head-icon">
-                  <span className="material-symbols-outlined">schedule</span>
-                </div>
-                <div>
-                  <h3 id="slot-modal-title" className="mb-slot-modal-title">
-                    Chi Tiết Khung Giờ: {detailSlot.start} - {detailSlot.end}
-                  </h3>
-                  <p className="mb-slot-modal-sub">
-                    {selectedCourt.name} • {formatHours(detailSlot.hours)} thi đấu
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="mb-slot-modal-close"
-                onClick={() => setDetailSlot(null)}
-                title="Đóng popup"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="mb-slot-modal-body">
-              <div className="mb-slot-modal-badges">
-                <span className="mb-slot-modal-badge-status">
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                    check_circle
-                  </span>
-                  Đang chọn khung giờ này
-                </span>
-                {holdLeft > 0 && (
-                  <span className="mb-slot-modal-badge-timer">
-                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                      timer
-                    </span>
-                    Tạm khóa giữ chỗ: {formatTimer(holdLeft)}
-                  </span>
-                )}
-              </div>
-
-              <div className="mb-slot-modal-info-grid">
-                <div className="mb-slot-modal-info-row">
-                  <span className="material-symbols-outlined">event</span>
-                  <div>
-                    <strong>Ngày thi đấu:</strong> {selectedDateInfo.fullLabel}
-                  </div>
-                </div>
-                <div className="mb-slot-modal-info-row">
-                  <span className="material-symbols-outlined">stadium</span>
-                  <div>
-                    <strong>Cụm sân:</strong> {selectedCourt.name}
-                  </div>
-                </div>
-                {selectedCourt.address && (
-                  <div className="mb-slot-modal-info-row">
-                    <span className="material-symbols-outlined">location_on</span>
-                    <div>
-                      <strong>Địa chỉ:</strong> {selectedCourt.address}
-                    </div>
-                  </div>
-                )}
-                {selectedCourt.subCourtDesc && (
-                  <div className="mb-slot-modal-info-row">
-                    <span className="material-symbols-outlined">sports_tennis</span>
-                    <div>
-                      <strong>Mô tả sân:</strong> {selectedCourt.subCourtDesc}
-                    </div>
-                  </div>
-                )}
-                <div className="mb-slot-modal-info-row">
-                  <span className="material-symbols-outlined">group</span>
-                  <div>
-                    <strong>Sân áp dụng ({courtQuantity} sân):</strong>{' '}
-                    {activeSubCourts.map((c) => c.name).join(', ')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-slot-modal-price-card">
-                <div>
-                  <span className="mb-slot-modal-price-label">
-                    Đơn giá: {formatVnd(detailSlot.price)}/sân ({courtQuantity} sân)
-                  </span>
-                  <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
-                    Đã bao gồm thuế và phí dịch vụ Escrow
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="mb-slot-modal-price-val">
-                    {formatVnd(detailSlot.price * courtQuantity)}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-slot-modal-foot">
-              <button
-                type="button"
-                className="mb-slot-modal-btn-close"
-                onClick={() => setDetailSlot(null)}
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                className="mb-slot-modal-btn-confirm"
-                onClick={() => {
-                  setDetailSlot(null)
-                  setTimeout(() => {
-                    summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  }, 120)
-                }}
-              >
-                Chốt sân
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       {/* ===================== AI CHAT ASSISTANT MODAL ===================== */}
       <AIChatModal
         isOpen={isAiModalOpen}
@@ -2305,7 +2191,7 @@ function MapBooking() {
         onSelectCourtSlot={({ courtId, slotId }) => {
           if (courtId) selectCourt(courtId)
           if (slotId) {
-            setSelectedSlotId(slotId)
+            setPickedSlotIds([slotId])
             setHoldLeft(HOLD_SECONDS)
           }
           setTimeout(() => {
