@@ -1112,6 +1112,17 @@ function MapBooking() {
   const activeSubCourts = primaryCourt ? [primaryCourt, ...extraCourts] : []
   const courtQuantity = activeSubCourts.length || 1
   const extraCourtSlots = extraCourts.flatMap((c) => c.check.slots)
+  // Bỏ chọn sân chính khi đã có sân thêm: sân thêm đầu tiên thành sân chính, giữ nguyên giờ các ca đã chọn
+  const handleDropPrimaryCourt = () => {
+    if (!primaryCourt) return
+    const next = extraCourts[0]
+    if (!next) {
+      toast.info('Đơn cần ít nhất 1 sân. Muốn đổi sân, chọn sân khác ở mục "Xem lịch sân khác".')
+      return
+    }
+    setPickedSlotIds(next.check.slots.map((slot) => slot.id))
+    setSelectedSubCourtIds([next.id, ...effectiveSubCourtIds.filter((id) => id !== primaryCourt.id && id !== next.id)])
+  }
   const totalBookingPrice =
     selectedSlots.reduce((sum, s) => sum + (Number(s.price) || 0), 0) + extraCourtSlots.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
 
@@ -2069,13 +2080,13 @@ function MapBooking() {
                       <div
                         key={court.id}
                         className={`mb-subcourt-card ${isSelected ? 'is-selected' : isBlocked ? 'is-booked' : 'is-available'}`}
-                        onClick={() => !isPrimary && !isBlocked && handleToggleSubCourt(court.id)}
+                        onClick={() => (isPrimary ? handleDropPrimaryCourt() : !isBlocked && handleToggleSubCourt(court.id))}
                         role="button"
-                        tabIndex={isPrimary || isBlocked ? -1 : 0}
-                        aria-disabled={isPrimary || isBlocked}
+                        tabIndex={!isPrimary && isBlocked ? -1 : 0}
+                        aria-disabled={!isPrimary && isBlocked}
                         title={
                           isPrimary
-                            ? `${court.name} là sân đang xem lịch. Đổi sân ở mục "Xem lịch sân khác" bên dưới`
+                            ? extraCourts.length > 0 ? `Bấm để bỏ chọn ${court.name} (lưới ca chuyển sang ${extraCourts[0].name})` : `${court.name} là sân đang xem lịch. Đổi sân ở mục "Xem lịch sân khác" bên dưới`
                             : isBlocked
                               ? `${court.name}: ${statusText}`
                               : isSelected
