@@ -10,6 +10,7 @@ import {
   deleteFacilityImage,
   getAmenities,
   getFacility,
+  resolveAreaCodes,
   setFacilityThumbnail,
   updateFacility,
   updateFacilityAmenities,
@@ -21,7 +22,7 @@ import TimeInput24 from '../../components/common/TimeInput24.jsx'
 import FacilityAddressFields from '../../components/common/FacilityAddressFields.jsx'
 import LocationPickerMap from '../../components/common/LocationPickerMap.jsx'
 import { geocodeAddress } from '../../utils/geolocation.js'
-import { composeFacilityAddress, isValidProvince, isValidWard, parseFacilityAddress, validateFacilityAddress } from '../../utils/vnAddress.js'
+import { isValidProvince, isValidWard, parseFacilityAddress, validateFacilityAddress } from '../../utils/vnAddress.js'
 
 const MAX_IMAGES = 10
 const APPROVAL = {
@@ -73,11 +74,11 @@ const formFromFacility = f => {
     autoGenerateSlots: !!f.autoGenerateSlots,
   }
 }
-const toPayload = form => ({
+// BE lưu địa chỉ 3 trường: streetAddress + provinceCode + wardCode (form chọn theo tên, đổi sang mã khi lưu)
+const toPayload = async form => ({
   name: form.name.trim(),
-  address: composeFacilityAddress({ street: form.street, district: form.district, province: form.province }),
-  province: form.province.trim() || null,
-  district: form.district.trim() || null,
+  streetAddress: form.street.trim().replace(/,+$/, '').trim(),
+  ...(await resolveAreaCodes(form.province, form.district)),
   latitude: form.latitude === '' ? null : Number(form.latitude),
   longitude: form.longitude === '' ? null : Number(form.longitude),
   phone: form.phone.trim() || null,
@@ -258,7 +259,7 @@ function CreateFacilityModal({ amenities, onClose, onCreated }) {
     }
     setBusy(true)
     try {
-      const created = await createFacility({ ...toPayload(form), amenityIds, imageUrls: [] })
+      const created = await createFacility({ ...(await toPayload(form)), amenityIds, imageUrls: [] })
       toast.success('Đã tạo cơ sở, đang chờ Admin duyệt. Bạn có thể thêm ảnh và sân ngay.')
       onCreated(created?.id ? String(created.id) : '')
       onClose()
@@ -354,7 +355,7 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
     }
     // amenityIds / imageUrls null: BE giữ nguyên (tiện ích và ảnh sửa riêng bên dưới).
     if (
-      await run('info', () => updateFacility(facilityId, { ...toPayload(form), status: null, amenityIds: null, imageUrls: null }), 'Đã lưu thông tin cơ sở.')
+      await run('info', async () => updateFacility(facilityId, { ...(await toPayload(form)), status: null, amenityIds: null, imageUrls: null }), 'Đã lưu thông tin cơ sở.')
     ) {
       setSubmitted(false)
       setForm(null)

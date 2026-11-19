@@ -4,8 +4,15 @@ import { withLegacyAddress } from '../../utils/vnAddress.js'
 // ---------- Cơ sở của chủ sân ----------
 export const getMyFacilities = async () => (await getList('/api/v1/facilities/my-facilities')).items.map(withLegacyAddress)
 export const getFacility = async id => withLegacyAddress(await get(`/api/v1/facilities/${path(id)}`))
-// CreateFacilityRequest: name, address, latitude, longitude, description, phone, openTime, closeTime, amenityIds, imageUrls.
+// CreateFacilityRequest: name, streetAddress, provinceCode, wardCode, latitude, longitude, description, phone, openTime, closeTime, amenityIds, imageUrls.
 export const createFacility = payload => post('/api/v1/facilities', payload)
+// Mã tỉnh / phường theo tên đã chọn trong form: GET /api/v1/master-data/provinces và /provinces/{code}/wards
+export async function resolveAreaCodes(provinceName, wardName) {
+  const province = (await getList('/api/v1/master-data/provinces')).items.find(p => p.name === provinceName)
+  const ward = province && (await getList(`/api/v1/master-data/provinces/${path(province.code)}/wards`)).items.find(w => w.name === wardName)
+  if (!ward) throw new Error('Không tìm thấy mã tỉnh / phường đã chọn, vui lòng chọn lại.')
+  return { provinceCode: province.code, wardCode: ward.code }
+}
 // UpdateFacilityRequest: như trên + status. Field null thì BE giữ nguyên.
 export const updateFacility = (id, payload) => put(`/api/v1/facilities/${path(id)}`, payload)
 export const deleteFacility = id => del(`/api/v1/facilities/${path(id)}`)
