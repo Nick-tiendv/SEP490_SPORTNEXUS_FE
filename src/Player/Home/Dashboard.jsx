@@ -13,6 +13,7 @@ import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
 import { getLfgs, lfgSkillLabel } from '../../api/player/lfgApi.js'
 import HomeRecommendations from './HomeRecommendations.jsx'
+import { BulkDiscountBadge } from '../Booking/Recurring/BulkDiscount.jsx'
 import { eloText, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 
 const actionCards = [
@@ -1860,6 +1861,9 @@ function Dashboard() {
                     >
                       {c.name}
                     </p>
+                    {c.rawFacility?.isBulkDiscountEnabled && (
+                      <div style={{ margin: '2px 0 4px' }}><BulkDiscountBadge /></div>
+                    )}
                     {c.surface && (
                       <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#047857', fontWeight: 600 }}>
                         🏟️ {String(c.surface).replace(/\s*\[TEST\]\s*/gi, '').trim()}
