@@ -293,8 +293,9 @@ export function normalizeVoucherStatus(raw) {
   const status = String(raw?.status ?? raw?.voucherStatus ?? '').trim().toUpperCase()
   if (status === 'USED' || status === 'REDEEMED' || raw?.isUsed === true) return VOUCHER_STATUS.USED
   if (status === 'EXPIRED' || raw?.isExpired === true) return VOUCHER_STATUS.EXPIRED
-  if (raw?.expiresAt || raw?.expiredAt || raw?.validUntil) {
-    const exp = Date.parse(raw.expiresAt || raw.expiredAt || raw.validUntil)
+  // BE: expiredDate (Vouchers.ExpiredDate)
+  if (raw?.expiredDate || raw?.expiresAt || raw?.expiredAt || raw?.validUntil) {
+    const exp = Date.parse(raw.expiredDate || raw.expiresAt || raw.expiredAt || raw.validUntil)
     if (!Number.isNaN(exp) && exp < Date.now() && status !== 'AVAILABLE' && status !== 'ACTIVE') {
       return VOUCHER_STATUS.EXPIRED
     }
@@ -330,7 +331,7 @@ export function toWalletVoucher(raw = {}) {
     facilityName: raw.facilityName || raw.facility?.name || '',
     bookingCode: raw.bookingCode || raw.sourceBookingCode || '',
     createdAt: raw.createdAt || raw.issuedAt || raw.createdDate || null,
-    expiresAt: raw.expiresAt || raw.expiredAt || raw.validUntil || raw.endDate || null,
+    expiresAt: raw.expiredDate || raw.expiresAt || raw.expiredAt || raw.validUntil || raw.endDate || null,
     usedAt: raw.usedAt || null,
   }
 }

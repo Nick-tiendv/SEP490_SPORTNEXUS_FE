@@ -48,6 +48,7 @@ const TournamentManagement = lazy(() => import('./Admin/Tournaments/TournamentMa
 const TeamManagement = lazy(() => import('./Admin/Teams/TeamManagement.jsx'))
 const RatingManagement = lazy(() => import('./Admin/Ratings/RatingManagement.jsx'))
 const PromotionManagement = lazy(() => import('./Admin/Promotions/PromotionManagement.jsx'))
+const VoucherManagement = lazy(() => import('./Admin/Vouchers/VoucherManagement.jsx'))
 const PaymentManagement = lazy(() => import('./Admin/Payments/PaymentManagement.jsx'))
 const ReviewsReportsPage = lazy(() => import('./Admin/Reviews/ReviewsReportsPage.jsx'))
 const NotificationManagement = lazy(() => import('./Admin/Notifications/NotificationManagement.jsx'))
@@ -161,6 +162,7 @@ function App() {
             <Route path="teams" element={<Page><TeamManagement /></Page>} />
             <Route path="ratings" element={<Page><RatingManagement /></Page>} />
             <Route path="promotions" element={<Page><PromotionManagement /></Page>} />
+            <Route path="vouchers" element={<Page><VoucherManagement /></Page>} />
             <Route path="facilities" element={<Page><FacilityManagement /></Page>} />
             <Route path="bookings" element={<Page><BookingManagement /></Page>} />
             <Route path="lfg" element={<Page><LFGManagement /></Page>} />

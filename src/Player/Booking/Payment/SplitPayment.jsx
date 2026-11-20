@@ -22,6 +22,8 @@ import {
 import { cancelLfg, describeLfgCancelResult } from '../../../api/player/lfgApi.js'
 import {
   getWallet,
+  getWalletVouchers,
+  VOUCHER_STATUS,
   createDeposit,
   getDepositByOrderCode,
   cancelDeposit,
@@ -260,7 +262,28 @@ function SplitPayment() {
   // Giảm giá đặt gói: cơ sở bật + đơn từ 4 ca thì FE trừ 10% (BE tính lại khi đặt). orderAmount = số phải trả cả đơn.
   // Gói định kỳ (cùng ca, cùng sân, cùng thứ, ≥ 4 tuần liên tiếp): giảm giá nếu cơ sở bật, không cho chia tiền
   const isPackage = Boolean(state.bulkPackage)
-  const orderAmount = bulkDiscount(totalAmount, isPackage, state.bulkDiscountEnabled).payable
+  const packageAmount = bulkDiscount(totalAmount, isPackage, state.bulkDiscountEnabled).payable
+
+  // Voucher của tôi (GET /api/v1/wallet/vouchers?status=ACTIVE): gửi voucherId khi POST /bookings, BE tính số tiền giảm chính thức.
+  // FE hiển thị số giảm dự kiến = discountPercent% số tiền đơn (sau giảm gói).
+  const [voucherList, setVoucherList] = useState({ loaded: false, items: [], error: '' })
+  const [selectedVoucherId, setSelectedVoucherId] = useState(() => state.voucherId || '')
+  useEffect(() => {
+    let cancelled = false
+    getWalletVouchers({ status: 'ACTIVE' })
+      .then((items) => {
+        if (cancelled) return
+        const now = Date.now()
+        const usable = items.filter((v) => v.id && v.status === VOUCHER_STATUS.AVAILABLE && Number(v.discountPercent) > 0 &&
+          (!v.expiresAt || Number.isNaN(Date.parse(v.expiresAt)) || Date.parse(v.expiresAt) > now))
+        setVoucherList({ loaded: true, items: usable, error: '' })
+      })
+      .catch((err) => { if (!cancelled) setVoucherList({ loaded: true, items: [], error: err?.message || 'Không tải được voucher.' }) })
+    return () => { cancelled = true }
+  }, [])
+  const selectedVoucher = voucherList.items.find((v) => v.id === selectedVoucherId) || null
+  const voucherDiscount = selectedVoucher ? Math.round((packageAmount * Number(selectedVoucher.discountPercent)) / 100) : 0
+  const orderAmount = Math.max(0, packageAmount - voucherDiscount)
   const recurring = state.recurring || null
   const hourlyRate = state.hourlyRate || (hours > 0 ? Math.round(totalAmount / hours) : 0)
   const unitPrice = state.unitPrice || (courtCount > 0 ? Math.round(totalAmount / courtCount) : 0)
@@ -902,6 +925,7 @@ function SplitPayment() {
         totalAmount: 0, // Server tự tính giá
         isSplitPayment: paymentMode === 'split',
         participantIds: activeParticipantIds,
+        voucherId: selectedVoucher?.id || null,
       }
     }
 
@@ -915,6 +939,7 @@ function SplitPayment() {
       totalAmount: 0,
       isSplitPayment: paymentMode === 'split',
       participantIds: activeParticipantIds,
+      voucherId: selectedVoucher?.id || null,
     }
   }
 
@@ -1144,7 +1169,7 @@ function SplitPayment() {
         amount: depositAmount,
         returnTo: {
           path: '/split-payment',
-          state: location.state,
+          state: { ...location.state, voucherId: selectedVoucher?.id || null },
           label: 'Quay lại đặt sân',
         },
       })
@@ -1942,6 +1967,43 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 </div>
                 {/* Giảm giá đặt gói: gạch giá cũ + giá mới màu đỏ, hoặc gợi ý chọn thêm N ca */}
                 <BulkDiscountNote total={totalAmount} isPackage={isPackage} enabled={state.bulkDiscountEnabled} />
+              </div>
+
+              {/* Mã giảm giá của tôi: chọn 1 voucher, BE trừ khi tạo đơn */}
+              <div className="sp-voucher">
+                <label htmlFor="sp-voucher-select" className="sp-voucher-label">
+                  <span className="material-symbols-outlined">confirmation_number</span>
+                  Mã giảm giá
+                </label>
+                {!voucherList.loaded ? (
+                  <p className="sp-voucher-hint">Đang tải voucher…</p>
+                ) : voucherList.error ? (
+                  <p className="sp-voucher-hint sp-voucher-error">{voucherList.error}</p>
+                ) : voucherList.items.length === 0 ? (
+                  <p className="sp-voucher-hint">Bạn chưa có voucher nào dùng được.</p>
+                ) : (
+                  <>
+                    <select
+                      id="sp-voucher-select"
+                      value={selectedVoucher?.id || ''}
+                      onChange={(e) => setSelectedVoucherId(e.target.value)}
+                      disabled={isSubmitting}
+                    >
+                      <option value="">Không dùng voucher</option>
+                      {voucherList.items.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          Giảm {v.discountPercent}%{v.expiresAt ? ` · HSD ${new Date(v.expiresAt).toLocaleDateString('vi-VN')}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedVoucher && (
+                      <p className="sp-voucher-applied">
+                        Giảm {selectedVoucher.discountPercent}%: <strong>-{formatVnd(voucherDiscount)}</strong>
+                        <span>Số tiền giảm chính xác do hệ thống tính khi tạo đơn.</span>
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="sp-receipt-divider" />
