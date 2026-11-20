@@ -9,7 +9,9 @@
 
 const LEARNED_DESIRES_STORAGE_KEY = 'player_lfg_learned_desires'
 
-export const SPORT_CATALOG = {
+// Phần trang trí theo khóa môn (emoji, màu, từ khóa nhận diện trong câu tìm kiếm). KHÔNG phải danh sách môn:
+// danh sách môn thật lấy từ GET /api/v1/master-data/sports qua setSportCatalog().
+const SPORT_DECOR = {
   badminton: {
     key: 'badminton',
     name: 'Cầu Lông',
@@ -108,6 +110,34 @@ export function normalizeVi(str = '') {
     .toLowerCase()
     .trim()
 }
+
+// Danh mục môn thật của hệ thống (rỗng cho tới khi setSportCatalog nạp từ API). Giữ cùng 1 object để các hàm đọc lúc gọi.
+export const SPORT_CATALOG = {}
+// Trang trí mặc định cho môn chưa có trong SPORT_DECOR (vd Admin vừa thêm môn mới)
+const DEFAULT_SPORT_DECOR = { emoji: '🏅', color: '#475569', bgColor: '#F1F5F9', keywords: [] }
+
+// Nạp danh mục môn từ GET /api/v1/master-data/sports: tên môn theo BE, trang trí theo khóa môn nếu FE đã biết.
+export function setSportCatalog(apiSports = []) {
+  for (const key of Object.keys(SPORT_CATALOG)) delete SPORT_CATALOG[key]
+  for (const sport of apiSports) {
+    const name = String(sport?.name || '').trim()
+    if (!name) continue
+    const key = normalizeSportKey(name) || normalizeVi(name).replace(/\s+/g, '_')
+    const decor = SPORT_DECOR[key] || DEFAULT_SPORT_DECOR
+    SPORT_CATALOG[key] = {
+      ...decor,
+      key,
+      id: sport.id,
+      name,
+      shortName: name,
+      rulesDescription: sport.rulesDescription || '',
+      keywords: [...new Set([...decor.keywords, name])],
+    }
+  }
+}
+
+// Thông tin hiển thị (tên, emoji, màu) của một khóa môn; môn lạ dùng trang trí mặc định
+export const sportMetaOf = (key) => SPORT_CATALOG[key] || SPORT_DECOR[key] || DEFAULT_SPORT_DECOR
 
 // Chuẩn hóa tên môn thể thao sang sportKey chuẩn
 export function normalizeSportKey(raw = '') {
@@ -325,10 +355,6 @@ export function loadProfileRegisteredSports(serverSports = []) {
     }
   } catch { /* ignore */ }
 
-  // Mặc định nếu tài khoản mới chưa có dữ liệu nào trên cả server lẫn local
-  if (map.size === 0) {
-    addSportItem('badminton', 'Trung bình - Khá')
-  }
 
   return Array.from(map.values())
 }
@@ -591,8 +617,9 @@ export function buildPersonalizedLfgSuggestions({
     ...habitSportKeys,
     ...learnedSportKeys,
   ])
+  // Người chơi chưa có môn nào (hồ sơ / thói quen / tìm kiếm): không giới hạn theo môn, dùng mọi môn của hệ thống
   if (allAllowedSportSet.size === 0) {
-    allAllowedSportSet.add('badminton')
+    Object.keys(SPORT_CATALOG).forEach((key) => allAllowedSportSet.add(key))
   }
 
   // Nếu người chơi đang chủ động chọn 1 môn cụ thể hoặc gõ tên môn trong ô tìm kiếm -> ưu tiên tuyệt đối mong muốn hiện tại
@@ -607,7 +634,7 @@ export function buildPersonalizedLfgSuggestions({
   ) {
     activeSportSet = new Set([activeFilters.sport])
   } else if (activeFilters.sport === 'profile_matched' && !includeLearnedDesires) {
-    activeSportSet = new Set(profileSportKeys.length > 0 ? profileSportKeys : ['badminton'])
+    activeSportSet = new Set(profileSportKeys.length > 0 ? profileSportKeys : allAllowedSportSet)
   } else if (keywordSports.length > 0) {
     activeSportSet = new Set(keywordSports)
   }
@@ -667,7 +694,6 @@ export function buildPersonalizedLfgSuggestions({
       }
       const nameDetected = detectSportsInText(`${fac.name || ''} ${fac.description || ''}`)
       nameDetected.forEach((k) => rawSports.add(k))
-      if (rawSports.size === 0) rawSports.add('badminton')
 
       const venueSports = Array.from(rawSports)
       // Chỉ giữ các môn nằm trong phạm vi sở thích / mong muốn của người chơi
@@ -732,7 +758,7 @@ export function buildPersonalizedLfgSuggestions({
 
       const rangeInfo = getDistanceRangeInfo(distanceKm)
       const primarySportKey = matchedSports[0]
-      const primarySportMeta = SPORT_CATALOG[primarySportKey] || SPORT_CATALOG.badminton
+      const primarySportMeta = SPORT_CATALOG[primarySportKey] || { ...DEFAULT_SPORT_DECOR, key: primarySportKey || '', name: '' }
 
       return {
         id: fac.id || fac.facilityId,
@@ -768,7 +794,7 @@ export function buildPersonalizedLfgSuggestions({
   // ----------------------------------------------------------------------------
   const suggestedMatches = (Array.isArray(matches) ? matches : [])
     .map((m) => {
-      const mSport = normalizeSportKey(m.sport || m.sportBadge || m.title) || 'badminton'
+      const mSport = normalizeSportKey(m.sport || m.sportBadge || m.title) || ''
       // Ràng buộc nghiêm ngặt: Không bao giờ đề xuất kèo ngoài sở thích, thói quen và mong muốn
       if (!activeSportSet.has(mSport)) return null
 
@@ -905,7 +931,7 @@ export function buildPersonalizedLfgSuggestions({
         matchedPostSports[0] ||
         (profileSportKeys[0] && activeSportSet.has(profileSportKeys[0])
           ? profileSportKeys[0]
-          : Array.from(activeSportSet)[0] || 'badminton')
+          : Array.from(activeSportSet)[0] || '')
 
       if (!activeSportSet.has(effectiveSportKey)) return null
 
@@ -928,7 +954,7 @@ export function buildPersonalizedLfgSuggestions({
 
       const reasons = []
       let relevanceScore = 0
-      const sportMeta = SPORT_CATALOG[effectiveSportKey] || SPORT_CATALOG.badminton
+      const sportMeta = SPORT_CATALOG[effectiveSportKey] || { ...DEFAULT_SPORT_DECOR, key: effectiveSportKey || '', name: '' }
 
       if (profileSportKeys.includes(effectiveSportKey)) {
         reasons.push({

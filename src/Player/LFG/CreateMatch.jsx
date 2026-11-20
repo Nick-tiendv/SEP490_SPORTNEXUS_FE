@@ -10,7 +10,6 @@ import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { getCourtSlots } from '../../api/player/bookingApi.js'
-import { vnClock } from '../../utils/vnTime.js'
 import FacilityAreaMap from '../../components/common/FacilityAreaMap.jsx'
 import { reverseGeocode } from '../../utils/geolocation.js'
 import {
@@ -20,9 +19,15 @@ import {
   subscribeBookingOrigin,
 } from '../../utils/playerOrigin.js'
 import {
+  SPORT_CATALOG,
   normalizeSportKey,
   recordNewPlayerDesire,
+  setSportCatalog,
 } from './lfgSuggestionEngine.js'
+import { getSportCategories } from '../../api/player/profileApi.js'
+import { isSlotOpen, normalizeCourtSlots } from '../Booking/Recurring/courtSlots.js'
+import { LFG_POLICY } from './lfgPolicy.js'
+import MonthCalendarPicker from '../Booking/FindCourt/MonthCalendarPicker.jsx'
 
 // Môn trên giao diện -> tên môn trong danh mục BE
 const calculateDurationHours = (rangeStr) => {
@@ -42,11 +47,19 @@ const calculateDurationHours = (rangeStr) => {
 // Số ca liên tiếp tối đa của 1 kèo (BE: numberOfSlots 1 - 6)
 const MAX_LFG_COURT_SLOTS = 6
 
-const SIDE_SIZE_OPTIONS = [
-  { value: null, label: 'Giao lưu', hint: 'Không chia phe' },
-  { value: 1, label: 'Đơn 1 vs 1', hint: 'Chia phe A / B' },
-  { value: 2, label: 'Đôi 2 vs 2', hint: 'Chia phe A / B' },
-]
+// Thể thức theo loại môn:
+// - Môn đồng đội (LFG_POLICY.teamSportKeys: bóng đá, bóng rổ, bóng chuyền): bắt buộc Đội vs Đội, số người mỗi đội = teamSize của sân.
+// - Môn khác (cầu lông, pickleball, tennis…): đánh đơn 1 vs 1 hoặc đôi 2 vs 2 (sân đơn chỉ 1 vs 1).
+// keepValue: giữ thể thức cũ khi sửa kèo.
+function buildSideSizeOptions(court, keepValue, isTeamSport) {
+  const size = Number(court?.teamSize) || 0
+  if (isTeamSport) {
+    return [{ value: size > 0 ? size : null, label: size > 0 ? `Đội ${size} vs ${size}` : 'Đội đấu đội', hint: 'Team vs Team (bắt buộc)' }]
+  }
+  const sizes = size === 1 ? [1] : [1, 2]
+  if (Number(keepValue) > 0 && !sizes.includes(Number(keepValue))) sizes.push(Number(keepValue))
+  return sizes.map((n) => ({ value: n, label: n === 1 ? 'Đơn 1 vs 1' : n === 2 ? 'Đôi 2 vs 2' : `${n} vs ${n}`, hint: 'Chia phe A / B' }))
+}
 
 const SKILL_LEVEL_CARDS = [
   { key: 'intermediate', label: 'Trung bình - Khá', desc: 'Đánh chắc tay, giao lưu đều đặn' },
@@ -76,111 +89,45 @@ function formatLocalDate(date) {
   return `${y}-${m}-${d}`
 }
 
-// Lấy danh sách các ngày khả dụng cho Ghép trận LFG:
-// Bắt đầu từ 2 ngày sau gần nhất trở đi (bỏ Hôm nay và Ngày mai), chỉ hiển thị Thứ và Ngày/Tháng/Năm (không hiển thị "ngày mốt")
-function getLfgUpcomingDays(count = 21) {
-  const days = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // Bắt đầu từ 2 ngày sau gần nhất (today + 2 days)
-  for (let i = 2; i < 2 + count; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    const dateStr = formatLocalDate(d)
-    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
-    const shortDayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-    const dayOfWeek = dayNames[d.getDay()]
-    const shortDay = shortDayNames[d.getDay()]
-    const dayNum = String(d.getDate()).padStart(2, '0')
-    const monthNum = String(d.getMonth() + 1).padStart(2, '0')
-    const year = d.getFullYear()
-    const dateFormatted = `${dayNum}/${monthNum}/${year}`
-
-    days.push({
-      dateStr,
+// Dải 7 ngày của lịch tạo kèo = tuần (Thứ 2 → Chủ nhật) chứa ngày đang chọn, giống trang đặt sân.
+// Ngày đã qua đánh dấu isPast (không chọn được). Cho tạo kèo từ hôm nay (BE vẫn kiểm tra luật thời gian khi tạo).
+function getLfgWeekDays(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const base = new Date(y, m - 1, d)
+  const monday = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ((base.getDay() + 6) % 7))
+  const todayStr = formatLocalDate(new Date())
+  const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
+  const shortDayNames = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+    const dayStr = formatLocalDate(day)
+    const dayNum = String(day.getDate()).padStart(2, '0')
+    const monthNum = String(day.getMonth() + 1).padStart(2, '0')
+    const dateFormatted = `${dayNum}/${monthNum}/${day.getFullYear()}`
+    return {
+      dateStr: dayStr,
       dayNum,
       monthNum,
-      year,
-      dayOfWeek,
-      shortDay,
+      year: day.getFullYear(),
+      dayOfWeek: dayNames[day.getDay()],
+      shortDay: dayStr === todayStr ? 'Hôm nay' : shortDayNames[day.getDay()],
       dateFormatted,
-      fullLabel: `${dayOfWeek}, ${dateFormatted}`,
-      diffDays: i,
-      isEligible: true,
-    })
-  }
-  return days
+      fullLabel: `${dayNames[day.getDay()]}, ${dateFormatted}`,
+      isPast: dayStr < todayStr,
+    }
+  })
 }
 
-// Chuyển đổi lưới ca thành các khung giờ chơi chuẩn 2 tiếng (không cho phép 1 tiếng)
-function buildTwoHourSlots(rawSlots, defaultPrice = 0) {
-  if (!Array.isArray(rawSlots) || rawSlots.length === 0) return []
-
-  // Sắp xếp ca theo thứ tự thời gian tăng dần
-  const sorted = [...rawSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-
-  // Nếu ca từ backend đã có độ dài 2 tiếng (diffHours >= 1.8)
-  const firstSlotDiffHours = (new Date(sorted[0].endTime).getTime() - new Date(sorted[0].startTime).getTime()) / (1000 * 60 * 60)
-  if (firstSlotDiffHours >= 1.8) {
-    return sorted.map((s) => {
-      const start = vnClock(s.startTime) || '00:00'
-      const end = vnClock(s.endTime) || '00:00'
-      const isAvail = s.status === 'Available' && !s.isPast && s.isBookable
-      const price = Number(s.price) > 0 ? Number(s.price) : defaultPrice * 2
-      return {
-        id: s.id,
-        slotIds: [s.id],
-        start,
-        end,
-        timeRange: `${start} - ${end}`,
-        hours: 2,
-        price,
-        status: s.status,
-        isAvailable: isAvail,
-        isPast: Boolean(s.isPast),
-        rawSlot: s,
-        rawSlots: [s],
-      }
-    })
-  }
-
-  // Nếu ca là 1 tiếng: Ghép 2 ca 1 tiếng liên tiếp thành khung giờ chuẩn 2 tiếng
-  const twoHourSlots = []
-  for (let i = 0; i < sorted.length; i += 2) {
-    const slotA = sorted[i]
-    const slotB = sorted[i + 1]
-    // Không nhận ca lẻ 1 tiếng ở cuối vì quy chuẩn hệ thống bắt buộc 2 tiếng
-    if (!slotB) break
-
-    const start = vnClock(slotA.startTime) || '00:00'
-    const end = vnClock(slotB.endTime) || '00:00'
-    const isAvailA = slotA.status === 'Available' && !slotA.isPast && slotA.isBookable
-    const isAvailB = slotB.status === 'Available' && !slotB.isPast && slotB.isBookable
-    const isAvail = isAvailA && isAvailB
-    const isPast = Boolean(slotA.isPast || slotB.isPast)
-    const priceA = Number(slotA.price) > 0 ? Number(slotA.price) : defaultPrice
-    const priceB = Number(slotB.price) > 0 ? Number(slotB.price) : defaultPrice
-    const totalPrice = priceA + priceB
-
-    twoHourSlots.push({
-      id: slotA.id,
-      slotIds: [slotA.id, slotB.id],
-      start,
-      end,
-      timeRange: `${start} - ${end}`,
-      hours: 2,
-      price: totalPrice,
-      status: isAvail ? 'Available' : (isPast ? 'Past' : 'Booked'),
-      isAvailable: isAvail,
-      isPast,
-      note: !isAvail ? (!isAvailA && !isAvailB ? 'Đã kín lịch' : 'Đã kín 1 phần ca') : null,
-      rawSlot: slotA,
-      rawSlots: [slotA, slotB],
-    })
-  }
-
-  return twoHourSlots
+// Lưới ca: hiện đúng từng ca BE trả về (độ dài ca do chủ sân cấu hình), giống trang đặt sân
+function buildLfgSlots(rawSlots, defaultPrice = 0) {
+  return normalizeCourtSlots(rawSlots, defaultPrice).map((s) => ({
+    ...s,
+    start: s.formattedStart,
+    end: s.formattedEnd,
+    timeRange: `${s.formattedStart} - ${s.formattedEnd}`,
+    isAvailable: isSlotOpen(s),
+    isPast: Boolean(s.isPast),
+  }))
 }
 
 const normalize = (t = '') => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -295,15 +242,10 @@ function CreateMatch() {
   const [pickedCourtId, setSelectedCourtId] = useState(() => {
     return districtData[userDistrictKey]?.courts[0]?.id || null
   })
-  const lfgUpcomingDays = useMemo(() => getLfgUpcomingDays(21), [])
-  const firstEligibleDayStr = useMemo(() => {
-    return lfgUpcomingDays[0]?.dateStr || ''
-  }, [lfgUpcomingDays])
-  // Khởi tạo ngày mặc định là ngày hợp lệ sớm nhất (cách 2 ngày gần nhất)
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const days = getLfgUpcomingDays(21)
-    return days[0]?.dateStr || ''
-  })
+  // Ngày sớm nhất được chọn: hôm nay (cho tạo kèo sát giờ nếu sân còn trống)
+  const firstEligibleDayStr = useMemo(() => formatLocalDate(new Date()), [])
+  // Ngày mặc định: hôm nay
+  const [selectedDate, setSelectedDate] = useState(() => formatLocalDate(new Date()))
   const [preferredTimeRange, setPreferredTimeRange] = useState('20:00 - 22:00')
 
   const preferredDurationHours = useMemo(() => {
@@ -353,7 +295,8 @@ function CreateMatch() {
   // Kèo LFG phải gắn với một ca sân thật, truyền sang từ màn hình chọn ca.
   const initialSlotId = location.state?.courtSlotId || location.state?.slotId || null
   const [courtSlotId, setCourtSlotId] = useState(initialSlotId)
-  const [slotsNeeded, setSlotsNeeded] = useState(3)
+  // Số người chủ kèo đã có (tính cả chủ kèo). Số suất cần tìm = tổng người của thể thức − số người đã có.
+  const [havePlayers, setHavePlayers] = useState(1)
   const [pricePerPerson, setPricePerPerson] = useState('')
   const [requireApproval, setRequireApproval] = useState(false)
   const [description, setDescription] = useState('')
@@ -378,10 +321,7 @@ function CreateMatch() {
     () => myTeams.filter((team) => isCaptainOfTeam(team, currentUser?.id)),
     [myTeams, currentUser?.id],
   )
-  const selectedHostTeam = useMemo(
-    () => captainTeams.find((team) => team.id === hostTeamId) || null,
-    [captainTeams, hostTeamId],
-  )
+
 
   // Danh sách cơ sở thể thao & ca sân khả dụng
   // Chỉ dùng cơ sở thật từ API; không có facilityId/courtId truyền sang thì để người dùng tự chọn
@@ -462,11 +402,12 @@ function CreateMatch() {
     return facilities.find((f) => f.id === selectedFacilityId) || null
   }, [facilities, selectedFacilityId])
 
-  // Danh sách sân con của cơ sở đang chọn
+  // Danh sách sân con của cơ sở đang chọn, chỉ lấy sân đúng môn đang chọn (cơ sở có thể có nhiều môn)
   const availableSubCourts = useMemo(() => {
     if (!selectedFacility || !Array.isArray(selectedFacility.courts)) return []
-    return selectedFacility.courts
-  }, [selectedFacility])
+    if (!sport) return selectedFacility.courts
+    return selectedFacility.courts.filter((c) => normalizeSportKey(c.categoryName || '') === sport)
+  }, [selectedFacility, sport])
 
   // Sân con đang chọn
   const selectedSubCourt = useMemo(() => {
@@ -479,6 +420,28 @@ function CreateMatch() {
     )
   }, [availableSubCourts, selectedSubCourtId])
 
+  // Môn của sân con đang chọn (theo danh mục BE); môn đồng đội bắt buộc kèo đội
+  const courtSportKey = normalizeSportKey(selectedSubCourt?.categoryName || '') || normalizeSportKey(sport || '')
+  const isTeamSport = LFG_POLICY.teamSportKeys.includes(courtSportKey)
+  // Đội của tôi (đội trưởng) cùng môn với sân để làm đội chủ kèo
+  const sportTeams = captainTeams.filter((team) => !team.sportName || normalizeSportKey(team.sportName) === courtSportKey)
+  const sideSizeOptions = buildSideSizeOptions(selectedSubCourt, isEditMode ? sideSize : null, isTeamSport)
+  // Thể thức không hợp với sân / môn mới chọn thì coi như chưa chọn; chỉ có 1 lựa chọn thì tự chọn
+  const validSideSize = sideSizeOptions.some((o) => o.value === sideSize)
+    ? sideSize
+    : sideSizeOptions.length === 1
+      ? sideSizeOptions[0].value
+      : undefined
+  // Đội chủ kèo: bắt buộc với môn đồng đội; môn vợt đánh đôi 2 vs 2 được chọn đội (không bắt buộc)
+  const canPickTeam = isTeamSport || Number(validSideSize) === 2
+  const hostTeam = canPickTeam ? sportTeams.find((team) => team.id === hostTeamId) || null : null
+  // Kèo đội (Team vs Team): một đội nhận kèo, tiền chia đôi 2 đội trưởng
+  const isTeamMatch = isTeamSport || Boolean(hostTeam)
+  // Tổng người trên sân theo thể thức (đơn 1 vs 1 = 2, đôi 2 vs 2 = 4…); chưa chọn thể thức thì chưa tính được
+  const totalPlayers = Number(validSideSize) > 0 ? Number(validSideSize) * 2 : null
+  // slotsNeeded gửi BE (POST /lfgs: số người cần tìm, không tính chủ kèo, 1 - 20)
+  const slotsNeeded = totalPlayers ? Math.max(0, totalPlayers - havePlayers) : 0
+
   // Tính ngày theo định dạng YYYY-MM-DD
   const currentDateStr = useMemo(() => {
     if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
@@ -486,9 +449,10 @@ function CreateMatch() {
     }
     return firstEligibleDayStr || ''
   }, [selectedDate, firstEligibleDayStr])
+  const lfgWeekDays = useMemo(() => getLfgWeekDays(currentDateStr || firstEligibleDayStr), [currentDateStr, firstEligibleDayStr])
 
   const formattedDateLabel = useMemo(() => {
-    const found = lfgUpcomingDays.find((d) => d.dateStr === currentDateStr)
+    const found = lfgWeekDays.find((d) => d.dateStr === currentDateStr)
     if (found) return found.fullLabel
     if (currentDateStr) {
       const parts = currentDateStr.split('-').map(Number)
@@ -501,9 +465,9 @@ function CreateMatch() {
       }
     }
     return currentDateStr
-  }, [currentDateStr, lfgUpcomingDays])
+  }, [currentDateStr, lfgWeekDays])
 
-  // Tải danh sách ca trống từ API getCourtSlots và quy chuẩn thành ca 2 tiếng
+  // Tải danh sách ca từ API getCourtSlots (độ dài ca theo BE)
   const defaultCourtPrice = Number(selectedSubCourt?.defaultPrice) || Number(selectedFacility?.price) || 0
   const slotsKey = selectedSubCourt?.id ? `${selectedSubCourt.id}|${currentDateStr}|${defaultCourtPrice}` : null
   const courtSlots = slotsKey && slotsResult.key === slotsKey ? slotsResult.slots : []
@@ -516,8 +480,7 @@ function CreateMatch() {
     getCourtSlots(subCourtId, dateStr)
       .then((rawSlots) => {
         if (!isMounted) return
-        // Quy chuẩn: Ghép các ca 1 tiếng thành ca 2 tiếng, không cho phép setup ca 1 tiếng
-        const slots = Array.isArray(rawSlots) && rawSlots.length > 0 ? buildTwoHourSlots(rawSlots, defaultCourtPrice) : []
+        const slots = buildLfgSlots(rawSlots, defaultCourtPrice)
         setSlotsResult({ key: slotsKey, slots })
       })
       .catch((err) => {
@@ -539,7 +502,7 @@ function CreateMatch() {
     setCreateError(null)
   }
 
-  // Buổi chơi nhiều ca liên tiếp (QĐ-C, vd 2 ca x 2 tiếng = 4 tiếng): chọn ca bắt đầu rồi chọn số ca.
+  // Buổi chơi nhiều ca liên tiếp (QĐ-C): chọn ca bắt đầu rồi chọn số ca.
   // BE gộp các ca thành 1 ca dài, giá mỗi người = tổng tiền sân / số người.
   const [slotCount, setSlotCount] = useState(1)
   const consecutiveRun = useMemo(() => {
@@ -561,7 +524,7 @@ function CreateMatch() {
     setCourtFee(picked.reduce((sum, s) => sum + s.price, 0))
     setPreferredTimeRange(`${picked[0].start} - ${picked[picked.length - 1].end}`)
   }
-  // Số ca DB gửi BE (ca 1 tiếng cũ được ghép 2 ca thành 1 khung trên giao diện)
+  // Số ca gửi BE (numberOfSlots)
   const dbSlotCount = consecutiveRun.slice(0, slotCount).reduce((n, s) => n + (s.slotIds?.length || 1), 0) || 1
 
   // Chọn / bỏ chọn bộ môn thể thao (nếu cơ sở đang chọn không hỗ trợ môn mới thì xóa chọn sân/ca cũ)
@@ -588,8 +551,9 @@ function CreateMatch() {
       getLfgById(editCardId)
         .then((res) => {
           if (res) {
-            const needed = res.totalSlots ?? res.slotsNeeded
-            if (needed) setSlotsNeeded(Number(needed))
+            const needed = Number(res.totalSlots ?? res.slotsNeeded) || 0
+            const side = Number(res.sideSize) > 0 ? Number(res.sideSize) : 0
+            if (side && needed) setHavePlayers(Math.max(1, side * 2 - needed))
             if (res.pricePerPerson) setPricePerPerson(String(res.pricePerPerson))
             if (res.description) setDescription(res.description)
             setSideSize(res.sideSize != null && Number(res.sideSize) > 0 ? Number(res.sideSize) : null)
@@ -603,6 +567,21 @@ function CreateMatch() {
         .catch((e) => console.warn('[CreateMatch] Không thể tải thông tin kèo cũ để sửa:', e))
     }
   }, [editCardId])
+
+  // Danh sách môn thật từ GET /api/v1/master-data/sports (không ghi cứng ở FE)
+  const [sportOptions, setSportOptions] = useState(() => Object.values(SPORT_CATALOG))
+  const [sportOptionsError, setSportOptionsError] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    getSportCategories()
+      .then((list) => {
+        if (cancelled) return
+        setSportCatalog(list)
+        setSportOptions(Object.values(SPORT_CATALOG))
+      })
+      .catch((err) => { if (!cancelled) setSportOptionsError(err?.message || 'Không tải được danh sách môn.') })
+    return () => { cancelled = true }
+  }, [])
 
   // Toast / Submission state
   const [submitting, setSubmitting] = useState(false)
@@ -686,20 +665,34 @@ function CreateMatch() {
       return
     }
 
-    // Kiểm tra quy định hệ thống: Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người
-    if (!isEditMode && courtSlotId) {
-      const selectedSlotObj = courtSlots.find((s) => s.id === courtSlotId)
-      const slotStartTime = selectedSlotObj?.rawSlot?.startTime || `${currentDateStr}T${selectedSlotObj?.start || '00:00'}:00`
-      const slotDate = new Date(slotStartTime)
-      const now = new Date()
-      const diffHours = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60)
-      if (diffHours < 47.9) {
-        setCreateError('Kèo phải được tạo trước giờ chơi ít nhất 2 ngày để kịp gom người.')
-        setSubmitting(false)
-        document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        return
-      }
+    // Kèo cá nhân: phải chọn thể thức và còn thiếu ít nhất 1 người
+    if (!isEditMode && !isTeamMatch && !totalPlayers) {
+      setCreateError('Chưa chọn thể thức (đơn / đôi). Vui lòng chọn ở mục 04 để hệ thống tính số người còn thiếu.')
+      setSubmitting(false)
+      return
     }
+    if (!isTeamMatch && totalPlayers && slotsNeeded < 1) {
+      setCreateError('Bạn đã đủ người cho thể thức này nên không cần đăng kèo tìm thêm người.')
+      setSubmitting(false)
+      return
+    }
+
+    // Kèo đội cần số người mỗi đội = teamSize của sân con (BE bắt buộc sideSize); sân chưa khai báo thì chưa tạo được
+    if (!isEditMode && isTeamSport && !validSideSize) {
+      setCreateError('Sân này chưa khai báo số người mỗi đội nên chưa tạo được kèo đội. Vui lòng chọn sân khác hoặc báo chủ sân cập nhật thông tin sân.')
+      setSubmitting(false)
+      document.getElementById('section-court-slots')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    // Môn đồng đội: bắt buộc chọn đội (chủ kèo là đội trưởng)
+    if (!isEditMode && isTeamSport && !hostTeam) {
+      setCreateError('Môn đồng đội chỉ ghép kèo theo đội. Vui lòng chọn đội bạn làm đội trưởng ở mục 04.')
+      setSubmitting(false)
+      document.getElementById('section-host-team')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
 
     // Kiểm tra số dư ví chủ sân (FE Xử lý: Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo)
     if (walletBalance < courtFee) {
@@ -715,7 +708,8 @@ function CreateMatch() {
       try {
         // UpdateLfgRequest: totalSlots (số người cần tìm), skillLevelTag, description, requireApproval. Không có giá.
         await updateLfg(editCardId, {
-          totalSlots: Number(slotsNeeded) || 3,
+          // Kèo cũ chưa có thể thức thì không tính được số suất: không gửi để giữ nguyên trên BE
+          totalSlots: slotsNeeded > 0 ? slotsNeeded : undefined,
           skillLevelTag: skillTag,
           description: description.trim() || undefined,
           requireApproval: Boolean(requireApproval),
@@ -756,13 +750,14 @@ function CreateMatch() {
       await createLfg({
         courtSlotId,
         numberOfSlots: dbSlotCount,
-        slotsNeeded: Number(slotsNeeded) || 3,
+        // Kèo đội: chờ BE chốt — tạm gửi 1 suất cho 1 đội nhận kèo (đội trưởng nhận thay cả đội)
+        slotsNeeded: isTeamMatch ? 1 : slotsNeeded,
         // Không gửi pricePerPerson: chủ kèo không tự đặt giá, BE chia đều tiền sân
         skillLevelTag: skillTag,
         description: description.trim() || undefined,
         requireApproval: Boolean(requireApproval),
-        sideSize: sideSize || undefined,
-        hostTeamId: selectedHostTeam?.id || null,
+        sideSize: validSideSize || undefined,
+        hostTeamId: hostTeam?.id || null,
       })
     } catch (apiErr) {
       console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
@@ -844,14 +839,8 @@ function CreateMatch() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                  {[
-                    { key: 'badminton', name: 'Cầu Lông', emoji: '🏸', sub: 'BWF Pro' },
-                    { key: 'pickleball', name: 'Pickleball', emoji: '🏓', sub: 'Giao lưu & Đấu' },
-                    { key: 'football', name: 'Bóng Đá', emoji: '⚽', sub: 'Mini 5-7' },
-                    { key: 'basketball', name: 'Bóng Rổ', emoji: '🏀', sub: 'FIBA 3x3' },
-                    { key: 'tennis', name: 'Tennis', emoji: '🎾', sub: 'Hard Court' },
-                  ].map((s) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                  {sportOptions.map((s) => (
                     <div
                       key={s.key}
                       onClick={() => handleSelectSport(s.key)}
@@ -877,13 +866,16 @@ function CreateMatch() {
                             <span className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399] shrink-0"></span>
                           )}
                         </div>
-                        <p className={`text-[10px] mt-0.5 truncate ${sport === s.key ? 'text-green-100' : 'text-gray-400'}`}>
-                          {s.sub}
-                        </p>
+                        {s.rulesDescription && (
+                          <p title={s.rulesDescription} className={`text-[10px] mt-0.5 truncate ${sport === s.key ? 'text-green-100' : 'text-gray-400'}`}>
+                            {s.rulesDescription}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
+                {sportOptionsError && <p className="text-xs text-rose-600 mt-2">{sportOptionsError}</p>}
               </div>
 
               {/* 02. BÁN KÍNH & KHU VỰC MUỐN CHƠI */}
@@ -1151,14 +1143,14 @@ function CreateMatch() {
                           </span>
                         </div>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          Chọn cơ sở, sân đấu và nhấp vào khung giờ 2 tiếng còn trống bên dưới để hệ thống giữ chỗ tự động
+                          Chọn cơ sở, sân đấu và nhấp vào ca còn trống bên dưới để hệ thống giữ chỗ tự động
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 bg-[#EAF7EE] px-3 py-1 rounded-xl border border-[#C6E7BE] text-xs font-bold text-[#15803D]">
                       <span className="material-symbols-outlined text-[16px]">schedule</span>
-                      <span>Quy chuẩn: Khung giờ 2 tiếng / ca</span>
+                      <span>Độ dài ca theo cấu hình của sân</span>
                     </div>
                   </div>
 
@@ -1175,43 +1167,34 @@ function CreateMatch() {
                         </span>
                       </div>
 
-                      {/* Nút Chọn ngày nhanh từ lịch tháng */}
-                      <label
-                        htmlFor="custom-date-picker"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-[#EAF7EE] border border-gray-300 hover:border-[#2D5F3F] text-gray-700 hover:text-[#15803D] text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                        title="Mở bảng lịch để chọn ngày khác thuận tiện hơn"
-                      >
-                        <span className="material-symbols-outlined text-[16px] text-[#2D5F3F]">edit_calendar</span>
-                        <span>Mở lịch tháng</span>
-                        <input
-                          id="custom-date-picker"
-                          type="date"
-                          min={firstEligibleDayStr}
-                          value={currentDateStr}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setSelectedDate(e.target.value)
-                              setCourtSlotId(null)
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                      </label>
+                      {/* Lịch tháng (giống trang đặt sân): chọn ngày thì dải tuần bên dưới đổi theo */}
+                      <MonthCalendarPicker
+                        value={currentDateStr}
+                        minDate={firstEligibleDayStr}
+                        label="Mở lịch tháng"
+                        triggerClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-[#EAF7EE] border border-gray-300 hover:border-[#2D5F3F] text-gray-700 hover:text-[#15803D] text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                        onChange={(dateStr) => {
+                          setSelectedDate(dateStr)
+                          setCourtSlotId(null)
+                        }}
+                      />
                     </div>
 
                     {/* Dải thẻ ngày trượt ngang dạng Calendar Strip */}
                     <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
-                      {lfgUpcomingDays.map((item) => {
+                      {lfgWeekDays.map((item) => {
                         const isSelected = item.dateStr === currentDateStr
                         return (
                           <button
                             key={item.dateStr}
                             type="button"
+                            disabled={item.isPast}
+                            title={item.isPast ? 'Ngày đã qua' : undefined}
                             onClick={() => {
                               setSelectedDate(item.dateStr)
                               setCourtSlotId(null)
                             }}
-                            className={`min-w-[82px] sm:min-w-[88px] py-2.5 px-2 rounded-2xl text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1 shrink-0 ${
+                            className={`min-w-[82px] sm:min-w-[88px] py-2.5 px-2 rounded-2xl text-center transition-all cursor-pointer flex flex-col items-center justify-between gap-1 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
                               isSelected
                                 ? 'bg-[#2D5F3F] text-white shadow-md shadow-[#2D5F3F]/25 ring-2 ring-[#2D5F3F]/40 scale-[1.02]'
                                 : 'bg-white border border-gray-200 hover:border-[#2D5F3F] hover:bg-[#F0FDF4] text-gray-700 shadow-2xs'
@@ -1403,7 +1386,7 @@ function CreateMatch() {
                                 <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
                                   isSlotSelected ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 border border-blue-200'
                                 }`}>
-                                  2 TIẾNG
+                                  {Number.isInteger(slot.durationHours) ? slot.durationHours : slot.durationHours.toFixed(1)} TIẾNG
                                 </span>
                                 {isSlotSelected && (
                                   <span className="material-symbols-outlined text-white text-[16px]">check_circle</span>
@@ -1434,7 +1417,7 @@ function CreateMatch() {
                   ) : (
                     <div className="py-6 px-4 bg-white/70 rounded-2xl border border-dashed border-gray-300 text-center text-xs text-gray-500">
                       <span className="material-symbols-outlined text-[28px] text-gray-400 block mb-1">event_busy</span>
-                      Chưa có ca trống 2 tiếng cho sân này vào ngày {formattedDateLabel}.
+                      Chưa có ca trống cho sân này vào ngày {formattedDateLabel}.
                       <div className="mt-2 flex items-center justify-center gap-3">
                         <span className="text-gray-500 font-medium">Vui lòng chọn ngày khác trên thanh lịch phía trên</span>
                         <span className="text-gray-300">|</span>
@@ -1513,18 +1496,18 @@ function CreateMatch() {
                 <div className="mb-4">
                   <p className="text-xs font-bold text-gray-700 mb-2">Thể thức thi đấu:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {SIDE_SIZE_OPTIONS.map((fmt) => (
+                    {sideSizeOptions.map((fmt) => (
                       <button
                         key={fmt.label}
                         type="button"
                         disabled={isEditMode}
-                        aria-pressed={sideSize === fmt.value}
+                        aria-pressed={validSideSize === fmt.value}
                         onClick={() => {
-                          setSideSize((prev) => (prev === fmt.value ? undefined : fmt.value))
-                          if (fmt.value && sideSize !== fmt.value) setSlotsNeeded(fmt.value * 2 - 1)
+                          setSideSize(validSideSize === fmt.value ? undefined : fmt.value)
+                          if (fmt.value) setHavePlayers((prev) => Math.min(prev, fmt.value * 2 - 1))
                         }}
                         className={`p-2.5 rounded-xl border text-xs font-bold text-center flex flex-col items-center justify-center gap-0.5 transition-all ${isEditMode ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} ${
-                          sideSize === fmt.value
+                          validSideSize === fmt.value
                             ? 'border-[#2D5F3F] bg-[#EAF7EE] text-[#15803D] shadow-2xs'
                             : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                         }`}
@@ -1535,41 +1518,54 @@ function CreateMatch() {
                     ))}
                   </div>
                   {isEditMode && <p className="text-[10.5px] text-gray-500 mt-1">Không đổi được thể thức sau khi đã tạo kèo.</p>}
+                  {!isEditMode && isTeamSport && (
+                    <p className="text-[10.5px] text-[#166534] mt-1">
+                      Môn đồng đội: bắt buộc ghép kèo Đội vs Đội.
+                      {!(Number(selectedSubCourt?.teamSize) > 0) && ' Sân này chưa khai báo số người mỗi đội.'}
+                    </p>
+                  )}
                 </div>
 
-                {/* Team vs Team: Chỉ hiển thị khi User là Đội trưởng của ít nhất 1 đội */}
-                {!isEditMode && captainTeams.length > 0 && (
-                  <div className="mb-4 p-4 rounded-2xl bg-[#F0FDF4] border border-[#86EFAC]">
-                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                      <label htmlFor="create-match-host-team" className="text-xs font-extrabold text-[#14532D] flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[17px] text-[#15803D]">groups</span>
-                        <span>Chọn Đội Đại Diện (Kèo Đội — Team vs Team)</span>
-                      </label>
-                      <span className="px-2 py-0.5 rounded-full bg-white text-[#15803D] border border-[#86EFAC] text-[10.5px] font-bold">
-                        Bạn là Đội trưởng ({captainTeams.length} đội)
-                      </span>
-                    </div>
-                    <select
-                      id="create-match-host-team"
-                      value={hostTeamId}
-                      onChange={(e) => setHostTeamId(e.target.value)}
-                      className="w-full h-11 px-3.5 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
-                    >
-                      <option value="">Cá nhân (Không đại diện đội)</option>
-                      {captainTeams.map((team) => (
-                        <option key={team.id} value={team.id} disabled={team.isLocked}>
-                          {team.name}
-                          {team.sportName ? ` — ${team.sportName}` : ''}
-                          {team.totalMembers ? ` (${team.totalMembers} thành viên)` : ''}
-                          {team.isLocked ? ' [Đang khóa]' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-[#166534] mt-1.5 leading-relaxed">
-                      {selectedHostTeam
-                        ? `Kèo sẽ hiển thị tên đội "${selectedHostTeam.name}" để thách đấu với đội khác ngoài bảng tin.`
-                        : 'Chọn một đội bạn làm Đội trưởng nếu muốn tạo kèo giao đấu Team vs Team.'}
-                    </p>
+                {/* Kèo đội (Team vs Team): bắt buộc với môn đồng đội; đánh đôi 2 vs 2 được chọn đội (không bắt buộc).
+                    Chủ kèo phải là đội trưởng của một đội cùng môn. */}
+                {!isEditMode && canPickTeam && (
+                  <div id="section-host-team" className="mb-4 p-4 rounded-2xl bg-[#F0FDF4] border border-[#86EFAC]">
+                    <label htmlFor="create-match-host-team" className="text-xs font-extrabold text-[#14532D] flex items-center gap-1.5 mb-2">
+                      <span className="material-symbols-outlined text-[17px] text-[#15803D]">groups</span>
+                      <span>{isTeamSport ? 'Chọn Đội Đại Diện (bắt buộc với môn đồng đội)' : 'Chọn Đội Đại Diện cho kèo đôi (không bắt buộc)'}</span>
+                    </label>
+                    {sportTeams.length === 0 && !isTeamSport ? (
+                      <p className="text-[11px] text-gray-600 leading-relaxed m-0">
+                        Bạn chưa là đội trưởng của đội nào cùng môn, kèo sẽ tìm người lẻ.{' '}
+                        <Link to="/tournament" className="font-bold text-[#15803D] underline">Tạo đội tại Giải đấu &amp; Đội</Link> để ghép kèo đôi theo đội.
+                      </p>
+                    ) : sportTeams.length === 0 ? (
+                      <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-relaxed m-0">
+                        Môn đồng đội chỉ ghép kèo theo đội. Bạn cần là <strong>đội trưởng</strong> của một đội cùng môn để tạo kèo.{' '}
+                        <Link to="/tournament" className="font-bold text-[#15803D] underline">Tạo / quản lý đội tại Giải đấu &amp; Đội</Link>
+                      </p>
+                    ) : (
+                      <>
+                        <select
+                          id="create-match-host-team"
+                          value={hostTeam?.id || ''}
+                          onChange={(e) => setHostTeamId(e.target.value)}
+                          className="w-full h-11 px-3.5 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
+                        >
+                          <option value="">{isTeamSport ? '-- Chọn đội của bạn --' : 'Không chọn đội (tìm người lẻ)'}</option>
+                          {sportTeams.map((team) => (
+                            <option key={team.id} value={team.id} disabled={team.isLocked}>
+                              {team.name}
+                              {team.totalMembers ? ` (${team.totalMembers} thành viên)` : ''}
+                              {team.isLocked ? ' [Đang khóa]' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-[#166534] mt-1.5 leading-relaxed m-0">
+                          Đội khác nhận kèo bằng đội (do đội trưởng nhận); <strong>toàn bộ thành viên đội</strong> được thông báo và tính vào kèo.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1705,17 +1701,28 @@ function CreateMatch() {
                   </label>
                 </div>
 
-                {/* Số người cần tìm & Giá mỗi người */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* slotsNeeded */}
+                {/* Kèo đội: 1 đội nhận kèo; tiền sân chia đôi cho 2 đội trưởng, không chia tiền trong đội */}
+                {isTeamMatch && !isEditMode && (
+                  <div className="p-3.5 rounded-xl bg-white border border-[#86EFAC] text-xs text-[#14532D] leading-relaxed">
+                    <p className="font-extrabold m-0 mb-1">Tiền sân kèo đội</p>
+                    <p className="m-0">
+                      Chia đôi cho 2 đội trưởng: mỗi đội trưởng trả <strong>{courtFee > 0 ? `${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / 2))} Điểm` : '½ tiền sân'}</strong>.
+                      Không chia tiền trong đội; thành viên đội không bị trừ tiền.
+                    </p>
+                  </div>
+                )}
+
+                {/* Số người cần tìm & Giá mỗi người (kèo cá nhân) */}
+                {!isTeamMatch && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Số người đã có → hệ thống tự tính số suất còn thiếu (slotsNeeded gửi BE) */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Số người cần tìm thêm:
+                      Số người bạn đã có (tính cả bạn):
                     </label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setSlotsNeeded((prev) => Math.max(1, prev - 1))}
+                        onClick={() => setHavePlayers((prev) => Math.max(1, prev - 1))}
                         className="w-10 h-10 rounded-xl bg-white border border-gray-300 font-black text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-all cursor-pointer"
                       >
                         -
@@ -1723,21 +1730,23 @@ function CreateMatch() {
                       <input
                         type="number"
                         min="1"
-                        max="20"
-                        value={slotsNeeded}
-                        onChange={(e) => setSlotsNeeded(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                        max={totalPlayers ? totalPlayers - 1 : undefined}
+                        value={havePlayers}
+                        onChange={(e) => setHavePlayers(Math.max(1, Math.min(totalPlayers ? totalPlayers - 1 : 20, Number(e.target.value) || 1)))}
                         className="flex-1 h-10 px-3 text-center bg-white border border-gray-300 rounded-xl font-black text-base text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#2D5F3F]"
                       />
                       <button
                         type="button"
-                        onClick={() => setSlotsNeeded((prev) => Math.min(20, prev + 1))}
+                        onClick={() => setHavePlayers((prev) => Math.min(totalPlayers ? totalPlayers - 1 : 20, prev + 1))}
                         className="w-10 h-10 rounded-xl bg-white border border-gray-300 font-black text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-all cursor-pointer"
                       >
                         +
                       </button>
                     </div>
                     <span className="text-[10.5px] text-gray-500 mt-1 block">
-                      Tổng số người trên sân = {slotsNeeded + 1} (bao gồm bạn là chủ kèo)
+                      {totalPlayers
+                        ? <>Thể thức cần <strong>{totalPlayers} người</strong> · bạn đã có {havePlayers} · <strong className="text-[#15803D]">cần tìm thêm {slotsNeeded} suất</strong></>
+                        : 'Chọn thể thức (đơn / đôi) ở mục 04 để hệ thống tính số suất còn thiếu.'}
                     </span>
                   </div>
 
@@ -1747,13 +1756,16 @@ function CreateMatch() {
                     <div className="w-full min-h-10 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-[#111827] flex items-center">
                       {isEditMode && pricePerPerson
                         ? `${new Intl.NumberFormat('vi-VN').format(Number(pricePerPerson))} Điểm / người`
-                        : 'Hệ thống tự chia đều tiền sân'}
+                        : courtFee > 0 && slotsNeeded > 0
+                          ? `≈ ${new Intl.NumberFormat('vi-VN').format(Math.round(courtFee / (slotsNeeded + 1)))} Điểm / người`
+                          : 'Hệ thống tự chia đều tiền sân'}
                     </div>
                     <span className="text-[10.5px] text-gray-500 mt-1 block">
-                      Chủ kèo không tự đặt giá. Giá chính xác hiển thị trên kèo sau khi tạo.
+                      Hệ thống chia tiền sân cho số suất cần tìm + chủ kèo. Giá chính xác hiển thị trên kèo sau khi tạo.
+                      {havePlayers > 1 && <strong className="block text-amber-700 mt-0.5">Lưu ý: {havePlayers - 1} người bạn mang theo chưa được tính khi chia tiền, phần của họ do bạn trả.</strong>}
                     </span>
                   </div>
-                </div>
+                </div>}
 
                 {/* Require Approval Switch */}
                 <div className="p-3.5 rounded-xl bg-white border border-gray-200">
@@ -2012,7 +2024,7 @@ function CreateMatch() {
       {/* Modal xác nhận thanh toán: BE đặt ca và trừ 100% tiền sân từ ví ngay khi tạo kèo */}
       {paymentConfirm.open && (() => {
         const vnd = (n) => `${new Intl.NumberFormat('vi-VN').format(Math.round(Number(n) || 0))} Điểm`
-        const players = (Number(slotsNeeded) || 3) + 1
+        const players = totalPlayers || slotsNeeded + 1
         const wallet = paymentConfirm.wallet
         const available = wallet ? Number(wallet.availableBalance ?? wallet.balance) : null
         const after = available != null ? available - courtFee : null
@@ -2026,7 +2038,7 @@ function CreateMatch() {
           ['Ngày', dateLabel],
           ['Giờ chơi', preferredTimeRange || '—'],
           ['Số ca', `${slotCount} ca`],
-          ...(selectedHostTeam ? [['Đội đại diện', selectedHostTeam.name]] : []),
+          ...(hostTeam ? [['Đội đại diện', hostTeam.name]] : []),
         ]
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closePaymentConfirm}>
@@ -2045,27 +2057,10 @@ function CreateMatch() {
                 Khi xác nhận, hệ thống đặt ca sân và trừ 100% tiền sân từ ví của bạn. Người tham gia sẽ trả lại phần của họ khi nhận suất.
               </p>
 
-              {!isEditMode && captainTeams.length > 0 && (
-                <div className="mb-3 p-3 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0]">
-                  <label htmlFor="modal-host-team-select" className="block text-[11px] font-extrabold uppercase tracking-wider text-[#14532D] mb-1.5">
-                    Chọn Đội Đại Diện (Team vs Team)
-                  </label>
-                  <select
-                    id="modal-host-team-select"
-                    value={hostTeamId}
-                    onChange={(e) => setHostTeamId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none focus:ring-2 focus:ring-[#15803D]/25 cursor-pointer"
-                  >
-                    <option value="">Cá nhân (Không đại diện đội)</option>
-                    {captainTeams.map((team) => (
-                      <option key={team.id} value={team.id} disabled={team.isLocked}>
-                        {team.name}
-                        {team.sportName ? ` — ${team.sportName}` : ''}
-                        {team.isLocked ? ' [Đang khóa]' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {hostTeam && (
+                <p className="mb-3 p-3 rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] text-[11.5px] text-[#14532D] leading-relaxed">
+                  Kèo đội <strong>{hostTeam.name}</strong>: khi đội đối thủ nhận kèo, đội trưởng đội đó trả ½ tiền sân; tiền không chia cho thành viên trong đội.
+                </p>
               )}
 
               <dl className="text-[13px] divide-y divide-gray-100 border border-gray-100 rounded-xl px-3.5 mb-3">

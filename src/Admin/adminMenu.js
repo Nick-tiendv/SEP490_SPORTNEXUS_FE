@@ -1,4 +1,4 @@
-import { LayoutDashboard, Medal, Users, UserRoundCheck, Building2, CalendarDays, Network, Trophy, Shield, CreditCard, Megaphone, ShieldAlert, Tags, Bell, Bot, Settings } from 'lucide-react'
+import { LayoutDashboard, Medal, Users, UserRoundCheck, Building2, CalendarDays, Network, Trophy, Shield, CreditCard, Megaphone, TicketPercent, ShieldAlert, Tags, Bell, Bot, Settings } from 'lucide-react'
 
 // Enable an item only after its matching /admin/* route is registered in App.jsx.
 // Enabled items automatically receive NavLink navigation and active styling.
@@ -16,6 +16,7 @@ export const adminMenu = [
   { label: "Elo & trình độ", path: '/admin/ratings', icon: Medal, enabled: true, group: "Vận hành" },
   { label: "Quản lý thanh toán", path: '/admin/payments', icon: CreditCard, enabled: true, badge: 'withdrawals', group: "Tài chính & kiểm duyệt" },
   { label: "Gói quảng bá", path: '/admin/promotions', icon: Megaphone, enabled: true, group: "Tài chính & kiểm duyệt" },
+  { label: "Mã giảm giá", path: '/admin/vouchers', icon: TicketPercent, enabled: true, group: "Tài chính & kiểm duyệt" },
   { label: "Đánh giá & Báo cáo", path: '/admin/reviews-reports', icon: ShieldAlert, enabled: true, badge: 'openReports', group: "Tài chính & kiểm duyệt" },
   { label: "Danh mục dùng chung", path: '/admin/master-data', icon: Tags, enabled: true, group: "Hệ thống" },
   { label: "Quản lý thông báo", path: '/admin/notifications', icon: Bell, enabled: true, group: "Hệ thống" },

@@ -48,6 +48,10 @@ function FlashClaim() {
   const captainTeams = myTeams.filter(
     (t) => isCaptainOfTeam(t, currentUser?.id) && !t.isLocked && (!teamInfo.hostTeamId || t.id !== teamInfo.hostTeamId),
   )
+  // Kèo đội: bắt buộc nhận bằng đội (không có lựa chọn cá nhân)
+  const teamOnly = Boolean(teamInfo.isTeamMatch)
+  const asTeam = teamOnly || claimMode === 'team'
+  const claimTeamId = selectedClaimTeamId || captainTeams[0]?.id || ''
 
   useEffect(() => {
     let active = true
@@ -81,9 +85,9 @@ function FlashClaim() {
         location: matchFromState?.location || loadingText,
         time: matchFromState?.time || loadingText,
       }
-  // Phe A / B chỉ có ở kèo đối kháng (sideSize = số người mỗi phe); kèo giao lưu không chọn phe
+  // Phe A / B chỉ có ở kèo đối kháng cá nhân (sideSize = số người mỗi phe); kèo đội thì đội nhận là phe đối diện, kèo giao lưu không chia phe
   const sideSize = Number(cardDetail?.sideSize ?? matchFromState?.sideSize) || 0
-  const hasSides = sideSize > 0
+  const hasSides = sideSize > 0 && !teamOnly
 
   // Ưu tiên giá BE; chỉ dùng giá từ bảng tin (cũng là pricePerPerson của BE) khi chưa tải được chi tiết
   const priceFromBe = cardDetail?.pricePerPerson ?? matchFromState?.price
@@ -108,7 +112,12 @@ function FlashClaim() {
       setErrorMessage(cardError || 'Chưa xác định được phí giữ slot của kèo. Vui lòng thử lại.')
       return
     }
-    if (claimMode === 'team' && !selectedClaimTeamId) {
+    // Kèo đội (Team vs Team): chỉ đội trưởng nhận, bằng đội của mình (cả đội được tính vào kèo)
+    if (teamOnly && captainTeams.length === 0) {
+      setErrorMessage('Kèo đội (Team vs Team): chỉ đội trưởng của một đội mới nhận được kèo này.')
+      return
+    }
+    if (asTeam && !claimTeamId) {
       setErrorMessage('Vui lòng chọn đội đại diện để nhận kèo bằng đội.')
       return
     }
@@ -123,7 +132,7 @@ function FlashClaim() {
         side: hasSides ? selectedSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
-        challengerTeamId: claimMode === 'team' ? selectedClaimTeamId : null,
+        challengerTeamId: asTeam ? claimTeamId : null,
       })
 
       // Image 2:
@@ -267,10 +276,17 @@ function FlashClaim() {
             </div>
             )}
 
+            {teamOnly && (
+              <p className="mt-3 pt-3 border-t border-gray-200/60 text-[11px] text-[#166534] leading-relaxed m-0">
+                Kèo đội: chỉ <strong>đội trưởng</strong> nhận kèo bằng đội của mình. <strong>Toàn bộ thành viên trong đội</strong> sẽ nhận thông báo và được tính vào kèo.
+                Tiền sân <strong>chia đôi cho 2 đội trưởng</strong>, không chia tiền trong đội.
+                {captainTeams.length === 0 && <strong className="block text-amber-700 mt-1">Bạn chưa là đội trưởng của đội nào nên chưa nhận được kèo này.</strong>}
+              </p>
+            )}
             {captainTeams.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-200/60 flex flex-col gap-2 text-xs">
-                <span className="text-[#14532D] font-extrabold">Hình thức nhận kèo:</span>
-                <div className="grid grid-cols-2 gap-2">
+                <span className="text-[#14532D] font-extrabold">{teamOnly ? 'Đội nhận kèo:' : 'Hình thức nhận kèo:'}</span>
+                {!teamOnly && <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setClaimMode('solo')}
@@ -296,11 +312,11 @@ function FlashClaim() {
                   >
                     Nhận kèo bằng Đội
                   </button>
-                </div>
-                {claimMode === 'team' && (
+                </div>}
+                {asTeam && (
                   <select
                     aria-label="Chọn đội nhận kèo"
-                    value={selectedClaimTeamId}
+                    value={claimTeamId}
                     onChange={(e) => setSelectedClaimTeamId(e.target.value)}
                     className="w-full h-9 px-3 rounded-xl border border-[#86EFAC] bg-white text-xs font-bold text-[#111827] outline-none"
                   >
@@ -354,7 +370,7 @@ function FlashClaim() {
             <div className="p-3.5 mb-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
               <span className="material-symbols-outlined text-red-600 text-[18px] shrink-0 mt-0.5">gpp_bad</span>
               <div className="leading-relaxed">
-                <strong className="block font-bold">Từ chối nhận suất:</strong>
+                <strong className="block font-bold">Không nhận được suất:</strong>
                 {errorMessage}
               </div>
             </div>
@@ -380,7 +396,7 @@ function FlashClaim() {
             <button
               className="flex-1 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-60"
               onClick={handleConfirm}
-              disabled={isSubmitting || !depositKnown || walletBalance < depositFee}
+              disabled={isSubmitting || !depositKnown || walletBalance < depositFee || (teamOnly && captainTeams.length === 0)}
             >
               <span className="material-symbols-outlined text-[17px]">
                 {isSubmitting ? 'sync' : 'check_circle'}

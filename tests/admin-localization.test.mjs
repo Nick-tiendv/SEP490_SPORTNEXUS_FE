@@ -12,7 +12,7 @@ import { decisionOptions, reportStatusLabels, toEnumKey } from '../src/Admin/Rev
 test('menu Admin tiếng Việt, đủ trang và giữ đường dẫn', () => {
   assert.deepEqual(adminMenu.map(item => item.label), [
     'Tổng quan', 'Quản lý người dùng', 'Quản lý chủ sân', 'Quản lý cơ sở thể thao',
-    'Quản lý đặt sân', 'Quản lý tìm nhóm chơi', 'Quản lý giải đấu', 'Quản lý đội', 'Elo & trình độ', 'Quản lý thanh toán', 'Gói quảng bá',
+    'Quản lý đặt sân', 'Quản lý tìm nhóm chơi', 'Quản lý giải đấu', 'Quản lý đội', 'Elo & trình độ', 'Quản lý thanh toán', 'Gói quảng bá', 'Mã giảm giá',
     'Đánh giá & Báo cáo', 'Danh mục dùng chung', 'Quản lý thông báo', 'Quản lý AI', 'Cài đặt hệ thống',
   ])
   assert.equal(adminMenu.find(item => item.path === '/admin/ai').enabled, false)
@@ -53,7 +53,7 @@ test('các trang Admin render tiếng Việt, không lộ giá trị enum tiến
       ['CourtOwners/CourtOwnerManagement', 'Quản lý'], ['Facilities/FacilityManagement', 'Quản lý cơ sở'],
       ['Bookings/BookingManagement', 'Quản lý đặt sân'], ['LFG/LFGManagement', 'Quản lý'],
       ['Tournaments/TournamentManagement', 'Quản lý giải đấu'], ['Teams/TeamManagement', 'Quản lý đội'],
-      ['Payments/PaymentManagement', 'Quản lý thanh toán'], ['Promotions/PromotionManagement', 'Gói quảng bá'],
+      ['Payments/PaymentManagement', 'Quản lý thanh toán'], ['Promotions/PromotionManagement', 'Gói quảng bá'], ['Vouchers/VoucherManagement', 'Mã giảm giá'],
       ['Reviews/ReviewsReportsPage', 'Đánh giá'], ['Notifications/NotificationManagement', 'Quản lý thông báo'],
       ['Settings/SystemSettings', 'Cài đặt hệ thống'],
     ]

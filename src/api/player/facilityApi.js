@@ -49,13 +49,16 @@ export async function getFacilityById(facilityId) {
  */
 export function categoryToSportKey(cat = '') {
   const norm = String(cat).toLowerCase()
+  if (!norm.trim()) return null
   if (norm.includes('cầu lông') || norm.includes('badminton')) return 'badminton'
   if (norm.includes('pickleball')) return 'pickleball'
   if (norm.includes('bóng đá') || norm.includes('football') || norm.includes('soccer')) return 'football'
   if (norm.includes('bóng rổ') || norm.includes('basketball')) return 'basketball'
+  if (norm.includes('bóng bàn') || norm.includes('table tennis')) return 'table_tennis'
   if (norm.includes('tennis') || norm.includes('quần vợt')) return 'tennis'
   if (norm.includes('bóng chuyền') || norm.includes('volleyball')) return 'volleyball'
-  return 'badminton'
+  // Môn khác (vd Admin vừa thêm): khóa theo tên bỏ dấu, cùng cách đặt khóa của danh mục môn (setSportCatalog)
+  return norm.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').trim().replace(/\s+/g, '_')
 }
 
 /**
@@ -102,8 +105,9 @@ export function transformFacilityToCourt(fac) {
 
   // Trích xuất danh sách môn thể thao tại cơ sở này
   const childCourts = Array.isArray(fac.courts) ? fac.courts : []
-  const sports = Array.from(new Set(childCourts.map((c) => categoryToSportKey(c.categoryName))))
-  const primarySport = sports[0] || 'badminton'
+  const sports = Array.from(new Set(childCourts.map((c) => categoryToSportKey(c.categoryName)).filter(Boolean)))
+  // Cơ sở chưa có sân con / sân chưa gắn môn: để trống, không đoán môn
+  const primarySport = sports[0] || null
 
   // Tìm mức giá sàn thấp nhất từ các sân con đang ACTIVE
   const activeCourts = childCourts.filter((c) => c.status === 'ACTIVE')

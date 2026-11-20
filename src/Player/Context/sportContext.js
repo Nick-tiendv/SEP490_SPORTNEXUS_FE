@@ -1,23 +1,20 @@
 import { createContext, useContext } from 'react'
+import { SPORT_CATALOG } from '../LFG/lfgSuggestionEngine.js'
 
-// Context + danh sách môn + hook dùng chung (Provider ở SportContext.jsx)
+// Context + hook dùng chung (Provider ở SportContext.jsx).
+// Danh sách môn lấy từ GET /api/v1/master-data/sports (Provider nạp vào SPORT_CATALOG), không ghi cứng ở FE.
 export const SportContext = createContext()
 
-export const SPORTS_LIST = [
-  { key: 'badminton', label: 'Cầu Lông', emoji: '🏸', color: '#2D5F3F' },
-  { key: 'pickleball', label: 'Pickleball', emoji: '🏓', color: '#1B6A45' },
-  { key: 'football', label: 'Bóng Đá', emoji: '⚽', color: '#1E5631' },
-  { key: 'basketball', label: 'Bóng Rổ', emoji: '🏀', color: '#C2410C' },
-  { key: 'tennis', label: 'Tennis', emoji: '🎾', color: '#65A30D' },
-]
-
-export const ALL_SPORTS_KEYS = SPORTS_LIST.map((s) => s.key)
+// Môn của hệ thống dạng { key, label, emoji, color } từ danh mục đã nạp
+export const sportsListFromCatalog = () =>
+  Object.values(SPORT_CATALOG).map((s) => ({ key: s.key, label: s.name, emoji: s.emoji, color: s.color }))
 
 export function useSport() {
   const context = useContext(SportContext)
   if (!context) {
+    const SPORTS_LIST = sportsListFromCatalog()
     return {
-      selectedSports: ALL_SPORTS_KEYS,
+      selectedSports: SPORTS_LIST.map((s) => s.key),
       setSelectedSports: () => {},
       toggleSport: () => {},
       selectOnlySport: () => {},

@@ -29,8 +29,12 @@ import { RecommendedLfgSection } from './RecommendedLfg.jsx'
 import LfgDetailModal from './LfgDetailModal.jsx'
 import LfgReasonPicker from './LfgReasonPicker.jsx'
 import { finalReason } from './lfgReason.js'
-// Mốc khóa hủy kèo: 48 giờ trước giờ chơi (BE trả isLocked / hostCancelUntil); hủy dưới 48h chịu phạt bồi thường & Fair Play
-const HOST_CANCEL_BEFORE_MS = 48 * 60 * 60 * 1000
+import { LFG_POLICY } from './lfgPolicy.js'
+
+const TEAM_ONLY_CLAIM_TEXT = 'Kèo đội (Team vs Team): chỉ đội trưởng của một đội mới nhận được kèo này.'
+// Số liệu chính sách chỉ để hiển thị chữ (xem lfgPolicy.js)
+const { lockHours: LOCK_H, earlyHostFairPlay: EARLY_FP, lateHostPenaltyPercent: LATE_PCT, lateHostFairPlay: LATE_FP, leaveBlockHours: LEAVE_BLOCK_H, checkInGraceMinutes: GRACE_MIN, noShowFairPlay: NO_SHOW_FP } = LFG_POLICY
+
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../hooks/usePlayerStanding.js'
 import { useSport } from '../Context/sportContext.js'
 import { getWallet } from '../../api/player/walletApi.js'
@@ -38,7 +42,7 @@ import { initialsOf, useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { getBookingQrTicket } from '../../api/player/bookingApi.js'
 import { vnClock } from '../../utils/vnTime.js'
 import { getFacilities, transformFacilityToCourt } from '../../api/player/facilityApi.js'
-import { getMySports } from '../../api/player/profileApi.js'
+import { getMySports, getSportCategories } from '../../api/player/profileApi.js'
 import { getOnboarding } from '../../api/player/ratingApi.js'
 import { createCommunityPost } from '../../api/player/communityApi.js'
 import { reverseGeocode } from '../../utils/geolocation.js'
@@ -51,6 +55,8 @@ import {
 } from '../../utils/playerOrigin.js'
 import {
   SPORT_CATALOG,
+  setSportCatalog,
+  sportMetaOf,
   normalizeSportKey,
   normalizeSkillKey,
   loadProfileRegisteredSports,
@@ -112,7 +118,8 @@ const PARTICIPANT_STATUS_TEXT = {
 // Chuyển một thẻ LFG từ backend sang dạng thẻ hiển thị trên bảng tin.
 const toFeedMatch = (card) => {
   const sportName = card.sportName || card.sportCategoryName || card.sport || ''
-  const sport = normalizeSportKey(sportName) || (/pickle/i.test(sportName) ? 'pickleball' : 'badminton')
+  // Không đoán môn: BE không trả môn thì để trống (thẻ hiện 'KÈO GHÉP')
+  const sport = normalizeSportKey(sportName) || ''
   const start = card.startTime ? new Date(card.startTime) : null
   const end = card.endTime ? new Date(card.endTime) : null
   const hour = start ? start.getHours() : 18
@@ -129,7 +136,8 @@ const toFeedMatch = (card) => {
     participantsList[0]?.fullName ||
     participantsList[0]?.name ||
     'Chủ kèo'
-  const resolvedHostFp = card.hostFairPlayScore ?? hostFromParticipants?.fairPlayScore ?? participantsList[0]?.fairPlayScore ?? 100
+  // Không có điểm thì để trống (hiện "—"), không tự cho 100 điểm
+  const resolvedHostFp = card.hostFairPlayScore ?? hostFromParticipants?.fairPlayScore ?? participantsList[0]?.fairPlayScore ?? null
 
   const nonHostParticipants = participantsList.filter((p) => {
     if (!p) return false
@@ -141,13 +149,13 @@ const toFeedMatch = (card) => {
     return !hName || pName !== hName
   })
 
-  const recruitSlots = Number(card.totalSlots) || Number(card.slotsNeeded) || Number(card.remainingSlots) || 3
+  const recruitSlots = Number(card.totalSlots) || Number(card.slotsNeeded) || Number(card.remainingSlots) || 0
   const remainingSlots =
     card.remainingSlots != null
       ? Number(card.remainingSlots)
       : card.slotsNeeded != null
       ? Number(card.slotsNeeded)
-      : Math.max(1, recruitSlots - nonHostParticipants.length)
+      : Math.max(0, recruitSlots - nonHostParticipants.length)
   const currentSlots =
     card.remainingSlots != null && card.totalSlots != null
       ? Math.max(0, Number(card.totalSlots) - Number(card.remainingSlots))
@@ -222,7 +230,7 @@ const toFeedMatch = (card) => {
     startTime: card.startTime || null,
     endTime: card.endTime || null,
     fullTimeDisplay,
-    sportName: sportName || SPORT_CATALOG[sport]?.name || 'Cầu Lông',
+    sportName: sportName || SPORT_CATALOG[sport]?.name || '',
     sport,
     sportBadge: sportName ? sportName.toUpperCase() : 'KÈO GHÉP',
     // Thể thức thật theo sideSize (số người mỗi phe); không có = giao lưu không chia phe
@@ -257,6 +265,9 @@ const toFeedMatch = (card) => {
       ? `Chủ kèo: ${resolvedHostName}${resolvedHostFp != null ? ` (Fair Play ${resolvedHostFp})` : ''}`
       : card.description || '',
     requireApproval: Boolean(card.requireApproval),
+    // Mốc khóa hủy kèo do BE trả (isLocked / hostCancelUntil); FE không tự tính
+    isLocked: typeof card.isLocked === 'boolean' ? card.isLocked : undefined,
+    hostCancelUntil: card.hostCancelUntil || null,
     participants: participantsList,
     roster,
     currentSlots,
@@ -310,15 +321,25 @@ function CommunityFeed() {
     const timer = setInterval(() => setNowMs(Date.now()), 15000)
     return () => clearInterval(timer)
   }, [])
+  // Chỉ dùng dữ liệu BE: so giờ hiện tại với hostCancelUntil (cập nhật khi trang mở lâu), không có thì dùng isLocked.
   const isCardLocked = (card) => {
-    if (typeof card?.isLocked === 'boolean') return card.isLocked
-    const until = card?.hostCancelUntil
-      ? new Date(card.hostCancelUntil).getTime()
-      : card?.startTime
-      ? new Date(card.startTime).getTime() - HOST_CANCEL_BEFORE_MS
-      : null
-    return until != null && nowMs >= until
+    if (card?.hostCancelUntil) return nowMs >= new Date(card.hostCancelUntil).getTime()
+    return card?.isLocked === true
   }
+  // Danh mục môn thật từ GET /api/v1/master-data/sports (bộ gợi ý kèo dùng để nhận diện môn, tên môn theo BE).
+  // Nạp xong thì render lại để gợi ý dùng danh mục mới.
+  const [, setSportCatalogVersion] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    getSportCategories()
+      .then((list) => {
+        if (cancelled) return
+        setSportCatalog(list)
+        setSportCatalogVersion((v) => v + 1)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   // Lý do hủy / rời kèo lấy từ BE một lần (API công khai)
   useEffect(() => {
     let cancelled = false
@@ -348,9 +369,8 @@ function CommunityFeed() {
   const [selectedSkillLevel, setSelectedSkillLevel] = useState('all')
   const [selectedDistance, setSelectedDistance] = useState('all')
   const [selectedFormat, setSelectedFormat] = useState('all')
-  const [filterMinFairPlay, setFilterMinFairPlay] = useState(true)
-  const [filterFlashOnly, setFilterFlashOnly] = useState(false)
-  const [filterStandardCourt, setFilterStandardCourt] = useState(true)
+  const [filterMinFairPlay, setFilterMinFairPlay] = useState(false)
+
 
   // Modals state
   const [detailModal, setDetailModal] = useState(null) // match object or null (xem toàn bộ thông tin chi tiết kèo)
@@ -400,6 +420,12 @@ function CommunityFeed() {
     const saved = localStorage.getItem('escrow_balance')
     return saved !== null ? Number(saved) : 0
   })
+  // Số dư trong localStorage có thể cũ (hoặc của tài khoản trước): đồng bộ từ GET /api/v1/wallet khi vào trang
+  useEffect(() => {
+    let cancelled = false
+    getWallet().then((w) => { if (!cancelled) setWalletBalance(w.balance) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // Matches list
   // Danh sách kèo đang mở lấy từ GET /api/v1/lfgs
@@ -720,6 +746,8 @@ function CommunityFeed() {
     setClaimMode(shouldUseTeam ? 'team' : 'solo')
     setSelectedClaimTeamId(eligible[0]?.id || '')
     setBookingModal(match)
+    // Lấy lại số dư thật từ BE mỗi lần mở modal nhận kèo
+    getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {})
   }
 
   // Confirm Slot Claim Handler - 2.6 Người tham gia Bước 2
@@ -729,7 +757,16 @@ function CommunityFeed() {
     setIsClaiming(true)
     setClaimError(null)
 
-    if (claimMode === 'team' && !selectedClaimTeamId) {
+    // Kèo đội (Team vs Team): chỉ đội trưởng nhận, bằng đội của mình; cả đội được tính vào kèo (BE báo cho thành viên)
+    const teamOnly = Boolean(bookingModal.isTeamMatch)
+    const claimTeams = eligibleTeamsForMatch(bookingModal)
+    if (teamOnly && claimTeams.length === 0) {
+      toast.error(TEAM_ONLY_CLAIM_TEXT)
+      setIsClaiming(false)
+      return
+    }
+    const claimTeamId = teamOnly || claimMode === 'team' ? selectedClaimTeamId || claimTeams[0]?.id || '' : null
+    if ((teamOnly || claimMode === 'team') && !claimTeamId) {
       toast.error('Vui lòng chọn đội đại diện để nhận kèo bằng đội!')
       setIsClaiming(false)
       return
@@ -744,10 +781,10 @@ function CommunityFeed() {
     try {
       // Gọi API Claim Slot: POST /api/v1/lfgs/{cardId}/claim
       await claimLfgSlot(bookingModal.id, {
-        side: bookingModal.sideSize > 0 ? selectedClaimSide : undefined,
+        side: bookingModal.sideSize > 0 && !bookingModal.isTeamMatch ? selectedClaimSide : undefined,
         friendIds: [],
         friendPayMode: 'me',
-        challengerTeamId: claimMode === 'team' ? selectedClaimTeamId : null,
+        challengerTeamId: claimTeamId,
       })
 
       // Image 2: Kèo không cần duyệt: trừ tiền ngay, vào kèo luôn. Kèo cần duyệt: chỉ gửi yêu cầu, tiền bị giữ khi chủ kèo duyệt.
@@ -774,7 +811,7 @@ function CommunityFeed() {
       const errMsg = err?.message || 'Không thể nhận suất kèo này. Vui lòng kiểm tra lại.'
       setClaimError(errMsg)
       setToastMessage({
-        title: 'Từ Chối Nhận Suất (Fair Play / Quy định)',
+        title: 'Không nhận được suất',
         desc: errMsg,
         type: 'error',
       })
@@ -902,12 +939,12 @@ function CommunityFeed() {
       if (isLockedCancel) {
         const extraSummary = describeLfgCancelResult(res)
         setToastMessage({
-          title: 'Đã Hủy Kèo Sát Giờ (< 48h)',
+          title: `Đã Hủy Kèo Sát Giờ (< ${LOCK_H}h)`,
           desc: compFormatted != null
-            ? `Hủy kèo sát giờ: Bạn bị trừ ${compFormatted} Điểm (50% tiền sân) bồi thường và -20 điểm FairPlay.`
+            ? `Hủy kèo sát giờ: Bạn bị trừ ${compFormatted} Điểm (${LATE_PCT}% tiền sân) bồi thường và -${LATE_FP} điểm FairPlay.`
             : extraSummary
-              ? `Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay. ${extraSummary}`
-              : 'Hủy kèo sát giờ: Bạn bị trừ 50% tiền sân bồi thường và -20 điểm FairPlay.',
+              ? `Hủy kèo sát giờ: Bạn bị trừ ${LATE_PCT}% tiền sân bồi thường và -${LATE_FP} điểm FairPlay. ${extraSummary}`
+              : `Hủy kèo sát giờ: Bạn bị trừ ${LATE_PCT}% tiền sân bồi thường và -${LATE_FP} điểm FairPlay.`,
           type: 'error',
         })
       } else {
@@ -1040,9 +1077,8 @@ function CommunityFeed() {
     setSelectedDistance('all')
     if (selectedFormat !== 'all') setIsLoadingLfgs(true)
     setSelectedFormat('all')
-    setFilterMinFairPlay(true)
-    setFilterFlashOnly(false)
-    setFilterStandardCourt(false)
+    setFilterMinFairPlay(false)
+
   }
 
   // Kèo đã tham gia: BE trả cả kèo đã hủy và kèo mình đã rời / bị loại / bị từ chối (myStatus).
@@ -1157,7 +1193,8 @@ function CommunityFeed() {
         const hay = [m.title, m.location, m.groupDesc, m.sportBadge, m.levelTag].filter(Boolean).join(' ').toLowerCase()
         if (!hay.includes(kw)) return false
       }
-      if (filterFlashOnly && !m.isFlashClaim) return false
+      // Chỉ kèo có chủ kèo Fair Play ≥ 90 (theo điểm BE trả; chưa có điểm thì không tính là đạt)
+      if (filterMinFairPlay && !(Number(m.hostFairPlayScore) >= 90)) return false
       return true
     })
     .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
@@ -1166,7 +1203,6 @@ function CommunityFeed() {
     .filter((m) => {
       if (!isAllActive && selectedSports.length > 0 && !selectedSports.includes(m.sport)) return false
       if (m.timeSlot && !selectedTimeSlots.includes(m.timeSlot)) return false
-      if (filterFlashOnly && !m.isFlashClaim) return false
       if (levelFilter !== 'all' && m.skillTag && m.skillTag !== levelFilter) return false
       return true
     })
@@ -1323,70 +1359,21 @@ function CommunityFeed() {
             <span>Tất Cả Thể Thao</span>
           </button>
 
-          {/* Pickleball */}
-          <button
-            onClick={() => handleSelectSportFilterWithLearning('pickleball')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              !isAllActive && selectedSports.includes('pickleball')
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🏓</span>
-            <span>Pickleball</span>
-          </button>
-
-          {/* Cầu Lông */}
-          <button
-            onClick={() => handleSelectSportFilterWithLearning('badminton')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              !isAllActive && selectedSports.includes('badminton')
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🏸</span>
-            <span>Cầu Lông</span>
-          </button>
-
-          {/* Bóng Đá */}
-          <button
-            onClick={() => handleSelectSportFilterWithLearning('football')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              !isAllActive && selectedSports.includes('football')
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">⚽</span>
-            <span>Bóng Đá</span>
-          </button>
-
-          {/* Bóng Rổ */}
-          <button
-            onClick={() => handleSelectSportFilterWithLearning('basketball')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              !isAllActive && selectedSports.includes('basketball')
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🏀</span>
-            <span>Bóng Rổ</span>
-          </button>
-
-          {/* Tennis */}
-          <button
-            onClick={() => handleSelectSportFilterWithLearning('tennis')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
-              !isAllActive && selectedSports.includes('tennis')
-                ? 'bg-[#3B6817] text-white shadow-sm'
-                : 'bg-transparent text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span className="text-[15px] leading-none">🎾</span>
-            <span>Tennis</span>
-          </button>
+          {/* Các môn lấy từ GET /api/v1/master-data/sports */}
+          {Object.values(SPORT_CATALOG).map((s) => (
+            <button
+              key={s.key}
+              onClick={() => handleSelectSportFilterWithLearning(s.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                !isAllActive && selectedSports.includes(s.key)
+                  ? 'bg-[#3B6817] text-white shadow-sm'
+                  : 'bg-transparent text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="text-[15px] leading-none">{s.emoji}</span>
+              <span>{s.name}</span>
+            </button>
+          ))}
 
           {/* Dropdown Trình độ */}
           <div className="relative shrink-0">
@@ -1445,7 +1432,7 @@ function CommunityFeed() {
                     Kèo Tranh Slot Nóng (Flash Queue)
                   </h3>
                   <p className="text-xs text-[#4A6B45] mt-0.5">
-                    Slot giải phóng tức thì khi có thành viên xin rút hoặc trễ giờ check-in 15p.
+                    Slot giải phóng tức thì khi có thành viên xin rút hoặc trễ giờ check-in {GRACE_MIN}p.
                   </p>
                 </div>
               </div>
@@ -1499,15 +1486,7 @@ function CommunityFeed() {
                     <div className="absolute top-3 left-3">
                       <span className="inline-flex items-center gap-1.5 bg-[#134E4A]/90 backdrop-blur-md text-white text-[10.5px] font-bold px-2.5 py-1 rounded-lg shadow-sm uppercase tracking-wide">
                         <span className="text-[13px] leading-none">
-                          {match.sport === 'badminton'
-                            ? '🏸'
-                            : match.sport === 'pickleball'
-                            ? '🏓'
-                            : match.sport === 'football'
-                            ? '⚽'
-                            : match.sport === 'basketball'
-                            ? '🏀'
-                            : '🎾'}
+                          {sportMetaOf(match.sport).emoji}
                         </span>
                         {match.sportBadge}
                       </span>
@@ -1754,7 +1733,7 @@ function CommunityFeed() {
                 <div className="bg-[#FAFBF9] rounded-2xl border border-gray-200 p-4 text-xs text-gray-600 flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#3B6817] text-[18px] shrink-0 mt-0.5">info</span>
                   <div>
-                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ 48 giờ trở lên: mọi người được hoàn 100% Điểm. Nếu hủy dưới 48 giờ trước giờ chơi: người tham gia được hoàn 100% Điểm và chủ kèo bị trừ 50% tiền sân bồi thường cùng -20 điểm FairPlay.
+                    <span className="font-bold text-[#111827]">Quy chế Chủ Kèo (2.6):</span> Hệ thống tự đặt ca sân và trừ 100% tiền sân từ ví chủ kèo. Khi hủy kèo trước giờ chơi từ {LOCK_H} giờ trở lên: mọi người được hoàn 100% Điểm, chủ kèo bị trừ {EARLY_FP} điểm FairPlay. Nếu hủy dưới {LOCK_H} giờ trước giờ chơi: người tham gia được hoàn 100% Điểm và chủ kèo bị trừ {LATE_PCT}% tiền sân bồi thường cùng -{LATE_FP} điểm FairPlay.
                   </div>
                 </div>
 
@@ -2020,7 +1999,7 @@ function CommunityFeed() {
                 <div className="bg-[#EAF7EE] rounded-2xl border border-[#C6E7BE] p-4 text-xs text-[#1C3524] flex items-start gap-2.5">
                   <span className="material-symbols-outlined text-[#15803D] text-[18px] shrink-0 mt-0.5">verified_user</span>
                   <div>
-                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (Lưu ý: Không được rời trong vòng 2 giờ trước giờ chơi).
+                    <span className="font-bold">Quy chế Người Tham Gia (2.6):</span> Tiền cọc được giữ an toàn trong ví Escrow của bạn và chỉ giải ngân cho chủ kèo khi check-in QR tại sân hoặc sau giờ chơi. Rời kèo trước giờ chơi từ {LOCK_H} giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (Lưu ý: Không được rời trong vòng {LEAVE_BLOCK_H} giờ trước giờ chơi).
                   </div>
                 </div>
 
@@ -2453,15 +2432,7 @@ function CommunityFeed() {
               <div className="absolute top-3.5 left-4 flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 bg-[#134E4A]/95 backdrop-blur-md text-white text-xs font-extrabold px-3 py-1 rounded-lg shadow-sm uppercase tracking-wide">
                   <span>
-                    {detailModal.sport === 'badminton'
-                      ? '🏸'
-                      : detailModal.sport === 'pickleball'
-                      ? '🏓'
-                      : detailModal.sport === 'football'
-                      ? '⚽'
-                      : detailModal.sport === 'basketball'
-                      ? '🏀'
-                      : '🎾'}
+                    {sportMetaOf(detailModal.sport).emoji}
                   </span>
                   <span>{detailModal.sportBadge}</span>
                 </span>
@@ -2566,7 +2537,7 @@ function CommunityFeed() {
                     <div className="min-w-0">
                       <span className="text-[10.5px] text-gray-400 font-bold uppercase block">Môn &amp; Trình độ yêu cầu</span>
                       <span className="font-extrabold text-gray-900 text-[13px] block mt-0.5 whitespace-nowrap">
-                        {detailModal.sportName} • {detailModal.levelTag}
+                        {[detailModal.sportName, detailModal.levelTag].filter(Boolean).join(' • ') || '—'}
                       </span>
                       <span className="text-[11px] text-gray-500 block">
                         {detailModal.format ? `Thể thức: ${detailModal.format}` : 'Giao lưu thể thao'}
@@ -2617,7 +2588,7 @@ function CommunityFeed() {
                   bg: '#15803D',
                   name: detailModal.hostName || 'Chủ kèo',
                   isHost: true,
-                  fairPlayScore: detailModal.hostFairPlayScore ?? 100,
+                  fairPlayScore: detailModal.hostFairPlayScore ?? null,
                 }
                 const joinedEntries = nonEmptyFromRoster.slice(1)
                 const parsedSlotTagCount = Number((String(detailModal.slotTag || '').match(/\d+/) || [])[0]) || 0
@@ -2775,7 +2746,7 @@ function CommunityFeed() {
                         : 'bg-[#EEF2FF] text-[#4338CA]'
                     }`}
                   >
-                    {bookingModal.sportBadge || (bookingModal.sport === 'badminton' ? 'CẦU LÔNG ĐÔI' : 'PICKLEBALL ĐÔI')}
+                    {bookingModal.sportBadge}
                   </span>
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {bookingModal.levelTag}
@@ -2902,9 +2873,15 @@ function CommunityFeed() {
                     )}
                   </div>
 
+                  {bookingModal.isTeamMatch && (
+                    <p className="text-[11px] text-[#166534] leading-relaxed m-0">
+                      Kèo đội: chỉ <strong>đội trưởng</strong> nhận kèo bằng đội của mình. <strong>Toàn bộ thành viên trong đội</strong> sẽ nhận thông báo và được tính vào kèo.
+                      Tiền sân <strong>chia đôi cho 2 đội trưởng</strong> (đội trưởng trả phần của đội), không chia tiền trong đội.
+                    </p>
+                  )}
                   {eligibleTeams.length > 0 ? (
                     <>
-                      <div className="grid grid-cols-2 gap-2">
+                      {!bookingModal.isTeamMatch && <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setClaimMode('solo')}
@@ -2931,9 +2908,9 @@ function CommunityFeed() {
                           <span className="material-symbols-outlined text-[15px]">shield</span>
                           <span>Nhận kèo bằng Đội</span>
                         </button>
-                      </div>
+                      </div>}
 
-                      {claimMode === 'team' && (
+                      {(bookingModal.isTeamMatch || claimMode === 'team') && (
                         <div>
                           <label htmlFor="claim-challenger-team" className="block text-[11px] font-bold text-[#14532D] mb-1">
                             Chọn đội của bạn (bạn là Đội trưởng):
@@ -2957,15 +2934,15 @@ function CommunityFeed() {
                     </>
                   ) : (
                     <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-relaxed">
-                      Đây là kèo Đội (Team vs Team). Để sử dụng tùy chọn &quot;Nhận kèo bằng Đội&quot;, bạn cần là Đội trưởng của ít nhất 1 đội tại mục Giải đấu &amp; Đội.
+                      {TEAM_ONLY_CLAIM_TEXT} Tạo hoặc quản lý đội tại mục Giải đấu &amp; Đội.
                     </p>
                   )}
                 </div>
               )
             })()}
 
-            {/* Chọn phe A / B: chỉ kèo đối kháng (sideSize) mới có phe thật; kèo giao lưu không chọn phe */}
-            {bookingModal.sideSize > 0 && (
+            {/* Chọn phe A / B: chỉ kèo đối kháng cá nhân; kèo đội thì đội nhận kèo là phe đối diện, kèo giao lưu không chia phe */}
+            {bookingModal.sideSize > 0 && !bookingModal.isTeamMatch && (
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-black uppercase text-gray-500 tracking-wider">
                 Chọn phe ({bookingModal.sideSize} vs {bookingModal.sideSize}):
@@ -3023,12 +3000,15 @@ function CommunityFeed() {
                 <span className="material-symbols-outlined text-rose-600 text-[22px] shrink-0 mt-0.5">gavel</span>
                 <div>
                   <strong className="block font-black text-rose-900 mb-1">
-                    Từ chối nhận suất (403):
+                    Không nhận được suất:
                   </strong>
                   <p className="font-semibold leading-relaxed whitespace-pre-wrap">{claimError}</p>
-                  <p className="text-[11px] text-rose-600 mt-1.5 italic">
-                    (Quy định: Nhận suất bị từ chối khi điểm Fair Play thấp hơn ngưỡng quy định hoặc đang bị cấm nhận suất)
-                  </p>
+                  {/* Chỉ giải thích luật Fair Play khi BE thật sự từ chối vì Fair Play / cấm nhận suất */}
+                  {/fair\s*play|cấm/i.test(claimError) && (
+                    <p className="text-[11px] text-rose-600 mt-1.5 italic">
+                      (Quy định: Nhận suất bị từ chối khi điểm Fair Play thấp hơn ngưỡng quy định hoặc đang bị cấm nhận suất)
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -3044,7 +3024,7 @@ function CommunityFeed() {
               </button>
               <button
                 type="button"
-                disabled={isClaiming}
+                disabled={isClaiming || (bookingModal?.isTeamMatch && eligibleTeamsForMatch(bookingModal).length === 0)}
                 onClick={handleConfirmClaim}
                 className="flex-1 py-2.5 rounded-xl bg-[#2D5F3F] hover:bg-[#234A31] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
@@ -3152,8 +3132,8 @@ function CommunityFeed() {
             ? Math.round(Number(cancelMatchModal.bookingTotalAmount) * 0.5)
             : null)
         const compensationText = rawComp != null
-          ? `${Number(rawComp).toLocaleString('vi-VN')} Điểm (50% tiền sân)`
-          : '50% tiền sân'
+          ? `${Number(rawComp).toLocaleString('vi-VN')} Điểm (${LATE_PCT}% tiền sân)`
+          : `${LATE_PCT}% tiền sân`
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
@@ -3162,7 +3142,7 @@ function CommunityFeed() {
                 <div className="flex items-center gap-2 text-rose-700">
                   <span className="material-symbols-outlined text-2xl">{isLocked ? 'gpp_bad' : 'warning'}</span>
                   <h3 className={`font-black text-base ${isLocked ? 'text-rose-800' : 'text-[#111827]'}`}>
-                    {isLocked ? 'Cảnh Báo Hủy Kèo Sát Giờ (< 48h)' : 'Xác Nhận Hủy Kèo Ghép'}
+                    {isLocked ? `Cảnh Báo Hủy Kèo Sát Giờ (< ${LOCK_H}h)` : 'Xác Nhận Hủy Kèo Ghép'}
                   </h3>
                 </div>
                 <button
@@ -3180,7 +3160,7 @@ function CommunityFeed() {
                 >
                   <span className="material-symbols-outlined text-[20px] shrink-0 mt-0.5">report</span>
                   <div>
-                    <strong>Hủy kèo sát giờ:</strong> Bạn sẽ bị trừ <strong>{compensationText}</strong> bồi thường và <strong>-20 điểm FairPlay</strong>.
+                    <strong>Hủy kèo sát giờ:</strong> Bạn sẽ bị trừ <strong>{compensationText}</strong> bồi thường và <strong>-{LATE_FP} điểm FairPlay</strong>.
                   </div>
                 </div>
               )}
@@ -3201,8 +3181,8 @@ function CommunityFeed() {
               />
               <p className={`text-[11px] m-0 ${isLocked ? 'text-rose-600 font-semibold' : 'text-gray-500'}`}>
                 {isLocked
-                  ? 'Kèo đã qua mốc khóa 48 tiếng trước giờ chơi (isLocked = true). Nếu vẫn hủy đơn phương, hệ thống sẽ trừ tiền bồi thường và điểm FairPlay ngay khi xác nhận.'
-                  : 'Chủ kèo có thể hủy đơn phương trước giờ chơi từ 48 tiếng trở lên mà không bị phạt sát giờ; BE chặn hủy khi đã có người check-in.'}
+                  ? `Kèo đã qua mốc khóa ${LOCK_H} tiếng trước giờ chơi. Nếu vẫn hủy đơn phương, hệ thống sẽ trừ tiền bồi thường và điểm FairPlay ngay khi xác nhận.`
+                  : `Chủ kèo hủy trước giờ chơi từ ${LOCK_H} tiếng trở lên không bị phạt tiền sát giờ (chỉ trừ ${EARLY_FP} điểm FairPlay); không hủy được khi đã có người check-in.`}
               </p>
 
               {/* Refund policy note */}
@@ -3211,8 +3191,8 @@ function CommunityFeed() {
                 <div>
                   <strong>Chính sách hủy kèo (2.6 Bước 5):</strong>
                   <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                    <li>Trước giờ chơi từ 48 giờ trở lên: hoàn 100% Điểm cho các thành viên tham gia và hoàn tiền sân cho chủ kèo theo chính sách.</li>
-                    <li>Dưới 48 giờ (sát giờ): người tham gia được hoàn 100% Điểm; chủ kèo bị trừ <strong>50% tiền sân bồi thường</strong> và <strong>-20 điểm FairPlay</strong>.</li>
+                    <li>Trước giờ chơi từ {LOCK_H} giờ trở lên: hoàn 100% Điểm cho các thành viên tham gia, hoàn tiền sân cho chủ kèo; chủ kèo bị trừ <strong>{EARLY_FP} điểm FairPlay</strong>.</li>
+                    <li>Dưới {LOCK_H} giờ (sát giờ): người tham gia được hoàn 100% Điểm; chủ kèo bị trừ <strong>{LATE_PCT}% tiền sân bồi thường</strong> và <strong>-{LATE_FP} điểm FairPlay</strong>.</li>
                   </ul>
                 </div>
               </div>
@@ -3274,7 +3254,7 @@ function CommunityFeed() {
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed flex items-start gap-2">
               <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5">timer</span>
               <div>
-                <strong>Quy định hoàn Điểm:</strong> Rời kèo trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (rút yêu cầu đang chờ thì không mất Điểm). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng 2 giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
+                <strong>Quy định hoàn Điểm:</strong> Rời kèo trước giờ chơi từ {LOCK_H} giờ trở lên được hoàn 100% Điểm, sau mốc này không được hoàn (rút yêu cầu đang chờ thì không mất Điểm). <em>Lưu ý: Hệ thống không cho phép rời kèo trong vòng {LEAVE_BLOCK_H} giờ trước giờ chơi để bảo vệ các vận động viên khác.</em>
               </div>
             </div>
 
@@ -3330,9 +3310,9 @@ function CommunityFeed() {
                 <strong className="text-gray-900 block mb-1">
                   2. Cơ chế xử phạt huỷ slot &amp; No-show
                 </strong>
-                - Rời kèo trước giờ chơi từ 48 giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
-                - Rời kèo trong vòng 48 giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.<br />
-                - Chủ kèo hủy kèo: người tham gia luôn được hoàn 100% (trong vòng 48 giờ còn được bồi thường thêm).
+                - Rời kèo trước giờ chơi từ {LOCK_H} giờ trở lên: Hoàn 100% Điểm về Ví Escrow.<br />
+                - Rời kèo trong vòng {LOCK_H} giờ trước giờ chơi hoặc vắng mặt: Không được hoàn Điểm.<br />
+                - Chủ kèo hủy kèo: người tham gia luôn được hoàn 100% (trong vòng {LOCK_H} giờ còn được bồi thường thêm).
               </div>
               <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                 <strong className="text-gray-900 block mb-1">
@@ -3505,11 +3485,7 @@ function CommunityFeed() {
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { key: 'all', label: 'Tất cả môn', emoji: '✨' },
-                      { key: 'badminton', label: 'Cầu lông', emoji: '🏸' },
-                      { key: 'pickleball', label: 'Pickleball', emoji: '🏓' },
-                      { key: 'football', label: 'Bóng đá', emoji: '⚽' },
-                      { key: 'basketball', label: 'Bóng rổ', emoji: '🏀' },
-                      { key: 'tennis', label: 'Tennis', emoji: '🎾' },
+                      ...Object.values(SPORT_CATALOG).map((c) => ({ key: c.key, label: c.name, emoji: c.emoji })),
                     ].map((s) => (
                       <button
                         key={s.key}
@@ -3641,7 +3617,7 @@ function CommunityFeed() {
                       <span className="material-symbols-outlined text-[#15803D] text-[18px]">verified_user</span>
                       <div>
                         <p className="font-bold text-gray-800">Chỉ hiện Host có điểm Fair Play &ge; 90</p>
-                        <p className="text-[10.5px] text-gray-500">Uy tín cao, cam kết 100% không bùng hẹn hoặc huỷ kèo đột xuất</p>
+                        <p className="text-[10.5px] text-gray-500">Theo điểm Fair Play hệ thống ghi nhận của chủ kèo</p>
                       </div>
                     </div>
                     <input
@@ -3652,39 +3628,6 @@ function CommunityFeed() {
                     />
                   </label>
 
-                  {/* Switch 2 */}
-                  <label className="flex items-center justify-between p-2 rounded-xl hover:bg-gray-50 cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-amber-500 text-[18px]">bolt</span>
-                      <div>
-                        <p className="font-bold text-gray-800">Ưu tiên kèo Tranh Slot Nóng (Flash Queue)</p>
-                        <p className="text-[10.5px] text-gray-500">Chỉ hiển thị các kèo cần bổ sung slot khẩn cấp hoặc đang giữ chỗ 15p</p>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={filterFlashOnly}
-                      onChange={(e) => setFilterFlashOnly(e.target.checked)}
-                      className="w-4 h-4 rounded accent-[#3B6817] cursor-pointer"
-                    />
-                  </label>
-
-                  {/* Switch 3 */}
-                  <label className="flex items-center justify-between p-2 rounded-xl hover:bg-gray-50 cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-[#3B6817] text-[18px]">check_circle</span>
-                      <div>
-                        <p className="font-bold text-gray-800">Chỉ chọn sân thảm tiêu chuẩn thi đấu</p>
-                        <p className="text-[10.5px] text-gray-500">Sân thảm cao su chuyên dụng, đèn đạt chuẩn chống chói, bảo vệ khớp gối</p>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={filterStandardCourt}
-                      onChange={(e) => setFilterStandardCourt(e.target.checked)}
-                      className="w-4 h-4 rounded accent-[#3B6817] cursor-pointer"
-                    />
-                  </label>
                 </div>
               </div>
             </div>
@@ -3788,7 +3731,7 @@ function CommunityFeed() {
                     <strong className="text-[#15803D] font-bold">Tích lũy trên 40 điểm:</strong> Muốn cộng điểm vượt mốc 40 điểm, bắt buộc người chơi phải tham gia thi đấu thực tế và được người chơi khác đánh giá tốt.
                   </li>
                   <li>
-                    <strong className="text-red-700 font-bold">Vắng mặt hoặc trễ giờ:</strong> Không có mặt check-in hoặc đến trễ quá <strong>15 phút</strong> sẽ bị <strong>trừ 10 điểm</strong>.
+                    <strong className="text-red-700 font-bold">Vắng mặt hoặc trễ giờ:</strong> Không có mặt check-in hoặc đến trễ quá <strong>{GRACE_MIN} phút</strong> sẽ bị <strong>trừ {NO_SHOW_FP} điểm</strong>.
                   </li>
                 </ul>
               </div>
@@ -3846,13 +3789,13 @@ function CommunityFeed() {
                 </div>
                 <ul className="space-y-1.5 list-disc pl-5 text-gray-600 leading-relaxed">
                   <li>
-                    <strong className="text-gray-900 font-bold">Người tham gia rời kèo:</strong> trước giờ chơi từ <strong>48 giờ</strong> trở lên được <strong>hoàn 100% Điểm</strong>; trong vòng 48 giờ <strong>không được hoàn</strong>.
+                    <strong className="text-gray-900 font-bold">Người tham gia rời kèo:</strong> trước giờ chơi từ <strong>{LOCK_H} giờ</strong> trở lên được <strong>hoàn 100% Điểm</strong>; trong vòng {LOCK_H} giờ <strong>không được hoàn</strong>.
                   </li>
                   <li>
-                    <strong className="text-gray-900 font-bold">Hủy kèo trước mốc 48 giờ:</strong> Chủ kèo có thể hủy kèo trước giờ chơi <strong>48 giờ</strong> mà <strong>không bị trừ điểm FairPlay</strong>; tiền cọc của các thành viên tham gia được hoàn 100% Điểm từ Escrow.
+                    <strong className="text-gray-900 font-bold">Hủy kèo trước mốc {LOCK_H} giờ:</strong> Chủ kèo hủy kèo trước giờ chơi từ <strong>{LOCK_H} giờ</strong> trở lên chỉ bị <strong>trừ {EARLY_FP} điểm FairPlay</strong>, không mất tiền sân; tiền cọc của các thành viên tham gia được hoàn 100% Điểm từ Escrow.
                   </li>
                   <li>
-                    <strong className="text-red-700 font-bold">Hủy kèo đơn phương dưới 48 giờ (sát giờ):</strong> Sau mốc <strong>48 giờ</strong> trước giờ chơi (kèo đã khóa), nếu chủ kèo vẫn hủy đơn phương sẽ bị trừ <strong>50% tiền sân bồi thường</strong> (tính theo Điểm, chia bồi thường cho người tham gia) và <strong>-20 điểm FairPlay</strong>.
+                    <strong className="text-red-700 font-bold">Hủy kèo đơn phương dưới {LOCK_H} giờ (sát giờ):</strong> Sau mốc <strong>{LOCK_H} giờ</strong> trước giờ chơi (kèo đã khóa), nếu chủ kèo vẫn hủy đơn phương sẽ bị trừ <strong>{LATE_PCT}% tiền sân bồi thường</strong> (tính theo Điểm, chia bồi thường cho người tham gia) và <strong>-{LATE_FP} điểm FairPlay</strong>.
                   </li>
                 </ul>
               </div>
