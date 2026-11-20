@@ -102,10 +102,13 @@ test('Dọn dẹp dữ liệu hardcode quận cũ TP.HCM, tọa độ mặc đ�
       assert.doesNotMatch(src, /\b(haversineKm|calculateDistanceFromRegisteredAddress|realDistanceKm)\b/)
     }
 
-    // Câu chữ giải thích mốc hủy kèo LFG trong CommunityFeed phải là 48h
-    assert.match(feedSrc, /HOST_CANCEL_BEFORE_MS = 48 \* 60 \* 60 \* 1000/)
-    assert.match(feedSrc, /dưới 48 giờ trước giờ chơi/)
-    assert.match(feedSrc, /trước giờ chơi từ 48 tiếng trở lên/)
+    // Mốc hủy kèo LFG: số liệu chính sách gom ở lfgPolicy.js (48h); FE không tự tính mốc khóa mà dùng isLocked / hostCancelUntil của BE
+    const policySrc = await readFile(new URL('../src/Player/LFG/lfgPolicy.js', import.meta.url), 'utf8')
+    assert.match(policySrc, /lockHours: 48/)
+    assert.doesNotMatch(feedSrc, /HOST_CANCEL_BEFORE_MS/)
+    assert.match(feedSrc, /hostCancelUntil/)
+    assert.match(feedSrc, /dưới \{LOCK_H\} giờ trước giờ chơi/)
+    assert.match(feedSrc, /trước giờ chơi từ \$\{LOCK_H\} tiếng trở lên/)
     assert.doesNotMatch(feedSrc, /tới 24 giờ trước giờ chơi|Mốc T − 24 giờ|tới trước giờ chơi 24 tiếng|dưới 24 tiếng trước giờ chơi/)
 
     assert.equal(engine.haversineKm, undefined)
@@ -273,8 +276,11 @@ test('Dọn dẹp dữ liệu hardcode quận cũ TP.HCM, tọa độ mặc đ�
     assert.match(feedSrc, /const isCardLocked = \(card\)/)
     assert.match(feedSrc, /compensationTotal/)
     assert.match(feedSrc, /Hủy kèo sát giờ:/)
-    assert.match(feedSrc, /50% tiền sân/)
-    assert.match(feedSrc, /-20 điểm FairPlay/)
+    const lfgPolicySrc = await readFile(new URL('../src/Player/LFG/lfgPolicy.js', import.meta.url), 'utf8')
+    assert.match(lfgPolicySrc, /lateHostPenaltyPercent: 50/)
+    assert.match(lfgPolicySrc, /lateHostFairPlay: 20/)
+    assert.match(feedSrc, /\$\{LATE_PCT\}% tiền sân/)
+    assert.match(feedSrc, /-\$\{LATE_FP\} điểm FairPlay/)
 
     // 4. Kiểm tra runtime gọi POST /api/v1/lfgs/{id}/cancel nhận compensationTotal cho kèo dưới 48h (isLocked = true)
     const prevAdapter = clientMod.default.defaults.adapter
