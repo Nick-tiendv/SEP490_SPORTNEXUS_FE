@@ -1,0 +1,41 @@
+/* Lịch chọn ngày theo tháng (MonthCalendarPicker) — dùng ở trang đặt sân và tạo kèo LFG */
+.mb-cal { position: relative; flex-shrink: 0; }
+.mb-cal .mb-date-custom-picker { font-family: inherit; white-space: nowrap; }
+.mb-cal-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 300px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+.mb-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.mb-cal-head strong { font-size: 14px; color: #14532d; }
+.mb-cal-head button {
+  display: grid; place-items: center;
+  width: 32px; height: 32px;
+  border: 1px solid #dfe5dc; border-radius: 8px;
+  background: #fff; color: #15803d; cursor: pointer;
+}
+.mb-cal-head button:disabled { opacity: 0.35; cursor: not-allowed; }
+.mb-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.mb-cal-weekday { padding: 4px 0; text-align: center; font-size: 11px; font-weight: 700; color: #6b7280; }
+.mb-cal-day {
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f8faf7;
+  color: #1f2937;
+  font: 600 13px inherit;
+  cursor: pointer;
+}
+.mb-cal-day:hover:not(:disabled) { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+.mb-cal-day.is-today { border-color: #86efac; color: #15803d; }
+.mb-cal-day.is-selected { background: #15803d; border-color: #15803d; color: #fff; }
+.mb-cal-day:disabled { background: transparent; color: #cbd5e1; cursor: not-allowed; }
+.mb-cal-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.4; color: #6b7280; }
+@media (max-width: 480px) { .mb-cal-pop { width: min(300px, calc(100vw - 32px)); } }

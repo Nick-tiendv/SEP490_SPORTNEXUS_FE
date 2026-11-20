@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import './monthCalendarPicker.css'
 
 // Lịch chọn ngày theo tháng (bấm "Chọn lịch" mở bảng ngày của tháng, bấm 1 ngày để xem lưới ca ngày đó).
 // value / minDate: 'YYYY-MM-DD'. label: chữ trên nút (vd hiện ngày đang chọn khi nằm ngoài dải 7 ngày).
@@ -11,7 +12,7 @@ const shiftMonth = ({ y, m }, delta) => {
   return { y: Math.floor(index / 12), m: (index % 12) + 1 }
 }
 
-export default function MonthCalendarPicker({ value, minDate, label = 'Chọn lịch', onChange }) {
+export default function MonthCalendarPicker({ value, minDate, label = 'Chọn lịch', triggerClassName = 'mb-date-custom-picker', onChange }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => monthOf(value || minDate))
   const rootRef = useRef(null)
@@ -42,7 +43,7 @@ export default function MonthCalendarPicker({ value, minDate, label = 'Chọn l�
 
   return (
     <div className="mb-cal" ref={rootRef}>
-      <button type="button" className="mb-date-custom-picker" aria-haspopup="dialog" aria-expanded={open} onClick={toggle} title="Chọn ngày khác từ lịch">
+      <button type="button" className={triggerClassName} aria-haspopup="dialog" aria-expanded={open} onClick={toggle} title="Chọn ngày khác từ lịch">
         <span className="material-symbols-outlined">calendar_month</span>
         <span>{label}</span>
       </button>
