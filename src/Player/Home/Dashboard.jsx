@@ -7,7 +7,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSport } from '../Context/sportContext.js'
 import { QRCodeSVG } from 'qrcode.react'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
-import { getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
+import { categoryToSportKey, getFacilities, searchFacilities } from '../../api/player/facilityApi.js'
+import { sportMetaOf } from '../LFG/lfgSuggestionEngine.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import SplitInvites from '../Booking/SplitInvites.jsx'
@@ -758,21 +759,17 @@ const SECTION_HEADER_STYLE = {
   boxShadow: '0 2px 10px rgba(45, 95, 63, 0.05)',
 }
 
-const SPORT_META = {
-  badminton: { name: 'Cầu Lông', emoji: '🏸', bg: '#EAF7EE', color: '#15803D', img: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop' },
-  pickleball: { name: 'Pickleball', emoji: '🏓', bg: '#ECFDF5', color: '#047857', img: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop' },
-  football: { name: 'Bóng Đá', emoji: '⚽', bg: '#EFF6FF', color: '#2563EB', img: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=320&h=320&fit=crop' },
-  basketball: { name: 'Bóng Rổ', emoji: '🏀', bg: '#FFF7ED', color: '#EA580C', img: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=320&h=320&fit=crop' },
-  tennis: { name: 'Tennis', emoji: '🎾', bg: '#F7FEE7', color: '#65A30D', img: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=320&h=320&fit=crop' },
+// Ảnh minh họa theo môn (chỉ để trang trí khi cơ sở / đơn chưa có ảnh). Tên, emoji, màu môn lấy từ danh mục môn của BE.
+const SPORT_IMG = {
+  badminton: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=320&h=320&fit=crop',
+  pickleball: 'https://images.unsplash.com/photo-1554284126-aa88f22d8b74?w=320&h=320&fit=crop',
+  football: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=320&h=320&fit=crop',
+  basketball: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=320&h=320&fit=crop',
+  tennis: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=320&h=320&fit=crop',
 }
-const sportKeyOf = (name = '') => {
-  const n = name.toLowerCase()
-  if (n.includes('pickle')) return 'pickleball'
-  if (n.includes('bóng đá') || n.includes('football')) return 'football'
-  if (n.includes('bóng rổ') || n.includes('basket')) return 'basketball'
-  if (n.includes('tennis') || n.includes('quần vợt')) return 'tennis'
-  return 'badminton'
-}
+// Tên môn của BE -> khóa môn (cùng khóa với danh mục môn); không nhận ra môn thì trả null, không đoán
+const sportKeyOf = (name = '') => categoryToSportKey(name)
+const sportMeta = (sport) => ({ ...sportMetaOf(sport), img: SPORT_IMG[sport] || '/sports-bg.jpg' })
 // Chuyển 1 cơ sở thành thẻ "Gợi ý sân". Nhận cả 2 dạng dữ liệu của BE:
 // - FacilityResponse (GET /facilities): có courts[] (categoryName, defaultPrice), images/imageItems
 // - FacilitySearchItemResponse (GET /facilities/search): có sports[], minPrice, courtCount, thumbnailUrl
@@ -790,14 +787,14 @@ const toSuggestedCourt = (fac) => {
   const thumb = fac.thumbnailUrl
     || fac.imageItems?.find((img) => img.isThumbnail)?.url
     || fac.images?.[0]
-    || SPORT_META[sport]?.img
+    || sportMeta(sport).img
     || '/sports-bg.jpg'
 
   return {
     id: fac.id,
     sport,
     sports,
-    sportEmoji: SPORT_META[sport]?.emoji || '🏟️',
+    sportEmoji: sport ? sportMeta(sport).emoji : '🏟️',
     slot: fac.openTime && fac.closeTime
       ? `Mở ${String(fac.openTime).slice(0, 5)} - ${String(fac.closeTime).slice(0, 5)}`
       : 'Chưa cập nhật giờ mở cửa',
@@ -824,15 +821,15 @@ const whenText = (start, end) => {
 const toUpcomingCard = (b) => {
   const sportName = b.sportName || b.categoryName || ''
   const sport = sportKeyOf(sportName)
-  const meta = SPORT_META[sport]
+  const meta = sportMeta(sport)
   const id = String(b.bookingId || b.id || '')
   return {
     id,
     bookingId: id,
     sport,
-    sportName: sportName || meta.name,
+    sportName: sportName || meta.name || '',
     sportEmoji: meta.emoji,
-    sportBadgeBg: meta.bg,
+    sportBadgeBg: meta.bgColor,
     sportBadgeColor: meta.color,
     time: whenText(b.startTime, b.endTime),
     type: [sportName, b.courtName].filter(Boolean).join(' • ') || 'Đặt sân',
@@ -849,11 +846,11 @@ const toUpcomingCard = (b) => {
 const toLfgRow = (c) => {
   const sportName = c.sportName || c.sportCategoryName || ''
   const sport = sportKeyOf(sportName)
-  const meta = SPORT_META[sport]
+  const meta = sportMeta(sport)
   return {
     id: String(c.id || c.cardId || ''),
     sport,
-    sportName: c.title || sportName || meta.name,
+    sportName: c.title || sportName || meta.name || '',
     sportEmoji: meta.emoji,
     missing: `Thiếu ${Number(c.remainingSlots) || 0} người`,
     missingColor: '#DC2626',

@@ -47,7 +47,7 @@ export async function refreshAccessToken(refreshToken) {
 export async function getPublicSports() {
   const body = (await apiClient.get('/api/v1/master-data/sports', { skipAuth: true })).data
   const list = body?.data?.items ?? body?.data ?? body
-  return (Array.isArray(list) ? list : []).map((sport) => ({ id: String(sport.id), name: sport.name || '' }))
+  return (Array.isArray(list) ? list : []).map((sport) => ({ id: String(sport.id), name: sport.name || '', rulesDescription: sport.rulesDescription || '' }))
 }
 
 // ---------- Kiểm tra SĐT đã có tài khoản chưa: GET /api/auth/check-phone?phone= → { exists } ----------

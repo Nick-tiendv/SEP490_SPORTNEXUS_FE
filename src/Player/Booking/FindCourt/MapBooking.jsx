@@ -2138,7 +2138,7 @@ function MapBooking() {
           <section className="mb-card" ref={summaryRef} aria-label="Xác nhận chọn sân">
             <div className="mb-summary-box">
               <div className="mb-summary-ic">
-                <span style={{ fontSize: 22 }}>{sportOf(selectedCourt?.sport)?.emoji || '🏸'}</span>
+                <span style={{ fontSize: 22 }}>{sportOf(selectedCourt?.sport)?.emoji || '🏟️'}</span>
               </div>
               <div className="mb-summary-info">
                 <h3>

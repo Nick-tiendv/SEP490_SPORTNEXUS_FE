@@ -124,6 +124,7 @@ export const logoutAllDevices = () => post('/api/auth/logout-all')
 export const getSportCategories = async () => (await getList('/api/v1/master-data/sports')).items.map(item => ({
   id: String(pick(item, 'id', 'sportCategoryId')),
   name: pick(item, 'name', 'sportName', 'categoryName') || '',
+  rulesDescription: item?.rulesDescription || '',
 }))
 
 const toMySport = item => ({
