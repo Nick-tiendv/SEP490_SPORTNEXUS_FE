@@ -11,6 +11,7 @@ import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
 import { getFacilityById } from '../../api/player/facilityApi.js'
 import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
 import { vnDateKey } from '../../utils/vnTime.js'
+import { RECURRING_CANCEL_LOCKED_TEXT, isRecurringCancelLocked } from '../Booking/Recurring/recurringBooking.js'
 
 const formatBookingStatusLabel = (rawStatus) => {
   const upper = String(rawStatus || '').toUpperCase()
@@ -40,8 +41,9 @@ function checkInWindowOf(ticket, nowMs) {
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, queryId, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn }) => ({
+const toTicket = ({ id, queryId, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn, isRecurring }) => ({
   id,
+  isRecurring: Boolean(isRecurring),
   queryId: queryId || id,
   qrCode: qrCode || '',
   ticketCode: id ? `SNX-${String(id).slice(0, 8).toUpperCase()}` : '',
@@ -229,6 +231,8 @@ function CheckInQR() {
               amount: playWindow.totalAmount || (detail?.paidAmount ?? detail?.totalAmount),
               timeRangeLabel: playWindow.timeRangeLabel,
               groupedBookingIds: playWindow.groupedBookingIds,
+              // Đơn thuộc gói định kỳ (BE: isRecurring, gửi khi tạo đơn)
+              isRecurring: detail?.isRecurring,
             })
           }
         } else if (ticketType === 'lfg') {
@@ -410,6 +414,10 @@ function CheckInQR() {
 
   // Mã QR bị làm mờ và vô hiệu hóa khi sân đã được check-in hoặc đã vượt quá giờ mà không người chơi nào check-in (hoặc đã hủy)
   const isQrDisabled = checkInDone || isExpiredNoCheckIn || isCancelled
+
+  // Gói định kỳ còn dưới 48h tới giờ chơi: khóa nút Hủy (BE trả 400)
+  const recurringCancelLocked = ticketType === 'booking' && !isCancelled && isRecurringCancelLocked(ticketData?.isRecurring, ticketData?.startAt, nowMs)
+  const cancelDisabled = isQrDisabled || recurringCancelLocked
 
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancellationReasons, setCancellationReasons] = useState([])
@@ -1820,7 +1828,7 @@ function CheckInQR() {
             <button
               type="button"
               onClick={handleOpenCancelModal}
-              disabled={isQrDisabled}
+              disabled={cancelDisabled}
               style={{
                 marginTop: '10px',
                 width: '100%',
@@ -1829,25 +1837,25 @@ function CheckInQR() {
                 borderRadius: '12px',
                 border: isCancelled
                   ? '1px solid #CBD5E1'
-                  : checkInDone || isExpiredNoCheckIn
+                  : checkInDone || isExpiredNoCheckIn || recurringCancelLocked
                   ? '1px solid #E2E8F0'
                   : '1.5px solid #EF4444',
                 background: isCancelled
                   ? '#F1F5F9'
-                  : checkInDone || isExpiredNoCheckIn
+                  : checkInDone || isExpiredNoCheckIn || recurringCancelLocked
                   ? '#F8FAFC'
                   : '#FEF2F2',
                 color: isCancelled
                   ? '#64748B'
-                  : checkInDone || isExpiredNoCheckIn
+                  : checkInDone || isExpiredNoCheckIn || recurringCancelLocked
                   ? '#94A3B8'
                   : '#DC2626',
                 fontSize: '13px',
                 fontWeight: 700,
-                cursor: isQrDisabled ? 'not-allowed' : 'pointer',
-                opacity: checkInDone || isExpiredNoCheckIn ? 0.55 : 1,
-                filter: checkInDone || isExpiredNoCheckIn ? 'grayscale(0.6)' : 'none',
-                boxShadow: isQrDisabled
+                cursor: cancelDisabled ? 'not-allowed' : 'pointer',
+                opacity: checkInDone || isExpiredNoCheckIn || recurringCancelLocked ? 0.55 : 1,
+                filter: checkInDone || isExpiredNoCheckIn || recurringCancelLocked ? 'grayscale(0.6)' : 'none',
+                boxShadow: cancelDisabled
                   ? 'none'
                   : '0 4px 14px rgba(239, 68, 68, 0.16)',
                 display: 'flex',
@@ -1857,14 +1865,14 @@ function CheckInQR() {
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                if (!isQrDisabled) {
+                if (!cancelDisabled) {
                   e.currentTarget.style.background = '#FEE2E2'
                   e.currentTarget.style.transform = 'translateY(-1px)'
                   e.currentTarget.style.boxShadow = '0 6px 18px rgba(239, 68, 68, 0.24)'
                 }
               }}
               onMouseLeave={(e) => {
-                if (!isQrDisabled) {
+                if (!cancelDisabled) {
                   e.currentTarget.style.background = '#FEF2F2'
                   e.currentTarget.style.transform = 'none'
                   e.currentTarget.style.boxShadow = '0 4px 14px rgba(239, 68, 68, 0.16)'
@@ -1877,11 +1885,13 @@ function CheckInQR() {
                   ? 'Chủ sân đã quét mã QR xác nhận check-in (Không thể hủy đơn)'
                   : isExpiredNoCheckIn
                   ? 'Sân đã vượt quá giờ thi đấu mà không ai check-in (Không thể hủy đơn)'
+                  : recurringCancelLocked
+                  ? RECURRING_CANCEL_LOCKED_TEXT
                   : 'Chưa check-in: Hủy trước giờ chơi từ 48 giờ trở lên được hoàn 100% Điểm'
               }
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                {isCancelled ? 'cancel' : checkInDone || isExpiredNoCheckIn ? 'block' : 'event_busy'}
+                {isCancelled ? 'cancel' : checkInDone || isExpiredNoCheckIn || recurringCancelLocked ? 'block' : 'event_busy'}
               </span>
               <span>
                 {isCancelled
@@ -1890,6 +1900,8 @@ function CheckInQR() {
                   ? 'Đã check-in (Không thể hủy)'
                   : isExpiredNoCheckIn
                   ? 'Đã quá giờ (Không thể hủy)'
+                  : recurringCancelLocked
+                  ? 'Gói định kỳ: không hủy được dưới 48h'
                   : 'Hủy đơn & Hoàn tiền'}
               </span>
             </button>
