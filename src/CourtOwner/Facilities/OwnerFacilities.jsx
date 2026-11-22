@@ -50,7 +50,8 @@ const EMPTY_FORM = {
   description: '',
   rules: '',
   autoGenerateSlots: true,
-  isBulkDiscountEnabled: false,
+  // % giảm gói đặt định kỳ (recurringDiscountPercent, 0 - 50); gợi ý mặc định 10%, 0 = không giảm
+  recurringDiscountPercent: '10',
 }
 const formFromFacility = f => {
   const parsed = parseFacilityAddress({
@@ -73,7 +74,8 @@ const formFromFacility = f => {
     description: f.description || '',
     rules: f.rules || '',
     autoGenerateSlots: !!f.autoGenerateSlots,
-    isBulkDiscountEnabled: !!f.isBulkDiscountEnabled,
+    // Cơ sở cũ chưa có % thì suy từ công tắc cũ (bật = 10%)
+    recurringDiscountPercent: String(f.recurringDiscountPercent ?? (f.isBulkDiscountEnabled ? 10 : 0)),
   }
 }
 // BE lưu địa chỉ 3 trường: streetAddress + provinceCode + wardCode (form chọn theo tên, đổi sang mã khi lưu)
@@ -89,9 +91,14 @@ const toPayload = async form => ({
   description: form.description.trim() || null,
   rules: form.rules.trim() || null,
   autoGenerateSlots: !!form.autoGenerateSlots,
-  // Giảm 10% khi người chơi đặt từ 4 ca (gói tháng / định kỳ); chủ sân chịu phần giảm
-  isBulkDiscountEnabled: !!form.isBulkDiscountEnabled,
+  // Giảm gói đặt định kỳ (cùng ca, cùng sân, cùng thứ, ≥ 4 tuần liên tiếp) theo % chủ sân đặt; chủ sân chịu phần giảm.
+  // Gửi kèm isBulkDiscountEnabled (> 0% = bật) để khớp cờ cũ của BE.
+  recurringDiscountPercent: Number(form.recurringDiscountPercent) || 0,
+  isBulkDiscountEnabled: Number(form.recurringDiscountPercent) > 0,
 })
+
+// % giảm gói định kỳ hợp lệ: số nguyên 0 - 50
+const isValidDiscountPct = value => String(value ?? '').trim() !== '' && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 50
 
 const validateOwnerForm = form => {
   if (!form.name.trim()) return 'Vui lòng nhập tên cơ sở.'
@@ -108,6 +115,7 @@ const validateOwnerForm = form => {
     }
   }
   if (form.openTime && form.closeTime && form.closeTime <= form.openTime) return 'Giờ đóng cửa phải sau giờ mở cửa.'
+  if (!isValidDiscountPct(form.recurringDiscountPercent)) return 'Mức giảm gói định kỳ phải là số nguyên từ 0 đến 50 (%).'
   return ''
 }
 
@@ -244,12 +252,24 @@ function FacilityForm({ form, setForm, showErrors = false }) {
         <input type="checkbox" checked={form.autoGenerateSlots} onChange={e => setForm(prev => ({ ...prev, autoGenerateSlots: e.target.checked }))} />
         Tự sinh ca hằng ngày theo giờ mở cửa
       </label>
-      <label className="snx-row" style={{ fontSize: 13, alignItems: 'flex-start' }}>
-        <input type="checkbox" checked={form.isBulkDiscountEnabled} onChange={e => setForm(prev => ({ ...prev, isBulkDiscountEnabled: e.target.checked }))} />
-        <span>
-          Giảm 10% cho người chơi đặt gói (từ 4 ca trở lên, vd đặt định kỳ hằng tuần)
-          <small className="snx-muted" style={{ display: 'block' }}>Phần giảm 10% do chủ sân chịu, phí nền tảng tính trên số tiền sau giảm.</small>
-        </span>
+      <label className="snx-field">
+        Giảm giá gói đặt định kỳ (%)
+        <input
+          className="snx-input"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          max="50"
+          step="1"
+          placeholder="10"
+          style={{ maxWidth: 140 }}
+          aria-invalid={showErrors && !isValidDiscountPct(form.recurringDiscountPercent) ? true : undefined}
+          {...field('recurringDiscountPercent')}
+        />
+        <small className="snx-muted">
+          Từ 0 đến 50%, gợi ý 10%. Nhập 0 = không giảm. Áp dụng khi người chơi đặt cùng ca, cùng sân, cùng thứ từ 4 tuần liên tiếp.
+          Phần giảm do chủ sân chịu, phí nền tảng tính trên số tiền sau giảm.
+        </small>
       </label>
     </div>
   )
@@ -496,8 +516,8 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
               <strong>{f.autoGenerateSlots ? 'Bật' : 'Tắt'}</strong>
             </div>
             <div>
-              <div className="snx-muted">Giảm 10% đặt gói</div>
-              <strong>{f.isBulkDiscountEnabled ? 'Bật' : 'Tắt'}</strong>
+              <div className="snx-muted">Giảm gói định kỳ</div>
+              <strong>{(() => { const pct = Number(f.recurringDiscountPercent ?? (f.isBulkDiscountEnabled ? 10 : 0)) || 0; return pct > 0 ? `${pct}%` : 'Không giảm' })()}</strong>
             </div>
           </div>
         )}

@@ -35,7 +35,7 @@ import {
   DEPOSIT_MAX,
 } from '../../../api/player/walletApi.js'
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
-import { bulkDiscount } from '../Recurring/recurringBooking.js'
+import { RECURRING_CANCEL_LOCKED_TEXT, bulkDiscount, isRecurringCancelLocked } from '../Recurring/recurringBooking.js'
 import { BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
 import './SplitPayment.css'
 
@@ -262,7 +262,13 @@ function SplitPayment() {
   // Giảm giá đặt gói: cơ sở bật + đơn từ 4 ca thì FE trừ 10% (BE tính lại khi đặt). orderAmount = số phải trả cả đơn.
   // Gói định kỳ (cùng ca, cùng sân, cùng thứ, ≥ 4 tuần liên tiếp): giảm giá nếu cơ sở bật, không cho chia tiền
   const isPackage = Boolean(state.bulkPackage)
-  const packageAmount = bulkDiscount(totalAmount, isPackage, state.bulkDiscountEnabled).payable
+  // Ca đầu tiên của gói (sớm nhất trong các ca đã chọn): dùng cho luật khóa hủy 48h của gói định kỳ
+  const packageFirstStart = (Array.isArray(state.selectedSlots) ? state.selectedSlots : [])
+    .map((s) => s?.startTime)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a) - new Date(b))[0] || null
+  const recurringCancelLocked = isRecurringCancelLocked(isPackage, packageFirstStart)
+  const packageAmount = bulkDiscount(totalAmount, isPackage, state.bulkDiscountPercent).payable
 
   // Voucher của tôi (GET /api/v1/wallet/vouchers?status=ACTIVE): gửi voucherId khi POST /bookings, BE tính số tiền giảm chính thức.
   // FE hiển thị số giảm dự kiến = discountPercent% số tiền đơn (sau giảm gói).
@@ -926,6 +932,7 @@ function SplitPayment() {
         isSplitPayment: paymentMode === 'split',
         participantIds: activeParticipantIds,
         voucherId: selectedVoucher?.id || null,
+        isRecurring: isPackage,
       }
     }
 
@@ -940,6 +947,7 @@ function SplitPayment() {
       isSplitPayment: paymentMode === 'split',
       participantIds: activeParticipantIds,
       voucherId: selectedVoucher?.id || null,
+      isRecurring: isPackage,
     }
   }
 
@@ -1966,7 +1974,7 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   )}
                 </div>
                 {/* Giảm giá đặt gói: gạch giá cũ + giá mới màu đỏ, hoặc gợi ý chọn thêm N ca */}
-                <BulkDiscountNote total={totalAmount} isPackage={isPackage} enabled={state.bulkDiscountEnabled} />
+                <BulkDiscountNote total={totalAmount} isPackage={isPackage} percent={state.bulkDiscountPercent} />
               </div>
 
               {/* Mã giảm giá của tôi: chọn 1 voucher, BE trừ khi tạo đơn */}
@@ -2639,12 +2647,14 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                 </button>
               </div>
 
-              {/* Nút Hủy đơn & hoàn tiền (Image 2: POST /api/v1/bookings/{id}/cancel) */}
+              {/* Nút Hủy đơn & hoàn tiền (Image 2: POST /api/v1/bookings/{id}/cancel).
+                  Gói định kỳ còn dưới 48h tới ca đầu tiên: khóa nút (BE trả 400). */}
               <button
                 type="button"
                 className="sp-btn-cancel-booking"
                 style={{ width: '100%' }}
-                disabled={isTicketQrDisabled}
+                disabled={isTicketQrDisabled || recurringCancelLocked}
+                title={recurringCancelLocked ? RECURRING_CANCEL_LOCKED_TEXT : undefined}
                 onClick={handleOpenCancelModal}
               >
                 <span className="material-symbols-outlined">event_busy</span>
@@ -2655,7 +2665,9 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                       ? 'Đơn đã check-in (Không thể hủy)'
                       : isTicketExpiredNoCheckIn
                         ? 'Đã quá giờ thi đấu (Không thể hủy)'
-                        : 'Hủy đơn đặt sân & Hoàn Điểm'}
+                        : recurringCancelLocked
+                          ? RECURRING_CANCEL_LOCKED_TEXT
+                          : 'Hủy đơn đặt sân & Hoàn Điểm'}
                 </span>
               </button>
             </div>
