@@ -2221,3 +2221,8 @@
 .mb-subcourts-other > span { font-weight: 600; margin-right: 2px; }
 .mb-subcourts-other button { padding: 5px 10px; border: 1px solid #dfe5dc; border-radius: 999px; background: #fff; color: #166534; font: 600 12px inherit; cursor: pointer; }
 .mb-subcourts-other button:hover { border-color: #86efac; background: #f0fdf4; }
+
+/* Cơ sở tạm ngưng do khiếu nại: ca xám lại, bấm vào chỉ báo lý do */
+.mb-suspended-note { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid #fcd34d; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: 13px; font-weight: 600; }
+.mb-suspended-note .material-symbols-outlined { font-size: 18px; }
+.mb-slot.mb-slot--suspended { filter: grayscale(1); opacity: 0.55; cursor: not-allowed; }

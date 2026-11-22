@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
+import { FACILITY_SUSPENDED_TEXT, isFacilitySuspended, isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 import MonthCalendarPicker from './MonthCalendarPicker.jsx'
@@ -1185,6 +1185,10 @@ function MapBooking() {
   // Bấm ca: chọn thêm / bỏ chọn (chọn nhiều ca liền nhau để chơi lâu hơn, hoặc ca rời nhau trong ngày)
   const handleSelectSlot = (slot) => {
     if (slot.status === 'booked') return
+    if (isFacilitySuspended(selectedCourt?.rawFacility)) {
+      toast.info(FACILITY_SUSPENDED_TEXT)
+      return
+    }
     const current = pickedSlotIds ?? []
     setPickedSlotIds(current.includes(slot.id) ? current.filter((id) => id !== slot.id) : [...current, slot.id])
     setHoldLeft(HOLD_SECONDS)
@@ -1953,6 +1957,13 @@ function MapBooking() {
                 {slotsError || `Ngày ${selectedDateInfo.fullLabel} hiện chưa có ca trống nào khả dụng. Vui lòng chọn ngày khác.`}
               </div>
             ) : (
+              <>
+              {isFacilitySuspended(selectedCourt?.rawFacility) && (
+                <div className="mb-suspended-note" role="note">
+                  <span className="material-symbols-outlined">gpp_maybe</span>
+                  {FACILITY_SUSPENDED_TEXT}. Tạm thời chưa nhận đặt ca mới.
+                </div>
+              )}
               <div className="mb-slots">
                 {slots.map((slot, i) => {
                   const delay = { animationDelay: `${i * 35}ms` }
@@ -1986,10 +1997,11 @@ function MapBooking() {
                       key={slot.id}
                       id={`mb-slot-${slot.id}`}
                       type="button"
-                      className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'}`}
+                      className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'} ${isFacilitySuspended(selectedCourt?.rawFacility) ? 'mb-slot--suspended' : ''}`}
                       style={delay}
                       onClick={() => handleSelectSlot(slot)}
-                      title={`Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để chọn / bỏ chọn`}
+                      aria-disabled={isFacilitySuspended(selectedCourt?.rawFacility) || undefined}
+                      title={isFacilitySuspended(selectedCourt?.rawFacility) ? FACILITY_SUSPENDED_TEXT : `Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để chọn / bỏ chọn`}
                     >
                       <div className="mb-slot-compact-head">
                         <span className="mb-slot-time">{slot.start} - {slot.end}</span>
@@ -2009,6 +2021,7 @@ function MapBooking() {
                   )
                 })}
               </div>
+              </>
             )}
 
             {/* BẢNG CHỌN SÂN TRONG CỤM (CHO PHÉP CHỌN VÀ ĐẶT NHIỀU SÂN CÙNG KHUNG GIỜ) */}

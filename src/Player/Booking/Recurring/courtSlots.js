@@ -5,6 +5,10 @@ import { findSameTimeSlot } from './recurringBooking.js'
 
 const HOUR_MS = 60 * 60 * 1000
 
+// Cơ sở bị tạm ngưng do khiếu nại quá hạn (BE: isSuspended): vẫn hiện sân, khóa đặt ca
+export const FACILITY_SUSPENDED_TEXT = 'Sân đang tạm ngưng do có khiếu nại'
+export const isFacilitySuspended = (facility) => facility?.isSuspended === true
+
 // Ca còn đặt được
 export const isSlotOpen = (slot) =>
   Boolean(slot) && String(slot.status || '').toLowerCase() === 'available' && slot.isBookable !== false && !slot.isPast
