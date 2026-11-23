@@ -3,6 +3,7 @@ import { confirmDialog } from '../../components/common/confirm.js'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import {
   searchTournaments,
@@ -15,6 +16,7 @@ import {
   getMatch,
   getTournamentBracket,
   getTournamentParticipants,
+  getTournamentStandings,
   getMyTournamentInvitations,
   respondTournamentInvitation,
 } from '../../api/player/tournamentApi.js'
@@ -106,6 +108,8 @@ function CategoryInsight({ category, onClose }) {
   const [view, setView] = useState('participants')
   const participants = useApi(() => getTournamentParticipants(category.id), [category.id], { initialData: [] })
   const bracket = useApi(() => getTournamentBracket(category.id), [category.id], { initialData: [], enabled: view === 'bracket' })
+  const standings = useApi(() => getTournamentStandings(category.id), [category.id], { initialData: [], enabled: view === 'standings' })
+  const standingGroups = (standings.data || []).filter((g) => g?.rows?.length)
   return (
     <section className="snx-card" style={{ padding: 16 }}>
       <div className="snx-row" style={{ marginBottom: 10 }}>
@@ -114,6 +118,7 @@ function CategoryInsight({ category, onClose }) {
         <div className="snx-tabs" role="tablist" aria-label="Thông tin bảng đấu">
           <button type="button" role="tab" aria-selected={view === 'participants'} className="snx-tab" onClick={() => setView('participants')}>Người tham gia</button>
           <button type="button" role="tab" aria-selected={view === 'bracket'} className="snx-tab" onClick={() => setView('bracket')}>Nhánh đấu</button>
+          <button type="button" role="tab" aria-selected={view === 'standings'} className="snx-tab" onClick={() => setView('standings')}>Bảng xếp hạng</button>
         </div>
         <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
       </div>
@@ -162,6 +167,23 @@ function CategoryInsight({ category, onClose }) {
               ))}
             </div>
           )
+      )}
+      {view === 'standings' && (
+        standings.error ? <div className="snx-alert snx-alert--error">{standings.error}</div>
+          : standings.loading && !standingGroups.length ? <p className="snx-muted">Đang tải bảng xếp hạng…</p>
+          : standingGroups.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Chưa có bảng xếp hạng (chưa chốt nhánh đấu hoặc chưa có trận nào có kết quả).</p>
+          : standingGroups.map((g) => (
+            <div key={g.group || 'all'} className="snx-table-wrap" style={{ marginBottom: 10 }}>
+              <table className="snx-table">
+                <thead><tr><th>{g.group ? `Bảng ${g.group}` : '#'}</th><th>Đấu thủ</th><th>Trận</th><th>T</th><th>H</th><th>B</th><th>HS</th><th>Điểm</th></tr></thead>
+                <tbody>
+                  {g.rows.map((r) => (
+                    <tr key={r.participantId}><td>{r.rank}</td><td>{r.name}</td><td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.diff > 0 ? `+${r.diff}` : r.diff}</td><td><strong>{r.points}</strong></td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
       )}
     </section>
   )
@@ -420,6 +442,7 @@ function TournamentList() {
   // GET /api/v1/tournaments/my-registrations
   const mine = useApi(getMyRegistrations, [], { initialData: [] })
   const teams = useApi(getMyTeams, [], { initialData: [] })
+  const me = useCurrentUser()
   const registeredIds = new Set((mine.data || []).map((t) => t.parentId))
 
   const openRegister = async (tournament) => {
@@ -431,12 +454,26 @@ function TournamentList() {
     }
   }
 
+  // Đăng ký theo đội: chỉ đội trưởng được hủy (BE vẫn tự chặn). my-registrations chỉ trả tên đội nên dò theo tên;
+  // không xác định được (không thấy hoặc trùng tên) thì để BE quyết.
+  const canCancel = (registration) => {
+    if (!registration.teamName || !me?.id) return true
+    const sameName = (teams.data || []).filter((team) => team.name === registration.teamName && (!registration.sportId || !team.sportCategoryId || team.sportCategoryId === registration.sportId))
+    return sameName.length !== 1 || sameName[0].captainId === String(me.id)
+  }
+
   const cancelRegister = async (tournament) => {
-    if (!(await confirmDialog(`Hủy đăng ký giải "${tournament.name}"?`))) return
+    // Hoàn lệ phí: trước hạn đăng ký 100%, sau hạn không hoàn.
+    const refundNote = !tournament.deadline
+      ? 'Lệ phí sẽ được hoàn theo quy định của giải.'
+      : new Date() <= new Date(tournament.deadline)
+        ? 'Bạn được hoàn 100% lệ phí vì còn trong hạn đăng ký.'
+        : 'Đã quá hạn đăng ký nên lệ phí sẽ không được hoàn.'
+    if (!(await confirmDialog(`Hủy đăng ký giải "${tournament.name}"? ${refundNote}`))) return
     setBusyId(tournament.id)
     try {
       await cancelTournamentRegistration(tournament.id)
-      toast.success('Đã hủy đăng ký. Lệ phí sẽ được hoàn theo quy định của giải.')
+      toast.success('Đã hủy đăng ký.')
       mine.refresh()
       openList.refresh()
       window.dispatchEvent(new Event('escrow_balance_updated'))
@@ -503,7 +540,9 @@ function TournamentList() {
                       : <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => openRegister(tournament)}>Đăng ký tham gia</button>
                   ) : (
                     <>
-                      <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={busyId === tournament.id} onClick={() => cancelRegister(tournament)}>Hủy đăng ký</button>
+                      {canCancel(tournament)
+                        ? <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={busyId === tournament.id} onClick={() => cancelRegister(tournament)}>Hủy đăng ký</button>
+                        : <span className="snx-muted" style={{ fontSize: 13 }}>Chỉ đội trưởng được hủy đăng ký</span>}
                       <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => navigate(`/qr-pass?type=tournament&tournamentId=${encodeURIComponent(tournament.id)}`)}>
                         <span className="material-symbols-outlined">qr_code_2</span>Vé check-in
                       </button>

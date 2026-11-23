@@ -8,19 +8,26 @@ import {
 import { confirmDialog } from '../../components/common/confirm.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import { addDays, formatDate, formatDateTime, formatTime, toDateKey, toTimeSpan } from '../shared.js'
+import { dateLimits, validateTournamentDates } from './tournamentRules.js'
 
 // Ngày ISO -> giá trị cho <input type="date">.
 const dateInput = (value) => (value ? toDateKey(value) : '')
 
 function EditInfoModal({ tournament, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    name: tournament.name || '',
+  const [original] = useState(() => ({
     startDate: dateInput(tournament.startDate),
     endDate: dateInput(tournament.endDate),
     registrationDeadline: dateInput(tournament.registrationDeadline),
+  }))
+  const [form, setForm] = useState({
+    name: tournament.name || '',
+    ...original,
     imageUrl: tournament.imageUrl || '',
     rules: tournament.rules || '',
   })
+  const limits = dateLimits(form.startDate)
+  // Chỉ áp luật ngày mới cho ô vừa đổi: giải tạo theo luật cũ vẫn sửa được tên / điều lệ.
+  const dirty = (...keys) => keys.some((key) => form[key] !== original[key])
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
@@ -41,8 +48,9 @@ function EditInfoModal({ tournament, onClose, onSaved }) {
   const submit = async (event) => {
     event.preventDefault()
     if (!form.name.trim()) { toast.error('Vui lòng nhập tên giải.'); return }
-    if (form.startDate && form.endDate && form.endDate < form.startDate) { toast.error('Ngày kết thúc phải sau ngày bắt đầu.'); return }
-    if (form.registrationDeadline && form.startDate && form.registrationDeadline > form.startDate) { toast.error('Hạn đăng ký phải trước ngày thi đấu.'); return }
+    const changed = new Set(['startDate', 'endDate', 'registrationDeadline'].filter((key) => dirty(key)))
+    const dateError = validateTournamentDates(form, { requireDates: false, changed })
+    if (dateError) { toast.error(dateError); return }
     setBusy(true)
     try {
       // Field null thì BE giữ nguyên.
@@ -74,10 +82,11 @@ function EditInfoModal({ tournament, onClose, onSaved }) {
         <div className="snx-stack" style={{ gap: 12 }}>
           <label className="snx-field">Tên giải<input className="snx-input" maxLength={200} value={form.name} onChange={set('name')} /></label>
           <div className="snx-form-grid">
-            <label className="snx-field">Ngày bắt đầu<input className="snx-input" type="date" value={form.startDate} onChange={set('startDate')} /></label>
-            <label className="snx-field">Ngày kết thúc<input className="snx-input" type="date" min={form.startDate} value={form.endDate} onChange={set('endDate')} /></label>
-            <label className="snx-field">Hạn đăng ký<input className="snx-input" type="date" max={form.startDate || undefined} value={form.registrationDeadline} onChange={set('registrationDeadline')} /></label>
+            <label className="snx-field">Ngày bắt đầu<input className="snx-input" type="date" min={dirty('startDate') ? limits.minStart : undefined} value={form.startDate} onChange={set('startDate')} /></label>
+            <label className="snx-field">Ngày kết thúc<input className="snx-input" type="date" min={form.startDate} max={dirty('startDate', 'endDate') ? limits.maxEnd : undefined} value={form.endDate} onChange={set('endDate')} /></label>
+            <label className="snx-field">Hạn đăng ký<input className="snx-input" type="date" max={dirty('startDate', 'registrationDeadline') ? limits.maxDeadline : form.startDate || undefined} value={form.registrationDeadline} onChange={set('registrationDeadline')} /></label>
           </div>
+          <p className="snx-muted" style={{ margin: 0, fontSize: 12 }}>Giải kéo dài tối đa 1 tháng. Hạn đăng ký phải trước ngày bắt đầu ít nhất 48 giờ.</p>
           <div className="snx-field">Ảnh bìa
             <div className="snx-row">
               {form.imageUrl && <img src={form.imageUrl} alt="Ảnh bìa giải" style={{ width: 120, height: 68, objectFit: 'cover', borderRadius: 8 }} />}
