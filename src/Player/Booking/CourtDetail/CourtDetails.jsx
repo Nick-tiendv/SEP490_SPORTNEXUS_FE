@@ -8,6 +8,7 @@ import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
 import { bulkDiscount, facilityDiscountPercent, isBulkPackage } from '../Recurring/recurringBooking.js'
 import { BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
+import PricePeriodTag from '../Recurring/PricePeriodTag.jsx'
 import { FACILITY_SUSPENDED_TEXT, isFacilitySuspended, isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
@@ -923,6 +924,7 @@ function CourtDetails() {
                         <span className="font-label-md text-label-md font-bold text-primary">
                           {Number(slot.price || 0).toLocaleString('vi-VN')} Điểm
                         </span>
+                        <PricePeriodTag slot={slot} />
                       </div>
                     </button>
                   )

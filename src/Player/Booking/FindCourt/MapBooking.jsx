@@ -6,6 +6,7 @@ import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 import MonthCalendarPicker from './MonthCalendarPicker.jsx'
 import { bulkDiscount, facilityDiscountPercent, isBulkPackage } from '../Recurring/recurringBooking.js'
 import { BulkDiscountBadge, BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
+import PricePeriodTag from '../Recurring/PricePeriodTag.jsx'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
@@ -1071,6 +1072,9 @@ function MapBooking() {
         end,
         hours: s.durationHours,
         price: s.price,
+        // Đợt giá đặc biệt (tuần lễ vàng) của ca, nếu có
+        pricePeriodName: s.pricePeriodName || null,
+        basePrice: s.basePrice ?? null,
         status: isAvail ? 'available' : 'booked',
         note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
         rawSlot: s.rawSlots ? s.rawSlots[0] : s,
@@ -2013,6 +2017,7 @@ function MapBooking() {
                       </div>
                       <div className="mb-slot-compact-sub">
                         <span className="mb-slot-price">{formatVnd(slot.price)}</span>
+                        <PricePeriodTag slot={slot} />
                         {isSelected && (
                           <span className="mb-slot-chip-selected">Đang chọn</span>
                         )}
