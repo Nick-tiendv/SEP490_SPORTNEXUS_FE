@@ -65,6 +65,7 @@ export async function getMyRegistrations() {
     status: raw.tournamentStatus || '',
     registrationStatus: raw.tournamentStatus || '',
     paymentStatus: raw.paymentStatus || '',
+    teamId: raw.teamId ? String(raw.teamId) : '',
     teamName: raw.teamName || '',
     qrCode: raw.qrCode || '',
   }))

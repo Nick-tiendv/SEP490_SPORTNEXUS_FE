@@ -454,12 +454,11 @@ function TournamentList() {
     }
   }
 
-  // Đăng ký theo đội: chỉ đội trưởng được hủy (BE vẫn tự chặn). my-registrations chỉ trả tên đội nên dò theo tên;
-  // không xác định được (không thấy hoặc trùng tên) thì để BE quyết.
+  // Đăng ký theo đội: chỉ đội trưởng được hủy (BE vẫn tự chặn). Không tìm thấy đội trong danh sách thì để BE quyết.
   const canCancel = (registration) => {
-    if (!registration.teamName || !me?.id) return true
-    const sameName = (teams.data || []).filter((team) => team.name === registration.teamName && (!registration.sportId || !team.sportCategoryId || team.sportCategoryId === registration.sportId))
-    return sameName.length !== 1 || sameName[0].captainId === String(me.id)
+    if (!registration.teamId || !me?.id) return true
+    const team = (teams.data || []).find((item) => String(item.id) === registration.teamId)
+    return !team || team.captainId === String(me.id)
   }
 
   const cancelRegister = async (tournament) => {

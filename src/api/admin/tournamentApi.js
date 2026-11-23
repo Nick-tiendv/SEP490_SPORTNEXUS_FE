@@ -46,8 +46,9 @@ export function toTournament(raw) {
     organizerId: String(pick(raw, 'organizerId', 'ownerId', 'owner.id') ?? ''),
     ownerId: String(pick(raw, 'ownerId', 'owner.id') ?? ''),
     sportId: String(pick(raw, 'categoryId', 'sportCategoryId') ?? ''),
-    // Giải do người chơi tạo cần Admin duyệt: APPROVED | PENDING | REJECTED
-    approvalStatus: String(pick(raw, 'approvalStatus') ?? '').toUpperCase(),
+    // APPROVED | PENDING | REJECTED. BE còn trả PENDING_OWNER / PENDING_ADMIN; nhóm đã bỏ bước chủ sân duyệt
+    // (23/11) nên cả hai quy về PENDING = chờ Admin duyệt.
+    approvalStatus: String(pick(raw, 'approvalStatus') ?? '').toUpperCase().replace(/^PENDING_(OWNER|ADMIN)$/, 'PENDING'),
     approvalNote: pick(raw, 'approvalNote') || '',
     tier: String(pick(raw, 'tier') ?? '').toUpperCase(),
     purpose: String(pick(raw, 'purpose') ?? '').toUpperCase(),
@@ -175,6 +176,6 @@ export async function getParticipants(id) {
 export async function getBracket(id) {
   return toBracket(unwrap((await apiClient.get(`/api/v1/tournaments/${path(id)}/bracket`)).data))
 }
-// Admin duyệt giải do người chơi tạo (giải PENDING không hiện công khai, không nhận đăng ký)
+// Admin duyệt giải (mọi giải đều chờ duyệt; giải PENDING không hiện công khai, không nhận đăng ký)
 export const approveTournament = async id => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/approve`)).data)
 export const rejectTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/reject`, { reason })).data)

@@ -9,10 +9,11 @@ const url = id => `/api/v1/tournaments/${path(id)}`
 export const getMyTournaments = async (scope) => (await getList('/api/v1/tournaments/my-tournaments', scope ? { scope } : undefined)).items
 export const getFacilityTournaments = async facilityId => (await getList(`/api/v1/facilities/${path(facilityId)}/tournaments`)).items
 export const getTournament = id => get(url(id))
-// CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules,
+// CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules, rulesFileUrl (PDF),
+// defaultBracketFormat (KNOCKOUT | ROUND_ROBIN | GROUP_KNOCKOUT), requestedSchedule[{ date, session, courtCount }],
 // tier (AMATEUR | SEMI_PRO | PRO), purpose (EXCHANGE | COMMERCIAL | DEVELOPMENT | INTERNAL), minRating, maxRating, minRatedMatches,
 // children[{ name, categoryType, maxParticipants, minParticipants, entryFee, prizes, minTeamSize, maxTeamSize }].
-// Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; giải của Player chờ Admin duyệt.
+// Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; mọi giải chờ Admin duyệt (nhóm chốt 23/11).
 export const createTournament = payload => post('/api/v1/tournaments', payload)
 // UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Dùng id giải mẹ hoặc bảng con.
 // entryFee: lệ phí bảng đấu, gửi với id bảng con, chỉ khi bảng còn mở và chưa có ai đăng ký.

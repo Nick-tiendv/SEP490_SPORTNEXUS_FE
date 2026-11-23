@@ -14,16 +14,18 @@ import {
   getMyTournaments,
   getParticipants,
   getSports,
+  getTournament,
   getTournamentInvitations,
   removeParticipant,
   updateMatchScore,
   updateTournamentInfo,
 } from '../../api/owner'
 import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
+import { uploadDocument } from '../../api/player/uploadApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TournamentManagePanel from './TournamentManagePanel.jsx'
-import { FORMAT_LABEL, canOrganizerCancel, dateLimits, defaultDeadline, estimateMatches, formatWarning, suggestFormat, validateTournamentDates } from './tournamentRules.js'
+import { FORMAT_LABEL, SESSIONS, canOrganizerCancel, dateLimits, defaultDeadline, estimateMatches, formatError, formatWarning, normalizeFormat, suggestFormat, validateSchedule, validateTournamentDates } from './tournamentRules.js'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
 const CATEGORY_TYPES = [
@@ -53,10 +55,15 @@ const RESULT_TYPES = [
   { key: 'WALKOVER', label: 'Xử thắng (đối thủ không ra sân)' },
   { key: 'RETIRED', label: 'Bỏ cuộc giữa trận' },
 ]
+// Không còn bước chủ sân duyệt (nhóm chốt 23/11, đã báo BE bỏ): PENDING_OWNER / PENDING_ADMIN đều hiện là chờ Admin.
+const PENDING_APPROVAL = { label: 'Chờ Admin duyệt', bg: '#FEF3C7', color: '#B45309' }
 const APPROVAL = {
-  PENDING: { label: 'Chờ Admin duyệt', bg: '#FEF3C7', color: '#B45309' },
+  PENDING: PENDING_APPROVAL,
+  PENDING_OWNER: PENDING_APPROVAL,
+  PENDING_ADMIN: PENDING_APPROVAL,
   REJECTED: { label: 'Bị từ chối', bg: '#FEE2E2', color: '#B91C1C' },
 }
+const isPendingApproval = (value) => String(value || '').toUpperCase().startsWith('PENDING')
 const fold = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
 const isFootball = (name) => /bong da|futsal|football|soccer/.test(fold(name))
 const optionalInt = (value) => (value === '' || value == null ? null : Number(value))
@@ -84,6 +91,7 @@ const emptyForm = (categoryId = '') => ({
   name: '', facilityId: '', categoryId, startDate: '', endDate: '', registrationDeadline: '', rules: '',
   tier: 'AMATEUR', purpose: 'EXCHANGE', minRating: '', maxRating: '', minRatedMatches: '',
   categoryType: 0, maxParticipants: 8, format: '', entryFee: '', prizes: [{ position: 'Vô địch', rewardAmount: '' }],
+  rulesFileUrl: '', schedule: [],
 })
 
 // Tải dữ liệu theo khóa: đổi khóa thì tải lại, giữ dữ liệu cũ trong lúc chờ.
@@ -135,6 +143,10 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const facilitiesLoad = useLoad(() => getPublicFacilities(), 'facilities', isPlayer)
   const publicFacilities = (facilitiesLoad.data || []).filter((f) => !f.approvalStatus || String(f.approvalStatus).toUpperCase() === 'APPROVED')
   const tournament = tournaments.find((item) => item.id === selectedTournamentId) || tournaments[0] || null
+  // Chi tiết giải mẹ: my-tournaments không trả thể thức đã chốt, file điều lệ và lịch sân yêu cầu
+  const detailKey = `detail|${tournament?.id}|${listToken}`
+  const detailLoad = useLoad(() => getTournament(tournament.id), detailKey, !!tournament?.id)
+  const detail = detailLoad.key === detailKey ? detailLoad.data : null
   const children = tournament?.children || []
   const child = children.find((item) => item.id === selectedChildId) || children[0] || null
   const childStatus = String(child?.status || '').toUpperCase()
@@ -159,11 +171,12 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const [scoreResultType, setScoreResultType] = useState('NORMAL')
   const [scoreWinnerId, setScoreWinnerId] = useState('')
   const [tiebreak, setTiebreak] = useState({ a: '', b: '' })
-  // Thể thức BTC chọn ở bước sinh sơ đồ, gắn với bảng đấu; chưa chọn thì dùng thể thức gợi ý theo số đấu thủ.
+  // Thể thức đã chốt lúc tạo giải (defaultBracketFormat) thì không đổi được (BE trả 400).
+  // Giải cũ chưa chốt: BTC chọn ở bước sinh sơ đồ, mặc định theo gợi ý từ số đấu thủ.
   const [bracketChoice, setBracketChoice] = useState({ childId: null, format: '' })
-  // Thứ tự: BTC vừa chọn lại → thể thức đã chốt lúc tạo giải (BE trả về) → gợi ý theo số đấu thủ.
-  const savedFormat = FORMAT_LABEL[String(child?.format || '').toUpperCase()] ? String(child.format).toUpperCase() : ''
-  const bracketFormat = bracketChoice.childId === childId && bracketChoice.format ? bracketChoice.format : savedFormat || suggestFormat(participants.length)
+  const lockedFormat = normalizeFormat(detail?.defaultBracketFormat)
+  const bracketFormat = lockedFormat || (bracketChoice.childId === childId && bracketChoice.format ? bracketChoice.format : suggestFormat(participants.length))
+  const bracketError = formatError(bracketFormat, participants.length)
   const bracketWarning = formatWarning(bracketFormat, participants.length)
   const [cancelReason, setCancelReason] = useState('')
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -175,8 +188,8 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const runAction = async (action, successMessage, { reloadList = false, reloadChild = true, after } = {}) => {
     setBusy(true)
     try {
-      await action()
-      showToast(successMessage)
+      const result = await action()
+      showToast(typeof successMessage === 'function' ? successMessage(result) : successMessage)
       if (reloadList) setListToken((value) => value + 1)
       if (reloadChild) setChildToken((value) => value + 1)
       after?.()
@@ -298,6 +311,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     // Lần tải môn trước đó lỗi (vd server khởi động chậm) thì tải lại.
     if (!sports.length) setSportsToken((value) => value + 1)
     setForm(emptyForm(defaultSportId()))
+    setRulesFileName('')
     setShowCreateModal(true)
   }
   // Danh sách môn về sau khi form đã mở: chọn sẵn môn mặc định.
@@ -314,6 +328,30 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       if (key === 'startDate' && value && (!prev.registrationDeadline || prev.registrationDeadline > defaultDeadline(value))) next.registrationDeadline = defaultDeadline(value)
       return next
     })
+  // Lịch sân BTC yêu cầu (người chơi tổ chức): mỗi dòng 1 ngày + buổi + số sân
+  const updateScheduleRow = (rowIndex, changes) => setField('schedule', form.schedule.map((row, i) => (i === rowIndex ? { ...row, ...changes } : row)))
+  // File điều lệ + nhân sự: BE lưu 1 link (rulesFileUrl), chỉ nhận PDF
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [rulesFileName, setRulesFileName] = useState('')
+  const handleRulesFile = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+      showToast('Chỉ nhận file PDF.', 'error')
+      return
+    }
+    setUploadingFile(true)
+    try {
+      const url = await uploadDocument(file)
+      setField('rulesFileUrl', url)
+      setRulesFileName(file.name)
+    } catch (error) {
+      showToast(error.message, 'error')
+    } finally {
+      setUploadingFile(false)
+    }
+  }
 
   const handleCreateTournament = (event) => {
     event.preventDefault()
@@ -342,6 +380,17 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       showToast(dateError, 'error')
       return
     }
+    // Đủ số tối đa thì thể thức đã chọn phải sinh được sơ đồ (vòng tròn ≤ 8, vòng bảng ≥ 6)
+    const createFormatError = formatError(createFormat, form.maxParticipants)
+    if (createFormatError) {
+      showToast(`${createFormatError} Đổi thể thức hoặc số người tối đa.`, 'error')
+      return
+    }
+    const scheduleError = isPlayer ? validateSchedule(form.schedule, form) : ''
+    if (scheduleError) {
+      showToast(scheduleError, 'error')
+      return
+    }
     if (form.tier && form.tier !== 'AMATEUR') {
       if (['minRating', 'maxRating', 'minRatedMatches'].some((key) => form[key] === '' || form[key] == null)) {
         showToast('Giải Bán chuyên / Chuyên nghiệp cần nhập Elo tối thiểu, Elo tối đa và số trận giải tối thiểu.', 'error')
@@ -365,15 +414,19 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       minRating: form.tier && form.tier !== 'AMATEUR' ? optionalInt(form.minRating) : null,
       maxRating: form.tier && form.tier !== 'AMATEUR' ? optionalInt(form.maxRating) : null,
       minRatedMatches: form.tier && form.tier !== 'AMATEUR' ? optionalInt(form.minRatedMatches) : null,
-      // Một giải một nội dung: bảng đấu con duy nhất mang tên giải. format: thể thức chốt lúc tạo
-      // (BE cần thêm trường này; chưa có thì BE bỏ qua và bước sinh sơ đồ dùng gợi ý).
+      // Thể thức chốt ngay lúc tạo; bước sinh sơ đồ không đổi được nữa
+      defaultBracketFormat: createFormat,
+      rulesFileUrl: form.rulesFileUrl || null,
+      requestedSchedule: isPlayer && form.schedule.length
+        ? form.schedule.map((row) => ({ date: row.date, session: row.session, courtCount: Number(row.courtCount) }))
+        : null,
+      // Một giải một nội dung: bảng đấu con duy nhất mang tên giải
       children: [{
         name: form.name.trim(),
         categoryType: Number(form.categoryType),
         maxParticipants: Number(form.maxParticipants),
         minParticipants: MIN_PARTICIPANTS,
         entryFee: parseAmount(form.entryFee),
-        format: createFormat,
         prizes: form.prizes
           .filter((prize) => prize.position.trim() && parseAmount(prize.rewardAmount) > 0)
           .map((prize) => ({ position: prize.position.trim(), rewardAmount: parseAmount(prize.rewardAmount) })),
@@ -381,8 +434,10 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     }
     runAction(
       () => createTournament(payload),
-      // Nhóm chốt 23/11: giải của chủ sân hay người chơi đều chờ Admin duyệt (không còn bước chủ sân duyệt).
-      'Đã gửi giải, chờ Admin duyệt trước khi công khai và nhận đăng ký.',
+      // Nhóm chốt 23/11: mọi giải chờ Admin duyệt. Báo theo approvalStatus BE trả về để không nói sai khi BE chưa đổi.
+      (result) => (String(result?.approvalStatus || '').toUpperCase() === 'APPROVED'
+        ? 'Đã tạo giải, giải đã công khai và mở đăng ký.'
+        : 'Đã gửi giải, chờ Admin duyệt trước khi công khai và nhận đăng ký.'),
       { reloadList: true, reloadChild: false, after: () => { setShowCreateModal(false); setSelectedTournamentId(null); setSelectedChildId(null) } },
     )
   }
@@ -526,7 +581,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                     Giải nội bộ: không hiện công khai, người chơi chỉ tham gia qua lời mời của Ban tổ chức.
                   </div>
                 )}
-                {String(tournament.approvalStatus || '').toUpperCase() === 'PENDING' && (
+                {isPendingApproval(tournament.approvalStatus) && (
                   <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '10px', background: '#FEF3C7', color: '#92400E', fontSize: '12.5px', fontWeight: 600 }}>
                     Giải đang chờ Admin duyệt: chưa hiện công khai và chưa nhận đăng ký.
                   </div>
@@ -586,6 +641,15 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                   {child.prizes?.length ? child.prizes.map((prize) => `${prize.position} ${formatVND(prize.rewardAmount)}`).join(' • ') : 'Không có'}
                   {child.prizes?.length > 0 && ` (tổng ${formatVND(prizeTotal(child.prizes))})`}
                 </span>
+                {lockedFormat && <span>⚔ {FORMAT_LABEL[lockedFormat]}</span>}
+                {detail?.rulesFileUrl && <a href={detail.rulesFileUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8' }}>📄 Điều lệ & nhân sự (PDF)</a>}
+              </div>
+            )}
+            {/* Lịch sân BTC yêu cầu: chủ sân dựa vào đây để giữ khung giờ sân cho giải */}
+            {detail?.requestedSchedule?.length > 0 && (
+              <div style={{ marginTop: '10px', fontSize: '12.5px', color: '#334155', fontWeight: 600 }}>
+                Lịch sân yêu cầu:{' '}
+                {detail.requestedSchedule.map((row) => `${String(row.date).split('-').reverse().join('/')} ${row.startTime && row.endTime ? `${row.startTime}–${row.endTime}` : SESSIONS[row.session] || row.session} (${row.courtCount} sân)`).join(' • ')}
               </div>
             )}
             {child && canManage && childStatus === 'OPEN' && participants.length === 0 && (
@@ -620,17 +684,19 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                       {child.categoryType === 'RANDOM_DOUBLES' && (
                         <button onClick={handleRandomPairing} disabled={busy} style={smallButton('#EFF6FF', '#1D4ED8', '1px solid #BFDBFE')}>🎲 Bốc thăm ghép đôi</button>
                       )}
-                      <select value={bracketFormat} onChange={(event) => setBracketChoice({ childId, format: event.target.value })} aria-label="Thể thức thi đấu" style={{ ...inputStyle, width: 'auto', padding: '6px 8px', fontSize: '12.5px' }}>
-                        {BRACKET_FORMATS.map((f) => <option key={f.key} value={f.key}>{f.label}{f.key === suggestFormat(participants.length) ? ' (gợi ý)' : ''}</option>)}
+                      <select value={bracketFormat} disabled={!!lockedFormat} title={lockedFormat ? 'Thể thức đã chốt khi tạo giải' : undefined} onChange={(event) => setBracketChoice({ childId, format: event.target.value })} aria-label="Thể thức thi đấu" style={{ ...inputStyle, width: 'auto', padding: '6px 8px', fontSize: '12.5px' }}>
+                        {BRACKET_FORMATS.map((f) => <option key={f.key} value={f.key}>{f.label}{!lockedFormat && f.key === suggestFormat(participants.length) ? ' (gợi ý)' : ''}</option>)}
                       </select>
-                      <button onClick={handleGenerateBracket} disabled={busy || participants.length < 2} style={smallButton('#D97706', '#FFFFFF')}>Chốt danh sách & sinh nhánh</button>
+                      <button onClick={handleGenerateBracket} disabled={busy || participants.length < 2 || !!bracketError} style={smallButton('#D97706', '#FFFFFF')}>Chốt danh sách & sinh nhánh</button>
                     </div>
                   )}
                 </div>
                 {childStatus === 'OPEN' && participants.length >= 2 && (
                   <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '12px' }}>
-                    {FORMAT_LABEL[bracketFormat]} với {participants.length} {isTeamCategory ? 'đội' : 'đấu thủ'}: khoảng {estimateMatches(bracketFormat, participants.length)} trận.
-                    {bracketWarning && <div style={{ color: '#B45309', fontWeight: 600, marginTop: '4px' }}>⚠ {bracketWarning}</div>}
+                    {FORMAT_LABEL[bracketFormat]}{lockedFormat ? ' (đã chốt khi tạo giải)' : ''} với {participants.length} {isTeamCategory ? 'đội' : 'đấu thủ'}: khoảng {estimateMatches(bracketFormat, participants.length)} trận.
+                    {bracketError
+                      ? <div style={{ color: '#B91C1C', fontWeight: 600, marginTop: '4px' }}>✕ {bracketError}{lockedFormat ? ' Thể thức đã chốt nên chưa sinh được sơ đồ: chờ thêm người đăng ký hoặc chọn hủy khi hết hạn.' : ''}</div>
+                      : bracketWarning && <div style={{ color: '#B45309', fontWeight: 600, marginTop: '4px' }}>⚠ {bracketWarning}</div>}
                   </div>
                 )}
 
@@ -1006,8 +1072,41 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600, marginBottom: '12px' }}>
               {CATEGORY_TYPES[form.categoryType]?.hint}. Cần tối thiểu {MIN_PARTICIPANTS}; hết hạn đăng ký mà chưa đủ, hệ thống hỏi Ban tổ chức có tiếp tục không.
               {Number(form.maxParticipants) >= 2 && <div style={{ color: '#1D4ED8', marginTop: '2px' }}>{FORMAT_LABEL[createFormat]} với tối đa {form.maxParticipants}: khoảng {estimateMatches(createFormat, form.maxParticipants)} trận.</div>}
-              {formatWarning(createFormat, form.maxParticipants) && <div style={{ color: '#B45309', marginTop: '2px' }}>⚠ {formatWarning(createFormat, form.maxParticipants)}</div>}
+              {formatError(createFormat, form.maxParticipants)
+                ? <div style={{ color: '#B91C1C', marginTop: '2px' }}>✕ {formatError(createFormat, form.maxParticipants)}</div>
+                : formatWarning(createFormat, form.maxParticipants) && <div style={{ color: '#B45309', marginTop: '2px' }}>⚠ {formatWarning(createFormat, form.maxParticipants)}</div>}
+              <div style={{ marginTop: '2px' }}>Thể thức chốt khi tạo giải, không đổi được ở bước sinh sơ đồ.</div>
             </div>
+
+            {/* Lịch sân yêu cầu: người chơi tổ chức ghi rõ ngày, buổi, số sân để chủ sân giữ sân cho giải */}
+            {isPlayer && (
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Lịch sân cần dùng (không bắt buộc)</div>
+                {form.schedule.map((row, rowIndex) => (
+                  <div key={rowIndex} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.4fr 90px 32px', gap: '8px', marginBottom: '6px' }}>
+                    <input type="date" aria-label="Ngày" min={form.startDate || undefined} max={form.endDate || form.startDate || undefined} value={row.date} onChange={(event) => updateScheduleRow(rowIndex, { date: event.target.value })} style={inputStyle} />
+                    <select aria-label="Buổi" value={row.session} onChange={(event) => updateScheduleRow(rowIndex, { session: event.target.value })} style={inputStyle}>
+                      {Object.entries(SESSIONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                    <input type="number" aria-label="Số sân" min={1} value={row.courtCount} onChange={(event) => updateScheduleRow(rowIndex, { courtCount: event.target.value })} style={inputStyle} />
+                    <button type="button" aria-label="Xóa dòng lịch sân" onClick={() => setField('schedule', form.schedule.filter((_, i) => i !== rowIndex))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  disabled={!form.startDate}
+                  onClick={() => setField('schedule', [...form.schedule, { date: form.schedule.length ? '' : form.startDate, session: 'FULL_DAY', courtCount: 1 }])}
+                  style={{ ...smallButton('#FFFFFF', '#334155', '1px dashed #CBD5E1'), cursor: form.startDate ? 'pointer' : 'not-allowed' }}
+                >
+                  + Thêm ngày thi đấu
+                </button>
+                <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600, marginTop: '4px' }}>
+                  {form.startDate ? 'Mỗi ngày không trùng buổi; số sân không vượt số sân cùng môn của cơ sở.' : 'Chọn ngày bắt đầu trước.'}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px', marginBottom: '14px' }}>
               <div>
@@ -1039,16 +1138,24 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               <textarea rows={3} maxLength={4000} value={form.rules || ''} onChange={(event) => setField('rules', event.target.value)} placeholder="Giới thiệu ngắn hiện trên thẻ giải cho người chơi" style={{ ...inputStyle, resize: 'vertical' }} />
             </div>
 
-            {/* Tài liệu gửi Admin duyệt: chưa có trường lưu link file trong giải nên chưa cho tải lên */}
+            {/* Tài liệu gửi Admin duyệt: BE lưu 1 file (rulesFileUrl), chỉ nhận PDF */}
             <div style={{ border: '1px dashed #CBD5E1', borderRadius: '12px', padding: '12px 14px', marginBottom: '6px', background: '#F8FAFC' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '8px' }}>Tài liệu gửi Admin duyệt (Word / Excel / PDF)</div>
-              {['Chi tiết giải', 'Luật lệ chi tiết', 'Danh sách nhân sự'].map((label) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', color: '#334155' }}>{label}</span>
-                  <button type="button" disabled style={{ ...smallButton('#FFFFFF', '#94A3B8', '1px solid #E2E8F0'), cursor: 'not-allowed' }}>Tải file lên</button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>Tài liệu gửi Admin duyệt (PDF)</div>
+                  <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>Gộp chi tiết giải, luật lệ chi tiết và danh sách nhân sự vào một file PDF.</div>
                 </div>
-              ))}
-              <div style={{ fontSize: '11.5px', color: '#B45309', fontWeight: 600 }}>Chưa mở: hệ thống chưa lưu được file đính kèm của giải.</div>
+                <label style={{ ...smallButton('#FFFFFF', '#1D4ED8', '1px solid #BFDBFE'), opacity: uploadingFile ? 0.6 : 1, cursor: uploadingFile ? 'wait' : 'pointer' }}>
+                  {uploadingFile ? 'Đang tải…' : form.rulesFileUrl ? 'Đổi file' : 'Tải file PDF'}
+                  <input type="file" accept="application/pdf,.pdf" hidden disabled={uploadingFile} onChange={handleRulesFile} />
+                </label>
+              </div>
+              {form.rulesFileUrl && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontSize: '12.5px' }}>
+                  <a href={form.rulesFileUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 600 }}>📄 {rulesFileName || 'Tài liệu giải'}</a>
+                  <button type="button" onClick={() => { setField('rulesFileUrl', ''); setRulesFileName('') }} style={{ background: 'none', border: 'none', padding: 0, color: '#B91C1C', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Bỏ file</button>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>

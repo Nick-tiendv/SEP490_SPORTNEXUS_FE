@@ -58,6 +58,24 @@ export const FORMAT_LABEL = {
   GROUP_KNOCKOUT: 'Vòng bảng + loại trực tiếp',
 }
 
+// BE trả thể thức kiểu 'Knockout' / 'RoundRobin' / 'GroupKnockout' (body tạo giải dùng 'KNOCKOUT'...). '' = không rõ.
+export const normalizeFormat = (value) => {
+  const key = String(value || '').trim().replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase()
+  return FORMAT_LABEL[key] ? key : ''
+}
+
+// Giới hạn cứng của BE: vòng tròn 3–8 đấu thủ, vòng bảng từ 6, loại trực tiếp từ 2.
+export const FORMAT_RANGE = { KNOCKOUT: [2, Infinity], ROUND_ROBIN: [3, 8], GROUP_KNOCKOUT: [6, Infinity] }
+export function formatError(format, count) {
+  const range = FORMAT_RANGE[format]
+  const n = Number(count)
+  if (!range || !Number.isFinite(n)) return ''
+  const [min, max] = range
+  if (n > max) return `${FORMAT_LABEL[format]} chỉ cho tối đa ${max} đấu thủ.`
+  if (n < min) return `${FORMAT_LABEL[format]} cần ít nhất ${min} đấu thủ.`
+  return ''
+}
+
 // Gợi ý: đến 8 đấu thủ loại trực tiếp, từ 9 vòng bảng rồi loại trực tiếp.
 export const suggestFormat = (count) => (Number(count) >= 9 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT')
 
@@ -87,5 +105,34 @@ export function formatWarning(format, count) {
   if (format === 'ROUND_ROBIN' && n > 6) return `Vòng tròn với ${n} đấu thủ là ${estimateMatches(format, n)} trận, quá nhiều cho một giải.`
   if (format === 'GROUP_KNOCKOUT' && n < 9) return `Dưới 9 đấu thủ nên chọn loại trực tiếp; chia bảng sẽ có bảng quá ít người.`
   if (format === 'KNOCKOUT' && n >= 9) return `Từ 9 đấu thủ, loại trực tiếp làm một nửa số người chỉ đấu 1 trận; nên chọn vòng bảng + loại trực tiếp.`
+  return ''
+}
+
+// ---------- Lịch sân BTC yêu cầu (requestedSchedule) ----------
+export const SESSIONS = {
+  MORNING: 'Sáng (06:00–12:00)',
+  AFTERNOON: 'Chiều (12:00–18:00)',
+  EVENING: 'Tối (18:00–22:00)',
+  FULL_DAY: 'Cả ngày (06:00–22:00)',
+}
+const showDate = (dateKey) => dateKey.split('-').reverse().join('/')
+
+// rows: [{ date, session, courtCount }]. Trả câu lỗi đầu tiên hoặc ''. Số sân tối đa do BE kiểm tra theo cơ sở.
+export function validateSchedule(rows, { startDate, endDate }) {
+  if (!rows?.length) return ''
+  if (!startDate) return 'Chọn ngày bắt đầu trước khi nhập lịch sân.'
+  const lastDate = endDate || startDate
+  const seen = []
+  for (const row of rows) {
+    if (!row.date) return 'Chọn ngày cho từng dòng lịch sân.'
+    if (row.date < startDate || row.date > lastDate) return `Ngày ${showDate(row.date)} nằm ngoài thời gian diễn ra giải.`
+    if (!SESSIONS[row.session]) return 'Chọn buổi cho từng dòng lịch sân.'
+    if (!Number.isInteger(Number(row.courtCount)) || Number(row.courtCount) < 1) return 'Số sân mỗi dòng phải từ 1 trở lên.'
+    // Cả ngày trùng mọi buổi trong cùng ngày
+    if (seen.some((other) => other.date === row.date && (other.session === row.session || other.session === 'FULL_DAY' || row.session === 'FULL_DAY'))) {
+      return `Ngày ${showDate(row.date)} bị trùng buổi.`
+    }
+    seen.push(row)
+  }
   return ''
 }

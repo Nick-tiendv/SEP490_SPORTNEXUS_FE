@@ -6,8 +6,11 @@ import {
   dateLimits,
   defaultDeadline,
   estimateMatches,
+  formatError,
   formatWarning,
+  normalizeFormat,
   suggestFormat,
+  validateSchedule,
   validateTournamentDates,
 } from '../src/CourtOwner/Tournament/tournamentRules.js'
 
@@ -80,4 +83,35 @@ test('giải đấu: cảnh báo thể thức lệch số người', () => {
   assert.equal(formatWarning('ROUND_ROBIN', 6), '')
   assert.match(formatWarning('GROUP_KNOCKOUT', 6), /loại trực tiếp/)
   assert.equal(formatWarning('GROUP_KNOCKOUT', 0), '')
+})
+
+test('giải đấu: đọc thể thức BE trả về', () => {
+  assert.equal(normalizeFormat('Knockout'), 'KNOCKOUT')
+  assert.equal(normalizeFormat('RoundRobin'), 'ROUND_ROBIN')
+  assert.equal(normalizeFormat('GroupKnockout'), 'GROUP_KNOCKOUT')
+  assert.equal(normalizeFormat('ROUND_ROBIN'), 'ROUND_ROBIN')
+  assert.equal(normalizeFormat(null), '')
+  assert.equal(normalizeFormat('Swiss'), '')
+})
+
+test('giải đấu: giới hạn số đấu thủ theo thể thức', () => {
+  assert.equal(formatError('ROUND_ROBIN', 8), '')
+  assert.match(formatError('ROUND_ROBIN', 9), /tối đa 8/)
+  assert.match(formatError('ROUND_ROBIN', 2), /ít nhất 3/)
+  assert.match(formatError('GROUP_KNOCKOUT', 5), /ít nhất 6/)
+  assert.equal(formatError('GROUP_KNOCKOUT', 6), '')
+  assert.equal(formatError('KNOCKOUT', 64), '')
+  assert.match(formatError('KNOCKOUT', 1), /ít nhất 2/)
+})
+
+test('giải đấu: kiểm tra lịch sân yêu cầu', () => {
+  const range = { startDate: '2026-12-10', endDate: '2026-12-12' }
+  assert.equal(validateSchedule([], range), '')
+  assert.equal(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 2 }, { date: '2026-12-10', session: 'EVENING', courtCount: 1 }], range), '')
+  assert.match(validateSchedule([{ date: '2026-12-13', session: 'MORNING', courtCount: 1 }], range), /ngoài thời gian/)
+  assert.match(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 0 }], range), /từ 1/)
+  assert.match(validateSchedule([{ date: '2026-12-11', session: 'FULL_DAY', courtCount: 1 }, { date: '2026-12-11', session: 'EVENING', courtCount: 1 }], range), /trùng buổi/)
+  assert.match(validateSchedule([{ date: '', session: 'MORNING', courtCount: 1 }], range), /Chọn ngày/)
+  assert.match(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 1 }], { startDate: '' }), /ngày bắt đầu/)
+  assert.equal(validateSchedule([{ date: '2026-12-10', session: 'FULL_DAY', courtCount: 3 }], { startDate: '2026-12-10', endDate: '' }), '', 'giải 1 ngày')
 })
