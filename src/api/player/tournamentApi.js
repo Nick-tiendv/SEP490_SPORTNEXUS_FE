@@ -110,6 +110,12 @@ export async function getTournamentBracket(id) {
   return rounds
 }
 
+// GET /api/v1/tournaments/{id}/standings (công khai, id là bảng đấu): [{ group, rows[{ rank, participantId, name, played, won, drawn, lost, points, diff, scored }] }]
+export const getTournamentStandings = async id => {
+  const data = await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}/standings`)
+  return Array.isArray(data) ? data : data ? [data] : []
+}
+
 // GET /api/v1/matches/{matchId}: BE trả MẢNG MatchDetailResponse (lấy phần tử đầu)
 export async function getMatch(matchId) {
   const data = await get(`/api/v1/matches/${encodeURIComponent(matchId)}`)

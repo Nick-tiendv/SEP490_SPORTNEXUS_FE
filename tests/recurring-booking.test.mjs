@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildRepeatDates, bulkDiscount, findSameTimeSlot, formatRepeatDate, isBulkPackage, weekdayOf } from '../src/Player/Booking/Recurring/recurringBooking.js'
+import { buildRepeatDates, bulkDiscount, facilityDiscountPercent, findSameTimeSlot, formatRepeatDate, isBulkPackage, weekdayOf } from '../src/Player/Booking/Recurring/recurringBooking.js'
 
 test('buildRepeatDates: các thứ đã chọn trong N tuần tính từ ngày gốc (không gồm ngày gốc)', () => {
   // 16/11/2026 là Thứ 2 (getDay = 1), 17/11/2026 là Thứ 3 (getDay = 2)
@@ -44,7 +44,23 @@ test('isBulkPackage: cùng ca, cùng sân, cùng thứ, ≥ 4 tuần liên tiế
 })
 
 test('bulkDiscount: giảm 10% khi là gói định kỳ và cơ sở bật giảm giá', () => {
-  assert.deepEqual(bulkDiscount(400000, true, true), { applies: true, amount: 40000, payable: 360000 })
-  assert.deepEqual(bulkDiscount(400000, false, true), { applies: false, amount: 0, payable: 400000 })
-  assert.deepEqual(bulkDiscount(400000, true, false), { applies: false, amount: 0, payable: 400000 })
+  assert.deepEqual(bulkDiscount(400000, true, 10), { applies: true, amount: 40000, payable: 360000 })
+  assert.deepEqual(bulkDiscount(400000, true, 25), { applies: true, amount: 100000, payable: 300000 })
+  assert.deepEqual(bulkDiscount(400000, false, 10), { applies: false, amount: 0, payable: 400000 })
+  assert.deepEqual(bulkDiscount(400000, true, 0), { applies: false, amount: 0, payable: 400000 })
+  // % của cơ sở: recurringDiscountPercent, cơ sở cũ chỉ có công tắc thì bật = 10%, giới hạn 0 - 50
+  assert.equal(facilityDiscountPercent({ recurringDiscountPercent: 20 }), 20)
+  assert.equal(facilityDiscountPercent({ recurringDiscountPercent: 0, isBulkDiscountEnabled: true }), 0)
+  assert.equal(facilityDiscountPercent({ isBulkDiscountEnabled: true }), 10)
+  assert.equal(facilityDiscountPercent({ recurringDiscountPercent: 80 }), 50)
+  assert.equal(facilityDiscountPercent(null), 0)
+})
+
+test('gói định kỳ khóa hủy khi còn dưới 48h tới ca đầu tiên', async () => {
+  const { isRecurringCancelLocked } = await import('../src/Player/Booking/Recurring/recurringBooking.js')
+  const now = Date.parse('2026-11-22T00:00:00Z')
+  assert.equal(isRecurringCancelLocked(true, '2026-11-23T00:00:00Z', now), true, '24h: khóa')
+  assert.equal(isRecurringCancelLocked(true, '2026-11-25T00:00:00Z', now), false, '72h: cho hủy')
+  assert.equal(isRecurringCancelLocked(false, '2026-11-23T00:00:00Z', now), false, 'đơn thường: không khóa theo luật này')
+  assert.equal(isRecurringCancelLocked(true, null, now), false)
 })

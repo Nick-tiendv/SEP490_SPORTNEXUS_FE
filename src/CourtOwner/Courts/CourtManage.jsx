@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
-import { createCourt, deleteCourt, getCourt, getCourts, getFacility, getSports, updateCourt, updateFacility } from '../../api/owner'
+import { createCourt, deleteCourt, getCourt, getCourts, getFacility, getSports, regenerateCourtSlotsFrom, updateCourt, updateFacility } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
@@ -161,6 +161,21 @@ export default function CourtManage() {
 
   const reloadCourts = async () => setCourts((await getCourts(facilityId)).map(toCourt))
 
+  // Sau khi đổi thời lượng ca / giá: hỏi có áp dụng cho các ca trống từ ngày mai không.
+  // Có thì gọi POST /courts/{id}/slots/regenerate-from cho từng sân (BE giữ nguyên ca đã có khách đặt).
+  const offerRegenerateSlots = async (changedCourts) => {
+    if (!changedCourts.length) return
+    const ok = await confirmDialog(
+      'Bạn có muốn áp dụng cấu hình mới này cho các ca trống từ ngày mai không? (Các đơn khách đã đặt sẽ được giữ nguyên)',
+      { title: 'Áp dụng cho lịch đã sinh', confirmLabel: 'Có, áp dụng', cancelLabel: 'Không', danger: false },
+    )
+    if (!ok) return
+    const results = await Promise.allSettled(changedCourts.map(court => regenerateCourtSlotsFrom(court.id)))
+    const failed = results.filter(result => result.status === 'rejected')
+    if (!failed.length) showToast(`Đã sinh lại ca trống từ ngày mai cho ${changedCourts.length > 1 ? `${changedCourts.length} sân` : changedCourts[0].name}.`)
+    else showToast(`Không sinh lại được ca cho ${failed.length}/${changedCourts.length} sân: ${failed[0].reason?.message || 'lỗi không xác định'}`, 'error')
+  }
+
   // Bật / tạm ngưng sân: PUT court với status ACTIVE | INACTIVE
   const handleToggleCourtStatus = async (court) => {
     const nextStatus = court.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
@@ -184,12 +199,14 @@ export default function CourtManage() {
     try {
       await updateCourt(facilityId, court.id, courtPayload(court, { slotMinutes: value === '' ? 0 : Number(value) }))
       await reloadCourts()
-      showToast(`Đã đổi thời lượng ca ${court.name}: ${value === '' ? 'theo môn' : `${value} phút`}. Áp dụng cho ca sinh từ bây giờ.`)
+      showToast(`Đã đổi thời lượng ca ${court.name}: ${value === '' ? 'theo môn' : `${value} phút`}.`)
     } catch (error) {
       showToast(error.message, 'error')
+      return
     } finally {
       setBusyId(null)
     }
+    await offerRegenerateSlots([court])
   }
 
   // Xóa sân: DELETE /facilities/{facilityId}/courts/{courtId} (BE xóa luôn các ca tương lai chưa đặt)
@@ -243,9 +260,16 @@ export default function CourtManage() {
       setCourtForm(null)
     } catch (error) {
       showToast(error.message, 'error')
+      return
     } finally {
       setBusyId(null)
     }
+    // Sửa sân mà đổi thời lượng ca hoặc giá chuẩn thì hỏi áp dụng cho ca đã sinh
+    const pricingChanged = editing && (
+      (payload.slotMinutes || null) !== (editing.slotMinutes || null) ||
+      Number(payload.defaultPrice) !== Number(editing.defaultPrice)
+    )
+    if (pricingChanged) await offerRegenerateSlots([editing])
   }
 
   // Sửa giá chuẩn của Khu trên giao diện (lưu về defaultPrice khi rời ô nhập)
@@ -269,9 +293,11 @@ export default function CourtManage() {
     } catch (error) {
       showToast(error.message, 'error')
       await reloadCourts().catch(() => {})
+      return
     } finally {
       setBusyId(null)
     }
+    await offerRegenerateSlots(changed)
   }
 
   // Lưu giờ mở / đóng cửa: PUT /facilities/{id} (field null thì BE giữ nguyên)

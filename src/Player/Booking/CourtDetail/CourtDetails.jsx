@@ -6,9 +6,10 @@ import { getCourtSlots, getFacilityAvailability } from '../../../api/player/book
 import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 import FacilityShop from '../../Shop/FacilityShop.jsx'
 import { getFacilityTournaments } from '../../../api/player/tournamentApi.js'
-import { bulkDiscount, isBulkPackage } from '../Recurring/recurringBooking.js'
+import { bulkDiscount, facilityDiscountPercent, isBulkPackage } from '../Recurring/recurringBooking.js'
 import { BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
-import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
+import PricePeriodTag from '../Recurring/PricePeriodTag.jsx'
+import { FACILITY_SUSPENDED_TEXT, isFacilitySuspended, isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 
@@ -284,6 +285,10 @@ function CourtDetails() {
   const warnOtherSport = () => toast.info('Một lần đặt chỉ gồm các sân cùng môn. Đã bỏ các ca môn khác, sân môn khác vui lòng đặt riêng.')
 
   const handleToggleSlot = (slot, court) => {
+    if (isFacilitySuspended(facility)) {
+      toast.info(FACILITY_SUSPENDED_TEXT)
+      return
+    }
     if (!isSlotAvailable(slot)) {
       return
     }
@@ -404,7 +409,8 @@ function CourtDetails() {
   const orderTotal = totalAmountVnd + repeatSlots.reduce((sum, slot) => sum + (Number(slot.price) || 0), 0)
   // Gói định kỳ (luật BE): cùng ca, cùng sân, cùng thứ, đặt liên tiếp từ 4 tuần → giảm giá (nếu cơ sở bật) + không chia tiền
   const orderIsPackage = isBulkPackage([...selectedSlots, ...repeatSlots])
-  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, facility?.isBulkDiscountEnabled)
+  const discountPercent = facilityDiscountPercent(facility)
+  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, discountPercent)
   // Tên các sân con được chọn
   const uniqueCourtNames = useMemo(() => {
     return Array.from(new Set(selectedSlots.map((s) => s.courtName)))
@@ -526,7 +532,7 @@ function CourtDetails() {
         hours: [...selectedSlots, ...repeatSlots].reduce((sum, s) => sum + (s.durationHours || 1), 0),
         total: orderTotal,
         // Giảm giá đặt gói: trang thanh toán tự trừ % khi cơ sở bật và đơn đủ số ca
-        bulkDiscountEnabled: Boolean(facility?.isBulkDiscountEnabled),
+        bulkDiscountPercent: discountPercent,
         bulkPackage: orderIsPackage,
         recurring,
         unitPrice: activeCourt?.defaultPrice || totalAmountVnd,
@@ -769,7 +775,7 @@ function CourtDetails() {
 
           {/* BƯỚC 2: BẢNG LƯỚI CA CỦA SÂN CON (GET /api/v1/courts/{courtId}/slots) */}
           <div className="flex flex-col gap-space-md p-space-lg rounded-2xl bg-surface-container-low shadow-xl border border-outline-variant/15">
-            {facility?.isBulkDiscountEnabled && <BulkDiscountBanner />}
+            <BulkDiscountBanner percent={discountPercent} />
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -849,10 +855,18 @@ function CourtDetails() {
               </div>
             )}
 
+            {!slotsLoading && !slotsError && courtSlots.length > 0 && isFacilitySuspended(facility) && (
+              <div role="note" className="mt-space-xs px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[13px] font-semibold">
+                {FACILITY_SUSPENDED_TEXT}. Tạm thời chưa nhận đặt ca mới.
+              </div>
+            )}
+
             {!slotsLoading && !slotsError && courtSlots.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-space-sm pt-space-xs">
                 {courtSlots.map((slot) => {
-                  const isAvailable = isSlotOpen(slot)
+                  // Cơ sở tạm ngưng: ca xám lại nhưng vẫn bấm được để báo lý do
+                  const suspended = isFacilitySuspended(facility)
+                  const isAvailable = isSlotOpen(slot) && !suspended
                   const isSelected = selectedSlots.some((s) => s.id === slot.id)
                   const startStr = formatTimeSlot(slot.startTime)
                   const endStr = formatTimeSlot(slot.endTime)
@@ -861,7 +875,9 @@ function CourtDetails() {
                     <button
                       key={slot.id}
                       type="button"
-                      disabled={!isAvailable}
+                      disabled={!isAvailable && !suspended}
+                      aria-disabled={suspended || undefined}
+                      title={suspended ? FACILITY_SUSPENDED_TEXT : undefined}
                       onClick={() => handleToggleSlot(slot, activeCourt)}
                       className={`relative p-3.5 rounded-xl flex flex-col justify-between text-left transition-all border ${
                         isSelected
@@ -908,6 +924,7 @@ function CourtDetails() {
                         <span className="font-label-md text-label-md font-bold text-primary">
                           {Number(slot.price || 0).toLocaleString('vi-VN')} Điểm
                         </span>
+                        <PricePeriodTag slot={slot} />
                       </div>
                     </button>
                   )
@@ -1130,7 +1147,7 @@ function CourtDetails() {
             )}
 
             {/* Giảm giá đặt gói: đủ ca thì gạch giá cũ + giá mới; chưa đủ thì gợi ý chọn thêm N ca */}
-            {selectedSlots.length > 0 && <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} enabled={facility?.isBulkDiscountEnabled} />}
+            {selectedSlots.length > 0 && <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} percent={discountPercent} />}
 
             {/* Total Amount */}
             <div className="pt-space-md flex items-baseline justify-between border-t border-outline-variant/20">

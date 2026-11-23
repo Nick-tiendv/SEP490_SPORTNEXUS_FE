@@ -14,6 +14,8 @@ const toFacilitySummary = (raw) => {
     address: raw.address || '',
     approvalStatus: String(raw.approvalStatus || '').toUpperCase(),
     isLocked: raw.isLocked === true,
+    // Tạm ngưng do khiếu nại quá hạn phản hồi (BE: isSuspended), khác khóa của Admin (isLocked)
+    isSuspended: raw.isSuspended === true,
     courtCount: courts.length,
     activeCourtCount: courts.filter((court) => String(court.status).toUpperCase() === 'ACTIVE').length,
     sportCount: new Set(courts.map((court) => court.categoryId)).size,
@@ -171,6 +173,15 @@ export default function CourtOwnerLayout() {
           )}
         />
         <main className="snx-main">
+          {facilities.filter((item) => item.isSuspended).map((item) => (
+            <div key={item.id} className="snx-alert snx-alert--error" role="alert" style={{ marginBottom: 12, fontWeight: 600 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>gpp_maybe</span>
+              <span>
+                {facilities.length > 1 ? `${item.name}: ` : ''}Cơ sở bị Tạm Ngưng do có Khiếu nại quá hạn 48h. Vui lòng phản hồi Admin để được mở lại.{' '}
+                <Link to="/owner/reports" style={{ textDecoration: 'underline' }}>Xem khiếu nại</Link>
+              </span>
+            </div>
+          ))}
           <Outlet context={outletContext} />
         </main>
         <AppFooter />

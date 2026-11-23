@@ -8,12 +8,15 @@ import {
   bulkDeleteSlots,
   bulkUpdateSlots,
   deleteSlot,
+  findOverlappingPeriods,
   generateCourtSlots,
   generateFacilitySlots,
   getCourts,
   getFacilityAvailability,
   getFacilitySlotsRange,
+  getPricePeriods,
 } from '../../api/owner'
+import PricePeriodsCard from './PricePeriodsCard.jsx'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { WEEK_DAYS, addDays, formatDate, formatTime, formatVND, statusBadge, toDateKey, toTimeSpan } from '../shared.js'
@@ -345,6 +348,21 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
       endTime: toTimeSpan(form.endTime),
       daysOfWeek: form.daysOfWeek.length ? form.daysOfWeek : null,
     }
+    // Đổi giá trùng đợt tuần lễ vàng / giá đặc biệt: báo trước vì sẽ ghi đè giá đợt trên các ca trống.
+    // Không tải được danh sách đợt (vd BE chưa có API) thì bỏ qua bước kiểm tra.
+    if (form.action === 'SET_PRICE') {
+      const periods = await getPricePeriods(facilityId, { from: form.dateFrom, to: form.dateTo }).catch(() => [])
+      const overlapping = findOverlappingPeriods(periods, { courtIds: ids, dateFrom: form.dateFrom, dateTo: form.dateTo, startTime: form.startTime, endTime: form.endTime })
+      if (overlapping.length) {
+        const nameOf = (id) => courts.find((c) => String(c.id) === id)?.name || 'Sân'
+        const lines = overlapping.map((p) => `• ${p.courtIds.length ? p.courtIds.map(nameOf).join(', ') : 'Tất cả sân'}: "${p.name}" (${formatDate(p.fromDate)} – ${formatDate(p.toDate)})`).join('\n')
+        const ok = await confirmDialog(
+          `Các sân sau đang áp dụng tuần lễ vàng / giá đặc biệt:\n${lines}\n\nĐổi giá sẽ ghi đè giá của đợt trên các ca còn trống. Vẫn tiếp tục?`,
+          { title: 'Trùng đợt giá đặc biệt', confirmLabel: 'Vẫn đổi giá', cancelLabel: 'Không đổi', danger: true },
+        )
+        if (!ok) return
+      }
+    }
     setBusy(true)
     try {
       const r = form.action === 'DELETE'
@@ -559,6 +577,8 @@ export default function OwnerSlots() {
           </div>
         )}
       </div>
+
+      <PricePeriodsCard facilityId={facilityId} courts={allCourts} onDone={refreshAll} />
 
       <div className="snx-grid snx-grid--2">
         <GenerateCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={refreshAll} />

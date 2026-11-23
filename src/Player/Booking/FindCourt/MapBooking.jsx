@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
+import { FACILITY_SUSPENDED_TEXT, isFacilitySuspended, isSlotOpen, normalizeCourtSlots } from '../Recurring/courtSlots.js'
 import { useRepeatBooking } from '../Recurring/useRepeatBooking.js'
 import RepeatBookingPanel from '../Recurring/RepeatBookingPanel.jsx'
 import MonthCalendarPicker from './MonthCalendarPicker.jsx'
-import { bulkDiscount, isBulkPackage } from '../Recurring/recurringBooking.js'
+import { bulkDiscount, facilityDiscountPercent, isBulkPackage } from '../Recurring/recurringBooking.js'
 import { BulkDiscountBadge, BulkDiscountBanner, BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
+import PricePeriodTag from '../Recurring/PricePeriodTag.jsx'
 import { toast } from 'sonner'
 import { useSport } from '../../Context/sportContext.js'
 import { getFacilities, getFacilityLocations, searchFacilities, transformFacilityToCourt, getAmenityOptions } from '../../../api/player/facilityApi.js'
@@ -1071,6 +1072,9 @@ function MapBooking() {
         end,
         hours: s.durationHours,
         price: s.price,
+        // Đợt giá đặc biệt (tuần lễ vàng) của ca, nếu có
+        pricePeriodName: s.pricePeriodName || null,
+        basePrice: s.basePrice ?? null,
         status: isAvail ? 'available' : 'booked',
         note: s.isPast ? 'Đã qua giờ' : (s.note || (s.status !== 'Available' ? 'Đã kín lịch' : null)),
         rawSlot: s.rawSlots ? s.rawSlots[0] : s,
@@ -1135,14 +1139,15 @@ function MapBooking() {
   )
   const orderSlotCount = selectedSlots.length + extraCourtSlots.length + repeat.slots.length
   const orderTotal = totalBookingPrice + repeat.slots.reduce((sum, s) => sum + (Number(s.price) || 0), 0)
-  // Giảm giá đặt gói: cơ sở bật isBulkDiscountEnabled và đơn từ 4 ca (FE hiển thị tạm tính, BE tính lại khi đặt)
+  // Giảm giá gói định kỳ theo % chủ sân đặt (recurringDiscountPercent); FE hiển thị tạm tính, BE tính lại khi đặt
   // Gói định kỳ (luật BE): cùng ca, cùng sân, cùng thứ, đặt liên tiếp từ 4 tuần → giảm giá (nếu cơ sở bật) + không chia tiền
   const orderIsPackage = isBulkPackage([
     ...selectedSlots.flatMap((s) => s.allRawSlots),
     ...extraCourtSlots.flatMap((s) => s.rawSlots),
     ...repeat.slots.flatMap((s) => s.rawSlots),
   ])
-  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, selectedCourt?.rawFacility?.isBulkDiscountEnabled)
+  const discountPercent = facilityDiscountPercent(selectedCourt?.rawFacility)
+  const orderDiscount = bulkDiscount(orderTotal, orderIsPackage, discountPercent)
 
   // Đếm ngược thời gian khóa giữ chỗ
   // Hết thời gian giữ chỗ → tự động nhả khung giờ (không tự chọn lại ca khác)
@@ -1184,6 +1189,10 @@ function MapBooking() {
   // Bấm ca: chọn thêm / bỏ chọn (chọn nhiều ca liền nhau để chơi lâu hơn, hoặc ca rời nhau trong ngày)
   const handleSelectSlot = (slot) => {
     if (slot.status === 'booked') return
+    if (isFacilitySuspended(selectedCourt?.rawFacility)) {
+      toast.info(FACILITY_SUSPENDED_TEXT)
+      return
+    }
     const current = pickedSlotIds ?? []
     setPickedSlotIds(current.includes(slot.id) ? current.filter((id) => id !== slot.id) : [...current, slot.id])
     setHoldLeft(HOLD_SECONDS)
@@ -1298,7 +1307,7 @@ function MapBooking() {
         total: orderTotal,
         slotCount: orderSlotCount,
         // Giảm giá đặt gói và đặt định kỳ: trang thanh toán tự trừ % và liệt kê các buổi
-        bulkDiscountEnabled: Boolean(selectedCourt?.rawFacility?.isBulkDiscountEnabled),
+        bulkDiscountPercent: discountPercent,
         bulkPackage: orderIsPackage,
         recurring: repeat.recurring,
         unitPrice: selectedSlot.price,
@@ -1798,7 +1807,7 @@ function MapBooking() {
                       {court.address}
                     </p>
                     <div className="mb-court-meta" style={{ flexWrap: 'wrap', gap: 5 }}>
-                      {court.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBadge />}
+                      <BulkDiscountBadge percent={facilityDiscountPercent(court.rawFacility)} />
                       {court.isFromApi && (
                         <span className="mb-tag" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 700 }}>
                           ✦ Cụm sân hệ thống
@@ -1899,7 +1908,7 @@ function MapBooking() {
               </div>
             </div>
 
-            {selectedCourt?.rawFacility?.isBulkDiscountEnabled && <BulkDiscountBanner />}
+            <BulkDiscountBanner percent={discountPercent} />
 
             {/* Thanh chọn ngày trực quan: Hôm nay, Ngày mai, và các ngày tiếp theo */}
             <div className="mb-date-bar">
@@ -1952,6 +1961,13 @@ function MapBooking() {
                 {slotsError || `Ngày ${selectedDateInfo.fullLabel} hiện chưa có ca trống nào khả dụng. Vui lòng chọn ngày khác.`}
               </div>
             ) : (
+              <>
+              {isFacilitySuspended(selectedCourt?.rawFacility) && (
+                <div className="mb-suspended-note" role="note">
+                  <span className="material-symbols-outlined">gpp_maybe</span>
+                  {FACILITY_SUSPENDED_TEXT}. Tạm thời chưa nhận đặt ca mới.
+                </div>
+              )}
               <div className="mb-slots">
                 {slots.map((slot, i) => {
                   const delay = { animationDelay: `${i * 35}ms` }
@@ -1985,10 +2001,11 @@ function MapBooking() {
                       key={slot.id}
                       id={`mb-slot-${slot.id}`}
                       type="button"
-                      className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'}`}
+                      className={`mb-slot ${isSelected ? 'mb-slot--selected-compact' : 'mb-slot--available'} ${isFacilitySuspended(selectedCourt?.rawFacility) ? 'mb-slot--suspended' : ''}`}
                       style={delay}
                       onClick={() => handleSelectSlot(slot)}
-                      title={`Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để chọn / bỏ chọn`}
+                      aria-disabled={isFacilitySuspended(selectedCourt?.rawFacility) || undefined}
+                      title={isFacilitySuspended(selectedCourt?.rawFacility) ? FACILITY_SUSPENDED_TEXT : `Khung giờ: ${slot.start} - ${slot.end} (${formatVnd(slot.price)}) - Bấm để chọn / bỏ chọn`}
                     >
                       <div className="mb-slot-compact-head">
                         <span className="mb-slot-time">{slot.start} - {slot.end}</span>
@@ -2000,6 +2017,7 @@ function MapBooking() {
                       </div>
                       <div className="mb-slot-compact-sub">
                         <span className="mb-slot-price">{formatVnd(slot.price)}</span>
+                        <PricePeriodTag slot={slot} />
                         {isSelected && (
                           <span className="mb-slot-chip-selected">Đang chọn</span>
                         )}
@@ -2008,6 +2026,7 @@ function MapBooking() {
                   )
                 })}
               </div>
+              </>
             )}
 
             {/* BẢNG CHỌN SÂN TRONG CỤM (CHO PHÉP CHỌN VÀ ĐẶT NHIỀU SÂN CÙNG KHUNG GIỜ) */}
@@ -2175,7 +2194,7 @@ function MapBooking() {
               <RepeatBookingPanel repeat={repeat} disabledReason={courtQuantity > 1 ? 'Đặt định kỳ áp dụng khi chọn 1 sân. Vui lòng bỏ bớt sân trong cụm.' : ''} />
             )}
             {selectedSlot && (
-              <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} enabled={selectedCourt?.rawFacility?.isBulkDiscountEnabled} />
+              <BulkDiscountNote total={orderTotal} isPackage={orderIsPackage} percent={discountPercent} />
             )}
             <button
               id="mb-confirm-booking"

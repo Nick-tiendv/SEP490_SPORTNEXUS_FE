@@ -1,11 +1,13 @@
 // Đặt sân định kỳ (lặp lại theo tuần) và gói định kỳ.
 // Luật BE: "Gói định kỳ" = cùng ca (cùng giờ), cùng sân, cùng thứ, đặt liên tiếp từ BULK_MIN_WEEKS tuần trở lên.
-// Gói định kỳ: không chia tiền (thanh toán trước toàn bộ); cơ sở bật isBulkDiscountEnabled thì giảm
-// BULK_DISCOUNT_PERCENT% (FE hiển thị tạm tính, BE tính lại khi đặt).
+// Gói định kỳ: không chia tiền (thanh toán trước toàn bộ); giảm theo % chủ sân đặt cho cơ sở
+// (recurringDiscountPercent, 0 - 50). FE hiển thị tạm tính, BE tính lại khi đặt.
 import { vnClock, vnDateKey } from '../../../utils/vnTime.js'
 
 export const BULK_MIN_WEEKS = 4
-export const BULK_DISCOUNT_PERCENT = 10
+// Cơ sở cũ chỉ có công tắc isBulkDiscountEnabled (trước khi có %) thì bật = 10%
+const LEGACY_BULK_DISCOUNT_PERCENT = 10
+const MAX_BULK_DISCOUNT_PERCENT = 50
 export const REPEAT_WEEK_OPTIONS = [2, 3, 4, 5, 6, 7, 8]
 // Thứ trong tuần theo Date.getDay(): 1 = Thứ 2 … 6 = Thứ 7, 0 = Chủ nhật
 export const WEEKDAYS = [
@@ -60,9 +62,27 @@ export function isBulkPackage(slots) {
   return true
 }
 
-// Giảm giá gói định kỳ: chỉ khi đơn là gói và cơ sở bật giảm giá.
-export function bulkDiscount(total, isPackage, enabled) {
-  const applies = Boolean(enabled) && Boolean(isPackage) && total > 0
-  const amount = applies ? Math.round((total * BULK_DISCOUNT_PERCENT) / 100) : 0
+// Gói định kỳ không hủy được khi còn dưới 48h tới ca đầu tiên (BE trả 400); FE khóa nút Hủy trước.
+export const RECURRING_CANCEL_LOCK_HOURS = 48
+export const RECURRING_CANCEL_LOCKED_TEXT = 'Gói định kỳ không hỗ trợ hủy sát giờ (dưới 48h)'
+export function isRecurringCancelLocked(isRecurring, firstStartTime, nowMs = Date.now()) {
+  if (!isRecurring || !firstStartTime) return false
+  const startMs = new Date(firstStartTime).getTime()
+  return Number.isFinite(startMs) && startMs - nowMs < RECURRING_CANCEL_LOCK_HOURS * 60 * 60 * 1000
+}
+
+// % giảm gói định kỳ của cơ sở (recurringDiscountPercent của BE); 0 = không giảm
+export function facilityDiscountPercent(facility) {
+  if (!facility) return 0
+  const raw = facility.recurringDiscountPercent ?? (facility.isBulkDiscountEnabled ? LEGACY_BULK_DISCOUNT_PERCENT : 0)
+  const percent = Math.round(Number(raw))
+  return Number.isFinite(percent) ? Math.min(MAX_BULK_DISCOUNT_PERCENT, Math.max(0, percent)) : 0
+}
+
+// Giảm giá gói định kỳ: chỉ khi đơn là gói và cơ sở có % giảm > 0.
+export function bulkDiscount(total, isPackage, percent) {
+  const rate = Number(percent) > 0 ? Number(percent) : 0
+  const applies = rate > 0 && Boolean(isPackage) && total > 0
+  const amount = applies ? Math.round((total * rate) / 100) : 0
   return { applies, amount, payable: total - amount }
 }

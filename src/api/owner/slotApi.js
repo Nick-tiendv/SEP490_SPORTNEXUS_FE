@@ -17,5 +17,8 @@ export const bulkDeleteSlots = (facilityId, payload) => post(`/api/v1/facilities
 export const getCourtSlots = (courtId, date) => get(`/api/v1/courts/${path(courtId)}/slots`, { date })
 // GenerateCourtSlotsRequest: dateFrom, dateTo, openTime, closeTime, durationMinutes, price, priceRules.
 export const generateCourtSlots = (courtId, payload) => post(`/api/v1/courts/${path(courtId)}/slots/generate`, payload)
+// RegenerateSlotsRequest { fromDate? } (bỏ trống = từ ngày mai): xóa các ca còn trống từ fromDate rồi sinh lại theo
+// slotMinutes + priceRules hiện tại của sân; ca đã có khách đặt / đang giữ được giữ nguyên.
+export const regenerateCourtSlotsFrom = (courtId, fromDate = null) => post(`/api/v1/courts/${path(courtId)}/slots/regenerate-from`, { fromDate })
 export const updateSlotStatus = (slotId, { status, price }) => put(`/api/v1/slots/${path(slotId)}/status`, { status, price })
 export const deleteSlot = slotId => del(`/api/v1/slots/${path(slotId)}`)
