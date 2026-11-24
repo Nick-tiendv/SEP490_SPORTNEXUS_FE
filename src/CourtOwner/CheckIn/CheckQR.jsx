@@ -5,6 +5,7 @@ import { checkInBooking, getOwnerBookings, scanQrCode } from '../../api/owner'
 import { pick } from '../../api/owner/request.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh.js'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const todayVN = () => new Intl.DateTimeFormat('en-CA', { timeZone: VN_TIME_ZONE }).format(new Date())
@@ -70,6 +71,8 @@ export default function CheckQR() {
   }, [facilityId, reloadKey])
 
   const reloadToday = () => setReloadKey((value) => value + 1)
+  // Có đơn mới / bị hủy, quay lại tab → tự tải lại danh sách hôm nay
+  useLiveRefresh(reloadToday, { enabled: !!facilityId })
   const todayData = today?.key.split('|')[0] === facilityId ? today : null
   const todayLoadError = todayError?.key === todayKey ? todayError.message : ''
 

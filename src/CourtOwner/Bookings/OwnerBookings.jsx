@@ -4,6 +4,7 @@ import { confirmDialog } from '../../components/common/confirm.js'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh.js'
 import { endOwnerBookingSession, getFacilityBookings, getOwnerBooking, getOwnerBookingsPage } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
@@ -270,6 +271,8 @@ export default function OwnerBookings() {
   const [openId, setOpenId] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  // Có đơn mới / bị hủy, quay lại tab → tự tải lại danh sách (bảng giữ dữ liệu cũ trong lúc tải)
+  useLiveRefresh(() => setReloadKey((value) => value + 1), { enabled: !!facilityId })
 
   const handleRequestCancel = (b) => {
     setCancelTarget({

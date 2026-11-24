@@ -4,6 +4,8 @@ import { getMyFacilities, getMyProfile, getMyWallet, logout as logoutApi } from 
 import { useAuth } from '../../context/authContext.js'
 import { AppFooter, AppSidebar, AppTopbar, SidebarNav, UserMenu } from '../../components/layout/AppShell.jsx'
 import NotificationBell from '../../Player/Layout/NotificationBell.jsx'
+import FloatingMascot from '../../components/mascot/FloatingMascot.jsx'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh.js'
 import { FACILITY_STORAGE_KEY } from './ownerContext.js'
 
 const toFacilitySummary = (raw) => {
@@ -73,6 +75,8 @@ export default function CourtOwnerLayout() {
 
   const refreshProfile = useCallback(() => getMyProfile().then((data) => { setProfile(data); return data }), [])
   const refreshWallet = useCallback(() => getMyWallet().then((data) => { setWallet(data); return data }), [])
+  // Có giao dịch mới (đặt sân, hoàn tiền…), quay lại tab → cập nhật số dư trên thanh trên cùng
+  useLiveRefresh(() => { refreshWallet().catch(() => {}) })
   // Tải lại danh sách cơ sở (gồm số sân) — gọi sau khi thêm / đổi trạng thái sân.
   const refreshFacilities = useCallback(() => fetchFacilities().then(applyFacilities), [applyFacilities])
 
@@ -186,6 +190,7 @@ export default function CourtOwnerLayout() {
         </main>
         <AppFooter />
       </div>
+      <FloatingMascot />
     </div>
   )
 }
