@@ -114,7 +114,7 @@ test('Chủ sân hủy đơn: API Preview Hủy, check mốc 48h, ownerPenaltyAm
     const prevAdapter = clientMod.default.defaults.adapter
     const calls = []
     clientMod.default.defaults.adapter = async (config) => {
-      calls.push({ method: config.method?.toUpperCase(), url: config.url })
+      calls.push({ method: config.method?.toUpperCase(), url: config.url, data: config.data })
       return {
         status: 200,
         data: {
@@ -139,6 +139,12 @@ test('Chủ sân hủy đơn: API Preview Hủy, check mốc 48h, ownerPenaltyAm
     assert.equal(cancelRes.ownerPenaltyAmount, 50000)
     assert.equal(cancelRes.ownerFairPlayPenalty, -10)
     assert.equal(calls.at(-1).url, '/api/v1/bookings/owner/bk-1/cancel')
+    // BE nhận mã lý do qua cancelReasonId, không phải reasonCode.
+    assert.deepEqual(JSON.parse(calls.at(-1).data), {
+      cancelReasonId: 1,
+      reason: 'Bảo trì mặt sân',
+      lockSlotAfterCancel: true,
+    })
   })
 
   await t.test('OwnerBookings, BookingSchedule và OwnerCancelBookingModal nối popup cảnh báo và render SSR an toàn', async () => {

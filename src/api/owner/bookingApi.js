@@ -18,9 +18,10 @@ export const getFacilityBookings = (facilityId, { date, status } = {}) => get(`/
 
 // CreateWalkInBookingRequest: courtSlotId, numberOfSlots, courtSlotIds, customerAccountId, customerName, customerPhone, note, autoCheckIn.
 export const createWalkInBooking = payload => post('/api/v1/bookings/owner/walk-in', payload)
-// OwnerCancelBookingRequest: reasonCode, reason, lockSlotAfterCancel.
+// OwnerCancelBookingRequest: cancelReasonId (mã lý do 1-8 từ cancellation-reasons), reason, lockSlotAfterCancel.
+// Khác API hủy của người chơi (vẫn dùng reasonCode).
 export const cancelOwnerBooking = (bookingId, { reasonCode, reason, lockSlotAfterCancel = false }) =>
-  post(`/api/v1/bookings/owner/${path(bookingId)}/cancel`, { reasonCode, reason, lockSlotAfterCancel })
+  post(`/api/v1/bookings/owner/${path(bookingId)}/cancel`, { cancelReasonId: reasonCode, reason, lockSlotAfterCancel })
 export const getCancellationReasons = async () => (await getList('/api/v1/bookings/cancellation-reasons')).items
 // Kết thúc ca sớm: check-out mọi người chơi đang check-in của đơn (kể cả vé kèo LFG). Không hoàn tiền.
 export const endOwnerBookingSession = bookingId => post(`/api/v1/bookings/owner/${path(bookingId)}/end`)
