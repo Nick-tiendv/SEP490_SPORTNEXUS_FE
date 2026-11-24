@@ -71,7 +71,8 @@ const TABS = [
   { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
   { key: 'invitations', label: 'Lời mời giải', icon: 'mail' },
   { key: 'organize', label: 'Giải tôi tổ chức', icon: 'campaign' },
-  // Luôn hiện: trọng tài biết mình có trang này; chưa được phân công thì trang báo rỗng
+  // Chỉ người được BTC thêm làm trọng tài / người nhập điểm mới thấy: FE chỉ biết qua my-staff-matches có trận
+  // (BE chưa có API "giải tôi làm nhân sự" nên trước khi giải sinh sơ đồ trọng tài chưa thấy tab)
   { key: 'referee', label: 'Trận tôi làm trọng tài', icon: 'sports' },
 ]
 
@@ -433,7 +434,7 @@ function MyMatches({ onBrowse }) {
 function TournamentList() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'open'
+  const requestedTab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'open'
   const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -488,10 +489,13 @@ function TournamentList() {
     }
   }
 
+  // GET /tournaments/my-staff-matches: có trận = đang là trọng tài / người nhập điểm của giải
+  const staffMatches = useApi(getMyStaffMatches, [], { initialData: [] })
+  const isReferee = (staffMatches.data?.length || 0) > 0
+  // Mở thẳng ?tab=referee mà không phải trọng tài thì về tab mặc định (chờ tải xong mới quyết)
+  const tab = requestedTab === 'referee' && !isReferee && !staffMatches.loading ? 'open' : requestedTab
   const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
   const current = tab === 'open' ? openList : mine
-  // GET /tournaments/my-staff-matches: số trận hiện trên tab trọng tài
-  const staffMatches = useApi(getMyStaffMatches, [], { initialData: [] })
   const counts = { mine: mine.data?.length || 0, referee: staffMatches.data?.length || 0 }
 
   return (
@@ -505,7 +509,7 @@ function TournamentList() {
 
       <div className="snx-row" style={{ marginBottom: 16 }}>
         <div className="snx-tabs" role="tablist" aria-label="Mục giải đấu">
-          {TABS.map((t) => (
+          {TABS.filter((t) => t.key !== 'referee' || isReferee).map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`snx-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
               <span className="material-symbols-outlined">{t.icon}</span>{t.label}
               {counts[t.key] > 0 && <span className="snx-tab-count">{counts[t.key]}</span>}

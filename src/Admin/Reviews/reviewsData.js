@@ -27,3 +27,14 @@ export function toCsv(records) {
   const cell = value => `"${String(value ?? '').replace(/^[=+@\-\t\r]/, "'$&").replace(/"/g, '""')}"`
   return '﻿' + [columns.map(([, title]) => title), ...records.map(r => columns.map(([key]) => (key === 'status' || key === 'targetType' ? label(r[key]) : r[key])))].map(row => row.map(cell).join(',')).join('\r\n')
 }
+
+// ---------- Khiếu nại kết quả trận (targetType MATCH) ----------
+// Quy trình: đấu thủ khiếu nại → trọng tài gửi biên bản → BTC quyết định → người khiếu nại chuyển Admin → Admin đóng.
+// Admin chỉ phân xử khi đã được chuyển lên (isEscalatedToAdmin) và chưa đóng; trước đó là việc của BTC.
+export const isMatchComplaint = report => report?.targetType === 'MATCH'
+export const awaitingAdmin = report => isMatchComplaint(report) && report.escalated && !report.escalationClosed && isActiveReport(report)
+// POST /reports/admin/{id}/resolve với khiếu nại trận: RESOLVE_NO_REFUND (khiếu nại đúng) | REJECT (bác)
+export const matchDecisionOptions = [
+  { value: 'RESOLVE_NO_REFUND', label: 'Khiếu nại đúng', hint: 'Kết luận khiếu nại có cơ sở. Cần đổi kết quả thì dùng "Sửa tỉ số & đóng".' },
+  { value: 'REJECT', label: 'Bác, giữ nguyên kết quả', hint: 'Kết quả trận giữ nguyên.' },
+]

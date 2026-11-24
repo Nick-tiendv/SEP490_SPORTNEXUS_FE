@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  TEST_RULES,
   addMonths,
   canOrganizerCancel,
+  deadlineForApi,
   dateLimits,
   defaultDeadline,
   estimateMatches,
@@ -11,6 +13,7 @@ import {
   formatError,
   formatWarning,
   normalizeFormat,
+  organizerBlockReason,
   suggestFormat,
   validateSchedule,
   validateTournamentDates,
@@ -146,4 +149,19 @@ test('giải đấu: khi nào người khiếu nại được chuyển Admin', (
   assert.equal(canEscalateComplaint({ ...decided, isEscalatedToAdmin: true }, now), false, 'chỉ chuyển 1 lần')
   assert.equal(canEscalateComplaint({ ...decided, targetType: 'BOOKING' }, now), false)
   assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z', status: 'WITHDRAWN' }, now), false)
+})
+
+test('giải đấu: test tự động luôn chạy luật thật (chế độ test chỉ bật trên npm run dev)', () => {
+  assert.equal(TEST_RULES, false)
+  assert.equal(deadlineForApi('2026-12-08'), '2026-12-08', 'luật thật gửi ngày như cũ')
+  assert.equal(deadlineForApi(''), null)
+})
+
+test('giải đấu: người chơi cần Fair Play từ 90 để tổ chức giải', () => {
+  assert.equal(organizerBlockReason(90), '')
+  assert.equal(organizerBlockReason(100), '')
+  assert.match(organizerBlockReason(89.5), /từ 90.*hiện tại 89\.5/)
+  assert.match(organizerBlockReason(70), /hiện tại 70/)
+  assert.equal(organizerBlockReason(null), '', 'chưa biết điểm thì để BE quyết')
+  assert.equal(organizerBlockReason('abc'), '')
 })

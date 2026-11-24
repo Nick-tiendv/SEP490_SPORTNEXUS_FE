@@ -23,9 +23,10 @@ import {
 import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
 import { uploadDocument } from '../../api/player/uploadApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
+import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TournamentManagePanel from './TournamentManagePanel.jsx'
-import { FORMAT_LABEL, SESSIONS, canOrganizerCancel, dateLimits, defaultDeadline, estimateMatches, formatError, formatWarning, normalizeFormat, suggestFormat, validateSchedule, validateTournamentDates } from './tournamentRules.js'
+import { FORMAT_LABEL, SESSIONS, TEST_RULES, canOrganizerCancel, organizerBlockReason, dateLimits, deadlineForApi, defaultDeadline, estimateMatches, formatError, formatWarning, normalizeFormat, suggestFormat, validateSchedule, validateTournamentDates } from './tournamentRules.js'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
 const CATEGORY_TYPES = [
@@ -121,6 +122,9 @@ export default function CreateAutomatedTournament() {
 // không giữ sân (court-blocks chỉ dành cho chủ sân / Admin).
 export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityId, facility: ownerFacility, refreshWallet: refreshOwnerWallet, layoutLoading = false, embedded = false }) {
   const isPlayer = mode === 'player'
+  // Người chơi cần Fair Play ≥ 90 mới được tạo giải (GET /api/auth/me → fairPlayScore)
+  const currentUser = useCurrentUser()
+  const organizerBlock = isPlayer ? organizerBlockReason(currentUser.fairPlayScore) : ''
   const refreshWallet = refreshOwnerWallet || (async () => {})
   const facilityId = isPlayer ? '' : ownerFacilityId
   const facility = isPlayer ? null : ownerFacility
@@ -407,7 +411,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       name: form.name.trim(),
       startDate: form.startDate || null,
       endDate: form.endDate || null,
-      registrationDeadline: form.registrationDeadline || null,
+      registrationDeadline: deadlineForApi(form.registrationDeadline),
       rules: form.rules?.trim() || null,
       tier: form.tier || 'AMATEUR',
       purpose: form.purpose || 'EXCHANGE',
@@ -491,14 +495,21 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         )}
         <button
           onClick={openCreateModal}
-          disabled={!isPlayer && (!facilityId || facility?.approvalStatus !== 'APPROVED')}
-          title={facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
+          disabled={isPlayer ? !!organizerBlock : !facilityId || facility?.approvalStatus !== 'APPROVED'}
+          title={isPlayer ? organizerBlock || undefined : facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
           className="snx-btn snx-btn--primary"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>add_circle</span>
           Tạo giải đấu mới
         </button>
       </div>
+      {/* Người chơi tổ chức giải: chặn trước khi mở form (BE cũng tự chặn) */}
+      {isPlayer && organizerBlock && (
+        <div className="snx-alert snx-alert--info" role="status" style={{ marginBottom: 16 }}>
+          <span className="material-symbols-outlined">shield</span>
+          <span>{organizerBlock} Điểm tăng khi bạn thi đấu đúng hẹn và được người chơi khác đánh giá tốt. Các giải bạn đã tạo vẫn quản lý bình thường.</span>
+        </div>
+      )}
 
       {!isPlayer && !layoutLoading && !facilityId && <div style={{ marginBottom: 24 }}><NoFacilityState what="tổ chức giải đấu" /></div>}
       {facility && facility.approvalStatus !== 'APPROVED' && <div className="snx-alert snx-alert--info" style={{ marginBottom: 16 }}>Cơ sở {facility.name} chưa được Admin duyệt nên chưa tạo được giải.</div>}
@@ -965,6 +976,11 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       {showCreateModal && (
         <div style={{ ...modalBackdrop, alignItems: 'flex-start', overflowY: 'auto' }}>
           <form onSubmit={handleCreateTournament} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '760px', width: '100%', padding: '26px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', margin: '20px 0' }}>
+            {TEST_RULES && (
+              <div role="status" style={{ marginBottom: '14px', padding: '8px 12px', borderRadius: '10px', background: '#FEF9C3', border: '1px solid #FDE047', color: '#854D0E', fontSize: '12.5px', fontWeight: 700 }}>
+                Chế độ test: đã nới luật ngày và khóa hủy giải (chỉ trên máy dev). Đặt tên giải có tiền tố [TEST]. Tắt trước khi demo.
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>Tạo giải đấu mới</h3>
@@ -1023,7 +1039,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               ))}
             </div>
             <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600, marginBottom: '12px' }}>
-              Giải kéo dài tối đa 1 tháng. Hạn đăng ký phải trước ngày bắt đầu ít nhất 48 giờ.
+              {TEST_RULES ? 'Chế độ test: giải bắt đầu sớm nhất ngày mai, hạn đăng ký tới 23:59 ngày đã chọn.' : 'Giải kéo dài tối đa 1 tháng. Hạn đăng ký phải trước ngày bắt đầu ít nhất 48 giờ.'}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px', marginBottom: '6px' }}>
               <div>
