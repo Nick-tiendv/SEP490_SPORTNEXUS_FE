@@ -13,6 +13,8 @@ import {
   updateNotificationSettings,
 } from '../../api/player/notificationApi.js'
 import { registerDeviceToken, unregisterDeviceToken } from '../../api/player/notificationApi.js'
+import { NOTIFICATIONS_SYNCED_EVENT, OPEN_NOTIFICATIONS_EVENT } from '../../components/mascot/mascotEvents.js'
+import { LIVE_REFRESH_EVENT } from '../../hooks/useLiveRefresh.js'
 
 // Icon / màu theo loại thông báo
 const TYPE_STYLES = {
@@ -113,8 +115,10 @@ export default function NotificationBell({ linkable = true }) {
   const [expandedId, setExpandedId] = useState(null)
   const containerRef = useRef(null)
 
-  // Thông báo lấy từ GET /api/v1/notifications, tải lại mỗi 60 giây và mỗi lần mở chuông
+  // Thông báo lấy từ GET /api/v1/notifications, tải lại mỗi 60 giây, khi số chưa đọc đổi (kiểm tra 15 giây/lần)
+  // và mỗi lần mở chuông
   const [notifications, setNotifications] = useState([])
+  const knownIdsRef = useRef(null) // id đã tải (null: chưa tải lần nào) để nhận ra thông báo mới
   const [loadError, setLoadError] = useState('')
 
   // State Cài đặt thông báo & Push token
@@ -159,17 +163,48 @@ export default function NotificationBell({ linkable = true }) {
           setNotifications((prev) => [...prev.filter((n) => n.local), ...mapped])
           setLoadError('')
           fetchUnreadCount(mapped.filter((n) => !n.read).length)
+          // Mascot thông báo nổi dùng lại kết quả này để phát hiện thông báo mới
+          window.dispatchEvent(new CustomEvent(NOTIFICATIONS_SYNCED_EVENT, { detail: mapped }))
+          // Có thông báo mới (đặt sân, hủy, thanh toán…) → các màn đang mở tự tải lại (useLiveRefresh)
+          const known = knownIdsRef.current
+          if (known && mapped.some((n) => !known.has(n.id))) window.dispatchEvent(new CustomEvent(LIVE_REFRESH_EVENT))
+          knownIdsRef.current = new Set([...(known || []), ...mapped.map((n) => n.id)])
         })
         .catch((error) => !cancelled && setLoadError(error?.message || 'Không tải được thông báo.'))
         .finally(() => !cancelled && setLoading(false))
     }
     load()
     const timer = setInterval(load, 60000)
+    // Chưa có realtime: kiểm tra số chưa đọc (API nhẹ) mỗi 15 giây, đổi thì tải lại danh sách. Tab ẩn thì bỏ qua.
+    let lastCount = null
+    const check = () => {
+      if (document.visibilityState !== 'visible') return
+      getUnreadCount()
+        .then((count) => {
+          if (cancelled) return
+          if (lastCount !== null && count !== lastCount) load()
+          lastCount = count
+          setUnreadCount(count)
+        })
+        .catch(() => { /* lỗi mạng tạm thời: lần kiểm tra sau thử lại */ })
+    }
+    check()
+    const checkTimer = setInterval(check, 15000)
+    document.addEventListener('visibilitychange', check)
     return () => {
       cancelled = true
       clearInterval(timer)
+      clearInterval(checkTimer)
+      document.removeEventListener('visibilitychange', check)
     }
   }, [isOpen, fetchUnreadCount])
+
+  // Bấm bong bóng của mascot → mở danh sách thông báo
+  useEffect(() => {
+    const open = () => setIsOpen(true)
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open)
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open)
+  }, [])
 
   // Đóng khi click ngoài dropdown
   useEffect(() => {

@@ -19,11 +19,14 @@ import {
   getTournamentStandings,
   getMyTournamentInvitations,
   respondTournamentInvitation,
+  getMyStaffMatches,
 } from '../../api/player/tournamentApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
+import RefereeMatches from './RefereeMatches.jsx'
 import ReportModal from '../../components/common/ReportModal.jsx'
 import { TournamentWorkspace } from '../../CourtOwner/Tournament/CreateTournament.jsx'
+import { FORMAT_LABEL, normalizeFormat } from '../../CourtOwner/Tournament/tournamentRules.js'
 
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
@@ -68,6 +71,9 @@ const TABS = [
   { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
   { key: 'invitations', label: 'Lời mời giải', icon: 'mail' },
   { key: 'organize', label: 'Giải tôi tổ chức', icon: 'campaign' },
+  // Chỉ người được BTC thêm làm trọng tài / người nhập điểm mới thấy: FE chỉ biết qua my-staff-matches có trận
+  // (BE chưa có API "giải tôi làm nhân sự" nên trước khi giải sinh sơ đồ trọng tài chưa thấy tab)
+  { key: 'referee', label: 'Trận tôi làm trọng tài', icon: 'sports' },
 ]
 
 function TournamentCard({ tournament, actions, onOpen }) {
@@ -204,7 +210,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         <div className="snx-modal-head">
           <div>
             <h2 id="tournament-detail-title" className="snx-card-title">{t?.name || 'Đang tải…'}</h2>
-            <p className="snx-card-subtitle">{[t?.sport, t?.facility, t?.format, TIER_LABEL[t?.tier], t?.organizer && `BTC: ${t.organizer}`].filter(Boolean).join(' · ')}</p>
+            <p className="snx-card-subtitle">{[t?.sport, t?.facility, FORMAT_LABEL[normalizeFormat(t?.format)] || t?.format, TIER_LABEL[t?.tier], t?.organizer && `BTC: ${t.organizer}`].filter(Boolean).join(' · ')}</p>
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
@@ -428,7 +434,7 @@ function MyMatches({ onBrowse }) {
 function TournamentList() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const tab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'open'
+  const requestedTab = TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'open'
   const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -454,12 +460,11 @@ function TournamentList() {
     }
   }
 
-  // Đăng ký theo đội: chỉ đội trưởng được hủy (BE vẫn tự chặn). my-registrations chỉ trả tên đội nên dò theo tên;
-  // không xác định được (không thấy hoặc trùng tên) thì để BE quyết.
+  // Đăng ký theo đội: chỉ đội trưởng được hủy (BE vẫn tự chặn). Không tìm thấy đội trong danh sách thì để BE quyết.
   const canCancel = (registration) => {
-    if (!registration.teamName || !me?.id) return true
-    const sameName = (teams.data || []).filter((team) => team.name === registration.teamName && (!registration.sportId || !team.sportCategoryId || team.sportCategoryId === registration.sportId))
-    return sameName.length !== 1 || sameName[0].captainId === String(me.id)
+    if (!registration.teamId || !me?.id) return true
+    const team = (teams.data || []).find((item) => String(item.id) === registration.teamId)
+    return !team || team.captainId === String(me.id)
   }
 
   const cancelRegister = async (tournament) => {
@@ -484,9 +489,14 @@ function TournamentList() {
     }
   }
 
+  // GET /tournaments/my-staff-matches: có trận = đang là trọng tài / người nhập điểm của giải
+  const staffMatches = useApi(getMyStaffMatches, [], { initialData: [] })
+  const isReferee = (staffMatches.data?.length || 0) > 0
+  // Mở thẳng ?tab=referee mà không phải trọng tài thì về tab mặc định (chờ tải xong mới quyết)
+  const tab = requestedTab === 'referee' && !isReferee && !staffMatches.loading ? 'open' : requestedTab
   const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
   const current = tab === 'open' ? openList : mine
-  const counts = { mine: mine.data?.length || 0 }
+  const counts = { mine: mine.data?.length || 0, referee: staffMatches.data?.length || 0 }
 
   return (
     <div className="snx-page">
@@ -499,7 +509,7 @@ function TournamentList() {
 
       <div className="snx-row" style={{ marginBottom: 16 }}>
         <div className="snx-tabs" role="tablist" aria-label="Mục giải đấu">
-          {TABS.map((t) => (
+          {TABS.filter((t) => t.key !== 'referee' || isReferee).map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`snx-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
               <span className="material-symbols-outlined">{t.icon}</span>{t.label}
               {counts[t.key] > 0 && <span className="snx-tab-count">{counts[t.key]}</span>}
@@ -519,6 +529,7 @@ function TournamentList() {
       {tab === 'invitations' && <InvitationsPanel onChanged={() => mine.refresh?.()} />}
       {tab === 'organize' && <TournamentWorkspace mode="player" embedded />}
       {tab === 'matches' && <MyMatches onBrowse={() => setTab('open')} />}
+      {tab === 'referee' && <RefereeMatches matches={staffMatches} />}
 
       {(tab === 'open' || tab === 'mine') && (
         <>

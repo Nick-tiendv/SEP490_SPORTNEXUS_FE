@@ -7,8 +7,9 @@ import { DemoDialog } from '../Users/UserDialogs.jsx'
 import '../Users/users.css'
 import './reviews.css'
 import ReviewsTab from './ReviewsTab.jsx'
-import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport } from '../../api/admin/reportApi.js'
-import { decisionOptions, emptyFilters, formatPendingFairPlayDelta, hasPendingFairPlayPenalty, isActiveReport, label, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
+import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport, resolveMatchComplaint } from '../../api/admin/reportApi.js'
+import { awaitingAdmin, decisionOptions, emptyFilters, formatPendingFairPlayDelta, hasPendingFairPlayPenalty, isActiveReport, isMatchComplaint, label, matchDecisionOptions, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
+import MatchScoreModal from '../../components/common/MatchScoreModal.jsx'
 
 const PAGE_SIZE = 10
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
@@ -68,6 +69,43 @@ function ResolveDialog({ report, onClose, onDone }) {
     {error && <p className="rr-error" role="alert">{error}</p>}
     <footer><button type="button" className="rr-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`rr-button ${values.decision === 'REJECT' ? 'danger' : 'primary'}`} disabled={submitting}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
   </form></DemoDialog>
+}
+
+// Khiếu nại kết quả trận đã chuyển Admin: kết luận cuối (POST /reports/admin/{id}/resolve), không hoàn tiền / trừ điểm.
+// Elo của trận được tính ở lần chạy job sau khi đóng.
+function MatchResolveDialog({ report, decision, onClose, onDone }) {
+  const option = matchDecisionOptions.find(item => item.value === decision)
+  const [adminNote, setAdminNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async event => {
+    event.preventDefault()
+    if (!adminNote.trim()) return setError('Vui lòng ghi chú lý do phân xử (gửi người khiếu nại và Ban tổ chức).')
+    setSubmitting(true); setError('')
+    try {
+      await resolveAdminReport(report.uuid, { decision, adminNote: adminNote.trim(), refundPercentage: null, lockSlotForMaintenance: false, deductTargetUserFairPlayPoints: null, deleteCommunityPost: false })
+      onDone(`Đã phân xử khiếu nại ${report.id}: ${option.label.toLowerCase()}.`)
+    } catch (err) {
+      setError(err.message); setSubmitting(false)
+    }
+  }
+  return <DemoDialog title={`${option.label} (${report.id})`} onClose={submitting ? () => {} : onClose}><form className="rr-action-form" onSubmit={submit}>
+    <p>{report.reporter} khiếu nại kết quả trận <strong>{report.entity}</strong> · {report.reason}</p>
+    <p className="rr-demo-note">{option.hint} Đây là phán quyết cuối, Elo của trận được tính sau khi đóng.</p>
+    <label>Ghi chú phân xử (bắt buộc)<textarea rows={3} maxLength={1000} value={adminNote} onChange={event => setAdminNote(event.target.value)} placeholder="Ví dụ: Đối chiếu biên bản trọng tài, kết quả BTC nhập là đúng." required /></label>
+    {error && <p className="rr-error" role="alert">{error}</p>}
+    <footer><button type="button" className="rr-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`rr-button ${decision === 'REJECT' ? 'danger' : 'primary'}`} disabled={submitting}>{submitting ? 'Đang xử lý…' : 'Xác nhận'}</button></footer>
+  </form></DemoDialog>
+}
+
+// Diễn biến khiếu nại trận cho Admin đối chiếu
+function MatchComplaintTimeline({ report }) {
+  const steps = [
+    ['BIÊN BẢN TRỌNG TÀI', report.refereeNote, report.refereeAt, 'Trọng tài chưa gửi biên bản.'],
+    ['QUYẾT ĐỊNH CỦA BAN TỔ CHỨC', report.organizerNote, report.organizerAt, 'Ban tổ chức chưa xử lý.'],
+    ['LÝ DO CHUYỂN ADMIN', report.escalatedReason, report.escalatedAt, 'Người khiếu nại chưa chuyển Admin.'],
+  ]
+  return <>{steps.map(([title, text, time, empty]) => <section key={title} className="rr-linked"><small>{title}{text && time ? ` · ${time}` : ''}</small><p>{text || empty}</p></section>)}</>
 }
 
 function WarningResolveDialog({ report, decision, onClose, onDone }) {
@@ -147,10 +185,12 @@ function WarningResolveDialog({ report, decision, onClose, onDone }) {
   )
 }
 
-function Inspector({ report, loading, error, onResolve, onQuickWarningResolve }) {
+function Inspector({ report, loading, error, onResolve, onQuickWarningResolve, onMatchDecision, onMatchScore }) {
   if (!report) return <aside className="rr-inspector rr-empty"><MessageSquare size={30} /><h2>Chưa chọn báo cáo</h2><p>Chọn một dòng để xem thông tin chi tiết.</p></aside>
   const isWarning = hasPendingFairPlayPenalty(report)
+  const isMatch = isMatchComplaint(report)
   const canAct = isActiveReport(report) && !loading
+  const canJudge = awaitingAdmin(report) && !loading
   return <aside className="rr-inspector" aria-busy={loading}><header><div><h2><TriangleAlert size={17} /> Báo cáo chi tiết</h2><small title={report.uuid}>{report.id}</small></div><Badge value={report.status} /></header>
     {loading && <p className="rr-demo-note">Đang tải chi tiết…</p>}
     {error && <p className="rr-error" role="alert">Không tải được chi tiết: {error}</p>}
@@ -166,7 +206,9 @@ function Inspector({ report, loading, error, onResolve, onQuickWarningResolve })
     <section className="rr-report-card"><dl><dt>Người báo cáo</dt><dd>{report.reporter}{report.reporterUsername && ` (@${report.reporterUsername})`}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Loại</dt><dd>{label(report.targetType)}</dd>{report.facility && <><dt>Cơ sở</dt><dd>{report.facility}</dd></>}{(report.bookingCode || report.bookingId) && <><dt>Đơn đặt sân</dt><dd>#{report.bookingCode || String(report.bookingId).slice(0, 8).toUpperCase()}</dd></>}<dt>Lý do</dt><dd>{report.reason}</dd>{report.requestedRefund != null && <><dt>Yêu cầu hoàn</dt><dd>{report.requestedRefund}%</dd></>}{isWarning && <><dt>Điểm đang treo</dt><dd style={{ color: '#dc2626', fontWeight: 700 }}>{formatPendingFairPlayDelta(report.pendingFairPlayDelta)} Fair Play</dd></>}<dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl>{report.description && <p>{report.description}</p>}
       {report.evidence.length > 0 && <div className="rr-note"><small>Bằng chứng ({report.evidence.length})</small><p>{report.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>Ảnh {index + 1}</a>)}</p></div>}
     </section>
-    <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>
+    {isMatch
+      ? <MatchComplaintTimeline report={report} />
+      : <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>}
     {(report.notes || report.decision) && <div className="rr-note"><small>Quyết định của quản trị viên{report.resolvedAt && ` · ${report.resolvedAt}`}</small><p>{report.decision && <strong>{decisionOptions.find(option => option.value === report.decision)?.label || report.decision}. </strong>}{report.notes}</p></div>}
     {report.history.length > 0 && <section className="rr-history"><h3>Lịch sử xử lý</h3>{report.history.map((entry, i) => <p key={`${entry.time}-${i}`}><span>{entry.time}</span>{entry.text}</p>)}</section>}
     <div className="rr-actions">
@@ -190,7 +232,14 @@ function Inspector({ report, loading, error, onResolve, onQuickWarningResolve })
           </button>
         </div>
       )}
-      <button className="rr-button primary" disabled={!canAct} onClick={onResolve}><CheckCircle2 size={14} />Xử lý báo cáo</button>
+      {isMatch ? <>
+        {!canJudge && isActiveReport(report) && <p className="rr-demo-note">Ban tổ chức đang xử lý. Admin chỉ phân xử khi người khiếu nại chuyển lên.</p>}
+        <div className="rr-actions-pair">
+          <button type="button" className="rr-button primary" disabled={!canJudge} onClick={() => onMatchDecision(report, 'RESOLVE_NO_REFUND')}>Khiếu nại đúng</button>
+          <button type="button" className="rr-button danger" disabled={!canJudge} onClick={() => onMatchDecision(report, 'REJECT')}>Bác, giữ kết quả</button>
+        </div>
+        <button type="button" className="rr-button" disabled={!canJudge || !report.targetObjectId} onClick={() => onMatchScore(report)}><CheckCircle2 size={14} />Sửa tỉ số & đóng</button>
+      </> : <button className="rr-button primary" disabled={!canAct} onClick={onResolve}><CheckCircle2 size={14} />Xử lý báo cáo</button>}
     </div>
   </aside>
 }
@@ -259,6 +308,8 @@ export default function ReviewsReportsPage() {
   const change = (key, value) => { setFilters(f => ({ ...f, [key]: value })); if (key !== 'search') setPage(1) }
   const resetFilters = () => { setFilters({ ...emptyFilters }); setSearch(''); setWarningOnly(false); setPage(1) }
   const showPending = () => { setTab('reports'); setFilters({ ...emptyFilters, status: 'PENDING' }); setSearch(''); setWarningOnly(false); setPage(1) }
+  // Khiếu nại kết quả trận (BE chưa lọc được "đã chuyển Admin" nên lọc theo loại, dòng chờ phân xử có nhãn riêng)
+  const showMatchComplaints = () => { setTab('reports'); setFilters({ ...emptyFilters, targetType: 'MATCH' }); setSearch(''); setWarningOnly(false); setPage(1) }
   const warningTickets = list.items.filter(hasPendingFairPlayPenalty)
   const visibleItems = warningOnly ? warningTickets : list.items
   const done = message => { setDialog(null); toast.success(message); setReload(value => value + 1) }
@@ -270,7 +321,7 @@ export default function ReviewsReportsPage() {
   }
   const selectFilter = (key, title, options) => <label>{title}<select value={filters[key]} onChange={e => change(key, e.target.value)}><option value="">Tất cả</option>{Object.entries(options).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
 
-  return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
+  return <div className="rr-page"><div className="rr-page-heading admin-page-header"><div><div className="rr-title"><h1>Đánh giá & Báo cáo</h1><span className="rr-badge rr-verified">{statsLoading ? '…' : number(stats.total)} Báo cáo</span></div><p>Theo dõi phản hồi của người chơi và hoạt động bị báo cáo trên SportNexus.</p></div><div className="rr-header-actions"><button className="rr-button" onClick={() => setReload(value => value + 1)}><RefreshCw size={14} />Làm mới</button><button className="rr-button" onClick={showMatchComplaints} aria-pressed={tab === 'reports' && filters.targetType === 'MATCH'}><TriangleAlert size={14} />Khiếu nại trận</button><button className="rr-button" onClick={exportCsv} disabled={tab !== 'reports' || !list.items.length}><Download size={14} />Xuất CSV</button><button className="rr-button primary" onClick={() => setDialog({ type: 'rules' })}><ShieldCheck size={14} />Hướng dẫn kiểm duyệt</button></div></div>
     <div className="rr-tabs" role="tablist" aria-label="Đánh giá và báo cáo">{[['reports', 'Báo cáo vi phạm', statsLoading ? '…' : `${number(stats.pending)} chờ xử lý`], ['reviews', 'Đánh giá & Phản hồi', 'Cơ sở · Fair Play']].map(([key, text, count]) => <button key={key} id={`rr-tab-${key}`} role="tab" aria-selected={tab === key} aria-controls="rr-content" className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>{text}<span>{count}</span></button>)}</div>
     {tab === 'reports' && <div className="rr-stats">{[
       ['Tổng báo cáo', number(stats.total), TriangleAlert, 'Toàn nền tảng'],
@@ -304,15 +355,17 @@ export default function ReviewsReportsPage() {
           const isWarning = hasPendingFairPlayPenalty(item)
           const rowClasses = [selected === item.uuid ? 'selected' : '', isWarning ? 'rr-row-warning' : ''].filter(Boolean).join(' ')
           const canQuickResolve = isWarning && isActiveReport(item)
-          return <tr key={item.uuid} className={rowClasses} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.targetType} /></td><td title={item.reason}><div className="rr-excerpt">{item.reason}</div>{isWarning && <span className="rr-warning-pill">Điểm đang treo: {formatPendingFairPlayDelta(item.pendingFairPlayDelta)}</span>}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td><td onClick={e => e.stopPropagation()}>{isWarning ? <div className="rr-warning-actions"><button type="button" className="rr-button primary" disabled={!canQuickResolve} onClick={() => setDialog({ type: 'warningResolve', report: item, decision: 'RESOLVE_NO_REFUND' })}>Duyệt - Giữ nguyên phạt</button><button type="button" className="rr-button danger" disabled={!canQuickResolve} onClick={() => setDialog({ type: 'warningResolve', report: item, decision: 'REJECT' })}>Bác bỏ - Xóa phạt</button></div> : '—'}</td></tr>
+          return <tr key={item.uuid} className={rowClasses} onClick={() => setSelected(item.uuid)}><td><button className="rr-row-button" onClick={() => setSelected(item.uuid)}>{item.id}</button></td><td>{item.reporter}</td><td>{item.entity}</td><td><Badge value={item.targetType} /></td><td title={item.reason}><div className="rr-excerpt">{item.reason}</div>{isWarning && <span className="rr-warning-pill">Điểm đang treo: {formatPendingFairPlayDelta(item.pendingFairPlayDelta)}</span>}{awaitingAdmin(item) && <span className="rr-warning-pill">Chờ Admin phân xử</span>}</td><td>{item.hasOwnerResponded ? 'Đã phản hồi' : '—'}</td><td><Badge value={item.status} /></td><td>{date(item.date)}</td><td onClick={e => e.stopPropagation()}>{isWarning ? <div className="rr-warning-actions"><button type="button" className="rr-button primary" disabled={!canQuickResolve} onClick={() => setDialog({ type: 'warningResolve', report: item, decision: 'RESOLVE_NO_REFUND' })}>Duyệt - Giữ nguyên phạt</button><button type="button" className="rr-button danger" disabled={!canQuickResolve} onClick={() => setDialog({ type: 'warningResolve', report: item, decision: 'REJECT' })}>Bác bỏ - Xóa phạt</button></div> : '—'}</td></tr>
         })}</tbody></table></div>
         {loading && !list.items.length && <div className="rr-empty"><Search size={28} /><h3>Đang tải báo cáo…</h3></div>}
         {!loading && list.error && <div className="rr-empty" role="alert"><TriangleAlert size={28} /><h3>Không tải được báo cáo</h3><p>{list.error}</p></div>}
         {!loading && !list.error && !visibleItems.length && <div className="rr-empty"><Search size={28} /><h3>Không có báo cáo</h3><p>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</p></div>}
         <footer className="rr-pagination"><span>Hiển thị {visibleItems.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + visibleItems.length} trên {number(list.total)} kết quả</span><div><button className="rr-button" aria-label="Trang trước" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page} / {pages}</span><button className="rr-button" aria-label="Trang sau" disabled={loading || page >= pages} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></footer>
-      </section><Inspector report={report} loading={Boolean(selected) && detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onResolve={() => setDialog({ type: 'resolve', report })} onQuickWarningResolve={(target, decision) => setDialog({ type: 'warningResolve', report: target, decision })} /></div>}
+      </section><Inspector report={report} loading={Boolean(selected) && detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onResolve={() => setDialog({ type: 'resolve', report })} onQuickWarningResolve={(target, decision) => setDialog({ type: 'warningResolve', report: target, decision })} onMatchDecision={(target, decision) => setDialog({ type: 'matchResolve', report: target, decision })} onMatchScore={target => setDialog({ type: 'matchScore', report: target })} /></div>}
     {dialog?.type === 'rules' && <GuidelinesDialog onClose={() => setDialog(null)} />}
     {dialog?.type === 'resolve' && <ResolveDialog report={dialog.report} onClose={() => setDialog(null)} onDone={done} />}
     {dialog?.type === 'warningResolve' && <WarningResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} />}
+    {dialog?.type === 'matchResolve' && <MatchResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} />}
+    {dialog?.type === 'matchScore' && <MatchScoreModal matchId={dialog.report.targetObjectId} title={`Sửa tỉ số & đóng khiếu nại ${dialog.report.id}`} submitLabel="Sửa tỉ số & đóng" withNote onClose={() => setDialog(null)} onSubmit={async (score, note) => { await resolveMatchComplaint(dialog.report.uuid, { action: 'UPDATE_SCORE', score, note }); done(`Đã sửa tỉ số và đóng khiếu nại ${dialog.report.id}. Elo được tính lại sau.`) }} />}
   </div>
 }

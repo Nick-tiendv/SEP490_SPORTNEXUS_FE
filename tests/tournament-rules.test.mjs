@@ -1,13 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  TEST_RULES,
   addMonths,
   canOrganizerCancel,
+  deadlineForApi,
   dateLimits,
   defaultDeadline,
   estimateMatches,
+  buildScorePayload,
+  canEscalateComplaint,
+  formatError,
   formatWarning,
+  normalizeFormat,
+  organizerBlockReason,
   suggestFormat,
+  validateSchedule,
   validateTournamentDates,
 } from '../src/CourtOwner/Tournament/tournamentRules.js'
 
@@ -80,4 +88,80 @@ test('giải đấu: cảnh báo thể thức lệch số người', () => {
   assert.equal(formatWarning('ROUND_ROBIN', 6), '')
   assert.match(formatWarning('GROUP_KNOCKOUT', 6), /loại trực tiếp/)
   assert.equal(formatWarning('GROUP_KNOCKOUT', 0), '')
+})
+
+test('giải đấu: đọc thể thức BE trả về', () => {
+  assert.equal(normalizeFormat('Knockout'), 'KNOCKOUT')
+  assert.equal(normalizeFormat('RoundRobin'), 'ROUND_ROBIN')
+  assert.equal(normalizeFormat('GroupKnockout'), 'GROUP_KNOCKOUT')
+  assert.equal(normalizeFormat('ROUND_ROBIN'), 'ROUND_ROBIN')
+  assert.equal(normalizeFormat(null), '')
+  assert.equal(normalizeFormat('Swiss'), '')
+})
+
+test('giải đấu: giới hạn số đấu thủ theo thể thức', () => {
+  assert.equal(formatError('ROUND_ROBIN', 8), '')
+  assert.match(formatError('ROUND_ROBIN', 9), /tối đa 8/)
+  assert.match(formatError('ROUND_ROBIN', 2), /ít nhất 3/)
+  assert.match(formatError('GROUP_KNOCKOUT', 5), /ít nhất 6/)
+  assert.equal(formatError('GROUP_KNOCKOUT', 6), '')
+  assert.equal(formatError('KNOCKOUT', 64), '')
+  assert.match(formatError('KNOCKOUT', 1), /ít nhất 2/)
+})
+
+test('giải đấu: kiểm tra lịch sân yêu cầu', () => {
+  const range = { startDate: '2026-12-10', endDate: '2026-12-12' }
+  assert.equal(validateSchedule([], range), '')
+  assert.equal(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 2 }, { date: '2026-12-10', session: 'EVENING', courtCount: 1 }], range), '')
+  assert.match(validateSchedule([{ date: '2026-12-13', session: 'MORNING', courtCount: 1 }], range), /ngoài thời gian/)
+  assert.match(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 0 }], range), /từ 1/)
+  assert.match(validateSchedule([{ date: '2026-12-11', session: 'FULL_DAY', courtCount: 1 }, { date: '2026-12-11', session: 'EVENING', courtCount: 1 }], range), /trùng buổi/)
+  assert.match(validateSchedule([{ date: '', session: 'MORNING', courtCount: 1 }], range), /Chọn ngày/)
+  assert.match(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 1 }], { startDate: '' }), /ngày bắt đầu/)
+  assert.equal(validateSchedule([{ date: '2026-12-10', session: 'FULL_DAY', courtCount: 3 }], { startDate: '2026-12-10', endDate: '' }), '', 'giải 1 ngày')
+})
+
+test('giải đấu: dựng body nhập tỉ số', () => {
+  const sets = [{ a: '21', b: '18' }, { a: '', b: '' }, { a: '19', b: '21' }]
+  const { payload } = buildScorePayload({ sets })
+  assert.deepEqual(payload.sets, [{ setNumber: 1, scoreP1: 21, scoreP2: 18 }, { setNumber: 2, scoreP1: 19, scoreP2: 21 }])
+  assert.equal(payload.resultType, 'NORMAL')
+  assert.equal(payload.tiebreakP1, null)
+  assert.match(buildScorePayload({ sets: [{ a: '', b: '' }] }).error, /ít nhất 1 hiệp/)
+  assert.match(buildScorePayload({ resultType: 'WALKOVER' }).error, /xử thắng/)
+  assert.deepEqual(buildScorePayload({ resultType: 'WALKOVER', winnerId: 'p1', sets }).payload.sets, [], 'xử thắng không gửi tỉ số')
+  assert.match(buildScorePayload({ resultType: 'RETIRED', sets }).error, /bỏ cuộc/)
+  assert.equal(buildScorePayload({ resultType: 'RETIRED', sets, winnerId: 'p2' }).payload.winnerId, 'p2')
+  const football = buildScorePayload({ sets: [{ a: '1', b: '1' }], tiebreak: { a: '4', b: '3' } }).payload
+  assert.equal(football.tiebreakP1, 4)
+  assert.match(buildScorePayload({ sets: [{ a: '1', b: '1' }], tiebreak: { a: '3', b: '3' } }).error, /luân lưu/)
+  assert.match(buildScorePayload({ sets: [{ a: '-1', b: '2' }] }).error, /âm/)
+})
+
+test('giải đấu: khi nào người khiếu nại được chuyển Admin', () => {
+  const now = new Date('2026-12-10T12:00:00Z')
+  const base = { targetType: 'MATCH', status: 'PENDING', createdAt: '2026-12-10T10:00:00Z' }
+  assert.equal(canEscalateComplaint(base, now), false, 'BTC còn trong hạn xử lý')
+  assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z' }, now), true, 'BTC quá 24 giờ chưa xử lý')
+  const decided = { ...base, status: 'REJECTED', organizerDecidedAt: '2026-12-09T13:00:00Z' }
+  assert.equal(canEscalateComplaint(decided, now), true, 'trong 24 giờ sau quyết định')
+  assert.equal(canEscalateComplaint({ ...decided, organizerDecidedAt: '2026-12-09T11:00:00Z' }, now), false, 'quá 24 giờ sau quyết định')
+  assert.equal(canEscalateComplaint({ ...decided, isEscalatedToAdmin: true }, now), false, 'chỉ chuyển 1 lần')
+  assert.equal(canEscalateComplaint({ ...decided, targetType: 'BOOKING' }, now), false)
+  assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z', status: 'WITHDRAWN' }, now), false)
+})
+
+test('giải đấu: test tự động luôn chạy luật thật (không đặt biến chế độ test)', () => {
+  assert.equal(TEST_RULES, false)
+  assert.equal(deadlineForApi('2026-12-08'), '2026-12-08', 'luật thật gửi ngày như cũ')
+  assert.equal(deadlineForApi(''), null)
+})
+
+test('giải đấu: người chơi cần Fair Play từ 90 để tổ chức giải', () => {
+  assert.equal(organizerBlockReason(90), '')
+  assert.equal(organizerBlockReason(100), '')
+  assert.match(organizerBlockReason(89.5), /từ 90.*hiện tại 89\.5/)
+  assert.match(organizerBlockReason(70), /hiện tại 70/)
+  assert.equal(organizerBlockReason(null), '', 'chưa biết điểm thì để BE quyết')
+  assert.equal(organizerBlockReason('abc'), '')
 })

@@ -56,3 +56,14 @@ export async function uploadImage(file, purpose = 'general') {
     throw err
   }
 }
+
+// POST /api/v1/uploads/documents (multipart, field "file"): tài liệu giải (điều lệ, nhân sự). FE chỉ cho chọn PDF.
+// Không có dự phòng: tải lỗi thì báo lỗi để BTC thử lại.
+export async function uploadDocument(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const data = await post('/api/v1/uploads/documents', form, { headers: { 'Content-Type': undefined } })
+  const url = typeof data === 'string' ? data : data?.url || data?.fileUrl || ''
+  if (!url) throw new Error('Không nhận được đường dẫn file từ máy chủ.')
+  return url
+}

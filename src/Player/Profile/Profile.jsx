@@ -25,6 +25,7 @@ import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
+import { canEscalateComplaint } from '../../CourtOwner/Tournament/tournamentRules.js'
 import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from '../../Auth/firebasePhone.js'
 import {
   getMyFacilityReviews,
@@ -37,6 +38,7 @@ import {
   createReport,
   getMyReports,
   withdrawReport,
+  escalateMatchComplaint,
 } from '../../api/player/reportApi.js'
 import {
   getNotificationSettings,
@@ -568,6 +570,20 @@ export default function Profile() {
       triggerToast(`⚠️ ${err?.message || 'Không thể gửi khiếu nại'}`)
     } finally {
       setSubmittingReport(false)
+    }
+  }
+
+  // Khiếu nại kết quả trận không đồng ý với BTC: chuyển Admin (POST /match-complaints/{id}/escalate, 1 lần)
+  const [escalating, setEscalating] = useState(null) // { id, reason }
+  const handleEscalateReport = async () => {
+    if (!escalating?.reason.trim()) { triggerToast('⚠️ Nhập lý do chuyển Admin.'); return }
+    try {
+      await escalateMatchComplaint(escalating.id, escalating.reason.trim())
+      triggerToast('Đã chuyển khiếu nại lên Admin phân xử.')
+      setEscalating(null)
+      loadReportData()
+    } catch (err) {
+      triggerToast(`⚠️ ${err?.message || 'Không chuyển được khiếu nại'}`)
     }
   }
 
@@ -3758,6 +3774,39 @@ export default function Profile() {
                             <strong>Kết quả xử lý từ BQT:</strong> {rpt.resolution}
                           </div>
                         )}
+
+                        {/* Khiếu nại kết quả trận giải: biên bản trọng tài, quyết định BTC, chuyển Admin */}
+                        {rpt.refereeNote && (
+                          <div style={{ fontSize: '12px', color: '#1E40AF', background: '#EFF6FF', padding: '8px 12px', borderRadius: '8px', marginBottom: '8px' }}>
+                            <strong>Biên bản trọng tài:</strong> {rpt.refereeNote}
+                          </div>
+                        )}
+                        {rpt.organizerDecisionNote && (
+                          <div style={{ fontSize: '12px', color: '#92400E', background: '#FFFBEB', padding: '8px 12px', borderRadius: '8px', marginBottom: '8px' }}>
+                            <strong>Quyết định của Ban tổ chức:</strong> {rpt.organizerDecisionNote}
+                          </div>
+                        )}
+                        {rpt.isEscalatedToAdmin && (
+                          <div style={{ fontSize: '12px', color: '#5B21B6', background: '#F5F3FF', padding: '8px 12px', borderRadius: '8px', marginBottom: '8px' }}>
+                            {rpt.escalationClosedAt ? 'Admin đã phân xử' : 'Đã chuyển Admin, đang chờ phân xử'}{rpt.adminNote ? `: ${rpt.adminNote}` : '.'}
+                          </div>
+                        )}
+                        {canEscalateComplaint(rpt) && (escalating?.id === rId ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                            <textarea rows={2} maxLength={1000} value={escalating.reason} onChange={(e) => setEscalating({ id: rId, reason: e.target.value })}
+                              placeholder="Vì sao bạn không đồng ý với Ban tổ chức?" style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #D1D5DB', fontSize: '12.5px' }} />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                              <button type="button" onClick={() => setEscalating(null)} style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #D1D5DB', background: '#FFFFFF', color: '#6B7280', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Thôi</button>
+                              <button type="button" onClick={handleEscalateReport} style={{ padding: '5px 12px', borderRadius: '8px', border: 'none', background: '#7C3AED', color: '#FFFFFF', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Gửi Admin</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '6px' }}>
+                            <button type="button" onClick={() => setEscalating({ id: rId, reason: '' })} title="Chỉ chuyển được 1 lần, trong 24 giờ sau quyết định của Ban tổ chức" style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #C4B5FD', background: '#FFFFFF', color: '#6D28D9', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                              Không đồng ý, chuyển Admin
+                            </button>
+                          </div>
+                        ))}
 
                         {isPending && (
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>

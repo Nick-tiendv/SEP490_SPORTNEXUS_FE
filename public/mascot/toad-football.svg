@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 240" width="220" height="240">
+  <title>Cóc mascot áo đá banh</title>
+  <ellipse id="shadow" cx="110" cy="228" rx="62" ry="8" fill="#000" opacity="0.15"/>
+
+  <!-- Chân sau + bàn chân -->
+  <g id="legs">
+    <path d="M52 214 Q52 199 76 199 L96 202 Q108 206 106 214 Q106 222 78 222 L56 222 Q52 220 52 214 Z" fill="#f06292"/><ellipse cx="78" cy="222" rx="28" ry="4.5" fill="#fff" stroke="#e0e0e0"/><path d="M70 204 L82 207 M68 209 L80 212" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M168 214 Q168 199 144 199 L124 202 Q112 206 114 214 Q114 222 142 222 L164 222 Q168 220 168 214 Z" fill="#f06292"/><ellipse cx="142" cy="222" rx="28" ry="4.5" fill="#fff" stroke="#e0e0e0"/><path d="M150 204 L138 207 M152 209 L140 212" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+    <rect x="66" y="176" width="24" height="36" rx="10" fill="#8aa83f"/>
+    <rect x="130" y="176" width="24" height="36" rx="10" fill="#8aa83f"/>
+    <!-- tất -->
+    <rect x="66" y="192" width="24" height="12" fill="#f1f1f1" stroke="#cfd8dc"/>
+    <rect x="130" y="192" width="24" height="12" fill="#f1f1f1" stroke="#cfd8dc"/>
+    <rect x="66" y="196" width="24" height="4" fill="#f06292"/>
+    <rect x="130" y="196" width="24" height="4" fill="#f06292"/>
+  </g>
+
+  <!-- Thân -->
+  <g id="body">
+    <ellipse cx="110" cy="148" rx="56" ry="52" fill="#8aa83f"/>
+    <!-- Áo -->
+    <path d="M62 120 Q110 106 158 120 L164 178 Q110 192 56 178 Z" fill="#f06292"/>
+    <path d="M62 120 Q110 106 158 120 L156 130 Q110 118 64 130 Z" fill="#fff"/>
+    <path d="M94 112 Q110 126 126 112" fill="none" stroke="#f06292" stroke-width="5" stroke-linecap="round"/>
+    <text x="110" y="162" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#fff">10</text>
+    <!-- Quần -->
+    <path d="M58 176 Q110 192 162 176 L166 196 Q138 204 112 198 Q84 204 54 196 Z" fill="#1d3557"/>
+    <path d="M110 186 L110 198" stroke="#0f2238" stroke-width="2"/>
+  </g>
+
+  <!-- Tay -->
+  <g id="arms">
+    <path id="arm-left" d="M64 126 Q36 142 40 164" fill="none" stroke="#8aa83f" stroke-width="16" stroke-linecap="round"/>
+    <path id="arm-right" d="M156 126 Q184 142 180 164" fill="none" stroke="#8aa83f" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="40" cy="166" r="9" fill="#7d9a38"/>
+    <path id="sleeve-left" d="M68 122 Q50 128 44 146" fill="none" stroke="#f06292" stroke-width="22" stroke-linecap="butt"/>
+    <path d="M35 143 L53 149" stroke="#fff" stroke-width="4"/>
+    <circle cx="180" cy="166" r="9" fill="#7d9a38"/>
+    <path id="sleeve-right" d="M152 122 Q170 128 176 146" fill="none" stroke="#f06292" stroke-width="22" stroke-linecap="butt"/>
+    <path d="M167 149 L185 143" stroke="#fff" stroke-width="4"/>
+  </g>
+
+  <!-- Đầu -->
+  <g id="head">
+    <ellipse cx="110" cy="88" rx="64" ry="42" fill="#8aa83f"/>
+    <!-- Mắt lồi -->
+    <circle cx="74" cy="56" r="22" fill="#8aa83f"/>
+    <circle cx="146" cy="56" r="22" fill="#8aa83f"/>
+    <circle cx="74" cy="56" r="15" fill="#fff"/>
+    <circle cx="146" cy="56" r="15" fill="#fff"/>
+    <circle cx="76" cy="58" r="9" fill="#f4b942"/>
+    <circle cx="144" cy="58" r="9" fill="#f4b942"/>
+    <ellipse cx="76" cy="58" rx="5" ry="6.5" fill="#222"/>
+    <ellipse cx="144" cy="58" rx="5" ry="6.5" fill="#222"/>
+    <circle cx="73" cy="55" r="2.2" fill="#fff"/>
+    <circle cx="141" cy="55" r="2.2" fill="#fff"/>
+    <!-- Mũi -->
+    <circle cx="101" cy="78" r="2.4" fill="#4d6420"/>
+    <circle cx="119" cy="78" r="2.4" fill="#4d6420"/>
+    <!-- Miệng rộng -->
+    <path d="M62 94 Q110 124 158 94" fill="#5a1f2a" stroke="#4d6420" stroke-width="3" stroke-linecap="round"/>
+    <path d="M80 104 Q110 118 140 104 Q110 110 80 104 Z" fill="#ef8a95"/>
+    <!-- Má hồng -->
+    <ellipse cx="62" cy="92" rx="9" ry="6" fill="#f08a8a" opacity="0.55"/>
+    <ellipse cx="158" cy="92" rx="9" ry="6" fill="#f08a8a" opacity="0.55"/>
+    <!-- Mụn cóc -->
+    <g fill="#6f8a2f">
+      <circle cx="96" cy="66" r="3.6"/>
+      <circle cx="124" cy="68" r="4"/>
+      <circle cx="110" cy="58" r="3"/>
+      <circle cx="52" cy="80" r="3.4"/>
+      <circle cx="168" cy="80" r="3.4"/>
+      <circle cx="88" cy="84" r="2.6"/>
+      <circle cx="132" cy="85" r="2.6"/>
+    </g>
+  </g>
+
+  <!-- Bóng -->
+  <g id="ball">
+    <circle cx="188" cy="214" r="15" fill="#fff" stroke="#263238" stroke-width="2"/>
+    <path d="M188 205 L195 210 L192 218 L184 218 L181 210 Z" fill="#263238"/>
+    <path d="M188 199 L188 205 M195 210 L202 208 M192 218 L197 224 M184 218 L179 224 M181 210 L174 208" stroke="#263238" stroke-width="2" fill="none"/>
+  </g>
+</svg>

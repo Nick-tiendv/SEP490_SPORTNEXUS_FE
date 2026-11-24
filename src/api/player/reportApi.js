@@ -240,6 +240,21 @@ export async function withdrawReport(reportId, note = '') {
   }
 }
 
+
+/**
+ * Chuyển khiếu nại kết quả trận lên Admin phân xử (chỉ người khiếu nại, mỗi khiếu nại 1 lần)
+ * POST /api/v1/match-complaints/{id}/escalate  body { reason } (bắt buộc, ≤ 1000 ký tự)
+ */
+export async function escalateMatchComplaint(reportId, reason) {
+  try {
+    const response = await apiClient.post(`/api/v1/match-complaints/${encodeURIComponent(reportId)}/escalate`, { reason })
+    const body = response.data
+    return body?.data || body?.result || body
+  } catch (error) {
+    throw normalizeApiError(error)
+  }
+}
+
 export default {
   getReportReasons,
   createReport,

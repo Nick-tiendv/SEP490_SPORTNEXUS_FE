@@ -5,6 +5,7 @@ import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TimeInput24 from '../../components/common/TimeInput24.jsx'
 import OwnerCancelBookingModal from '../Bookings/OwnerCancelBookingModal.jsx'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh.js'
 
 const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 // Body PUT /slots/{id}/status nhận enum dạng số (docs/api/02).
@@ -128,6 +129,8 @@ export default function ViewCourtBookingSchedule() {
   }, [facilityId, selectedDate, reloadKey])
 
   const reload = () => setReloadKey((value) => value + 1)
+  // Có đơn mới / bị hủy, quay lại tab → tự tải lại (lưới giữ dữ liệu cũ trong lúc tải nên không nháy)
+  useLiveRefresh(reload, { enabled: !!facilityId })
   // Giữ dữ liệu lần tải trước của cùng cơ sở + ngày trong lúc tải lại để lưới không nháy.
   const sameView = (key) => key?.split('|').slice(0, 2).join('|') === `${facilityId}|${selectedDate}`
   const data = calendar && sameView(calendar.key) ? calendar.data : null

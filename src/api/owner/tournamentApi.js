@@ -9,10 +9,11 @@ const url = id => `/api/v1/tournaments/${path(id)}`
 export const getMyTournaments = async (scope) => (await getList('/api/v1/tournaments/my-tournaments', scope ? { scope } : undefined)).items
 export const getFacilityTournaments = async facilityId => (await getList(`/api/v1/facilities/${path(facilityId)}/tournaments`)).items
 export const getTournament = id => get(url(id))
-// CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules,
+// CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules, rulesFileUrl (PDF),
+// defaultBracketFormat (KNOCKOUT | ROUND_ROBIN | GROUP_KNOCKOUT), requestedSchedule[{ date, session, courtCount }],
 // tier (AMATEUR | SEMI_PRO | PRO), purpose (EXCHANGE | COMMERCIAL | DEVELOPMENT | INTERNAL), minRating, maxRating, minRatedMatches,
 // children[{ name, categoryType, maxParticipants, minParticipants, entryFee, prizes, minTeamSize, maxTeamSize }].
-// Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; giải của Player chờ Admin duyệt.
+// Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; mọi giải chờ Admin duyệt (nhóm chốt 23/11).
 export const createTournament = payload => post('/api/v1/tournaments', payload)
 // UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Dùng id giải mẹ hoặc bảng con.
 // entryFee: lệ phí bảng đấu, gửi với id bảng con, chỉ khi bảng còn mở và chưa có ai đăng ký.
@@ -75,3 +76,14 @@ export const updateTournamentStaff = (id, staffId, payload) => put(`${url(id)}/s
 export const autoScheduleTournament = id => post(`${url(id)}/auto-schedule`)
 // Thiếu người khi hết hạn đăng ký: BTC chọn trong 24 giờ { decision: CANCEL | EXTEND | CONTINUE, newDeadline?, reason? }
 export const decideRegistration = (id, payload) => post(`${url(id)}/registration-decision`, payload)
+
+// ---------- Khiếu nại kết quả trận (BTC / Admin) ----------
+// GET /tournaments/{id}/match-complaints?status=OPEN|ALL (id giải mẹ gồm mọi bảng con). MatchComplaintResponse: id, matchId,
+// tournamentId, tournamentName, roundName, participant1Name, participant2Name, winnerName, reporterId, reporterName, reason,
+// description, evidenceImageUrls, status, resolutionNote, createdAt, resolvedAt.
+export const getMatchComplaints = async (id, status = 'OPEN') => (await getList(`${url(id)}/match-complaints`, { status })).items
+// POST /match-complaints/{id}/decide: { decision: ACCEPT | REJECT, note } (note bắt buộc). Người khiếu nại có 24 giờ chuyển Admin.
+export const decideMatchComplaint = (complaintId, decision, note) => post(`/api/v1/match-complaints/${path(complaintId)}/decide`, { decision, note })
+// POST /match-complaints/{id}/resolve: { action: KEEP_SCORE | UPDATE_SCORE, score (như PUT /score), note } — sửa tỉ số và đóng trong 1 bước
+export const resolveMatchComplaint = (complaintId, { action, score, note }) =>
+  post(`/api/v1/match-complaints/${path(complaintId)}/resolve`, { action, score: score || null, note: note || null })

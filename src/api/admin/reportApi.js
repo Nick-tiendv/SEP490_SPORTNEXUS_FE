@@ -44,6 +44,16 @@ export function toReport(raw) {
     status: String(pick(raw, 'status', 'reportStatus') ?? 'PENDING').replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
     decision: pick(raw, 'decision', 'adminDecision') || '',
     notes: pick(raw, 'adminNote', 'adminNotes', 'resolutionNote') || '',
+    // Khiếu nại kết quả trận (targetType MATCH): targetObjectId = matchId; biên bản trọng tài → quyết định BTC → chuyển Admin
+    targetObjectId: String(pick(raw, 'targetObjectId') ?? ''),
+    refereeNote: pick(raw, 'refereeNote') || '',
+    refereeAt: toTime(pick(raw, 'refereeSubmittedAt')),
+    organizerNote: pick(raw, 'organizerDecisionNote') || '',
+    organizerAt: toTime(pick(raw, 'organizerDecidedAt')),
+    escalated: Boolean(pick(raw, 'isEscalatedToAdmin')),
+    escalatedReason: pick(raw, 'escalatedReason') || '',
+    escalatedAt: toTime(pick(raw, 'escalatedAt')),
+    escalationClosed: Boolean(pick(raw, 'escalationClosedAt')),
     date: toIsoDate(pick(raw, 'createdAt', 'createdDate', 'reportedAt')),
     resolvedAt: toTime(pick(raw, 'resolvedAt', 'updatedAt')),
     history: asArray(pick(raw, 'history', 'histories', 'timeline', 'logs')).map(entry => ({
@@ -91,5 +101,14 @@ export async function resolveAdminReport(reportId, { decision, adminNote, refund
     lockSlotForMaintenance: Boolean(lockSlotForMaintenance),
     deductTargetUserFairPlayPoints: deductTargetUserFairPlayPoints ?? null,
     deleteCommunityPost: Boolean(deleteCommunityPost),
+  })).data)
+}
+// Khiếu nại kết quả trận: Admin sửa tỉ số và đóng trong 1 bước (phán quyết cuối, đóng yêu cầu phân xử).
+// POST /api/v1/match-complaints/{id}/resolve { action: KEEP_SCORE | UPDATE_SCORE, score (như PUT /matches/{id}/score), note }
+export async function resolveMatchComplaint(reportId, { action, score, note }) {
+  return unwrap((await apiClient.post(`/api/v1/match-complaints/${encodeURIComponent(reportId)}/resolve`, {
+    action,
+    score: score || null,
+    note: note || null,
   })).data)
 }

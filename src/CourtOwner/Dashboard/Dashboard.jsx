@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { getOwnerBookings, getOwnerDashboard } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
+import { useLiveRefresh } from '../../hooks/useLiveRefresh.js'
 import { BookingComparisonPanel, CourtBookingsPanel, OwnerKpiCard } from './OwnerDashboardCharts.jsx'
 import './ownerDashboard.css'
 import './ownerPanels.css'
@@ -207,6 +208,9 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null) // { key, data }
   const [statsError, setStatsError] = useState(null) // { key, message }
   const [todayBookings, setTodayBookings] = useState(null) // { facilityId, items }
+  // Có đơn mới / bị hủy, quay lại tab → tải lại số liệu (giữ số cũ trong lúc tải)
+  const [liveKey, setLiveKey] = useState(0)
+  useLiveRefresh(() => setLiveKey((value) => value + 1), { enabled: !!facilityId })
 
   useEffect(() => {
     if (!facilityId) return
@@ -216,7 +220,7 @@ export default function Dashboard() {
       .then((data) => !cancelled && setStats({ key, data }))
       .catch((error) => !cancelled && setStatsError({ key, message: error.message }))
     return () => { cancelled = true }
-  }, [facilityId, periodDays])
+  }, [facilityId, periodDays, liveKey])
 
   // Đơn hôm nay (đã thanh toán / đã check-in), sắp xếp theo giờ chơi
   useEffect(() => {
@@ -232,7 +236,7 @@ export default function Dashboard() {
       })
       .catch(() => !cancelled && setTodayBookings({ facilityId, items: [] }))
     return () => { cancelled = true }
-  }, [facilityId])
+  }, [facilityId, liveKey])
 
   const data = stats?.key === statsKey ? stats.data : null
   const statsLoadError = statsError?.key === statsKey ? statsError.message : ''

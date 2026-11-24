@@ -1,5 +1,5 @@
 import apiClient, { normalizeApiError } from '../apiClient.js'
-import { get, getList, post } from '../owner/request.js'
+import { get, getList, post, put } from '../owner/request.js'
 import { toTournament } from '../admin/tournamentApi.js'
 
 const TOURNAMENTS_ENDPOINT = '/api/v1/tournaments'
@@ -65,6 +65,7 @@ export async function getMyRegistrations() {
     status: raw.tournamentStatus || '',
     registrationStatus: raw.tournamentStatus || '',
     paymentStatus: raw.paymentStatus || '',
+    teamId: raw.teamId ? String(raw.teamId) : '',
     teamName: raw.teamName || '',
     qrCode: raw.qrCode || '',
   }))
@@ -127,6 +128,15 @@ export const getMyTournamentInvitations = async (status) => (await getList(`${TO
 // Chấp nhận = đăng ký thật (kiểm tra khảo sát / Elo / số người, giữ lệ phí trong ví); từ chối thì báo Ban tổ chức
 export const respondTournamentInvitation = (invitationId, accept) =>
   post(`${TOURNAMENTS_ENDPOINT}/invitations/${encodeURIComponent(invitationId)}/respond`, { accept: Boolean(accept) })
+
+// ---------- Nhân sự giải (trọng tài / người nhập điểm có tài khoản) ----------
+// GET /tournaments/my-staff-matches: trận chưa xong của các giải tôi là nhân sự. StaffMatchResponse: matchId, tournamentId,
+// tournamentName, rootTournamentId, rootTournamentName, staffRole, isAssignedOfficial, roundName, status,
+// participant1Name, participant2Name, startTime, endTime, courtName, facilityName. Gồm trận chưa đá và trận đã xong
+// trong 72 giờ (BE xác nhận 23/11). Hết giải thì danh sách rỗng.
+export const getMyStaffMatches = async () => (await getList(`${TOURNAMENTS_ENDPOINT}/my-staff-matches`)).items
+// PUT /matches/{id}/score: BTC, nhân sự có tài khoản hoặc Admin. Body: { sets, winnerId, tiebreakP1, tiebreakP2, resultType }
+export const updateMatchScore = (matchId, payload) => put(`/api/v1/matches/${encodeURIComponent(matchId)}/score`, payload)
 
 export default {
   getTournamentQrTicket,
