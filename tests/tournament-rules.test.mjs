@@ -6,6 +6,8 @@ import {
   dateLimits,
   defaultDeadline,
   estimateMatches,
+  buildScorePayload,
+  canEscalateComplaint,
   formatError,
   formatWarning,
   normalizeFormat,
@@ -114,4 +116,34 @@ test('giải đấu: kiểm tra lịch sân yêu cầu', () => {
   assert.match(validateSchedule([{ date: '', session: 'MORNING', courtCount: 1 }], range), /Chọn ngày/)
   assert.match(validateSchedule([{ date: '2026-12-10', session: 'MORNING', courtCount: 1 }], { startDate: '' }), /ngày bắt đầu/)
   assert.equal(validateSchedule([{ date: '2026-12-10', session: 'FULL_DAY', courtCount: 3 }], { startDate: '2026-12-10', endDate: '' }), '', 'giải 1 ngày')
+})
+
+test('giải đấu: dựng body nhập tỉ số', () => {
+  const sets = [{ a: '21', b: '18' }, { a: '', b: '' }, { a: '19', b: '21' }]
+  const { payload } = buildScorePayload({ sets })
+  assert.deepEqual(payload.sets, [{ setNumber: 1, scoreP1: 21, scoreP2: 18 }, { setNumber: 2, scoreP1: 19, scoreP2: 21 }])
+  assert.equal(payload.resultType, 'NORMAL')
+  assert.equal(payload.tiebreakP1, null)
+  assert.match(buildScorePayload({ sets: [{ a: '', b: '' }] }).error, /ít nhất 1 hiệp/)
+  assert.match(buildScorePayload({ resultType: 'WALKOVER' }).error, /xử thắng/)
+  assert.deepEqual(buildScorePayload({ resultType: 'WALKOVER', winnerId: 'p1', sets }).payload.sets, [], 'xử thắng không gửi tỉ số')
+  assert.match(buildScorePayload({ resultType: 'RETIRED', sets }).error, /bỏ cuộc/)
+  assert.equal(buildScorePayload({ resultType: 'RETIRED', sets, winnerId: 'p2' }).payload.winnerId, 'p2')
+  const football = buildScorePayload({ sets: [{ a: '1', b: '1' }], tiebreak: { a: '4', b: '3' } }).payload
+  assert.equal(football.tiebreakP1, 4)
+  assert.match(buildScorePayload({ sets: [{ a: '1', b: '1' }], tiebreak: { a: '3', b: '3' } }).error, /luân lưu/)
+  assert.match(buildScorePayload({ sets: [{ a: '-1', b: '2' }] }).error, /âm/)
+})
+
+test('giải đấu: khi nào người khiếu nại được chuyển Admin', () => {
+  const now = new Date('2026-12-10T12:00:00Z')
+  const base = { targetType: 'MATCH', status: 'PENDING', createdAt: '2026-12-10T10:00:00Z' }
+  assert.equal(canEscalateComplaint(base, now), false, 'BTC còn trong hạn xử lý')
+  assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z' }, now), true, 'BTC quá 24 giờ chưa xử lý')
+  const decided = { ...base, status: 'REJECTED', organizerDecidedAt: '2026-12-09T13:00:00Z' }
+  assert.equal(canEscalateComplaint(decided, now), true, 'trong 24 giờ sau quyết định')
+  assert.equal(canEscalateComplaint({ ...decided, organizerDecidedAt: '2026-12-09T11:00:00Z' }, now), false, 'quá 24 giờ sau quyết định')
+  assert.equal(canEscalateComplaint({ ...decided, isEscalatedToAdmin: true }, now), false, 'chỉ chuyển 1 lần')
+  assert.equal(canEscalateComplaint({ ...decided, targetType: 'BOOKING' }, now), false)
+  assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z', status: 'WITHDRAWN' }, now), false)
 })

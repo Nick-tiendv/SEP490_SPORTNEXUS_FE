@@ -2,11 +2,15 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import {
-  addTournamentStaff, assignMatchCourt, assignMatchOfficials, autoScheduleTournament, blockCourts, decideRegistration,
-  getCourtSchedule, getCourts, getFacilitySlots, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff, updateTournamentInfo, updateTournamentStaff,
+  addTournamentStaff, assignMatchCourt, assignMatchOfficials, autoScheduleTournament, blockCourts, decideMatchComplaint, decideRegistration,
+  getCourtSchedule, getCourts, getFacilitySlots, getMatchComplaints, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff,
+  resolveMatchComplaint, updateTournamentInfo, updateTournamentStaff,
 } from '../../api/owner'
+import { getReportReasons } from '../../api/player/reportApi.js'
+import MatchScoreModal from '../../components/common/MatchScoreModal.jsx'
 import { confirmDialog } from '../../components/common/confirm.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
+import { lookupAccountByPhone } from '../../api/player/bookingApi.js'
 import { addDays, formatDate, formatDateTime, formatTime, toDateKey, toTimeSpan } from '../shared.js'
 import { dateLimits, validateTournamentDates } from './tournamentRules.js'
 
@@ -254,14 +258,34 @@ function StaffSection({ tournamentId, staff, onChanged, closed }) {
   }
   const cancelEdit = () => { setEditingId(null); setForm({ fullName: '', phone: '', role: 'REFEREE', accountId: '', note: '' }) }
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
+  // Đổi số điện thoại thì phải tìm lại tài khoản
+  const setPhone = (e) => setForm({ ...form, phone: e.target.value, accountId: '' })
+  // Trọng tài / người nhập điểm phải có tài khoản: tìm theo số điện thoại (GET /api/accounts/lookup) để lấy họ tên + accountId
+  const needsAccount = form.role !== 'OTHER'
+  const [looking, setLooking] = useState(false)
+  const findAccount = async () => {
+    setLooking(true)
+    try {
+      const account = await lookupAccountByPhone(form.phone)
+      const accountId = account?.id || account?.accountId || account?.userId
+      if (!accountId) throw new Error('Không tìm thấy tài khoản với số điện thoại này.')
+      setForm((prev) => ({ ...prev, accountId: String(accountId), fullName: account.fullName || account.username || prev.fullName }))
+    } catch (error) {
+      setForm((prev) => ({ ...prev, accountId: '' }))
+      toast.error(error.message || 'Không tìm thấy tài khoản với số điện thoại này.')
+    } finally {
+      setLooking(false)
+    }
+  }
   const submit = async (event) => {
     event.preventDefault()
+    if (needsAccount && !form.accountId) { toast.error('Trọng tài / người nhập điểm phải có tài khoản: nhập số điện thoại rồi bấm Tìm.'); return }
     if (!form.fullName.trim() || !form.phone.trim()) { toast.error('Nhập họ tên và số điện thoại.'); return }
     setBusy(true)
     try {
       const payload = {
         fullName: form.fullName.trim(), phone: form.phone.trim(), role: form.role,
-        accountId: form.accountId.trim() || null, note: form.note.trim() || null,
+        accountId: form.accountId || null, note: form.note.trim() || null,
       }
       if (editingId) await updateTournamentStaff(tournamentId, editingId, payload)
       else await addTournamentStaff(tournamentId, payload)
@@ -304,12 +328,20 @@ function StaffSection({ tournamentId, staff, onChanged, closed }) {
       )}
       {!closed && (
         <form className="snx-form-grid" onSubmit={submit}>
-          <label className="snx-field">Họ tên<input className="snx-input" maxLength={100} value={form.fullName} onChange={set('fullName')} /></label>
-          <label className="snx-field">Số điện thoại<input className="snx-input" maxLength={15} value={form.phone} onChange={set('phone')} /></label>
           <label className="snx-field">Vai trò
             <select className="snx-select" value={form.role} onChange={set('role')}>{STAFF_ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
-          <label className="snx-field">Mã tài khoản (không bắt buộc)<input className="snx-input" placeholder="accountId" value={form.accountId} onChange={set('accountId')} /></label>
+          <div className="snx-field">
+            <label htmlFor="staff-phone">Số điện thoại</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input id="staff-phone" className="snx-input" maxLength={15} inputMode="tel" value={form.phone} onChange={setPhone} />
+              <button type="button" className="snx-btn snx-btn--secondary" onClick={findAccount} disabled={looking || !form.phone.trim()}>{looking ? 'Đang tìm…' : 'Tìm'}</button>
+            </div>
+            {form.accountId
+              ? <span style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>✓ Đã gắn tài khoản: nhập được tỉ số các trận của giải</span>
+              : needsAccount && <span className="snx-muted" style={{ fontSize: 12 }}>Người này phải có tài khoản SportNexus.</span>}
+          </div>
+          <label className="snx-field">Họ tên<input className="snx-input" maxLength={100} value={form.fullName} onChange={set('fullName')} readOnly={!!form.accountId} placeholder={needsAccount ? 'Tự điền sau khi tìm' : ''} /></label>
           <label className="snx-field">Ghi chú<input className="snx-input" maxLength={200} value={form.note} onChange={set('note')} /></label>
           <div className="snx-field" style={{ justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
             {editingId && <button type="button" className="snx-btn snx-btn--secondary" onClick={cancelEdit} disabled={busy}>Hủy sửa</button>}
@@ -341,6 +373,122 @@ function StandingsSection({ childId }) {
           </table>
         </div>
       ))}
+    </>
+  )
+}
+
+// Khiếu nại kết quả trận: BTC giữ kết quả / chấp nhận (decide) hoặc sửa tỉ số và đóng (resolve UPDATE_SCORE).
+// Người khiếu nại có 24 giờ chuyển Admin; đã chuyển Admin thì BTC không xử lý được nữa (BE trả 400).
+const COMPLAINT_STATUS = {
+  PENDING: ['Chờ BTC xử lý', 'amber'],
+  OWNER_RESPONDED: ['BTC đã quyết định, chờ Admin', 'blue'],
+  REJECTED: ['Đã bác, giữ kết quả', 'gray'],
+  RESOLVED_NO_REFUND: ['Khiếu nại đúng', 'green'],
+}
+function ComplaintsSection({ tournamentId, onChanged }) {
+  const [scope, setScope] = useState('OPEN')
+  const complaints = useApi(() => getMatchComplaints(tournamentId, scope), [tournamentId, scope], { initialData: [] })
+  const reasons = useApi(() => getReportReasons('MATCH'), [], { initialData: [] })
+  const reasonLabel = (code) => {
+    const reason = (reasons.data || []).find((r) => r.code === code)
+    return reason?.title || reason?.label || code
+  }
+  const [acting, setActing] = useState(null) // { complaint, decision: 'REJECT' | 'ACCEPT' }
+  const [note, setNote] = useState('')
+  const [scoring, setScoring] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const done = (message) => {
+    toast.success(message)
+    setActing(null)
+    setScoring(null)
+    setNote('')
+    complaints.refresh()
+    onChanged()
+  }
+  const decide = async () => {
+    if (!note.trim()) { toast.error('Nhập lý do quyết định để gửi người khiếu nại.'); return }
+    setBusy(true)
+    try {
+      await decideMatchComplaint(acting.complaint.id, acting.decision, note.trim())
+      done(acting.decision === 'REJECT' ? 'Đã bác khiếu nại, giữ nguyên kết quả.' : 'Đã chấp nhận khiếu nại. Sửa tỉ số ở bảng trận nếu cần.')
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const list = complaints.data || []
+  return (
+    <>
+      <div className="snx-row" style={{ margin: '18px 0 8px' }}>
+        <h3 className="snx-card-title" style={{ fontSize: 15 }}>Khiếu nại kết quả trận{scope === 'OPEN' && list.length ? ` (${list.length} đang mở)` : ''}</h3>
+        <span className="snx-spacer" />
+        <select className="snx-select" style={{ width: 'auto' }} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Lọc khiếu nại">
+          <option value="OPEN">Đang mở</option>
+          <option value="ALL">Tất cả</option>
+        </select>
+      </div>
+      {complaints.error && <div className="snx-alert snx-alert--error">{complaints.error}</div>}
+      {!complaints.error && !list.length && <p className="snx-muted">{complaints.loading ? 'Đang tải…' : scope === 'OPEN' ? 'Không có khiếu nại nào đang chờ.' : 'Chưa có khiếu nại nào.'}</p>}
+      {list.length > 0 && (
+        <div className="snx-list">
+          {list.map((c) => {
+            const [label, tone] = COMPLAINT_STATUS[String(c.status).toUpperCase()] || [c.status, 'gray']
+            const canAct = String(c.status).toUpperCase() === 'PENDING'
+            return (
+              <div key={c.id} className="snx-list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                <div className="snx-row">
+                  <strong style={{ fontSize: 14 }}>{c.participant1Name || '—'} vs {c.participant2Name || '—'}</strong>
+                  <span className="snx-muted">{[c.tournamentName, c.roundName].filter(Boolean).join(' · ')}</span>
+                  <span className="snx-spacer" />
+                  <span className={`snx-badge snx-badge--${tone}`}>{label}</span>
+                </div>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{c.reporterName || 'Người chơi'}</strong> · {reasonLabel(c.reason)} · <span className="snx-muted">{formatDateTime(c.createdAt)}</span>
+                  {c.winnerName && <span className="snx-muted"> · Kết quả hiện tại: {c.winnerName} thắng</span>}
+                </div>
+                {c.description && <div style={{ fontSize: 13 }}>{c.description}</div>}
+                {c.evidenceImageUrls?.length > 0 && (
+                  <div className="snx-row">
+                    {c.evidenceImageUrls.map((src) => <a key={src} href={src} target="_blank" rel="noreferrer"><img src={src} alt="Bằng chứng" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} /></a>)}
+                  </div>
+                )}
+                {c.resolutionNote && <div className="snx-muted" style={{ fontSize: 13 }}>Kết luận: {c.resolutionNote}</div>}
+                {canAct && acting?.complaint.id !== c.id && (
+                  <div className="snx-row">
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => { setActing({ complaint: c, decision: 'REJECT' }); setNote('') }}>Giữ kết quả</button>
+                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => { setActing({ complaint: c, decision: 'ACCEPT' }); setNote('') }}>Chấp nhận</button>
+                    <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => setScoring(c)}>Sửa tỉ số & đóng</button>
+                  </div>
+                )}
+                {acting?.complaint.id === c.id && (
+                  <div className="snx-stack" style={{ gap: 6 }}>
+                    <textarea className="snx-input" rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)}
+                      placeholder={acting.decision === 'REJECT' ? 'Lý do giữ nguyên kết quả (gửi người khiếu nại)' : 'Lý do chấp nhận (gửi người khiếu nại)'} />
+                    <div className="snx-row">
+                      <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setActing(null)} disabled={busy}>Thôi</button>
+                      <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={decide} disabled={busy}>{acting.decision === 'REJECT' ? 'Xác nhận giữ kết quả' : 'Xác nhận chấp nhận'}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {scoring && (
+        <MatchScoreModal
+          matchId={scoring.matchId}
+          title="Sửa tỉ số và đóng khiếu nại"
+          submitLabel="Sửa tỉ số & đóng"
+          withNote
+          onClose={() => setScoring(null)}
+          onSubmit={async (score, scoreNote) => {
+            await resolveMatchComplaint(scoring.id, { action: 'UPDATE_SCORE', score, note: scoreNote })
+            done('Đã sửa tỉ số và đóng khiếu nại. Elo được tính lại sau.')
+          }}
+        />
+      )}
     </>
   )
 }
@@ -489,6 +637,8 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       )}
 
       {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
+
+      {!courtOnly && <ComplaintsSection tournamentId={tournament.id} onChanged={onChanged} />}
 
       {!courtOnly && <StaffSection tournamentId={tournament.id} staff={staff.data || []} onChanged={staff.refresh} closed={closed} />}
 

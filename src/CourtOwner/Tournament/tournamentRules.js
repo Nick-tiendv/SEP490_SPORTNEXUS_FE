@@ -136,3 +136,44 @@ export function validateSchedule(rows, { startDate, endDate }) {
   }
   return ''
 }
+
+// ---------- Tỉ số trận (PUT /matches/{id}/score, dùng lại cho khiếu nại UPDATE_SCORE) ----------
+// sets: [{ a, b }] dạng chuỗi từ ô nhập; tiebreak: { a, b } (luân lưu, để trống nếu không có).
+// Trả { payload } hoặc { error }.
+export function buildScorePayload({ resultType = 'NORMAL', sets = [], winnerId = '', tiebreak = { a: '', b: '' } }) {
+  const filled = sets
+    .filter((set) => set.a !== '' || set.b !== '')
+    .map((set, index) => ({ setNumber: index + 1, scoreP1: Number(set.a) || 0, scoreP2: Number(set.b) || 0 }))
+  if (filled.some((set) => set.scoreP1 < 0 || set.scoreP2 < 0)) return { error: 'Tỉ số không được âm.' }
+  const payload = { sets: [], winnerId: null, tiebreakP1: null, tiebreakP2: null, resultType }
+  if (resultType === 'WALKOVER') {
+    if (!winnerId) return { error: 'Chọn bên được xử thắng.' }
+    return { payload: { ...payload, winnerId } }
+  }
+  if (!filled.length) return { error: 'Nhập tỉ số ít nhất 1 hiệp.' }
+  payload.sets = filled
+  if (resultType === 'RETIRED') {
+    if (!winnerId) return { error: 'Chọn bên thắng (bên còn lại bỏ cuộc).' }
+    payload.winnerId = winnerId
+    return { payload }
+  }
+  const hasTiebreak = tiebreak.a !== '' || tiebreak.b !== ''
+  if (hasTiebreak) {
+    if (tiebreak.a === '' || tiebreak.b === '' || Number(tiebreak.a) === Number(tiebreak.b)) return { error: 'Tỉ số luân lưu phải đủ hai bên và không bằng nhau.' }
+    payload.tiebreakP1 = Number(tiebreak.a)
+    payload.tiebreakP2 = Number(tiebreak.b)
+  }
+  return { payload }
+}
+
+// ---------- Khiếu nại trận: người khiếu nại chuyển Admin (POST /match-complaints/{id}/escalate) ----------
+// Được chuyển 1 lần khi: BTC đã quyết định và chưa quá 24 giờ, hoặc BTC chưa xử lý và đã quá 24 giờ kể từ lúc gửi.
+export const ESCALATE_WINDOW_HOURS = 24
+export function canEscalateComplaint(report, now = new Date()) {
+  if (String(report?.targetType || '').toUpperCase() !== 'MATCH') return false
+  if (report.isEscalatedToAdmin || report.resolvedByAdminId) return false
+  if (String(report.status || '').toUpperCase() === 'WITHDRAWN') return false
+  const hours = (value) => (now.getTime() - new Date(value).getTime()) / 3600000
+  if (report.organizerDecidedAt) return hours(report.organizerDecidedAt) < ESCALATE_WINDOW_HOURS
+  return String(report.status || '').toUpperCase() === 'PENDING' && !!report.createdAt && hours(report.createdAt) >= ESCALATE_WINDOW_HOURS
+}

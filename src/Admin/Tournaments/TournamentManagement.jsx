@@ -4,14 +4,14 @@ import TournamentTable from './TournamentTable.jsx'
 import TournamentDetails from './TournamentDetails.jsx'
 import { TournamentActionDialog } from './TournamentDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
-import { tournamentStats, statusLabels, statusFilterOptions, number, money, exportTournaments } from './tournamentData.js'
+import { tournamentStats, statusLabels, statusFilterOptions, approvalLabels, number, money, exportTournaments } from './tournamentData.js'
 import { getTournamentStatistics, listAdminTournaments } from '../../api/admin/tournamentApi.js'
 import { listAdminFacilities } from '../../api/admin/facilityApi.js'
 import { fetchAllPages } from '../../api/admin/dashboardApi.js'
 import '../Users/users.css'
 import './tournament.css'
 
-const emptyFilters = { search: '', status: '', facility: '', locked: '' }
+const emptyFilters = { search: '', status: '', facility: '', locked: '', approval: '' }
 const icons = { total: Trophy, open: UserRoundPlus, upcoming: Clock3, completed: BadgeCheck, participants: Users }
 
 export default function TournamentManagement() {
@@ -27,8 +27,16 @@ export default function TournamentManagement() {
   const keyword = useDebounced(filters.search.trim())
 
   // GET /api/v1/admin/tournaments — tìm kiếm, lọc và phân trang phía server.
-  const params = useMemo(() => ({ keyword, status: filters.status, facilityId: filters.facility, isLocked: filters.locked, page, pageSize }), [keyword, filters.status, filters.facility, filters.locked, page, pageSize])
+  // approvalStatus=PENDING: BE gộp chờ chủ sân + chờ Admin (nhóm đã bỏ bước chủ sân duyệt)
+  const params = useMemo(() => ({ keyword, status: filters.status, facilityId: filters.facility, isLocked: filters.locked, approvalStatus: filters.approval, page, pageSize }), [keyword, filters.status, filters.facility, filters.locked, filters.approval, page, pageSize])
   const list = usePagedList(listAdminTournaments, params, reload)
+  // Số giải đang chờ duyệt cho nút lọc nhanh
+  const [pendingCount, setPendingCount] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    listAdminTournaments({ approvalStatus: 'PENDING', page: 1, pageSize: 1 }).then(result => !cancelled && setPendingCount(result.total ?? null)).catch(() => {})
+    return () => { cancelled = true }
+  }, [reload])
   useEffect(() => {
     let cancelled = false
     getTournamentStatistics()
@@ -53,14 +61,14 @@ export default function TournamentManagement() {
   const done = message => { setDialog(null); if (message) setNotice(message); setReload(value => value + 1) }
   const onAction = (type, context) => setDialog({ type, context })
 
-  return <div className="tournaments-page"><header className="tournaments-page-heading admin-page-header"><div><h1>Quản lý giải đấu <span>{statsLoading ? '…' : `${number(s.totalTournaments)} giải`}</span></h1><p>Theo dõi đăng ký, nhánh đấu và tiến độ các giải thể thao trên SportNexus.</p></div><div><button className="users-button" onClick={() => setReload(value => value + 1)} disabled={list.loading}><RefreshCw size={13} />Làm mới</button><button className="users-button" disabled={!tournaments.length} onClick={() => { exportTournaments(tournaments); setNotice(`Đã xuất ${number(tournaments.length)} giải của trang hiện tại ra CSV.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'OPEN'}><ListFilter size={13} />Đang mở đăng ký</button></div></header>
+  return <div className="tournaments-page"><header className="tournaments-page-heading admin-page-header"><div><h1>Quản lý giải đấu <span>{statsLoading ? '…' : `${number(s.totalTournaments)} giải`}</span></h1><p>Theo dõi đăng ký, nhánh đấu và tiến độ các giải thể thao trên SportNexus.</p></div><div><button className="users-button" onClick={() => setReload(value => value + 1)} disabled={list.loading}><RefreshCw size={13} />Làm mới</button><button className="users-button" disabled={!tournaments.length} onClick={() => { exportTournaments(tournaments); setNotice(`Đã xuất ${number(tournaments.length)} giải của trang hiện tại ra CSV.`) }}><Download size={13} />Xuất CSV</button><button className="users-button" onClick={quick} aria-pressed={filters.status === 'OPEN'}><ListFilter size={13} />Đang mở đăng ký</button><button className="users-button" onClick={() => change('approval', filters.approval === 'PENDING' ? '' : 'PENDING')} aria-pressed={filters.approval === 'PENDING'}><Clock3 size={13} />Chờ duyệt{pendingCount ? ` (${number(pendingCount)})` : ''}</button></div></header>
     <div className="tournaments-kpis">{tournamentStats(s).map(stat => { const Icon = icons[stat.icon]; return <article key={stat.label} className={stat.icon}><div><small>{stat.label}</small><Icon size={24} /></div><strong>{statsLoading ? '…' : number(stat.value)}</strong><p>{stat.note}</p></article> })}</div>
     {!statsLoading && <p className="tournaments-filter-hint">Quỹ giải thưởng đang giữ {money(s.prizeFundsHeld)} · đã trả thưởng {money(s.prizesPaid)} · phí đã hoàn {money(s.entryFeesRefunded)}{s.topFacilities?.length ? ` · Cơ sở tổ chức nhiều nhất: ${s.topFacilities.slice(0, 3).map(item => `${item.name} (${item.count})`).join(', ')}` : ''}</p>}
     {stats.error && <div className="users-notice" role="alert"><span>Không tải được thống kê giải đấu: {stats.error}</span></div>}
     {list.error && <div className="users-notice" role="alert"><span>Không tải được danh sách giải đấu: {list.error}</span><button aria-label="Thử lại" onClick={() => setReload(value => value + 1)}>↻</button></div>}
     {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
     <section className="tournaments-toolbar" aria-label="Bộ lọc giải đấu"><div className="tournaments-filter-row"><label className="users-search"><Search size={14} /><input aria-label="Tìm kiếm giải đấu" placeholder="Tên giải, cơ sở, ban tổ chức…" value={filters.search} onChange={event => change('search', event.target.value)} /></label><label>Trạng thái<select value={filters.status} onChange={event => change('status', event.target.value)}><option value="">Tất cả trạng thái</option>{statusFilterOptions.map(value => <option key={value} value={value}>{statusLabels[value]}</option>)}</select></label></div>
-      <div className="tournaments-filter-row"><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)} disabled={!facilities.length}><option value="">{facilities.length ? 'Tất cả cơ sở' : 'Chưa có cơ sở'}</option>{facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>)}</select></label><label>Khóa<select value={filters.locked} onChange={event => change('locked', event.target.value)}><option value="">Tất cả</option><option value="true">Đang bị khóa</option><option value="false">Không bị khóa</option></select></label><button type="button" className="tournaments-text-button" onClick={reset} disabled={!activeFilters}>Đặt lại</button></div>
+      <div className="tournaments-filter-row"><label>Cơ sở<select value={filters.facility} onChange={event => change('facility', event.target.value)} disabled={!facilities.length}><option value="">{facilities.length ? 'Tất cả cơ sở' : 'Chưa có cơ sở'}</option>{facilities.map(facility => <option key={facility.id} value={facility.id}>{facility.name}</option>)}</select></label><label>Khóa<select value={filters.locked} onChange={event => change('locked', event.target.value)}><option value="">Tất cả</option><option value="true">Đang bị khóa</option><option value="false">Không bị khóa</option></select></label><label>Duyệt<select value={filters.approval} onChange={event => change('approval', event.target.value)}><option value="">Tất cả</option>{Object.entries(approvalLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button type="button" className="tournaments-text-button" onClick={reset} disabled={!activeFilters}>Đặt lại</button></div>
     </section>
     <div className={`tournaments-content-grid ${detail ? 'with-details' : ''}`}><TournamentTable tournaments={tournaments} total={list.total} totalPages={list.totalPages} loading={list.loading} detailId={detailId} onDetail={setDetailId} page={page} pageSize={pageSize} onPage={setPage} onPageSize={value => { setPageSize(value); setPage(1) }} />{detail && <TournamentDetails key={`${detail.id}#${reload}`} tournament={detail} onClose={() => setDetailId(null)} onAction={onAction} />}</div>
     {['cancel', 'lock', 'unlock', 'approve', 'reject'].includes(dialog?.type) && <TournamentActionDialog type={dialog.type} context={dialog.context} onClose={() => setDialog(null)} onDone={done} />}

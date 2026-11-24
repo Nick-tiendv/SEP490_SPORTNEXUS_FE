@@ -9,7 +9,9 @@ export const statusLabels = { DRAFT: 'Bản nháp', OPEN: 'Đang mở đăng ký
 export const statusFilterOptions = ['OPEN', 'IN_PROGRESS', 'FINISHED', 'CANCELLED']
 // Loại hạng mục: khi tạo giải gửi số (0, 1, 2); response trả chữ (SINGLES…).
 export const categoryTypeLabels = { 0: 'Đơn', 1: 'Đôi', 2: 'Đồng đội', SINGLES: 'Đơn', DOUBLES: 'Đôi', TEAM: 'Đồng đội' }
-export const formatLabels = { Knockout: 'Loại trực tiếp', RoundRobin: 'Vòng tròn', DoubleElimination: 'Nhánh thắng – thua' }
+export const formatLabels = { Knockout: 'Loại trực tiếp', RoundRobin: 'Vòng tròn', GroupKnockout: 'Vòng bảng + loại trực tiếp', DoubleElimination: 'Nhánh thắng – thua' }
+// Trạng thái duyệt (PENDING_OWNER / PENDING_ADMIN đã quy về PENDING trong mapper)
+export const approvalLabels = { PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Bị từ chối' }
 export const sportLabels = { Badminton: 'Cầu lông', Pickleball: 'Pickleball', Football: 'Bóng đá', Basketball: 'Bóng rổ', Tennis: 'Quần vợt' }
 export const matchLabels = { Scheduled: 'Đã lên lịch', Pending: 'Chờ thi đấu', Ongoing: 'Đang thi đấu', InProgress: 'Đang thi đấu', Completed: 'Đã hoàn thành', Finished: 'Đã hoàn thành', Bye: 'Miễn vòng', Waiting: 'Chờ kết quả vòng trước' }
 

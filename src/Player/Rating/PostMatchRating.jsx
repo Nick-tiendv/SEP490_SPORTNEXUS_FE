@@ -72,12 +72,14 @@ function PostMatchRating() {
   }, [])
 
   const selectedMatch = pendingRatings.find((m) => m.contextId === selectedContextId) || pendingRatings[0] || null
+  // Trận giải (contextId = matchId của giải, chấm trong 72 giờ): BE chưa ghi rõ contextType nên nhận cả TOURNAMENT / MATCH
+  const isTournamentMatch = /TOURNAMENT|MATCH/i.test(String(selectedMatch?.contextType || ''))
   const checkoutSession = selectedMatch
     ? {
         contextId: selectedMatch.contextId,
         facilityId: selectedMatch.facilityId,
         courtName: [selectedMatch.facilityName, selectedMatch.courtName].filter(Boolean).join(' - '),
-        courtId: selectedMatch.sportName || (selectedMatch.contextType === 'LFG' ? 'Kèo LFG' : 'Đặt sân'),
+        courtId: selectedMatch.sportName || (selectedMatch.contextType === 'LFG' ? 'Kèo LFG' : isTournamentMatch ? 'Trận giải' : 'Đặt sân'),
         checkInTime: `${fmtTime(selectedMatch.startTime)} - ${fmtTime(selectedMatch.endTime)}, ${fmtDate(selectedMatch.startTime)}`,
         checkOutTime: `${fmtTime(selectedMatch.endTime)}; hạn chấm ${fmtTime(selectedMatch.ratingDeadline)} ${fmtDate(selectedMatch.ratingDeadline)}`,
       }
@@ -87,7 +89,7 @@ function PostMatchRating() {
     userId: u.userId,
     name: u.fullName,
     avatar: u.avatarUrl,
-    role: selectedMatch.contextType === 'LFG' ? 'Thành viên kèo LFG' : 'Người góp tiền cùng sân',
+    role: selectedMatch.contextType === 'LFG' ? 'Thành viên kèo LFG' : isTournamentMatch ? 'Người thi đấu cùng trận giải' : 'Người góp tiền cùng sân',
   }))
 
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)

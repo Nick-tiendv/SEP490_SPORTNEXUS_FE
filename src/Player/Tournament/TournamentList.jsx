@@ -19,11 +19,14 @@ import {
   getTournamentStandings,
   getMyTournamentInvitations,
   respondTournamentInvitation,
+  getMyStaffMatches,
 } from '../../api/player/tournamentApi.js'
 import { getMyTeams } from '../../api/player/teamApi.js'
 import TeamsPanel from './TeamsPanel.jsx'
+import RefereeMatches from './RefereeMatches.jsx'
 import ReportModal from '../../components/common/ReportModal.jsx'
 import { TournamentWorkspace } from '../../CourtOwner/Tournament/CreateTournament.jsx'
+import { FORMAT_LABEL, normalizeFormat } from '../../CourtOwner/Tournament/tournamentRules.js'
 
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
@@ -68,6 +71,8 @@ const TABS = [
   { key: 'teams', label: 'Đội của tôi', icon: 'groups' },
   { key: 'invitations', label: 'Lời mời giải', icon: 'mail' },
   { key: 'organize', label: 'Giải tôi tổ chức', icon: 'campaign' },
+  // Luôn hiện: trọng tài biết mình có trang này; chưa được phân công thì trang báo rỗng
+  { key: 'referee', label: 'Trận tôi làm trọng tài', icon: 'sports' },
 ]
 
 function TournamentCard({ tournament, actions, onOpen }) {
@@ -204,7 +209,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         <div className="snx-modal-head">
           <div>
             <h2 id="tournament-detail-title" className="snx-card-title">{t?.name || 'Đang tải…'}</h2>
-            <p className="snx-card-subtitle">{[t?.sport, t?.facility, t?.format, TIER_LABEL[t?.tier], t?.organizer && `BTC: ${t.organizer}`].filter(Boolean).join(' · ')}</p>
+            <p className="snx-card-subtitle">{[t?.sport, t?.facility, FORMAT_LABEL[normalizeFormat(t?.format)] || t?.format, TIER_LABEL[t?.tier], t?.organizer && `BTC: ${t.organizer}`].filter(Boolean).join(' · ')}</p>
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
@@ -485,7 +490,9 @@ function TournamentList() {
 
   const list = tab === 'open' ? openList.data?.items || [] : mine.data || []
   const current = tab === 'open' ? openList : mine
-  const counts = { mine: mine.data?.length || 0 }
+  // GET /tournaments/my-staff-matches: số trận hiện trên tab trọng tài
+  const staffMatches = useApi(getMyStaffMatches, [], { initialData: [] })
+  const counts = { mine: mine.data?.length || 0, referee: staffMatches.data?.length || 0 }
 
   return (
     <div className="snx-page">
@@ -518,6 +525,7 @@ function TournamentList() {
       {tab === 'invitations' && <InvitationsPanel onChanged={() => mine.refresh?.()} />}
       {tab === 'organize' && <TournamentWorkspace mode="player" embedded />}
       {tab === 'matches' && <MyMatches onBrowse={() => setTab('open')} />}
+      {tab === 'referee' && <RefereeMatches matches={staffMatches} />}
 
       {(tab === 'open' || tab === 'mine') && (
         <>
