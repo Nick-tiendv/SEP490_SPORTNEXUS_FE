@@ -28,6 +28,8 @@ const USER_KEYS = [
   'sportnexus_browser_push_enabled',
   'sportnexus_disabled_notif_types',
   'sportnexus_booking_origin',
+  // Ảnh đại diện lưu tạm: không xóa thì tài khoản sau (chưa có avatar) hiện ảnh của tài khoản trước
+  'sportnexus_local_avatar',
 ]
 
 export function clearUserData() {
