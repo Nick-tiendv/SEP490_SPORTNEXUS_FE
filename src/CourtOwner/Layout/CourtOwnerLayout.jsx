@@ -75,8 +75,12 @@ export default function CourtOwnerLayout() {
 
   const refreshProfile = useCallback(() => getMyProfile().then((data) => { setProfile(data); return data }), [])
   const refreshWallet = useCallback(() => getMyWallet().then((data) => { setWallet(data); return data }), [])
-  // Có giao dịch mới (đặt sân, hoàn tiền…), quay lại tab → cập nhật số dư trên thanh trên cùng
-  useLiveRefresh(() => { refreshWallet().catch(() => {}) })
+  // Có giao dịch mới (đặt sân, hoàn tiền…), quay lại tab → cập nhật số dư và điểm Fair Play trên thanh trên cùng
+  // (hủy đơn của khách < 48h bị trừ điểm Fair Play)
+  useLiveRefresh(() => {
+    refreshWallet().catch(() => {})
+    refreshProfile().catch(() => {})
+  })
   // Tải lại danh sách cơ sở (gồm số sân) — gọi sau khi thêm / đổi trạng thái sân.
   const refreshFacilities = useCallback(() => fetchFacilities().then(applyFacilities), [applyFacilities])
 
@@ -172,7 +176,7 @@ export default function CourtOwnerLayout() {
                 <span><span className="snx-pill-label">Đang tạm giữ</span><span className="snx-pill-value">{formatVND(wallet?.frozenBalance)}</span></span>
               </span>
               <NotificationBell linkable={false} />
-              <UserMenu name={displayName} subtitle="Chủ cơ sở" avatarUrl={profile?.avatarUrl} profileTo="/owner/profile" onLogout={handleLogout} />
+              <UserMenu name={displayName} subtitle={profile?.fairPlayScore != null ? `Chủ cơ sở · Fair Play ${profile.fairPlayScore}` : 'Chủ cơ sở'} avatarUrl={profile?.avatarUrl} profileTo="/owner/profile" onLogout={handleLogout} />
             </>
           )}
         />

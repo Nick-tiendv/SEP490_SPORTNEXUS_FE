@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   changePassword,
   getBankAccount,
+  getMyFairPlay,
   getMyVerification,
   logout as logoutApi,
   submitVerification,
@@ -39,6 +40,21 @@ const imageError = (file) => {
   if (file.size > MAX_IMAGE_SIZE) return 'Ảnh không được vượt quá 5MB.'
   return ''
 }
+// Nguồn biến động điểm Fair Play (FairPlayAdjustment.Source)
+const FAIR_PLAY_SOURCES = {
+  RATING: 'Đánh giá từ người chơi',
+  LATE: 'Check-in muộn',
+  NO_SHOW: 'Vắng mặt',
+  CANCEL: 'Hủy đơn muộn',
+  RECOVERY: 'Hồi điểm hằng ngày',
+  REPORT: 'Xử lý khiếu nại',
+  ADMIN: 'Quản trị viên điều chỉnh',
+}
+const fairPlayTone = (score) =>
+  score >= 90 ? { bg: '#DCFCE7', color: '#15803D' } : score >= 70 ? { bg: '#FEF3C7', color: '#B45309' } : { bg: '#FEE2E2', color: '#B91C1C' }
+const formatDateTimeVN = (value) =>
+  (value ? new Date(value).toLocaleString('vi-VN', { timeZone: VN_TIME_ZONE, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '')
+
 const isAdult = (date) => {
   const birth = new Date(date)
   const adult = new Date(birth.getFullYear() + 18, birth.getMonth(), birth.getDate())
@@ -78,6 +94,14 @@ export default function Profile() {
   useEffect(() => {
     getBankAccount().then((data) => setBankAccount(data?.bankAccountNumber ? data : null)).catch(() => {})
   }, [])
+
+  // Lịch sử cộng / trừ điểm Fair Play; lỗi thì chỉ hiện điểm (từ /api/auth/me), ẩn phần lịch sử
+  const [fairPlay, setFairPlay] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    getMyFairPlay().then((data) => !cancelled && setFairPlay(data || {})).catch(() => {})
+    return () => { cancelled = true }
+  }, [profile?.fairPlayScore])
 
   const run = async (key, action, successMessage) => {
     setBusy(key)
@@ -128,6 +152,11 @@ export default function Profile() {
   const kycStatus = profile?.ownerVerificationStatus || verification.data?.status || 'NOT_SUBMITTED'
   const kycInfo = KYC_STATUS[String(kycStatus).toUpperCase()] || KYC_STATUS.NOT_SUBMITTED
   const canSubmitKyc = ['NOT_SUBMITTED', 'REJECTED'].includes(String(kycStatus).toUpperCase())
+
+  // ---------- Fair Play (thang 100) ----------
+  const fairPlayRaw = fairPlay?.fairPlayScore ?? fairPlay?.score ?? profile?.fairPlayScore
+  const fairPlayScore = fairPlayRaw != null && Number.isFinite(Number(fairPlayRaw)) ? Math.round(Number(fairPlayRaw) * 10) / 10 : null
+  const fairPlayHistory = Array.isArray(fairPlay?.history?.items) ? fairPlay.history.items : Array.isArray(fairPlay?.adjustments) ? fairPlay.adjustments : null
 
   const openKycForm = () => {
     const previous = verification.data
@@ -262,6 +291,12 @@ export default function Profile() {
                 <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>{kycInfo.icon}</span>
                 {kycInfo.label}
               </span>
+              {fairPlayScore != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', ...fairPlayTone(fairPlayScore), fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>shield_person</span>
+                  Fair Play {fairPlayScore}
+                </span>
+              )}
               {profile && !profile.isActive && (
                 <span style={{ background: '#FEE2E2', color: '#B91C1C', fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px' }}>Tài khoản bị khóa</span>
               )}
@@ -313,6 +348,47 @@ export default function Profile() {
           )}
         </form>
       </div>
+
+      {/* ĐIỂM FAIR PLAY */}
+      {fairPlayScore != null && (
+        <div style={panelStyle}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: '72px', height: '72px', borderRadius: '20px', ...fairPlayTone(fairPlayScore), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: '24px', fontWeight: 800, lineHeight: 1 }}>{fairPlayScore}</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, marginTop: '2px' }}>/ 100</span>
+            </div>
+            <div style={{ flex: 1, minWidth: '220px' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#0F172A' }}>Điểm Fair Play</h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
+                Điểm uy tín của chủ sân. Hủy đơn của khách dưới 48 giờ trước giờ chơi bị trừ 10 điểm; Quản trị viên có thể điều chỉnh khi xử lý khiếu nại.
+              </p>
+            </div>
+          </div>
+          {fairPlayHistory && (
+            <div style={{ marginTop: '16px', display: 'grid', gap: '8px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>Lịch sử cộng / trừ điểm</div>
+              {fairPlayHistory.length === 0 ? (
+                <div style={{ fontSize: '13px', color: '#64748B' }}>Chưa có lần cộng / trừ điểm nào.</div>
+              ) : (
+                fairPlayHistory.slice(0, 10).map((item, index) => {
+                  const delta = Number(item.delta) || 0
+                  return (
+                    <div key={item.id || index} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#1F2937' }}>{FAIR_PLAY_SOURCES[item.source] || item.source || 'Điều chỉnh điểm'}</div>
+                        <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                          {[item.reason, formatDateTimeVN(item.createdAt)].filter(Boolean).join(' • ')}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: delta >= 0 ? '#15803D' : '#DC2626' }}>{delta > 0 ? '+' : ''}{delta}</div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* XÁC MINH DANH TÍNH (eKYC) */}
       <div style={panelStyle}>
