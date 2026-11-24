@@ -1,0 +1,199 @@
+/* Mascot thông báo nổi. z-index 35: dưới thanh trên (40), lớp phủ menu (45), sidebar (50) và mọi modal. */
+.snx-mascot {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 35;
+  pointer-events: none; /* chỉ thân mascot và bong bóng nhận chuột, phần còn lại không chặn trang */
+  will-change: transform;
+}
+.snx-mascot__hit {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none; /* kéo được trên màn hình cảm ứng */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 40%;
+  outline: none;
+}
+.snx-mascot__hit:focus-visible { box-shadow: 0 0 0 3px var(--snx-green-500, #22c55e); }
+.snx-mascot.is-drag .snx-mascot__hit { cursor: grabbing; }
+
+.snx-mascot__flip { width: 100%; height: 100%; transition: transform .2s ease; }
+.snx-mascot__flip.is-left { transform: scaleX(-1); }
+.snx-mascot__figure { width: 100%; height: 100%; transform-origin: 50% 100%; filter: drop-shadow(0 4px 6px rgba(15, 23, 42, .18)); }
+.snx-mascot__svg, .snx-mascot__img, .snx-mascot__sprite { display: block; width: 100%; height: 100%; }
+.snx-mascot__img { object-fit: contain; pointer-events: none; }
+.snx-mascot__sprite { background-repeat: no-repeat; animation: snx-m-sprite var(--snx-sprite-dur, .6s) steps(var(--snx-sprite-steps, 1)) infinite; }
+
+/* Bộ phận SVG: tâm xoay tính theo đơn vị viewBox 220x240 */
+.snx-mascot__svg g { transform-box: view-box; }
+.snx-m-leg--l { transform-origin: 78px 180px; }
+.snx-m-leg--r { transform-origin: 142px 180px; }
+.snx-m-arm--l { transform-origin: 64px 126px; }
+.snx-m-arm--r { transform-origin: 156px 126px; }
+.snx-m-anger { transform-origin: 185px 25px; }
+/* Lật cả con cóc khi chạy sang trái nhưng giữ số áo không bị ngược */
+.snx-m-number { transform-box: view-box; transform-origin: 110px 150px; }
+.snx-mascot__flip.is-left .snx-m-number { transform: scaleX(-1); }
+
+/* Chạy */
+.is-run .snx-mascot__figure { animation: snx-m-bob .32s ease-in-out infinite alternate; }
+.is-run .snx-m-leg--l { animation: snx-m-step .32s ease-in-out infinite alternate; }
+.is-run .snx-m-leg--r { animation: snx-m-step .32s ease-in-out infinite alternate-reverse; }
+.is-run .snx-m-arm--l { animation: snx-m-swing .32s ease-in-out infinite alternate; }
+.is-run .snx-m-arm--r { animation: snx-m-swing .32s ease-in-out infinite alternate-reverse; }
+.is-run .snx-m-ball { animation: snx-m-roll .6s linear infinite; } /* tâm xoay đặt inline theo từng kit */
+.is-run .snx-m-ball--hop { animation: snx-m-hop .32s ease-in-out infinite alternate; } /* quả cầu thì nảy, không lăn */
+/* Đứng nghỉ */
+.is-idle .snx-mascot__figure { animation: snx-m-breathe 2.4s ease-in-out infinite; }
+/* Báo thông báo: nhảy + vẫy tay */
+.is-jump .snx-mascot__figure { animation: snx-m-jump 1s ease-in-out infinite; }
+.is-jump .snx-m-arm--r { animation: snx-m-wave .45s ease-in-out infinite alternate; }
+/* Dỗi: hừ một cái mỗi 2 giây, dấu giận phập phồng */
+.is-sulk .snx-mascot__figure { animation: snx-m-huff 2.2s ease-in-out infinite; }
+.is-sulk .snx-m-anger { animation: snx-m-pulse 1s ease-in-out infinite; }
+/* Bị kéo: nghiêng người, chân đạp loạn */
+.is-drag .snx-mascot__figure { transform: rotate(-8deg) scale(1.06); }
+.is-drag .snx-m-leg--l { animation: snx-m-step .18s linear infinite alternate; }
+.is-drag .snx-m-leg--r { animation: snx-m-step .18s linear infinite alternate-reverse; }
+/* Sprite sheet tự có khung chuyển động: bỏ hiệu ứng toàn thân */
+.snx-mascot__figure.is-sprite { animation: none !important; }
+
+@keyframes snx-m-bob { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-6%) rotate(3deg); } }
+@keyframes snx-m-step { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes snx-m-swing { from { transform: rotate(18deg); } to { transform: rotate(-18deg); } }
+@keyframes snx-m-roll { to { transform: rotate(360deg); } }
+@keyframes snx-m-hop { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+@keyframes snx-m-breathe { 50% { transform: scale(1.03, .97); } }
+@keyframes snx-m-jump {
+  0%, 70%, 100% { transform: translateY(0) scale(1); }
+  10% { transform: translateY(0) scale(1.08, .9); }
+  35% { transform: translateY(-38%) scale(.95, 1.06); }
+  60% { transform: translateY(0) scale(1.06, .94); }
+}
+@keyframes snx-m-wave { from { transform: rotate(-110deg); } to { transform: rotate(-150deg); } }
+@keyframes snx-m-huff {
+  0%, 70%, 100% { transform: rotate(0); }
+  76% { transform: rotate(-5deg) translateY(-4%); }
+  86% { transform: rotate(4deg); }
+}
+@keyframes snx-m-pulse { 50% { transform: scale(1.25); } }
+@keyframes snx-m-sprite { from { background-position-x: 0%; } to { background-position-x: var(--snx-sprite-end, 0%); } }
+@keyframes snx-m-pop { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* Bong bóng thoại */
+.snx-mascot-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  box-sizing: border-box;
+  pointer-events: auto;
+  padding: 10px 30px 10px 12px;
+  border: 1px solid #d9e8dc;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 14px 32px -14px rgba(15, 23, 42, .4);
+  color: #0f172a;
+  font: 13px/1.45 var(--snx-font-sans, system-ui, sans-serif);
+  animation: snx-m-pop .22s ease-out;
+}
+.snx-mascot-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: calc(var(--snx-mascot-tail, 30px) - 6px);
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border: inherit;
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+.snx-mascot-bubble.is-below { bottom: auto; top: calc(100% + 10px); }
+.snx-mascot-bubble.is-below::after { bottom: auto; top: -7px; transform: rotate(-135deg); }
+.snx-mascot-bubble.is-notice { border-color: #86efac; }
+.snx-mascot-bubble.is-sulk { border-color: #fecdd3; background: #fff1f2; }
+
+.snx-mascot-bubble__main {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.snx-mascot-bubble__eyebrow { color: var(--snx-green-700, #15803d); font-size: 11px; font-weight: 700; }
+.snx-mascot-bubble__title { font-size: 13.5px; }
+.snx-mascot-bubble__text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #475569;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.snx-mascot-bubble__cta { margin-top: 2px; color: var(--snx-green-700, #15803d); font-size: 11.5px; font-weight: 600; text-decoration: underline; }
+.snx-mascot-bubble__main:hover .snx-mascot-bubble__title { color: var(--snx-green-700, #15803d); }
+.snx-mascot-bubble__say { margin: 0; }
+.snx-mascot-bubble__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.snx-mascot-bubble__actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--snx-green-500, #22c55e);
+  border-radius: 999px;
+  background: var(--snx-green-50, #f0fdf4);
+  color: var(--snx-green-700, #15803d);
+  font: 600 12px var(--snx-font-sans, system-ui, sans-serif);
+  cursor: pointer;
+}
+.snx-mascot-bubble__actions button.is-muted { border-color: #cbd5e1; background: #fff; color: #475569; }
+.snx-mascot-bubble__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+  font-size: 16px;
+  line-height: 22px;
+  cursor: pointer;
+}
+.snx-mascot-bubble__close:hover { background: #f1f5f9; color: #0f172a; }
+
+/* Nút hiện lại khi đã ẩn và nút chế độ demo (?mascotDemo=1) */
+.snx-mascot-restore,
+.snx-mascot-demo {
+  position: fixed;
+  left: calc(var(--snx-sidebar-w, 0px) + 12px);
+  z-index: 35;
+  border: 1px solid #d9e8dc;
+  background: #fff;
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, .35);
+  cursor: pointer;
+}
+.snx-mascot-restore { bottom: 12px; width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 18px; opacity: .8; }
+.snx-mascot-restore:hover { opacity: 1; }
+.snx-mascot-demo {
+  bottom: 56px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--snx-green-700, #15803d);
+  font: 600 12px var(--snx-font-sans, system-ui, sans-serif);
+}
+@media (max-width: 1023px) {
+  .snx-mascot-restore, .snx-mascot-demo { left: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snx-mascot *, .snx-mascot-bubble { animation: none !important; transition: none !important; }
+}

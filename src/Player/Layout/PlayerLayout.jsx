@@ -6,6 +6,7 @@ import TopSideBar from './TopSideBar.jsx'
 import { AppFooter } from '../../components/layout/AppShell.jsx'
 import { SportProvider } from '../Context/SportContext.jsx'
 import AIChatModal from '../Booking/AIChat/AIChatModal.jsx'
+import FloatingMascot from '../../components/mascot/FloatingMascot.jsx'
 
 function PlayerLayout() {
   const [aiOpen, setAiOpen] = useState(false)
@@ -34,6 +35,8 @@ function PlayerLayout() {
         </main>
         <AppFooter />
       </div>
+
+      <FloatingMascot />
 
       {/* Full-featured SportNexus AI Concierge Modal */}
       <AIChatModal
