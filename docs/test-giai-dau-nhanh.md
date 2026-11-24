@@ -57,7 +57,7 @@ Các mốc do **BE** quyết thì chế độ này không đổi được:
 3. **A và B đăng ký** giải (tab Đang mở đăng ký).
 4. **BTC thêm trọng tài**: panel quản lý giải → Nhân sự giải → vai trò Trọng tài → nhập số điện thoại → **Tìm** → Thêm nhân sự.
 5. **BTC chốt danh sách & sinh nhánh**, rồi phân trọng tài cho trận ở bảng "Xếp sân & trọng tài".
-6. **Trọng tài nhập tỉ số**: tab **Trận tôi làm trọng tài** → Nhập tỉ số.
+6. **Điểm danh rồi nhập tỉ số**: tab **Trận tôi làm trọng tài** → Nhập tỉ số → bấm **Điểm danh** từng bên (hoặc BTC điểm danh ở danh sách VĐV / chủ sân quét vé QR) → nhập tỉ số. Chỉ một bên điểm danh thì chỉ xử thắng được cho bên có mặt.
 7. **Người thua khiếu nại** ngay: chi tiết giải → trận → Khiếu nại kết quả.
 8. **BTC xử lý**: panel quản lý giải → Khiếu nại kết quả trận → Giữ kết quả (nhập lý do).
 9. **Người thua chuyển Admin**: Hồ sơ → Trung tâm hỗ trợ → Khiếu nại của tôi → **Không đồng ý, chuyển Admin**.
@@ -69,5 +69,6 @@ Thử thêm nếu còn thời gian: BTC bấm "Sửa tỉ số & đóng" ở bư
 
 - BE có cho sinh sơ đồ khi chưa qua hạn đăng ký không (tài liệu BE không ghi).
 - BE có cho nhập tỉ số trước giờ bắt đầu giải không.
+- BE có cho trọng tài / người chơi tổ chức giải gọi `POST /tournaments/{id}/check-in` không (tài liệu ghi chỉ Owner, Admin).
 
 Lỗi thì ghi lại `message` BE trả (toast) và request trong DevTools → Network.

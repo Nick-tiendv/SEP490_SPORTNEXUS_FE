@@ -28,7 +28,8 @@ import { useOwnerContext } from '../Layout/ownerContext.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import TournamentManagePanel from './TournamentManagePanel.jsx'
-import { FORMAT_LABEL, SESSIONS, TEST_RULES, canOrganizerCancel, organizerBlockReason, dateLimits, deadlineForApi, defaultDeadline, estimateMatches, formatError, formatWarning, normalizeFormat, suggestFormat, validateSchedule, validateTournamentDates } from './tournamentRules.js'
+import FacilityPicker from './FacilityPicker.jsx'
+import { FORMAT_LABEL, SESSIONS, TEST_RULES, canOrganizerCancel, checkInGate, organizerBlockReason, dateLimits, deadlineForApi, defaultDeadline, estimateMatches, formatError, formatWarning, normalizeFormat, suggestFormat, validateSchedule, validateTournamentDates } from './tournamentRules.js'
 
 // categoryType trong body tạo giải phải gửi dạng SỐ (docs/api/02).
 const CATEGORY_TYPES = [
@@ -261,7 +262,16 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     setScoreResultType(['WALKOVER', 'RETIRED'].includes(match.resultType) ? match.resultType : 'NORMAL')
     setScoreWinnerId(match.winnerId || '')
     setTiebreak({ a: match.tiebreakA != null ? String(match.tiebreakA) : '', b: match.tiebreakB != null ? String(match.tiebreakB) : '' })
+    const gate = gateOf(match)
+    if (gate?.mode === 'WALKOVER_ONLY') {
+      setScoreResultType('WALKOVER')
+      setScoreWinnerId(gate.present[0].id)
+    }
   }
+  // Chưa điểm danh thì không thi đấu (trận đã có kết quả thì không xét lại)
+  const gateOf = (match) => (match && String(match.status).toUpperCase() !== 'FINISHED' ? checkInGate([match.a, match.b], participants) : null)
+  const scoreGate = gateOf(scoreMatch)
+  const scoreGateMode = scoreGate?.mode || 'OK'
   // Tổng tỉ số các hiệp đang nhập (để biết trận hòa → luân lưu / hòa vòng bảng)
   const scoreTotals = scoreSets.reduce((sum, set) => ({ a: sum.a + (Number(set.a) || 0), b: sum.b + (Number(set.b) || 0) }), { a: 0, b: 0 })
   const scoreFilled = scoreSets.some((set) => set.a !== '' || set.b !== '')
@@ -272,6 +282,10 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const isDrawResult = scoreLevel && footballMatch && groupStageMatch
   const handleSaveScore = (event) => {
     event.preventDefault()
+    if (scoreGateMode === 'BLOCKED' || (scoreGateMode === 'WALKOVER_ONLY' && (scoreResultType !== 'WALKOVER' || scoreWinnerId !== scoreGate.present[0].id))) {
+      showToast(scoreGate.message, 'error')
+      return
+    }
     const sets = scoreSets
       .filter((set) => set.a !== '' || set.b !== '')
       .map((set, index) => ({ setNumber: index + 1, scoreP1: Number(set.a) || 0, scoreP2: Number(set.b) || 0 }))
@@ -838,6 +852,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                                   >
                                     <span style={{ fontSize: '13px', fontWeight: won ? 900 : 700, color: info.name ? '#0F172A' : '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                       {info.name || (match.isBye ? 'Miễn đấu' : 'Chờ xác định')}
+                                      {childStatus === 'IN_PROGRESS' && info.name && gateOf(match)?.absent.includes(info) &&<span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: 600, color: '#B45309' }}>chưa điểm danh</span>}
                                     </span>
                                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{score ?? ''}</span>
                                   </div>
@@ -888,12 +903,25 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             <p style={{ margin: '0 0 12px 0', fontSize: '12.5px', color: '#475569', fontWeight: 600 }}>
               Nhập điểm từng hiệp. Hệ thống tự kiểm tra luật điểm của môn {tournament?.categoryName} và tự xác định người thắng. Elo cập nhật sau khi hết hạn khiếu nại (15 – 20 phút).
             </p>
-            <select value={scoreResultType} onChange={(event) => setScoreResultType(event.target.value)} aria-label="Kiểu kết quả" style={{ ...inputStyle, marginBottom: '12px' }}>
+            {scoreGateMode !== 'OK' && (
+              <div style={{ marginBottom: '12px', padding: '10px 12px', borderRadius: '10px', background: scoreGateMode === 'BLOCKED' ? '#FEF2F2' : '#FFFBEB', color: scoreGateMode === 'BLOCKED' ? '#B91C1C' : '#B45309', fontSize: '12.5px', fontWeight: 600 }}>
+                {scoreGate.message}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                  {scoreGate.absent.map((side) => {
+                    const participant = participants.find((p) => String(p.participantId) === String(side.id))
+                    return participant && (
+                      <button key={side.id} type="button" onClick={() => handleCheckIn(participant)} disabled={busy} style={smallButton('#F0FDF4', '#15803D', '1px solid #BBF7D0')}>Điểm danh {side.name}</button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            <select value={scoreResultType} onChange={(event) => setScoreResultType(event.target.value)} disabled={scoreGateMode !== 'OK'} aria-label="Kiểu kết quả" style={{ ...inputStyle, marginBottom: '12px' }}>
               {RESULT_TYPES.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
             </select>
-            {scoreResultType !== 'NORMAL' && (
+            {scoreResultType !== 'NORMAL' && scoreGateMode !== 'BLOCKED' && (
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                {[scoreMatch.a, scoreMatch.b].map((side) => (
+                {(scoreGateMode === 'WALKOVER_ONLY' ? scoreGate.present : [scoreMatch.a, scoreMatch.b]).map((side) => (
                   <button key={side.id} type="button" onClick={() => setScoreWinnerId(side.id)}
                     style={{ flex: 1, padding: '8px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', border: scoreWinnerId === side.id ? '2px solid #15803D' : '1px solid #CBD5E1', background: scoreWinnerId === side.id ? '#DCFCE7' : '#FFFFFF', color: '#0F172A' }}>
                     {scoreWinnerId === side.id ? '✓ ' : ''}{side.name} thắng
@@ -950,7 +978,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setScoreMatch(null)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
-              <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+              <button type="submit" disabled={busy || scoreGateMode === 'BLOCKED'} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#1D4ED8', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy || scoreGateMode === 'BLOCKED' ? 0.6 : 1 }}>
                 {busy ? 'Đang lưu...' : 'Lưu tỉ số'}
               </button>
             </div>
@@ -998,10 +1026,13 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               <div>
                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>Tạo giải đấu mới</h3>
                 {isPlayer ? (
-                  <select value={form.facilityId || ''} onChange={(event) => setForm((prev) => ({ ...prev, facilityId: event.target.value }))} style={{ ...inputStyle, marginTop: '6px', minWidth: '260px' }} aria-label="Cơ sở tổ chức">
-                    <option value="">{facilitiesLoad.loading ? 'Đang tải cơ sở…' : '— Chọn cơ sở tổ chức —'}</option>
-                    {publicFacilities.map((f) => <option key={f.id} value={f.id}>{f.name}{f.address ? ` — ${f.address}` : ''}</option>)}
-                  </select>
+                  <FacilityPicker
+                    facilities={publicFacilities}
+                    value={form.facilityId || ''}
+                    loading={facilitiesLoad.loading}
+                    onChange={(id) => setForm((prev) => ({ ...prev, facilityId: id }))}
+                    style={{ marginTop: '6px', minWidth: '320px' }}
+                  />
                 ) : (
                   <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>Tại {facility?.name}</div>
                 )}

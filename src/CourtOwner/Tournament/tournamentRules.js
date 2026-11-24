@@ -205,3 +205,37 @@ export function organizerBlockReason(fairPlayScore) {
   if (!Number.isFinite(score) || score >= ORGANIZER_MIN_FAIR_PLAY) return ''
   return `Cần điểm Fair Play từ ${ORGANIZER_MIN_FAIR_PLAY} để tổ chức giải (hiện tại ${Math.round(score * 10) / 10}).`
 }
+
+// ---------- Điểm danh trước khi thi đấu (nhóm chốt 24/11) ----------
+// Chưa điểm danh thì không được thi đấu: chỉ nhập tỉ số khi cả hai bên đã điểm danh. Thiếu một bên → chỉ được
+// xử thắng (WALKOVER) cho bên có mặt; thiếu cả hai → phải điểm danh trước. Không áp dụng khi sửa tỉ số do khiếu nại.
+// sides: [{ id, name }] (id = participantId); participants: GET /tournaments/{id}/participants.
+// Trả null khi chưa có danh sách người tham gia (để BE quyết).
+export function checkInGate(sides, participants) {
+  if (!Array.isArray(participants) || !participants.length) return null
+  const find = (side) => participants.find((p) => (side.id ? String(p.participantId) === String(side.id) : (p.teamName || p.fullName) === side.name))
+  const present = sides.filter((side) => find(side)?.isCheckedIn)
+  const absent = sides.filter((side) => !find(side)?.isCheckedIn)
+  if (!absent.length) return { absent, present, mode: 'OK', message: '' }
+  const names = absent.map((side) => side.name).join(', ')
+  if (present.length) {
+    return { absent, present, mode: 'WALKOVER_ONLY', message: `${names} chưa điểm danh: chỉ được xử thắng cho ${present[0].name}, hoặc điểm danh trước khi nhập tỉ số.` }
+  }
+  return { absent, present, mode: 'BLOCKED', message: `${names} chưa điểm danh: cần điểm danh trước khi nhập kết quả.` }
+}
+
+// ---------- Ô chọn cơ sở tổ chức (người chơi tạo giải) ----------
+// Bỏ dấu để gõ "ha noi" vẫn ra "Hà Nội"
+const foldText = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
+
+// Lọc cơ sở theo tên / địa chỉ: mọi từ gõ vào đều phải có mặt (không phân biệt dấu, thứ tự). Tên khớp đầu chuỗi lên trước.
+export function matchFacilities(facilities, query) {
+  const words = foldText(query).split(/\s+/).filter(Boolean)
+  if (!words.length) return facilities
+  const hits = facilities.filter((f) => {
+    const text = foldText(`${f.name} ${f.address || ''}`)
+    return words.every((word) => text.includes(word))
+  })
+  const first = foldText(query).trim()
+  return hits.sort((a, b) => Number(foldText(b.name).startsWith(first)) - Number(foldText(a.name).startsWith(first)))
+}
