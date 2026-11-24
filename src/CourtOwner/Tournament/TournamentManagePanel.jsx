@@ -636,7 +636,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         </>
       )}
 
-      {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
+      {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.winnerName || m.isDraw).length}`} childId={child.id} />}
 
       {!courtOnly && <ComplaintsSection tournamentId={tournament.id} onChanged={onChanged} />}
 

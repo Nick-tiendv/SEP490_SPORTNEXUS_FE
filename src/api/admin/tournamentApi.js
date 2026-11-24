@@ -92,22 +92,30 @@ export function toParticipant(raw) {
     registered: toIsoDate(pick(raw, 'registeredAt', 'createdAt', 'joinedAt')),
   }
 }
+// "TBD" = chưa xác định đấu thủ
+const realName = value => (typeof value === 'string' && value !== 'TBD' ? value : '')
 function toSide(raw, prefix) {
   return {
     id: String(pick(raw, `${prefix}Id`, `${prefix}.id`, `${prefix}ParticipantId`) ?? ''),
-    name: pick(raw, `${prefix}Name`, `${prefix}.name`, `${prefix}.fullName`, `${prefix}.teamName`) || '',
+    // GET /bracket trả p1 / p2 là tên (chuỗi), không kèm id
+    name: realName(raw?.[prefix]) || realName(pick(raw, `${prefix}Name`, `${prefix}.name`, `${prefix}.fullName`, `${prefix}.teamName`)),
   }
 }
 export function toMatch(raw) {
-  // Hỗ trợ cả kiểu player1/player2 và participant1/participant2, team1/team2.
-  const prefixA = ['player1', 'participant1', 'team1', 'home'].find(prefix => pick(raw, `${prefix}Id`, `${prefix}Name`, prefix)) || 'player1'
-  const prefixB = ['player2', 'participant2', 'team2', 'away'].find(prefix => pick(raw, `${prefix}Id`, `${prefix}Name`, prefix)) || 'player2'
-  const sets = asArray(pick(raw, 'sets', 'setScores')).map(set => ({ set: num(pick(set, 'setNumber')), a: num(pick(set, 'scoreP1')), b: num(pick(set, 'scoreP2')) }))
+  // Hỗ trợ cả kiểu player1/player2, participant1/participant2, team1/team2 và p1/p2 (GET /bracket).
+  const prefixA = ['player1', 'participant1', 'team1', 'home', 'p1'].find(prefix => pick(raw, `${prefix}Id`, `${prefix}Name`, prefix)) || 'player1'
+  const prefixB = ['player2', 'participant2', 'team2', 'away', 'p2'].find(prefix => pick(raw, `${prefix}Id`, `${prefix}Name`, prefix)) || 'player2'
+  const sets = asArray(pick(raw, 'sets', 'setScores', 'scores')).map(set => ({ set: num(pick(set, 'setNumber')), a: num(pick(set, 'scoreP1')), b: num(pick(set, 'scoreP2')) }))
+  const round = num(pick(raw, 'roundNumber', 'round', 'roundIndex'))
+  const roundName = String(pick(raw, 'roundName', 'stage') || '')
   return {
     id: String(pick(raw, 'id', 'matchId') ?? ''),
-    round: num(pick(raw, 'roundNumber', 'round', 'roundIndex')) ?? 1,
-    roundName: pick(raw, 'roundName', 'stage') || '',
-    order: num(pick(raw, 'matchNumber', 'matchOrder', 'order', 'position')) ?? 0,
+    round: round ?? 1,
+    roundMissing: round == null,
+    // BE ghi "Tứ kết (miễn đấu)" cho trận có người được miễn đấu
+    roundName: roundName.replace(/\s*\(miễn đấu\)/i, ''),
+    isBye: /miễn đấu/i.test(roundName),
+    order: num(pick(raw, 'matchNumber', 'matchIndex', 'matchOrder', 'order', 'position')) ?? 0,
     a: toSide(raw, prefixA),
     b: toSide(raw, prefixB),
     scoreA: num(pick(raw, 'scoreP1', 'score1', 'player1Score', 'homeScore')),
@@ -115,7 +123,7 @@ export function toMatch(raw) {
     sets,
     // winnerId null khi trận hòa (resultType = DRAW, chỉ vòng bảng / vòng tròn bóng đá)
     winnerId: String(pick(raw, 'winnerId', 'winner.id') ?? ''),
-    winnerName: pick(raw, 'winnerName', 'winner.name') || '',
+    winnerName: realName(raw?.winner) || pick(raw, 'winnerName', 'winner.name') || '',
     resultType: String(pick(raw, 'resultType') ?? '').toUpperCase(),
     isDraw: String(pick(raw, 'resultType') ?? '').toUpperCase() === 'DRAW',
     stage: String(pick(raw, 'stage') ?? '').toUpperCase(),
@@ -127,12 +135,20 @@ export function toMatch(raw) {
     time: pick(raw, 'scheduledTime', 'startTime', 'courtSlot.startTime') || '',
   }
 }
+// GET /bracket chỉ trả tên người thắng (không có id) → so theo tên khi thiếu id
+export const isMatchWinner = (match, side) =>
+  Boolean(side?.name) && (match.winnerId ? side.id === match.winnerId : side.name === match.winnerName)
 // Bracket có thể trả về dạng { rounds: [{ matches }] } hoặc danh sách trận phẳng — gom về rounds.
 export function toBracket(data) {
   const rounds = asArray(pick(data, 'rounds'))
   const matches = rounds.length
     ? rounds.flatMap((round, index) => asArray(pick(round, 'matches')).map(match => ({ ...toMatch(match), round: num(pick(round, 'roundNumber', 'round')) ?? index + 1, roundName: pick(round, 'name', 'roundName') || toMatch(match).roundName })))
     : toList(data).items.length ? toList(data).items.map(toMatch) : asArray(pick(data, 'matches')).map(toMatch)
+  // Danh sách phẳng không có số vòng: loại trực tiếp đánh số trận kiểu cây (1 = chung kết, 2–3 = bán kết, 4–7 = tứ kết…)
+  const tree = rounds.length ? [] : matches.filter(match => match.roundMissing && match.stage === 'KNOCKOUT' && match.order > 0)
+  const depth = match => Math.floor(Math.log2(match.order))
+  const maxDepth = Math.max(...tree.map(depth))
+  for (const match of tree) match.round = maxDepth - depth(match) + 1
   // Vòng bảng (stage = GROUP) gom theo bảng; vòng loại trực tiếp gom theo vòng.
   const keyOf = match => (match.stage === 'GROUP' ? `0|${match.groupName}|${String(match.round).padStart(3, '0')}` : `1||${String(match.round).padStart(3, '0')}`)
   const byRound = new Map()

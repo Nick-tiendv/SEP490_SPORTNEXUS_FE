@@ -11,6 +11,7 @@ import {
   executeRandomPairing,
   generateBracket,
   getBracket,
+  getMatch,
   getMyTournaments,
   getParticipants,
   getSports,
@@ -22,6 +23,7 @@ import {
 } from '../../api/owner'
 import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
 import { uploadDocument } from '../../api/player/uploadApi.js'
+import { isMatchWinner, toMatch } from '../../api/admin/tournamentApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import NoFacilityState from '../NoFacilityState.jsx'
@@ -242,7 +244,18 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   }
 
   // ---------- Nhập tỉ số ----------
-  const openScoreModal = (match) => {
+  const openScoreModal = async (match) => {
+    // GET /bracket không kèm id đấu thủ → lấy chi tiết trận để chọn người thắng
+    if (!match.a.id || !match.b.id) {
+      try {
+        const data = await getMatch(match.id)
+        const detail = toMatch(Array.isArray(data) ? data[0] : data)
+        match = { ...match, a: detail.a, b: detail.b, winnerId: detail.winnerId }
+      } catch (error) {
+        showToast(error?.message || 'Không tải được thông tin trận.', 'error')
+        return
+      }
+    }
     setScoreMatch(match)
     setScoreSets(match.sets?.length ? match.sets.map((set) => ({ a: String(set.a ?? ''), b: String(set.b ?? '') })) : [{ a: '', b: '' }])
     setScoreResultType(['WALKOVER', 'RETIRED'].includes(match.resultType) ? match.resultType : 'NORMAL')
@@ -448,8 +461,8 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
 
   // Nhà vô địch: người thắng trận cuối cùng khi bảng đã kết thúc
   const finalMatch = rounds.length ? rounds[rounds.length - 1].matches[0] : null
-  const champion = childStatus === 'FINISHED' && finalMatch?.winnerId
-    ? [finalMatch.a, finalMatch.b].find((side) => side.id && side.id === finalMatch.winnerId)
+  const champion = childStatus === 'FINISHED' && finalMatch
+    ? [finalMatch.a, finalMatch.b].find((side) => isMatchWinner(finalMatch, side))
     : null
 
   const panelStyle = {
@@ -807,7 +820,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                       <div key={round.label} style={{ minWidth: '210px', display: 'flex', flexDirection: 'column', justifyContent: 'space-around', gap: '14px' }}>
                         <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', textAlign: 'center', textTransform: 'uppercase' }}>{round.label}</div>
                         {round.matches.map((match) => {
-                          const ready = childStatus === 'IN_PROGRESS' && match.a.id && match.b.id
+                          const ready = childStatus === 'IN_PROGRESS' && match.a.name && match.b.name
                           const setText = match.sets?.length ? match.sets.map((set) => `${set.a}-${set.b}`).join(', ') : ''
                           return (
                             <div
@@ -817,14 +830,14 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                             >
                               {[['a', match.scoreA], ['b', match.scoreB]].map(([side, score]) => {
                                 const info = match[side]
-                                const won = match.winnerId && info.id === match.winnerId
+                                const won = isMatchWinner(match, info)
                                 return (
                                   <div
                                     key={side}
                                     style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '6px 8px', borderRadius: '6px', marginBottom: side === 'a' ? '6px' : 0, background: won ? '#DCFCE7' : '#F8FAFC', border: '1px solid #E2E8F0' }}
                                   >
                                     <span style={{ fontSize: '13px', fontWeight: won ? 900 : 700, color: info.name ? '#0F172A' : '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {info.name || 'Chờ xác định'}
+                                      {info.name || (match.isBye ? 'Miễn đấu' : 'Chờ xác định')}
                                     </span>
                                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{score ?? ''}</span>
                                   </div>
