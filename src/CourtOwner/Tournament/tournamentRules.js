@@ -3,12 +3,12 @@
 import { addDays, toDateKey } from '../shared.js'
 
 // ---------- Chế độ test (docs/test-giai-dau-nhanh.md) ----------
-// Chỉ bật khi chạy `npm run dev` VÀ có VITE_TOURNAMENT_TEST_RULES=true trong .env.local (không commit).
-// Bản build và `npm test` luôn dùng luật thật. Luật thời gian mới thêm sau này: viết ở file này và đọc TEST_RULES
-// nếu cần nới khi test.
+// Bật khi có VITE_TOURNAMENT_TEST_RULES=true: .env.local khi dev, hoặc biến môi trường trên Vercel để cả nhóm test
+// (đặt cho môi trường Preview, KHÔNG đặt cho Production). Tắt = xóa biến rồi build / deploy lại, không cần sửa code.
+// `npm test` luôn dùng luật thật. Luật thời gian mới thêm sau này: viết ở file này và đọc TEST_RULES nếu cần nới khi test.
 // Nới: bắt đầu từ ngày mai, hạn đăng ký 23:59 hôm nay (ngay trước ngày bắt đầu), BTC hủy giải lúc nào cũng được.
 const env = (typeof import.meta !== 'undefined' && import.meta.env) || {}
-export const TEST_RULES = env.DEV === true && String(env.VITE_TOURNAMENT_TEST_RULES) === 'true'
+export const TEST_RULES = String(env.VITE_TOURNAMENT_TEST_RULES) === 'true'
 
 export const DEADLINE_GAP_DAYS = TEST_RULES ? 1 : 2 // hạn đăng ký trước ngày bắt đầu ít nhất 48 giờ
 export const MAX_DURATION_MONTHS = 1 // giải kéo dài tối đa 1 tháng kể từ ngày bắt đầu

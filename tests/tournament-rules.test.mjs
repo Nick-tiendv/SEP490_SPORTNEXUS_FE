@@ -151,7 +151,7 @@ test('giải đấu: khi nào người khiếu nại được chuyển Admin', (
   assert.equal(canEscalateComplaint({ ...base, createdAt: '2026-12-09T11:00:00Z', status: 'WITHDRAWN' }, now), false)
 })
 
-test('giải đấu: test tự động luôn chạy luật thật (chế độ test chỉ bật trên npm run dev)', () => {
+test('giải đấu: test tự động luôn chạy luật thật (không đặt biến chế độ test)', () => {
   assert.equal(TEST_RULES, false)
   assert.equal(deadlineForApi('2026-12-08'), '2026-12-08', 'luật thật gửi ngày như cũ')
   assert.equal(deadlineForApi(''), null)

@@ -978,7 +978,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
           <form onSubmit={handleCreateTournament} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '760px', width: '100%', padding: '26px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)', margin: '20px 0' }}>
             {TEST_RULES && (
               <div role="status" style={{ marginBottom: '14px', padding: '8px 12px', borderRadius: '10px', background: '#FEF9C3', border: '1px solid #FDE047', color: '#854D0E', fontSize: '12.5px', fontWeight: 700 }}>
-                Chế độ test: đã nới luật ngày và khóa hủy giải (chỉ trên máy dev). Đặt tên giải có tiền tố [TEST]. Tắt trước khi demo.
+                Chế độ test: đã nới luật ngày và khóa hủy giải. Đặt tên giải có tiền tố [TEST]. Tắt trước khi demo.
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>

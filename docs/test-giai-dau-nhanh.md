@@ -4,16 +4,21 @@ Luật thật của giải (bắt đầu sau 2 ngày, hạn đăng ký trước 
 
 ## Bật / tắt
 
-1. Thêm vào `.env.local` (file này không commit):
-   ```
-   VITE_TOURNAMENT_TEST_RULES=true
-   ```
-2. Khởi động lại `npm run dev` (Vite chỉ đọc biến môi trường lúc khởi động).
-3. Mở form tạo giải: thấy dải vàng **"Chế độ test"** là đã bật.
+Chế độ test bật bằng biến môi trường `VITE_TOURNAMENT_TEST_RULES=true`, không cần sửa code. Vite đọc biến lúc khởi động / lúc build, nên đổi biến xong phải chạy lại hoặc deploy lại.
 
-Tắt: xóa dòng trên (hoặc đặt `false`) rồi khởi động lại `npm run dev`. **Nhớ tắt trước buổi demo / bảo vệ.**
+**Trên máy mình (dev):**
+1. Thêm vào `.env.local` (file này không commit): `VITE_TOURNAMENT_TEST_RULES=true`
+2. Tắt rồi chạy lại `npm run dev`.
 
-Chế độ chỉ có tác dụng khi chạy `npm run dev`. Bản `npm run build` và `npm test` luôn dùng luật thật, kể cả khi lỡ để biến này.
+**Trên Vercel (cả nhóm cùng test):**
+1. Vercel → Project → Settings → Environment Variables → thêm `VITE_TOURNAMENT_TEST_RULES` = `true`.
+   - Nên chọn môi trường **Preview** (bản deploy của nhánh / PR) và **không chọn Production**, để trang thật không bị nới luật.
+   - Nếu chỉ có một bản deploy Production để test chung: đặt cho Production, test xong **phải** xóa.
+2. Redeploy (biến chỉ có tác dụng ở lần build sau khi thêm).
+
+**Kiểm tra:** mở form tạo giải, thấy dải vàng **"Chế độ test"** là đã bật.
+
+**Tắt:** xóa biến (hoặc đặt `false`) rồi chạy lại / redeploy. **Bắt buộc tắt trước buổi demo / bảo vệ và trước khi dùng thật.** `npm test` luôn chạy luật thật.
 
 ## Chế độ test đổi gì
 
