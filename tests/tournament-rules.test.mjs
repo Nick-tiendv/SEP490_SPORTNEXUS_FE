@@ -4,6 +4,7 @@ import {
   TEST_RULES,
   addMonths,
   canOrganizerCancel,
+  checkInGate,
   deadlineForApi,
   dateLimits,
   defaultDeadline,
@@ -164,4 +165,18 @@ test('giải đấu: người chơi cần Fair Play từ 90 để tổ chức gi
   assert.match(organizerBlockReason(70), /hiện tại 70/)
   assert.equal(organizerBlockReason(null), '', 'chưa biết điểm thì để BE quyết')
   assert.equal(organizerBlockReason('abc'), '')
+})
+
+test('điểm danh: đủ hai bên mới nhập tỉ số, thiếu một bên chỉ xử thắng', () => {
+  const a = { id: 'p1', name: 'An' }
+  const b = { id: 'p2', name: 'Bình' }
+  const list = (x, y) => [{ participantId: 'p1', fullName: 'An', isCheckedIn: x }, { participantId: 'p2', fullName: 'Bình', isCheckedIn: y }]
+  assert.equal(checkInGate([a, b], list(true, true)).mode, 'OK')
+  const one = checkInGate([a, b], list(true, false))
+  assert.equal(one.mode, 'WALKOVER_ONLY')
+  assert.equal(one.present[0].id, 'p1')
+  assert.match(one.message, /Bình chưa điểm danh/)
+  assert.equal(checkInGate([a, b], list(false, false)).mode, 'BLOCKED')
+  assert.equal(checkInGate([{ id: '', name: 'An' }, { id: '', name: 'Bình' }], list(true, true)).mode, 'OK', 'thiếu id thì so theo tên')
+  assert.equal(checkInGate([a, b], []), null, 'chưa có danh sách thì để BE quyết')
 })

@@ -111,9 +111,12 @@ function EditInfoModal({ tournament, onClose, onSaved }) {
   )
 }
 
-function CourtBlockForm({ tournamentId, courts, onDone }) {
+function CourtBlockForm({ tournamentId, courts, startDate, endDate, blockedCourtIds, onDone }) {
   const today = toDateKey()
-  const [form, setForm] = useState({ courtIds: [], dateFrom: today, dateTo: today, startTime: '', endTime: '' })
+  // Mặc định các ngày thi đấu của giải (không lùi về trước hôm nay)
+  const from = startDate && dateInput(startDate) > today ? dateInput(startDate) : today
+  const to = endDate && dateInput(endDate) > from ? dateInput(endDate) : from
+  const [form, setForm] = useState({ courtIds: [], dateFrom: from, dateTo: to, startTime: '', endTime: '' })
   const [busy, setBusy] = useState('')
   const [conflicts, setConflicts] = useState([])
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value })
@@ -149,7 +152,11 @@ function CourtBlockForm({ tournamentId, courts, onDone }) {
         {courts.map((c) => {
           const id = String(c.id)
           const on = form.courtIds.includes(id)
-          return <button key={id} type="button" className="snx-chip" aria-pressed={on} onClick={() => setForm({ ...form, courtIds: on ? form.courtIds.filter((x) => x !== id) : [...form.courtIds, id] })}>{c.name}</button>
+          return (
+            <button key={id} type="button" className="snx-chip" aria-pressed={on} title={blockedCourtIds.has(id) ? 'Sân này đang có ca giữ cho giải' : undefined} onClick={() => setForm({ ...form, courtIds: on ? form.courtIds.filter((x) => x !== id) : [...form.courtIds, id] })}>
+              {c.name}{blockedCourtIds.has(id) && <span style={{ color: '#B45309', fontWeight: 700 }}> ✓ đã giữ</span>}
+            </button>
+          )
         })}
       </div>
       <div className="snx-form-grid">
@@ -170,6 +177,57 @@ function CourtBlockForm({ tournamentId, courts, onDone }) {
           {conflicts.slice(0, 8).map((c) => <span key={c.slotId}>{c.courtName} {formatDateTime(c.startTime)}: {c.reason}</span>)}
         </div>
       )}
+    </div>
+  )
+}
+
+// Lịch sân của giải theo ngày (GET /court-schedule): sân nào đang giữ khung giờ nào, trận nào đá sân nào lúc mấy giờ.
+// scheduled: TournamentMatchCourtItem { matchId, roundName, status, courtId, courtName, startTime, endTime }; tên đấu thủ lấy từ sơ đồ.
+function CourtScheduleView({ blocks, scheduled, matches }) {
+  const byId = new Map(matches.map((m) => [String(m.id), m]))
+  const days = new Map()
+  const dayOf = (value) => {
+    const key = toDateKey(value)
+    if (!days.has(key)) days.set(key, { key, blocks: [], matches: [] })
+    return days.get(key)
+  }
+  for (const b of blocks) if (b.startTime) dayOf(b.startTime).blocks.push(b)
+  for (const s of scheduled) if (s.startTime && s.courtName) dayOf(s.startTime).matches.push(s)
+  const byTime = (x, y) => new Date(x.startTime) - new Date(y.startTime)
+  const list = [...days.values()].sort((x, y) => x.key.localeCompare(y.key))
+
+  if (!list.length) return <p className="snx-muted">Chưa giữ sân và chưa xếp trận nào.</p>
+  return (
+    <div className="snx-stack" style={{ gap: 12 }}>
+      {list.map((day) => (
+        <div key={day.key} style={{ border: '1px solid #E2E8F0', borderRadius: 12, padding: '10px 12px' }}>
+          <strong style={{ fontSize: 14 }}>{new Date(`${day.key}T00:00:00`).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
+          <div className="snx-row" style={{ margin: '8px 0', gap: 6 }}>
+            <span className="snx-muted" style={{ fontSize: 12.5 }}>Sân đang giữ:</span>
+            {day.blocks.length === 0
+              ? <span className="snx-muted" style={{ fontSize: 12.5 }}>không có</span>
+              : day.blocks.sort(byTime).map((b) => <span key={`${b.courtId}|${b.startTime}`} className="snx-badge snx-badge--amber">{b.courtName} {formatTime(b.startTime)} – {formatTime(b.endTime)} ({b.slotCount} ca)</span>)}
+          </div>
+          {day.matches.length === 0 ? <p className="snx-muted" style={{ margin: 0, fontSize: 12.5 }}>Chưa xếp trận nào trong ngày.</p> : (
+            <div className="snx-list">
+              {day.matches.sort(byTime).map((s) => {
+                const m = byId.get(String(s.matchId))
+                return (
+                  <div key={s.matchId} className="snx-list-item" style={{ padding: '6px 10px' }}>
+                    <strong style={{ minWidth: 104 }}>{formatTime(s.startTime)} – {formatTime(s.endTime)}</strong>
+                    <span className="snx-badge snx-badge--blue">{s.courtName}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {s.roundName || m?.roundName ? <span className="snx-muted">{s.roundName || m.roundName}: </span> : null}
+                      {m ? `${m.a?.name || 'Chờ xác định'} vs ${m.b?.name || 'Chờ xác định'}` : 'Trận đấu'}
+                    </span>
+                    {['FINISHED', 'COMPLETED'].includes(String(s.status).toUpperCase()) && <span className="snx-badge snx-badge--gray">Đã xong</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -570,6 +628,14 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
   const closed = ['CANCELLED', 'FINISHED'].includes(status)
   const matches = (rounds || []).flatMap((round) => round.matches || []).filter((m) => m.id)
   const blocks = schedule.data?.blocks || []
+  const scheduled = schedule.data?.matches || []
+  const blockedCourtIds = new Set(blocks.map((b) => String(b.courtId)))
+  // Sân / giờ của trận: sơ đồ chưa có thì lấy từ lịch sân
+  const slotOf = (m) => {
+    if (m.court) return { court: m.court, time: m.time }
+    const s = scheduled.find((x) => String(x.matchId) === String(m.id))
+    return s?.courtName ? { court: s.courtName, time: s.startTime } : null
+  }
 
   return (
     <div className="snx-card" style={{ marginBottom: 24 }}>
@@ -588,17 +654,14 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       {!closed && canBlockCourts && (
         <>
           <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Giữ khung giờ sân cho giải</h3>
-          <CourtBlockForm tournamentId={tournament.id} courts={courts.data || []} onDone={schedule.refresh} />
+          <CourtBlockForm key={tournament.id} tournamentId={tournament.id} courts={courts.data || []} startDate={tournament.startDate} endDate={tournament.endDate} blockedCourtIds={blockedCourtIds} onDone={schedule.refresh} />
         </>
       )}
 
-      <h3 className="snx-card-title" style={{ fontSize: 15, margin: '18px 0 8px' }}>Khung giờ đang giữ ({blocks.length})</h3>
-      {schedule.error && <div className="snx-alert snx-alert--error">{schedule.error}</div>}
-      {blocks.length === 0 ? <p className="snx-muted">Chưa giữ khung giờ nào.</p> : (
-        <div className="snx-row">
-          {blocks.map((b) => <span key={`${b.courtId}|${b.startTime}`} className="snx-badge snx-badge--amber">{b.courtName}: {formatDateTime(b.startTime)} – {formatTime(b.endTime)} ({b.slotCount} ca)</span>)}
-        </div>
-      )}
+      <h3 className="snx-card-title" style={{ fontSize: 15, margin: '18px 0 8px' }}>Lịch sân & lịch thi đấu</h3>
+      {schedule.error ? <div className="snx-alert snx-alert--error">{schedule.error}</div> : schedule.loading && !schedule.data
+        ? <p className="snx-muted">Đang tải lịch sân…</p>
+        : <CourtScheduleView blocks={blocks} scheduled={scheduled} matches={matches} />}
 
       {!courtOnly && child && matches.length > 0 && (
         <>
@@ -613,11 +676,12 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
               <tbody>
                 {matches.map((m) => {
                   const done = ['FINISHED', 'COMPLETED'].includes(String(m.status).toUpperCase())
+                  const slot = slotOf(m)
                   return (
                     <tr key={m.id}>
                       <td>{m.roundName || `Vòng ${m.round}`}</td>
                       <td>{m.a?.name || 'Chờ xác định'} vs {m.b?.name || 'Chờ xác định'}</td>
-                      <td>{m.court ? `${m.court} • ${formatDateTime(m.time)}` : <span className="snx-muted">Chưa xếp</span>}</td>
+                      <td>{slot ? `${slot.court} • ${formatDateTime(slot.time)}` : <span className="snx-muted">Chưa xếp</span>}</td>
                       <td>
                         {!done && !closed && referees.length > 0 ? (
                           <select className="snx-select" style={{ minWidth: 140 }} defaultValue="" onChange={(e) => setOfficial(m, e.target.value)} aria-label="Phân trọng tài">
@@ -626,7 +690,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
                           </select>
                         ) : <span className="snx-muted">{referees.length ? '—' : 'Chưa có trọng tài'}</span>}
                       </td>
-                      <td>{!done && !closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setAssigning(m)}>{m.court ? 'Đổi sân' : 'Xếp sân'}</button>}</td>
+                      <td>{!done && !closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setAssigning(m)}>{slot ? 'Đổi sân' : 'Xếp sân'}</button>}</td>
                     </tr>
                   )
                 })}
@@ -636,7 +700,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         </>
       )}
 
-      {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.isDraw).length}`} childId={child.id} />}
+      {!courtOnly && child && <StandingsSection key={`${child.id}|${matches.length}|${matches.filter((m) => m.winnerId || m.winnerName || m.isDraw).length}`} childId={child.id} />}
 
       {!courtOnly && <ComplaintsSection tournamentId={tournament.id} onChanged={onChanged} />}
 

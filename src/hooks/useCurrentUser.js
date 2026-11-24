@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { getMyProfile, readLocalAvatar } from '../api/player/profileApi.js'
+import { readSession } from '../context/authSession.js'
 
 // Thông tin người dùng đang đăng nhập (GET /api/auth/me), dùng chung cho TopBar, trang chủ, thanh toán...
 // Gọi API một lần cho cả app; tải lại khi hồ sơ được sửa (sự kiện 'player-profile-updated').
 // Chữ viết tắt từ họ tên (tối đa 3 chữ), dùng khi chưa có ảnh đại diện
 export const initialsOf = name => (name || '?').trim().split(/\s+/).map(part => part[0]).slice(-3).join('').toUpperCase()
 
-let cache = null
-let pending = null
+// Cache theo phiên đăng nhập (token): đăng xuất rồi đăng nhập tài khoản khác mà không tải lại trang
+// thì phải tải lại /api/auth/me, không được dùng hồ sơ của tài khoản trước.
+let cache = null // { key, user }
+let pending = null // { key, promise }
+const sessionKey = () => readSession()?.token || ''
 
 const fromLogin = () => {
   try {
@@ -34,16 +38,24 @@ const toUser = me => ({
   avatarUrl: me.avatarUrl || readLocalAvatar() || null,
   fairPlayScore: me.fairPlayScore ?? null,
 })
+export const loadCurrentUser = (force = false) => load(force)
 const load = (force = false) => {
-  if (!force && (cache || pending)) return pending || Promise.resolve(cache)
-  pending = getMyProfile()
-    .then(me => { cache = toUser(me || {}); return cache })
-    .finally(() => { pending = null })
-  return pending
+  const key = sessionKey()
+  if (!force && cache?.key === key) return Promise.resolve(cache.user)
+  if (!force && pending?.key === key) return pending.promise
+  const promise = getMyProfile()
+    .then(me => {
+      const user = toUser(me || {})
+      if (sessionKey() === key) cache = { key, user } // phiên đã đổi trong lúc tải thì bỏ kết quả cũ
+      return user
+    })
+    .finally(() => { if (pending?.promise === promise) pending = null })
+  pending = { key, promise }
+  return promise
 }
 
 export function useCurrentUser() {
-  const [user, setUser] = useState(() => cache || fromLogin())
+  const [user, setUser] = useState(() => (cache?.key === sessionKey() ? cache.user : fromLogin()))
   useEffect(() => {
     let active = true
     load().then(value => active && setUser(value)).catch(() => {})
