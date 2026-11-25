@@ -26,7 +26,7 @@ export const date = value => (value ? value.split('-').reverse().join('/') : '�
 // Thẻ KPI từ GET /api/v1/admin/tournaments/statistics.
 export function tournamentStats(stats) {
   return [
-    { label: 'Tổng giải đấu', value: stats.totalTournaments, note: `${number(stats.subTournaments)} hạng mục · ${number(stats.locked)} bị khóa`, icon: 'total' },
+    { label: 'Tổng giải đấu', value: stats.totalTournaments, note: `${number(stats.locked)} bị khóa`, icon: 'total' },
     { label: 'Đang mở đăng ký', value: stats.open, note: 'Đang nhận người tham gia', icon: 'open' },
     { label: 'Đang diễn ra', value: stats.inProgress, note: 'Đang thi đấu', icon: 'upcoming' },
     { label: 'Đã kết thúc', value: stats.finished, note: `${number(stats.cancelled)} giải đã hủy`, icon: 'completed' },
@@ -36,8 +36,8 @@ export function tournamentStats(stats) {
 
 export function exportTournaments(tournaments) {
   const escape = value => { const text = String(value ?? ''); return `"${(/^[\s]*[=+@-]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"` }
-  const rows = [['Mã giải', 'Tên giải', 'Môn thể thao', 'Cơ sở', 'Ban tổ chức', 'Thể thức', 'Số hạng mục', 'Trạng thái', 'Đã khóa', 'Người tham gia', 'Quỹ giải thưởng (đ)', 'Đã trả thưởng (đ)'],
-    ...tournaments.map(t => [t.id, t.name, sportLabels[t.sport] || t.sport, t.facility, t.organizer, formatLabels[t.format] || t.format, t.subTournamentCount ?? '', statusLabels[t.status] || t.status, t.locked ? `Có — ${t.lockReason}` : 'Không', t.registered ?? '', t.prize ?? '', t.prizePaid ?? ''])]
+  const rows = [['Mã giải', 'Tên giải', 'Môn thể thao', 'Cơ sở', 'Ban tổ chức', 'Thể thức', 'Trạng thái', 'Đã khóa', 'Người tham gia', 'Quỹ giải thưởng (đ)', 'Đã trả thưởng (đ)'],
+    ...tournaments.map(t => [t.id, t.name, sportLabels[t.sport] || t.sport, t.facility, t.organizer, formatLabels[t.format] || t.format, statusLabels[t.status] || t.status, t.locked ? `Có — ${t.lockReason}` : 'Không', t.registered ?? '', t.prize ?? '', t.prizePaid ?? ''])]
   const url = URL.createObjectURL(new Blob(['﻿' + rows.map(row => row.map(escape).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }))
   const link = document.createElement('a'); link.href = url; link.download = 'giai-dau.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

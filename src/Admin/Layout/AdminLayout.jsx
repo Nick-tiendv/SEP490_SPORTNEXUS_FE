@@ -5,6 +5,7 @@ import AdminHeader from './AdminHeader.jsx'
 import { AppFooter } from '../../components/layout/AppShell.jsx'
 import { getMyAccount } from '../../api/admin/accountApi.js'
 import { getAdminDashboard } from '../../api/admin/dashboardApi.js'
+import { listAdminTournaments } from '../../api/admin/tournamentApi.js'
 import { lastDaysRange, toApiDate } from '../Dashboard/dashboardData.js'
 // Shared Admin design system: tokens → shell & layout → components. Page CSS loads after these.
 import '../styles/admin-theme.css'
@@ -35,7 +36,10 @@ export default function AdminLayout() {
     let cancelled = false
     const { from, to } = lastDaysRange(30)
     getAdminDashboard({ fromDate: toApiDate(from), toDate: toApiDate(to) }, { fresh: !firstBadgeLoad.current })
-      .then(({ pending }) => !cancelled && setBadges(pending)).catch(() => {})
+      .then(({ pending }) => !cancelled && setBadges(prev => ({ ...prev, ...pending }))).catch(() => {})
+    // dashboard.pending chưa có giải chờ duyệt: đếm riêng qua danh sách giải (approvalStatus=PENDING)
+    listAdminTournaments({ approvalStatus: 'PENDING', page: 1, pageSize: 1 })
+      .then(({ total }) => !cancelled && setBadges(prev => ({ ...prev, tournamentApprovals: total || 0 }))).catch(() => {})
     firstBadgeLoad.current = false
     return () => { cancelled = true }
   }, [pathname])

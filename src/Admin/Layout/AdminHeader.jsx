@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, Bell, Grid2X2, ChevronRight, ChevronDown, Menu, LogOut, Settings, UserRoundCheck, Building2, CreditCard, ShieldAlert } from 'lucide-react'
+import { Search, Bell, Grid2X2, ChevronRight, ChevronDown, Menu, LogOut, Settings, UserRoundCheck, Building2, CreditCard, ShieldAlert, Trophy } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/authContext.js'
 import { adminMenu } from '../adminMenu.js'
@@ -11,6 +11,7 @@ const enabledPages = adminMenu.filter(item => item.enabled)
 const pendingItems = [
   { key: 'ownerVerifications', label: 'Chủ sân chờ xác minh', path: '/admin/court-owners', icon: UserRoundCheck },
   { key: 'facilityApprovals', label: 'Cơ sở chờ duyệt', path: '/admin/facilities', icon: Building2 },
+  { key: 'tournamentApprovals', label: 'Giải đấu chờ duyệt', path: '/admin/tournaments?approval=PENDING', icon: Trophy },
   { key: 'withdrawals', label: 'Yêu cầu rút tiền chờ xử lý', path: '/admin/payments', icon: CreditCard },
   { key: 'openReports', label: 'Báo cáo vi phạm đang mở', path: '/admin/reviews-reports', icon: ShieldAlert },
 ]

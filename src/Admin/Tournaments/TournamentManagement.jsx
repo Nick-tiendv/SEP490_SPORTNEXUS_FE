@@ -15,7 +15,8 @@ const emptyFilters = { search: '', status: '', facility: '', locked: '', approva
 const icons = { total: Trophy, open: UserRoundPlus, upcoming: Clock3, completed: BadgeCheck, participants: Users }
 
 export default function TournamentManagement() {
-  const [filters, setFilters] = useState(emptyFilters)
+  // ?approval=PENDING (từ chuông thông báo "Giải đấu chờ duyệt"): mở sẵn bộ lọc chờ duyệt
+  const [filters, setFilters] = useState(() => ({ ...emptyFilters, approval: typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('approval') === 'PENDING' ? 'PENDING' : '' }))
   const [reload, setReload] = useState(0)
   const [stats, setStats] = useState({ key: -1, value: {}, error: '' })
   const [facilities, setFacilities] = useState([])

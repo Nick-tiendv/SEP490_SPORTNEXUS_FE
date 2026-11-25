@@ -11,7 +11,7 @@ export const adminMenu = [
   { label: "Quản lý cơ sở thể thao", path: '/admin/facilities', icon: Building2, enabled: true, badge: 'facilityApprovals', group: "Vận hành" },
   { label: "Quản lý đặt sân", path: '/admin/bookings', icon: CalendarDays, enabled: true, group: "Vận hành" },
   { label: "Quản lý tìm nhóm chơi", path: '/admin/lfg', icon: Network, enabled: true, group: "Vận hành" },
-  { label: "Quản lý giải đấu", path: '/admin/tournaments', icon: Trophy, enabled: true, group: "Vận hành" },
+  { label: "Quản lý giải đấu", path: '/admin/tournaments', icon: Trophy, enabled: true, badge: 'tournamentApprovals', group: "Vận hành" },
   { label: "Quản lý đội", path: '/admin/teams', icon: Shield, enabled: true, group: "Vận hành" },
   { label: "Elo & trình độ", path: '/admin/ratings', icon: Medal, enabled: true, group: "Vận hành" },
   { label: "Quản lý thanh toán", path: '/admin/payments', icon: CreditCard, enabled: true, badge: 'withdrawals', group: "Tài chính & kiểm duyệt" },
