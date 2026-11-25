@@ -23,7 +23,9 @@ import {
 } from '../../api/owner'
 import { getFacilities as getPublicFacilities } from '../../api/player/facilityApi.js'
 import { uploadDocument } from '../../api/player/uploadApi.js'
-import { isMatchWinner, toMatch } from '../../api/admin/tournamentApi.js'
+import { isMatchWinner, toMatch, tournamentDocuments } from '../../api/admin/tournamentApi.js'
+import { getMyVerification, verificationStatusOf } from '../../api/player/verificationApi.js'
+import { Link } from 'react-router-dom'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { useCurrentUser } from '../../hooks/useCurrentUser.js'
 import NoFacilityState from '../NoFacilityState.jsx'
@@ -78,6 +80,22 @@ const STATUS = {
   FINISHED: { label: 'Đã kết thúc', bg: '#F3E8FF', color: '#7E22CE' },
   CANCELLED: { label: 'Đã hủy', bg: '#FEE2E2', color: '#B91C1C' },
 }
+// Nhóm giải trong danh sách: theo trạng thái thật của giải, giải chưa được Admin duyệt (hoặc bị từ chối) gom riêng
+const LIST_GROUPS = [
+  { key: 'IN_PROGRESS', label: 'Đang thi đấu' },
+  { key: 'OPEN', label: 'Đang nhận đăng ký' },
+  { key: 'PENDING', label: 'Chờ duyệt' },
+  { key: 'FINISHED', label: 'Đã kết thúc' },
+  { key: 'CANCELLED', label: 'Đã hủy' },
+]
+const listGroupOf = (item) => {
+  const status = String(item.status || '').toUpperCase()
+  const approval = String(item.approvalStatus || '').toUpperCase()
+  if (status === 'CANCELLED' || status === 'FINISHED') return status
+  if (isPendingApproval(approval) || approval === 'REJECTED') return 'PENDING'
+  return status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN'
+}
+const shortDate = (value) => (value ? new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : '')
 const statusOf = (value) => STATUS[String(value || '').toUpperCase()] || { label: value || '—', bg: '#F1F5F9', color: '#475569' }
 
 const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(Number(num) || 0) + ' Điểm'
@@ -88,14 +106,15 @@ const formatAmountInput = (text) => {
 }
 const prizeTotal = (prizes) => (prizes || []).reduce((sum, prize) => sum + (Number(prize.rewardAmount) || 0), 0)
 
-// Mỗi giải một nội dung: BE vẫn cần 1 bảng đấu con nên FE tự tạo từ các ô của form.
+// Giải 1 tầng (BE 24/11, FE_CHANGES_TOURNAMENT_1_TANG): 1 giải = 1 nội dung thi đấu, không còn bảng đấu con.
 // Số người tối thiểu cố định 4: hết hạn đăng ký mà chưa đủ thì BE hỏi BTC có tiếp tục không.
 const MIN_PARTICIPANTS = 4
 const emptyForm = (categoryId = '') => ({
   name: '', facilityId: '', categoryId, startDate: '', endDate: '', registrationDeadline: '', rules: '',
   tier: 'AMATEUR', purpose: 'EXCHANGE', minRating: '', maxRating: '', minRatedMatches: '',
   categoryType: 0, maxParticipants: 8, format: '', entryFee: '', prizes: [{ position: 'Vô địch', rewardAmount: '' }],
-  rulesFileUrl: '', schedule: [],
+  // Tài liệu gửi Admin duyệt: nhiều file PDF (rulesFileUrls) + hợp đồng với chủ sân (contractFileUrl, người chơi tổ chức)
+  rulesFiles: [], contractFile: null, schedule: [],
 })
 
 // Tải dữ liệu theo khóa: đổi khóa thì tải lại, giữ dữ liệu cũ trong lúc chờ.
@@ -127,18 +146,25 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const isPlayer = mode === 'player'
   // Người chơi cần Fair Play ≥ 90 mới được tạo giải (GET /api/auth/me → fairPlayScore)
   const currentUser = useCurrentUser()
-  const organizerBlock = isPlayer ? organizerBlockReason(currentUser.fairPlayScore) : ''
+  const fairPlayBlock = isPlayer ? organizerBlockReason(currentUser.fairPlayScore) : ''
+  // Người chơi cần CCCD được Admin duyệt mới tổ chức giải (BE chặn khi tạo giải). Lỗi tải trạng thái thì không chặn, để BE quyết.
+  const kycLoad = useLoad(() => getMyVerification(), 'kyc', isPlayer)
+  const kycStatus = !kycLoad.loading && !kycLoad.error ? verificationStatusOf(kycLoad.data) : ''
+  const kycBlock = isPlayer && kycStatus && kycStatus !== 'APPROVED'
+    ? (kycStatus === 'PENDING' ? 'Hồ sơ xác minh danh tính (CCCD) đang chờ Admin duyệt.' : 'Cần xác minh danh tính (CCCD) và được Admin duyệt để tổ chức giải.')
+    : ''
+  const organizerBlock = [fairPlayBlock, kycBlock].filter(Boolean).join(' ')
   const refreshWallet = refreshOwnerWallet || (async () => {})
   const facilityId = isPlayer ? '' : ownerFacilityId
   const facility = isPlayer ? null : ownerFacility
   const [listToken, setListToken] = useState(0)
   const [childToken, setChildToken] = useState(0)
   const [selectedTournamentId, setSelectedTournamentId] = useState(null)
-  const [selectedChildId, setSelectedChildId] = useState(null)
 
   const [sportsToken, setSportsToken] = useState(0)
   // Chủ sân: 'mine' = giải mình tổ chức; 'facility' = giải người khác tổ chức tại cơ sở (chỉ xem và giữ sân)
   const [scope, setScope] = useState('mine')
+  const [listFilter, setListFilter] = useState('ALL')
   const facilityScope = !isPlayer && scope === 'facility'
   const tournamentsLoad = useLoad(() => getMyTournaments(facilityScope ? 'facility' : undefined), `${listToken}|${scope}`)
   const sportsLoad = useLoad(() => getSports(), `sports|${sportsToken}`)
@@ -150,12 +176,14 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const facilitiesLoad = useLoad(() => getPublicFacilities(), 'facilities', isPlayer)
   const publicFacilities = (facilitiesLoad.data || []).filter((f) => !f.approvalStatus || String(f.approvalStatus).toUpperCase() === 'APPROVED')
   const tournament = tournaments.find((item) => item.id === selectedTournamentId) || tournaments[0] || null
+  // Bộ lọc trạng thái hết giải (vd vừa hủy giải cuối cùng của nhóm) thì quay về Tất cả
+  const activeFilter = tournaments.some((item) => listGroupOf(item) === listFilter) ? listFilter : 'ALL'
   // Chi tiết giải mẹ: my-tournaments không trả thể thức đã chốt, file điều lệ và lịch sân yêu cầu
   const detailKey = `detail|${tournament?.id}|${listToken}`
   const detailLoad = useLoad(() => getTournament(tournament.id), detailKey, !!tournament?.id)
   const detail = detailLoad.key === detailKey ? detailLoad.data : null
-  const children = tournament?.children || []
-  const child = children.find((item) => item.id === selectedChildId) || children[0] || null
+  // Giải 1 tầng: thể thức, lệ phí, người tham gia, sơ đồ nằm ngay ở giải
+  const child = tournament
   const childStatus = String(child?.status || '').toUpperCase()
   const childId = child?.id || ''
   // Giải người khác tổ chức tại sân mình: chủ sân chỉ xem và giữ sân, không thao tác thi đấu
@@ -211,7 +239,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
 
   // ---------- Người tham gia ----------
   const isTeamCategory = child?.categoryType === 'PREMADE_TEAMS'
-  // Giải nội bộ: BTC gửi lời mời (BE không thêm thẳng); người được mời chấp nhận mới vào bảng và đóng lệ phí
+  // Giải nội bộ: BTC gửi lời mời (BE không thêm thẳng); người được mời chấp nhận mới vào giải và đóng lệ phí
   const handleAddParticipant = (event) => {
     event.preventDefault()
     const value = newParticipant.trim()
@@ -224,15 +252,15 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   }
   const handleCancelInvitation = (invitation) =>
     runAction(() => cancelTournamentInvitation(invitation.id), 'Đã thu hồi lời mời.', { reloadChild: false, after: () => setInvitationsToken((v) => v + 1) })
-  // Lệ phí bảng đấu: chỉ sửa khi bảng còn mở và chưa có ai đăng ký (gửi id bảng con)
+  // Lệ phí: chỉ sửa khi giải còn mở và chưa có ai đăng ký
   const handleSaveFee = (event) => {
     event.preventDefault()
-    runAction(() => updateTournamentInfo(childId, { entryFee: parseAmount(feeInput) }), 'Đã cập nhật lệ phí bảng đấu.', { reloadList: true, after: () => setFeeInput('') })
+    runAction(() => updateTournamentInfo(childId, { entryFee: parseAmount(feeInput) }), 'Đã cập nhật lệ phí.', { reloadList: true, after: () => setFeeInput('') })
   }
   const handleRemoveParticipant = async (participant) => {
     const name = participant.teamName || participant.fullName
-    if (!(await confirmDialog(`Xóa "${name}" khỏi bảng đấu?`))) return
-    runAction(() => removeParticipant(childId, participant.participantId), `Đã xóa "${name}" khỏi bảng đấu.`, { reloadList: true })
+    if (!(await confirmDialog(`Xóa "${name}" khỏi giải?`))) return
+    runAction(() => removeParticipant(childId, participant.participantId), `Đã xóa "${name}" khỏi giải.`, { reloadList: true })
   }
   const handleCheckIn = (participant) =>
     runAction(() => checkInParticipant(childId, { participantId: participant.participantId, qrCode: null }), `Đã điểm danh "${participant.teamName || participant.fullName}".`)
@@ -241,7 +269,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
   const handleRandomPairing = () => runAction(() => executeRandomPairing(childId), 'Bốc thăm ghép đôi hoàn tất, các cặp đấu đã được tạo.', { reloadList: true })
   const handleGenerateBracket = async () => {
     if (!(await confirmDialog('Chốt danh sách và sinh sơ đồ nhánh đấu? Sau bước này không thể thêm / xóa người tham gia.'))) return
-    runAction(() => generateBracket(childId, bracketFormat), 'Đã chốt danh sách và sinh sơ đồ nhánh đấu. Bảng đấu chuyển sang Đang thi đấu.', { reloadList: true })
+    runAction(() => generateBracket(childId, bracketFormat), 'Đã chốt danh sách và sinh sơ đồ nhánh đấu. Giải chuyển sang Đang thi đấu.', { reloadList: true })
   }
 
   // ---------- Nhập tỉ số ----------
@@ -331,7 +359,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     runAction(() => deleteTournament(tournament.id), 'Đã xóa giải đấu.', {
       reloadList: true,
       reloadChild: false,
-      after: () => { setSelectedTournamentId(null); setSelectedChildId(null); refreshWallet().catch(() => {}) },
+      after: () => { setSelectedTournamentId(null); refreshWallet().catch(() => {}) },
     })
   }
 
@@ -342,7 +370,6 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     // Lần tải môn trước đó lỗi (vd server khởi động chậm) thì tải lại.
     if (!sports.length) setSportsToken((value) => value + 1)
     setForm(emptyForm(defaultSportId()))
-    setRulesFileName('')
     setShowCreateModal(true)
   }
   // Danh sách môn về sau khi form đã mở: chọn sẵn môn mặc định.
@@ -361,26 +388,26 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
     })
   // Lịch sân BTC yêu cầu (người chơi tổ chức): mỗi dòng 1 ngày + buổi + số sân
   const updateScheduleRow = (rowIndex, changes) => setField('schedule', form.schedule.map((row, i) => (i === rowIndex ? { ...row, ...changes } : row)))
-  // File điều lệ + nhân sự: BE lưu 1 link (rulesFileUrl), chỉ nhận PDF
-  const [uploadingFile, setUploadingFile] = useState(false)
-  const [rulesFileName, setRulesFileName] = useState('')
-  const handleRulesFile = async (event) => {
-    const file = event.target.files?.[0]
+  // Tài liệu gửi Admin duyệt (chỉ PDF): tải từng file, lấy link. kind = 'rules' (nhiều file) | 'contract' (1 file)
+  const [uploadingFile, setUploadingFile] = useState('')
+  const handleDocuments = async (event, kind) => {
+    const files = [...(event.target.files || [])]
     event.target.value = ''
-    if (!file) return
-    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+    if (!files.length) return
+    if (files.some((file) => file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name))) {
       showToast('Chỉ nhận file PDF.', 'error')
       return
     }
-    setUploadingFile(true)
+    setUploadingFile(kind)
     try {
-      const url = await uploadDocument(file)
-      setField('rulesFileUrl', url)
-      setRulesFileName(file.name)
+      for (const file of kind === 'contract' ? files.slice(0, 1) : files) {
+        const item = { url: await uploadDocument(file), name: file.name }
+        setForm((prev) => (kind === 'contract' ? { ...prev, contractFile: item } : { ...prev, rulesFiles: [...prev.rulesFiles, item] }))
+      }
     } catch (error) {
       showToast(error.message, 'error')
     } finally {
-      setUploadingFile(false)
+      setUploadingFile('')
     }
   }
 
@@ -417,7 +444,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       showToast(`${createFormatError} Đổi thể thức hoặc số người tối đa.`, 'error')
       return
     }
-    const scheduleError = isPlayer ? validateSchedule(form.schedule, form) : ''
+    const scheduleError = validateSchedule(form.schedule, form)
     if (scheduleError) {
       showToast(scheduleError, 'error')
       return
@@ -447,21 +474,20 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       minRatedMatches: form.tier && form.tier !== 'AMATEUR' ? optionalInt(form.minRatedMatches) : null,
       // Thể thức chốt ngay lúc tạo; bước sinh sơ đồ không đổi được nữa
       defaultBracketFormat: createFormat,
-      rulesFileUrl: form.rulesFileUrl || null,
-      requestedSchedule: isPlayer && form.schedule.length
+      rulesFileUrls: form.rulesFiles.map((file) => file.url),
+      rulesFileUrl: form.rulesFiles[0]?.url || null,
+      contractFileUrl: isPlayer ? form.contractFile?.url || null : null,
+      requestedSchedule: form.schedule.length
         ? form.schedule.map((row) => ({ date: row.date, session: row.session, courtCount: Number(row.courtCount) }))
         : null,
-      // Một giải một nội dung: bảng đấu con duy nhất mang tên giải
-      children: [{
-        name: form.name.trim(),
-        categoryType: Number(form.categoryType),
-        maxParticipants: Number(form.maxParticipants),
-        minParticipants: MIN_PARTICIPANTS,
-        entryFee: parseAmount(form.entryFee),
-        prizes: form.prizes
-          .filter((prize) => prize.position.trim() && parseAmount(prize.rewardAmount) > 0)
-          .map((prize) => ({ position: prize.position.trim(), rewardAmount: parseAmount(prize.rewardAmount) })),
-      }],
+      // Thể thức thi đấu ở cấp giải (giải 1 tầng)
+      categoryType: Number(form.categoryType),
+      maxParticipants: Number(form.maxParticipants),
+      minParticipants: MIN_PARTICIPANTS,
+      entryFee: parseAmount(form.entryFee),
+      prizes: form.prizes
+        .filter((prize) => prize.position.trim() && parseAmount(prize.rewardAmount) > 0)
+        .map((prize) => ({ position: prize.position.trim(), rewardAmount: parseAmount(prize.rewardAmount) })),
     }
     runAction(
       () => createTournament(payload),
@@ -469,11 +495,11 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       (result) => (String(result?.approvalStatus || '').toUpperCase() === 'APPROVED'
         ? 'Đã tạo giải, giải đã công khai và mở đăng ký.'
         : 'Đã gửi giải, chờ Admin duyệt trước khi công khai và nhận đăng ký.'),
-      { reloadList: true, reloadChild: false, after: () => { setShowCreateModal(false); setSelectedTournamentId(null); setSelectedChildId(null) } },
+      { reloadList: true, reloadChild: false, after: () => { setShowCreateModal(false); setSelectedTournamentId(null) } },
     )
   }
 
-  // Nhà vô địch: người thắng trận cuối cùng khi bảng đã kết thúc
+  // Nhà vô địch: người thắng trận cuối cùng khi giải đã kết thúc
   const finalMatch = rounds.length ? rounds[rounds.length - 1].matches[0] : null
   const champion = childStatus === 'FINISHED' && finalMatch
     ? [finalMatch.a, finalMatch.b].find((side) => isMatchWinner(finalMatch, side))
@@ -504,7 +530,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         {isPlayer ? (
           <div>
             <h2 className="snx-page-title" style={{ fontSize: 22 }}>Giải tôi tổ chức</h2>
-            <p className="snx-page-subtitle">Bạn làm Ban tổ chức: tạo giải tại một cơ sở, chờ Admin duyệt, rồi quản lý người tham gia, nhánh đấu, tỉ số và trọng tài. Lệ phí về ví của bạn khi bảng đấu kết thúc.</p>
+            <p className="snx-page-subtitle">Bạn làm Ban tổ chức: tạo giải tại một cơ sở, chờ Admin duyệt, rồi quản lý người tham gia, nhánh đấu, tỉ số và trọng tài. Lệ phí về ví của bạn khi giải kết thúc.</p>
           </div>
         ) : (
         <div>
@@ -516,7 +542,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
           </div>
           <h1 className="snx-page-title">Giải đấu</h1>
           <p className="snx-page-subtitle">
-            Tạo giải với nhiều bảng đấu, quản lý người tham gia, bốc thăm ghép đôi, chốt nhánh loại trực tiếp và nhập tỉ số từng trận.
+            Tạo giải, quản lý người tham gia, bốc thăm ghép đôi, chốt nhánh loại trực tiếp và nhập tỉ số từng trận.
           </p>
         </div>
         )}
@@ -534,7 +560,11 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
       {isPlayer && organizerBlock && (
         <div className="snx-alert snx-alert--info" role="status" style={{ marginBottom: 16 }}>
           <span className="material-symbols-outlined">shield</span>
-          <span>{organizerBlock} Điểm tăng khi bạn thi đấu đúng hẹn và được người chơi khác đánh giá tốt. Các giải bạn đã tạo vẫn quản lý bình thường.</span>
+          <span>
+            {fairPlayBlock && <>{fairPlayBlock} Điểm tăng khi bạn thi đấu đúng hẹn và được người chơi khác đánh giá tốt. </>}
+            {kycBlock && <>{kycBlock} {kycStatus !== 'PENDING' && <Link to="/profile?verify=1">Xác minh ngay</Link>} </>}
+            Các giải bạn đã tạo vẫn quản lý bình thường.
+          </span>
         </div>
       )}
 
@@ -548,7 +578,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
           {!isPlayer && (
             <div style={{ display: 'flex', gap: '6px' }}>
               {[['mine', 'Tôi tổ chức'], ['facility', 'Giải tại sân của tôi']].map(([key, label]) => (
-                <button key={key} type="button" onClick={() => { setScope(key); setSelectedTournamentId(null); setSelectedChildId(null) }}
+                <button key={key} type="button" onClick={() => { setScope(key); setSelectedTournamentId(null); setListFilter('ALL') }}
                   style={smallButton(scope === key ? '#1D4ED8' : '#FFFFFF', scope === key ? '#FFFFFF' : '#1D4ED8', '1px solid #BFDBFE')}>{label}</button>
               ))}
             </div>
@@ -561,37 +591,63 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         ) : tournaments.length === 0 ? (
           <div style={{ padding: '24px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>{facilityScope ? 'Chưa có giải nào do người khác tổ chức tại cơ sở này.' : `${isPlayer ? 'Bạn chưa tạo giải nào' : 'Cơ sở chưa có giải đấu nào'}. Bấm "Tạo giải đấu mới" để bắt đầu.`}</div>
         ) : (
-          <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {tournaments.map((item) => {
-              const active = item.id === tournament?.id
+          <>
+            {/* Lọc theo trạng thái */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+              {[{ key: 'ALL', label: 'Tất cả' }, ...LIST_GROUPS].map((group) => {
+                const count = group.key === 'ALL' ? tournaments.length : tournaments.filter((item) => listGroupOf(item) === group.key).length
+                const on = activeFilter === group.key
+                return (
+                  <button key={group.key} type="button" onClick={() => setListFilter(group.key)} disabled={!count && group.key !== 'ALL'}
+                    style={{ padding: '6px 12px', borderRadius: '999px', fontSize: '12.5px', fontWeight: 700, cursor: count ? 'pointer' : 'default', border: on ? '1px solid #15803D' : '1px solid #E2E8F0', background: on ? '#15803D' : '#FFFFFF', color: on ? '#FFFFFF' : count ? '#334155' : '#CBD5E1' }}>
+                    {group.label} ({count})
+                  </button>
+                )
+              })}
+            </div>
+            {(activeFilter === 'ALL' ? LIST_GROUPS : LIST_GROUPS.filter((group) => group.key === listFilter)).map((group) => {
+              const items = tournaments.filter((item) => listGroupOf(item) === group.key)
+              if (!items.length) return null
               return (
-                <button
-                  key={item.id}
-                  onClick={() => { setSelectedTournamentId(item.id); setSelectedChildId(null) }}
-                  style={{
-                    minWidth: '260px',
-                    textAlign: 'left',
-                    padding: '14px 16px',
-                    borderRadius: '14px',
-                    border: active ? '2px solid #D97706' : '1px solid #E2E8F0',
-                    background: active ? '#FFFBEB' : '#FFFFFF',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#B45309' }}>{item.categoryName || 'Giải đấu'}</span>
-                    {APPROVAL[String(item.approvalStatus || '').toUpperCase()]
-                      ? <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, background: APPROVAL[String(item.approvalStatus).toUpperCase()].bg, color: APPROVAL[String(item.approvalStatus).toUpperCase()].color }}>{APPROVAL[String(item.approvalStatus).toUpperCase()].label}</span>
-                      : badge(item.status)}
+                <div key={group.key} style={{ marginBottom: '14px' }}>
+                  {activeFilter === 'ALL' && <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '8px' }}>{group.label} ({items.length})</div>}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))', gap: '12px' }}>
+                    {items.map((item) => {
+                      const active = item.id === tournament?.id
+                      const done = group.key === 'FINISHED' || group.key === 'CANCELLED'
+                      const approval = APPROVAL[String(item.approvalStatus || '').toUpperCase()]
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => { setSelectedTournamentId(item.id) }}
+                          style={{
+                            textAlign: 'left',
+                            padding: '12px 14px',
+                            borderRadius: '14px',
+                            border: active ? '2px solid #D97706' : '1px solid #E2E8F0',
+                            background: active ? '#FFFBEB' : done ? '#F8FAFC' : '#FFFFFF',
+                            opacity: done && !active ? 0.75 : 1,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#B45309' }}>{item.categoryName || 'Giải đấu'}</span>
+                            {approval
+                              ? <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700, background: approval.bg, color: approval.color }}>{approval.label}</span>
+                              : badge(item.status)}
+                          </div>
+                          <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#0F172A' }}>{item.name}</div>
+                          <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
+                            {[item.startDate && `${shortDate(item.startDate)}${item.endDate ? ` – ${shortDate(item.endDate)}` : ''}`, `${item.totalParticipants ?? 0}${item.maxParticipants ? `/${item.maxParticipants}` : ''} người / đội`].filter(Boolean).join(' • ')}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
-                  <div style={{ fontSize: '14.5px', fontWeight: 600, color: '#0F172A' }}>{item.name}</div>
-                  <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
-                    {item.totalChildren} bảng đấu • {item.totalParticipants} người / đội tham gia
-                  </div>
-                </button>
+                </div>
               )
             })}
-          </div>
+          </>
         )}
       </div>
 
@@ -607,7 +663,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                   {badge(tournament.status)}
                 </div>
                 <div style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
-                  {[tournament.categoryName, tournament.facilityName, `${tournament.totalChildren} bảng đấu`, TIER_LABEL[String(tournament.tier || '').toUpperCase()]].filter(Boolean).join(' • ')}
+                  {[tournament.categoryName, tournament.facilityName, TIER_LABEL[String(tournament.tier || '').toUpperCase()]].filter(Boolean).join(' • ')}
                 </div>
                 {!canManage && (
                   <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '10px', background: '#EFF6FF', color: '#1E40AF', fontSize: '12.5px', fontWeight: 600 }}>
@@ -634,7 +690,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                 {canManage && !['CANCELLED', 'FINISHED'].includes(String(tournament.status).toUpperCase()) && (
                   canOrganizerCancel(tournament.registrationDeadline)
                     ? <button onClick={() => setShowCancelModal(true)} disabled={busy} style={smallButton('#FFF7ED', '#C2410C', '1px solid #FED7AA')}>Hủy giải</button>
-                    : <button disabled title="Ban tổ chức chỉ được hủy giải tới 24 giờ trước hạn đăng ký. Hết hạn đăng ký mà thiếu người thì chọn Hủy trong mục quyết định của bảng đấu." style={{ ...smallButton('#F8FAFC', '#94A3B8', '1px solid #E2E8F0'), cursor: 'not-allowed' }}>Hủy giải (đã khóa)</button>
+                    : <button disabled title="Ban tổ chức chỉ được hủy giải tới 24 giờ trước hạn đăng ký. Hết hạn đăng ký mà thiếu người thì chọn Hủy trong mục quyết định thiếu người." style={{ ...smallButton('#F8FAFC', '#94A3B8', '1px solid #E2E8F0'), cursor: 'not-allowed' }}>Hủy giải (đã khóa)</button>
                 )}
                 {canManage && (String(tournament.status).toUpperCase() === 'CANCELLED' || tournament.totalParticipants === 0) && (
                   <button onClick={handleDeleteTournament} disabled={busy} style={smallButton('#FEE2E2', '#B91C1C')}>Xóa giải</button>
@@ -642,45 +698,17 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               </div>
             </div>
 
-            {/* Tabs bảng đấu con */}
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {children.map((item) => {
-                const active = item.id === child?.id
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setSelectedChildId(item.id)}
-                    style={{
-                      textAlign: 'left',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      border: active ? '2px solid #1D4ED8' : '1px solid #E2E8F0',
-                      background: active ? '#EFF6FF' : '#FFFFFF',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>{item.name}</span>
-                      {badge(item.status)}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '2px' }}>
-                      {CATEGORY_TYPE_LABEL[item.categoryType] || item.categoryTypeName} • {item.currentParticipants}/{item.maxParticipants} • Lệ phí {formatVND(item.entryFee)}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-
             {child && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '16px', padding: '12px 16px', borderRadius: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
-                <span>📋 {child.registrationGuide || child.categoryTypeName}</span>
+                <span>📋 {CATEGORY_TYPE_LABEL[child.categoryType] || child.categoryTypeName} • {child.currentParticipants ?? child.totalParticipants ?? 0}/{child.maxParticipants} • Lệ phí {formatVND(child.entryFee)}</span>
+                {child.registrationGuide && <span>{child.registrationGuide}</span>}
                 <span>
                   🏆 Giải thưởng (BTC trao ngoài hệ thống):{' '}
                   {child.prizes?.length ? child.prizes.map((prize) => `${prize.position} ${formatVND(prize.rewardAmount)}`).join(' • ') : 'Không có'}
                   {child.prizes?.length > 0 && ` (tổng ${formatVND(prizeTotal(child.prizes))})`}
                 </span>
                 {lockedFormat && <span>⚔ {FORMAT_LABEL[lockedFormat]}</span>}
-                {detail?.rulesFileUrl && <a href={detail.rulesFileUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8' }}>📄 Điều lệ & nhân sự (PDF)</a>}
+                {tournamentDocuments(detail).map((doc) => <a key={doc.url} href={doc.url} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8' }}>📄 {doc.label}</a>)}
               </div>
             )}
             {/* Lịch sân BTC yêu cầu: chủ sân dựa vào đây để giữ khung giờ sân cho giải */}
@@ -692,7 +720,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             )}
             {child && canManage && childStatus === 'OPEN' && participants.length === 0 && (
               <form onSubmit={handleSaveFee} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Lệ phí bảng "{child.name}" (chưa có ai đăng ký):</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Sửa lệ phí (chưa có ai đăng ký):</span>
                 <input inputMode="numeric" value={feeInput} onChange={(event) => setFeeInput(formatAmountInput(event.target.value))} placeholder={formatVND(child.entryFee)} style={{ ...inputStyle, width: '160px' }} />
                 <button type="submit" disabled={busy || feeInput === ''} style={smallButton('#1D4ED8', '#FFFFFF')}>Lưu lệ phí</button>
               </form>
@@ -806,7 +834,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                           )
                         )}
                         {childStatus === 'OPEN' && (
-                          <button onClick={() => handleRemoveParticipant(participant)} disabled={busy} title="Xóa khỏi bảng đấu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex' }}>
+                          <button onClick={() => handleRemoveParticipant(participant)} disabled={busy} title="Xóa khỏi giải" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex' }}>
                             <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>delete</span>
                           </button>
                         )}
@@ -992,7 +1020,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
           <form onSubmit={handleCancelTournament} style={{ background: '#FFFFFF', borderRadius: '20px', maxWidth: '460px', width: '100%', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
             <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#0F172A' }}>Hủy giải "{tournament.name}"</h3>
             <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: '#B45309', fontWeight: 600 }}>
-              Mọi bảng đấu chưa kết thúc sẽ bị hủy: hoàn lệ phí cho người tham gia và trả lại ca sân.
+              Giải bị hủy: hoàn lệ phí cho người tham gia và trả lại ca sân.
             </p>
             <textarea
               required
@@ -1138,8 +1166,8 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               <div style={{ marginTop: '2px' }}>Thể thức chốt khi tạo giải, không đổi được ở bước sinh sơ đồ.</div>
             </div>
 
-            {/* Lịch sân yêu cầu: người chơi tổ chức ghi rõ ngày, buổi, số sân để chủ sân giữ sân cho giải */}
-            {isPlayer && (
+            {/* Lịch sân cần dùng (người chơi và chủ sân): ngày, buổi, số sân. Admin duyệt giải thì BE giữ các ca này cho giải */}
+            {(
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A', marginBottom: '6px' }}>Lịch sân cần dùng (không bắt buộc)</div>
                 {form.schedule.map((row, rowIndex) => (
@@ -1198,24 +1226,31 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
               <textarea rows={3} maxLength={4000} value={form.rules || ''} onChange={(event) => setField('rules', event.target.value)} placeholder="Giới thiệu ngắn hiện trên thẻ giải cho người chơi" style={{ ...inputStyle, resize: 'vertical' }} />
             </div>
 
-            {/* Tài liệu gửi Admin duyệt: BE lưu 1 file (rulesFileUrl), chỉ nhận PDF */}
-            <div style={{ border: '1px dashed #CBD5E1', borderRadius: '12px', padding: '12px 14px', marginBottom: '6px', background: '#F8FAFC' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>Tài liệu gửi Admin duyệt (PDF)</div>
-                  <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>Gộp chi tiết giải, luật lệ chi tiết và danh sách nhân sự vào một file PDF.</div>
+            {/* Tài liệu gửi Admin duyệt: nhiều file PDF (rulesFileUrls); người chơi thêm hợp đồng với chủ sân (contractFileUrl) */}
+            <div style={{ border: '1px dashed #CBD5E1', borderRadius: '12px', padding: '12px 14px', marginBottom: '6px', background: '#F8FAFC', display: 'grid', gap: '12px' }}>
+              {[
+                { kind: 'rules', title: 'Tài liệu gửi Admin duyệt (PDF)', hint: 'Chi tiết giải, luật lệ chi tiết, danh sách nhân sự… Chọn được nhiều file.', files: form.rulesFiles, multiple: true },
+                ...(isPlayer ? [{ kind: 'contract', title: 'Hợp đồng với chủ sân (PDF)', hint: 'Bản thỏa thuận thuê sân với chủ cơ sở tổ chức giải.', files: form.contractFile ? [form.contractFile] : [], multiple: false }] : []),
+              ].map((group) => (
+                <div key={group.kind}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>{group.title}</div>
+                      <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 600 }}>{group.hint}</div>
+                    </div>
+                    <label style={{ ...smallButton('#FFFFFF', '#1D4ED8', '1px solid #BFDBFE'), opacity: uploadingFile ? 0.6 : 1, cursor: uploadingFile ? 'wait' : 'pointer' }}>
+                      {uploadingFile === group.kind ? 'Đang tải…' : group.multiple ? (group.files.length ? 'Thêm file' : 'Tải file PDF') : group.files.length ? 'Đổi file' : 'Tải file PDF'}
+                      <input type="file" accept="application/pdf,.pdf" multiple={group.multiple} hidden disabled={!!uploadingFile} onChange={(event) => handleDocuments(event, group.kind)} />
+                    </label>
+                  </div>
+                  {group.files.map((file, index) => (
+                    <div key={file.url} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', fontSize: '12.5px' }}>
+                      <a href={file.url} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 600 }}>📄 {file.name}</a>
+                      <button type="button" onClick={() => setForm((prev) => (group.kind === 'contract' ? { ...prev, contractFile: null } : { ...prev, rulesFiles: prev.rulesFiles.filter((_, i) => i !== index) }))} style={{ background: 'none', border: 'none', padding: 0, color: '#B91C1C', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Bỏ file</button>
+                    </div>
+                  ))}
                 </div>
-                <label style={{ ...smallButton('#FFFFFF', '#1D4ED8', '1px solid #BFDBFE'), opacity: uploadingFile ? 0.6 : 1, cursor: uploadingFile ? 'wait' : 'pointer' }}>
-                  {uploadingFile ? 'Đang tải…' : form.rulesFileUrl ? 'Đổi file' : 'Tải file PDF'}
-                  <input type="file" accept="application/pdf,.pdf" hidden disabled={uploadingFile} onChange={handleRulesFile} />
-                </label>
-              </div>
-              {form.rulesFileUrl && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontSize: '12.5px' }}>
-                  <a href={form.rulesFileUrl} target="_blank" rel="noreferrer" style={{ color: '#1D4ED8', fontWeight: 600 }}>📄 {rulesFileName || 'Tài liệu giải'}</a>
-                  <button type="button" onClick={() => { setField('rulesFileUrl', ''); setRulesFileName('') }} style={{ background: 'none', border: 'none', padding: 0, color: '#B91C1C', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Bỏ file</button>
-                </div>
-              )}
+              ))}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>

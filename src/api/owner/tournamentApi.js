@@ -12,11 +12,12 @@ export const getTournament = id => get(url(id))
 // CreateTournamentRequest: facilityId, categoryId, name, startDate, endDate, registrationDeadline, rules, rulesFileUrl (PDF),
 // defaultBracketFormat (KNOCKOUT | ROUND_ROBIN | GROUP_KNOCKOUT), requestedSchedule[{ date, session, courtCount }],
 // tier (AMATEUR | SEMI_PRO | PRO), purpose (EXCHANGE | COMMERCIAL | DEVELOPMENT | INTERNAL), minRating, maxRating, minRatedMatches,
-// children[{ name, categoryType, maxParticipants, minParticipants, entryFee, prizes, minTeamSize, maxTeamSize }].
+// categoryType (0 đơn | 1 đội | 2 đôi bốc thăm), maxParticipants, minParticipants, entryFee, prizes, minTeamSize, maxTeamSize (giải 1 tầng, BE 24/11).
+// Response: { tournamentId, approvalStatus }.
 // Giải thưởng chỉ để hiển thị (BTC trao ngoài hệ thống), không giữ quỹ trong ví. Owner hoặc Player tạo; mọi giải chờ Admin duyệt (nhóm chốt 23/11).
 export const createTournament = payload => post('/api/v1/tournaments', payload)
-// UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Dùng id giải mẹ hoặc bảng con.
-// entryFee: lệ phí bảng đấu, gửi với id bảng con, chỉ khi bảng còn mở và chưa có ai đăng ký.
+// UpdateTournamentInfoRequest: name, startDate, endDate, registrationDeadline, imageUrl, rules (null = giữ nguyên). Mọi API giải đấu dùng id giải.
+// entryFee: chỉ sửa khi giải còn mở và chưa có ai đăng ký.
 export const updateTournamentInfo = (id, payload) => put(url(id), payload)
 export const deleteTournament = id => del(url(id))
 export const cancelTournament = (id, reason) => patch(`${url(id)}/cancel-tournament`, { reason })
@@ -27,7 +28,7 @@ export const getParticipants = async id => (await getList(`${url(id)}/participan
 export const addParticipant = (id, payload) => post(`${url(id)}/participants`, payload)
 
 // ---------- Lời mời giải nội bộ (purpose = INTERNAL) ----------
-// Mời VĐV (userId / phone) hoặc đội (teamId; đội trưởng nhận lời mời) vào bảng đấu; người được mời chấp nhận mới được đăng ký
+// Mời VĐV (userId / phone) hoặc đội (teamId; đội trưởng nhận lời mời) vào giải; người được mời chấp nhận mới được đăng ký
 export const inviteToTournament = (childId, { userId, phone, teamId, message }) =>
   post(`${url(childId)}/invitations`, { userId: userId || null, phone: phone || null, teamId: teamId || null, message: message || null })
 export const getTournamentInvitations = async childId => (await getList(`${url(childId)}/invitations`)).items
@@ -74,11 +75,11 @@ export const updateTournamentStaff = (id, staffId, payload) => put(`${url(id)}/s
 
 // POST /auto-schedule: tự xếp ca + đề xuất trọng tài
 export const autoScheduleTournament = id => post(`${url(id)}/auto-schedule`)
-// Thiếu người khi hết hạn đăng ký: BTC chọn trong 24 giờ { decision: CANCEL | EXTEND | CONTINUE, newDeadline?, reason? }
+// Thiếu người khi hết hạn đăng ký: BTC chọn trong 24 giờ { decision: CANCEL | CONTINUE, reason? } (FE không dùng EXTEND: không cho gia hạn đăng ký)
 export const decideRegistration = (id, payload) => post(`${url(id)}/registration-decision`, payload)
 
 // ---------- Khiếu nại kết quả trận (BTC / Admin) ----------
-// GET /tournaments/{id}/match-complaints?status=OPEN|ALL (id giải mẹ gồm mọi bảng con). MatchComplaintResponse: id, matchId,
+// GET /tournaments/{id}/match-complaints?status=OPEN|ALL (khiếu nại các trận của giải). MatchComplaintResponse: id, matchId,
 // tournamentId, tournamentName, roundName, participant1Name, participant2Name, winnerName, reporterId, reporterName, reason,
 // description, evidenceImageUrls, status, resolutionNote, createdAt, resolvedAt.
 export const getMatchComplaints = async (id, status = 'OPEN') => (await getList(`${url(id)}/match-complaints`, { status })).items

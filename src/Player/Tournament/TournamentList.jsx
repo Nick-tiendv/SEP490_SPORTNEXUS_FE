@@ -14,9 +14,6 @@ import {
   getMyMatches,
   getCourtSchedule,
   getMatch,
-  getTournamentBracket,
-  getTournamentParticipants,
-  getTournamentStandings,
   getMyTournamentInvitations,
   respondTournamentInvitation,
   getMyStaffMatches,
@@ -31,6 +28,7 @@ import { FORMAT_LABEL, normalizeFormat } from '../../CourtOwner/Tournament/tourn
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
 const TIER_LABEL = { AMATEUR: 'Phong trào', SEMI_PRO: 'Bán chuyên', PRO: 'Chuyên nghiệp' }
+const PURPOSE_LABEL = { EXCHANGE: 'Giao lưu', COMMERCIAL: 'Thương mại', DEVELOPMENT: 'Phát triển chuyên môn', INTERNAL: 'Nội bộ' }
 const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} Điểm` : 'Miễn phí')
 const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 // Ngày của giải chưa được ban tổ chức nhập
@@ -108,98 +106,10 @@ function TournamentCard({ tournament, actions, onOpen }) {
   )
 }
 
-// Chi tiết giải: các bảng đấu, giải thưởng, lịch các trận (court-schedule) và chi tiết trận
-// Người tham gia + sơ đồ nhánh đấu của 1 bảng đấu (API công khai)
-function CategoryInsight({ category, onClose }) {
-  const [view, setView] = useState('participants')
-  const participants = useApi(() => getTournamentParticipants(category.id), [category.id], { initialData: [] })
-  const bracket = useApi(() => getTournamentBracket(category.id), [category.id], { initialData: [], enabled: view === 'bracket' })
-  const standings = useApi(() => getTournamentStandings(category.id), [category.id], { initialData: [], enabled: view === 'standings' })
-  const standingGroups = (standings.data || []).filter((g) => g?.rows?.length)
-  return (
-    <section className="snx-card" style={{ padding: 16 }}>
-      <div className="snx-row" style={{ marginBottom: 10 }}>
-        <strong>{category.name}</strong>
-        <span className="snx-spacer" />
-        <div className="snx-tabs" role="tablist" aria-label="Thông tin bảng đấu">
-          <button type="button" role="tab" aria-selected={view === 'participants'} className="snx-tab" onClick={() => setView('participants')}>Người tham gia</button>
-          <button type="button" role="tab" aria-selected={view === 'bracket'} className="snx-tab" onClick={() => setView('bracket')}>Nhánh đấu</button>
-          <button type="button" role="tab" aria-selected={view === 'standings'} className="snx-tab" onClick={() => setView('standings')}>Bảng xếp hạng</button>
-        </div>
-        <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
-      </div>
-      {view === 'participants' && (
-        participants.error ? <div className="snx-alert snx-alert--error">{participants.error}</div>
-          : participants.loading && !participants.data.length ? <p className="snx-muted">Đang tải…</p>
-          : participants.data.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Chưa có ai đăng ký nội dung này.</p>
-          : (
-            <div className="snx-list">
-              {participants.data.map((p) => (
-                <div key={p.participantId} className="snx-list-item">
-                  <span className="snx-avatar-sm">{p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : (p.teamName || p.fullName || '?').slice(0, 1)}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong style={{ fontSize: 14 }}>{p.teamName || p.fullName}</strong>
-                    {p.teamName && <div className="snx-muted">{(p.teamMembers || []).map((m) => m.fullName).join(', ') || p.fullName}</div>}
-                  </div>
-                  {p.isCheckedIn && <span className="snx-badge snx-badge--green">Đã check-in</span>}
-                </div>
-              ))}
-            </div>
-          )
-      )}
-      {view === 'bracket' && (
-        bracket.error ? <div className="snx-alert snx-alert--error">{bracket.error}</div>
-          : bracket.loading && !bracket.data.length ? <p className="snx-muted">Đang tải nhánh đấu…</p>
-          : bracket.data.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Ban tổ chức chưa chốt nhánh đấu.</p>
-          : (
-            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
-              {bracket.data.map((round) => (
-                <div key={round.name} style={{ minWidth: 220, flex: '0 0 auto' }}>
-                  <div className="snx-muted" style={{ fontWeight: 600, marginBottom: 6 }}>{round.name}</div>
-                  <div className="snx-stack" style={{ gap: 8 }}>
-                    {round.matches.map((m) => (
-                      <div key={m.id} style={{ border: '1px solid #e2e8e6', borderRadius: 10, padding: '8px 10px', background: '#fff' }}>
-                        {[['p1', 'scoreP1'], ['p2', 'scoreP2']].map(([side, scoreKey]) => (
-                          <div key={side} className="snx-row" style={{ flexWrap: 'nowrap', fontWeight: m.winner && m.winner === m[side] ? 700 : 400 }}>
-                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m[side] === 'TBD' ? 'Chờ xác định' : m[side]}</span>
-                            <span>{(m.scores || []).map((s) => s[scoreKey]).join(' ')}</span>
-                          </div>
-                        ))}
-                        <div className="snx-muted" style={{ fontSize: 12, marginTop: 4 }}>{isDraw(m) ? 'Hòa · ' : ''}{m.courtName ? `${m.courtName} · ${dateTime(m.startTime)}` : 'Chưa xếp sân'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-      )}
-      {view === 'standings' && (
-        standings.error ? <div className="snx-alert snx-alert--error">{standings.error}</div>
-          : standings.loading && !standingGroups.length ? <p className="snx-muted">Đang tải bảng xếp hạng…</p>
-          : standingGroups.length === 0 ? <p className="snx-muted" style={{ margin: 0 }}>Chưa có bảng xếp hạng (chưa chốt nhánh đấu hoặc chưa có trận nào có kết quả).</p>
-          : standingGroups.map((g) => (
-            <div key={g.group || 'all'} className="snx-table-wrap" style={{ marginBottom: 10 }}>
-              <table className="snx-table">
-                <thead><tr><th>{g.group ? `Bảng ${g.group}` : '#'}</th><th>Đấu thủ</th><th>Trận</th><th>T</th><th>H</th><th>B</th><th>HS</th><th>Điểm</th></tr></thead>
-                <tbody>
-                  {g.rows.map((r) => (
-                    <tr key={r.participantId}><td>{r.rank}</td><td>{r.name}</td><td>{r.played}</td><td>{r.won}</td><td>{r.drawn}</td><td>{r.lost}</td><td>{r.diff > 0 ? `+${r.diff}` : r.diff}</td><td><strong>{r.points}</strong></td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))
-      )}
-    </section>
-  )
-}
-
 function TournamentDetailModal({ id, onClose, onRegister }) {
   const detail = useApi(() => getTournament(id), [id])
   const schedule = useApi(() => getCourtSchedule(id), [id], { initialData: null })
   const [matchId, setMatchId] = useState(null)
-  const [insightId, setInsightId] = useState(null)
   const [complainMatch, setComplainMatch] = useState(null)
   const match = useApi(() => getMatch(matchId), [matchId], { enabled: Boolean(matchId) })
   const t = detail.data
@@ -210,7 +120,7 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         <div className="snx-modal-head">
           <div>
             <h2 id="tournament-detail-title" className="snx-card-title">{t?.name || 'Đang tải…'}</h2>
-            <p className="snx-card-subtitle">{[t?.sport, t?.facility, FORMAT_LABEL[normalizeFormat(t?.format)] || t?.format, TIER_LABEL[t?.tier], t?.organizer && `BTC: ${t.organizer}`].filter(Boolean).join(' · ')}</p>
+            <p className="snx-card-subtitle">{t?.sport}</p>
           </div>
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
@@ -218,35 +128,43 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         {t?.imageUrl && <img src={t.imageUrl} alt={`Ảnh bìa giải ${t.name}`} style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 12, marginBottom: 12 }} />}
         {t && (
           <div className="snx-stack">
-            <div className="snx-row"><StatusBadge value={t.status} /><span className="snx-muted">{t.starts || t.ends ? `${dateOrTba(t.starts)} – ${dateOrTba(t.ends)}` : 'Lịch thi đấu chưa công bố'} · Hạn đăng ký {dateOrTba(t.deadline)}</span></div>
+            <div className="snx-row"><StatusBadge value={t.status} /></div>
+
+            {/* Thông tin giải: đủ các ô của form tạo giải (trừ file PDF gửi Admin) */}
+            <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '10px 16px', margin: 0 }}>
+              {[
+                ['Ban tổ chức', t.organizer || '—'],
+                ['Cơ sở thi đấu', [t.facility, t.address].filter(Boolean).join(' · ') || '—'],
+                ['Thời gian thi đấu', t.starts || t.ends ? `${dateOrTba(t.starts)} – ${dateOrTba(t.ends)}` : 'Chưa công bố'],
+                ['Hạn đăng ký', t.deadlineAt ? dateTime(t.deadlineAt) : 'Chưa công bố'],
+                ['Cấp giải', TIER_LABEL[t.tier] || '—'],
+                ['Mục đích', PURPOSE_LABEL[t.purpose] || '—'],
+                ['Hình thức đăng ký', [t.categoryTypeName || t.registrationGuide, t.minTeamSize || t.maxTeamSize ? `đội ${t.minTeamSize ?? '?'}–${t.maxTeamSize ?? '?'} người` : ''].filter(Boolean).join(', ') || '—'],
+                ['Số người tham gia', `${t.registered ?? 0}${t.capacity ? `/${t.capacity}` : ''} đã đăng ký`],
+                ['Thể thức thi đấu', FORMAT_LABEL[normalizeFormat(t.format)] || t.format || '—'],
+                ['Lệ phí', money(t.entryFee)],
+                ...(t.minRating != null || t.maxRating != null || t.minRatedMatches != null
+                  ? [['Điều kiện Elo', [t.minRating != null && `từ ${t.minRating}`, t.maxRating != null && `đến ${t.maxRating}`, t.minRatedMatches != null && `ít nhất ${t.minRatedMatches} trận giải`].filter(Boolean).join(', ')]]
+                  : []),
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="snx-muted" style={{ fontSize: 12.5 }}>{label}</dt>
+                  <dd style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 600 }}>{value}</dd>
+                </div>
+              ))}
+            </dl>
 
             <section>
-              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Nội dung thi đấu</h3>
-              <div className="snx-list">
-                {(t.children.length ? t.children : [t]).map((child) => (
-                  <div key={child.id} className="snx-list-item">
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: 14 }}>{child.name}</strong>
-                      <div className="snx-muted">{money(child.entryFee)} · {child.registered ?? 0}{child.capacity ? `/${child.capacity}` : ''} đã đăng ký</div>
-                    </div>
-                    <StatusBadge value={child.status} />
-                    <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setInsightId(insightId === child.id ? null : child.id)}>{insightId === child.id ? 'Ẩn' : 'Người tham gia & nhánh đấu'}</button>
-                  </div>
-                ))}
-              </div>
+              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Giải thưởng <span className="snx-muted" style={{ fontSize: 12.5, fontWeight: 500 }}>(Ban tổ chức tự trao ngoài hệ thống)</span></h3>
+              {t.prizes?.length
+                ? <div className="snx-row" style={{ gap: 6 }}>{t.prizes.map((p) => <span key={p.position} className="snx-badge snx-badge--amber">{p.position}: {money(p.amount)}</span>)}</div>
+                : <p className="snx-muted" style={{ margin: 0 }}>Không có giải thưởng.</p>}
             </section>
 
-            {insightId && (() => {
-              const category = (t.children.length ? t.children : [t]).find((c) => c.id === insightId)
-              return category ? <CategoryInsight key={category.id} category={category} onClose={() => setInsightId(null)} /> : null
-            })()}
-
-            {(t.minRating != null || t.maxRating != null || t.minRatedMatches != null) && (
-              <p className="snx-muted" style={{ margin: 0 }}>
-                Điều kiện Elo: {[t.minRating != null && `từ ${t.minRating}`, t.maxRating != null && `đến ${t.maxRating}`, t.minRatedMatches != null && `ít nhất ${t.minRatedMatches} trận giải`].filter(Boolean).join(', ')}
-              </p>
-            )}
-            {t.prize > 0 && <p style={{ margin: 0, fontSize: 14 }}>Tổng giải thưởng: <strong>{money(t.prize)}</strong> <span className="snx-muted">(Ban tổ chức trao ngoài hệ thống)</span></p>}
+            <section>
+              <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 6 }}>Giới thiệu giải</h3>
+              <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap' }}>{t.description || <span className="snx-muted">Ban tổ chức chưa viết giới thiệu.</span>}</p>
+            </section>
 
             {schedule.data?.matches?.length > 0 && (
               <section>
@@ -297,20 +215,29 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
   )
 }
 
+// Hình thức đăng ký do BTC chọn khi tạo giải (categoryType); người chơi không tự đổi
+const TEAM_CATEGORY = new Set(['PREMADE_TEAMS', '1'])
 function RegisterModal({ target, teams, onClose, onDone }) {
-  const [categoryId, setCategoryId] = useState(target.children?.[0]?.id || target.id)
+  const me = useCurrentUser()
   const [teamId, setTeamId] = useState('')
   const [busy, setBusy] = useState(false)
-  const children = target.children || []
-  // Đội chỉ đăng ký giải đúng môn của đội
-  const sportTeams = target.sportId ? teams.filter((team) => !team.sportCategoryId || team.sportCategoryId === target.sportId) : teams
+  const isTeam = TEAM_CATEGORY.has(String(target.categoryType).toUpperCase())
+  // Đội đúng môn của giải; chỉ đội trưởng đăng ký cho đội, số thành viên phải trong khoảng BTC đặt
+  const teamOptions = (target.sportId ? teams.filter((team) => !team.sportCategoryId || team.sportCategoryId === target.sportId) : teams).map((team) => {
+    const reason = me.id && team.captainId && String(team.captainId) !== String(me.id) ? 'bạn không phải đội trưởng'
+      : target.minTeamSize != null && team.totalMembers < target.minTeamSize ? `cần ít nhất ${target.minTeamSize} người`
+        : target.maxTeamSize != null && team.totalMembers > target.maxTeamSize ? `tối đa ${target.maxTeamSize} người`
+          : ''
+    return { ...team, reason }
+  })
 
   const confirm = async () => {
+    if (isTeam && !teamId) { toast.error('Giải đăng ký theo đội: chọn đội của bạn.'); return }
     setBusy(true)
     try {
-      // POST /api/v1/tournaments/{id}/join?teamId= : trừ lệ phí và giữ trong ví.
+      // POST /api/v1/tournaments/{id}/join?teamId= : trừ lệ phí và giữ trong ví. teamId chỉ gửi với giải đội.
       // Cần khảo sát người chơi + Elo môn này (cả đội) + đủ điều kiện Elo của cấp giải.
-      await joinTournament(categoryId, teamId || undefined, target.sportId)
+      await joinTournament(target.id, isTeam ? teamId : undefined, target.sportId)
       toast.success('Đăng ký giải thành công! Lệ phí được giữ trong ví đến khi giải diễn ra.')
       window.dispatchEvent(new Event('escrow_balance_updated'))
       onDone()
@@ -329,25 +256,29 @@ function RegisterModal({ target, teams, onClose, onDone }) {
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
         <div className="snx-stack">
-          {children.length > 0 && (
-            <label className="snx-field">Nội dung thi đấu
-              <select className="snx-select" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                {children.map((child) => <option key={child.id} value={child.id}>{child.name} — {money(child.entryFee)}{child.capacity ? ` (${child.registered ?? 0}/${child.capacity})` : ''}</option>)}
-              </select>
-            </label>
+          <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', margin: 0 }}>
+            <div><dt className="snx-muted" style={{ fontSize: 12.5 }}>Hình thức đăng ký (BTC quy định)</dt><dd style={{ margin: '2px 0 0', fontWeight: 600 }}>{target.categoryTypeName || (isTeam ? 'Theo đội' : 'Cá nhân')}</dd></div>
+            <div><dt className="snx-muted" style={{ fontSize: 12.5 }}>Lệ phí</dt><dd style={{ margin: '2px 0 0', fontWeight: 600 }}>{money(target.entryFee)}</dd></div>
+          </dl>
+          {isTeam ? (
+            <>
+              <label className="snx-field">Đội đăng ký
+                <select className="snx-select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                  <option value="">— Chọn đội —</option>
+                  {teamOptions.map((team) => <option key={team.id} value={team.id} disabled={!!team.reason}>{team.name} ({team.totalMembers} người){team.reason ? ` — ${team.reason}` : ''}</option>)}
+                </select>
+              </label>
+              {target.minTeamSize != null && <p className="snx-muted" style={{ margin: 0 }}>Mỗi đội {target.minTeamSize === target.maxTeamSize ? `đúng ${target.minTeamSize}` : `${target.minTeamSize}–${target.maxTeamSize ?? '?'}`} người. Đội trưởng đăng ký cho cả đội.</p>}
+              {teamOptions.length === 0 && <p className="snx-muted" style={{ margin: 0 }}>Bạn chưa có đội môn này. Tạo đội ở tab “Đội của tôi”.</p>}
+            </>
+          ) : (
+            <p className="snx-muted" style={{ margin: 0 }}>{String(target.categoryType).toUpperCase() === 'RANDOM_DOUBLES' ? 'Bạn đăng ký cá nhân, Ban tổ chức bốc thăm ghép đôi.' : 'Bạn đăng ký cá nhân.'}</p>
           )}
-          <label className="snx-field">Đội (bắt buộc với nội dung đôi / đội)
-            <select className="snx-select" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-              <option value="">Đăng ký cá nhân</option>
-              {sportTeams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-            </select>
-          </label>
-          {sportTeams.length === 0 && <p className="snx-muted" style={{ margin: 0 }}>Chưa có đội môn này? Tạo đội ở tab “Đội của tôi”.</p>}
-          <p className="snx-muted" style={{ margin: 0 }}>Đánh đơn đăng ký cá nhân; đôi môn vợt cần đội đúng 2 người; bóng đá / bóng rổ chỉ đấu theo đội. Bạn (và cả đội) cần có Elo môn này.</p>
+          <p className="snx-muted" style={{ margin: 0 }}>Bạn{isTeam ? ' và cả đội' : ''} cần có Elo môn này.</p>
         </div>
         <div className="snx-modal-foot">
           <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Hủy</button>
-          <button type="button" className="snx-btn snx-btn--primary" disabled={busy} onClick={confirm}>{busy ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}</button>
+          <button type="button" className="snx-btn snx-btn--primary" disabled={busy || (isTeam && !teamId)} onClick={confirm}>{busy ? 'Đang đăng ký…' : 'Xác nhận đăng ký'}</button>
         </div>
       </div>
     </div>
@@ -384,7 +315,7 @@ function InvitationsPanel({ onChanged }) {
           return (
             <div key={inv.id} className="snx-list-item" style={{ alignItems: 'flex-start' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={{ fontSize: 14 }}>{inv.parentTournamentName ? `${inv.parentTournamentName} · ${inv.tournamentName}` : inv.tournamentName}</strong>
+                <strong style={{ fontSize: 14 }}>{inv.tournamentName}</strong>
                 <div className="snx-muted">
                   {[`Mời bởi ${inv.invitedByName}`, inv.teamName && `Đội ${inv.teamName}`, `Lệ phí ${money(inv.entryFee)}`, inv.startDate && `Thi đấu ${date(inv.startDate)}`, inv.registrationDeadline && `Hạn ${dateTime(inv.registrationDeadline)}`].filter(Boolean).join(' · ')}
                 </div>
@@ -418,7 +349,7 @@ function MyMatches({ onBrowse }) {
             <div style={{ minWidth: 92 }}><strong style={{ fontSize: 14 }}>{dateTime(m.startTime)}</strong><div className="snx-muted">{m.courtName || 'Chưa xếp sân'}</div></div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <strong style={{ fontSize: 14 }}>{m.mySideName || 'Bạn'} <span className="snx-muted">vs</span> {m.opponentName || 'Chờ xác định'}</strong>
-              <div className="snx-muted">{[m.parentTournamentName, m.tournamentName, m.roundName].filter(Boolean).join(' · ')} · {m.facilityName}</div>
+              <div className="snx-muted">{[m.tournamentName, m.roundName].filter(Boolean).join(' · ')} · {m.facilityName}</div>
               {isDraw(m)
                 ? <div style={{ fontSize: 13, marginTop: 2 }}><strong>Hòa</strong></div>
                 : m.winnerName && <div style={{ fontSize: 13, marginTop: 2 }}>Thắng: <strong>{m.winnerName}</strong></div>}
@@ -453,7 +384,8 @@ function TournamentList() {
 
   const openRegister = async (tournament) => {
     try {
-      setRegisterTarget(tournament.children ? tournament : await getTournament(tournament.id))
+      // Danh sách giải không có lệ phí / hình thức đăng ký: lấy chi tiết giải
+      setRegisterTarget(await getTournament(tournament.id))
       setDetailId(null)
     } catch (error) {
       toast.error(error?.message || 'Không tải được thông tin giải.')

@@ -26,6 +26,7 @@ import { getMyBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import { canEscalateComplaint } from '../../CourtOwner/Tournament/tournamentRules.js'
+import IdentityVerificationRow from './IdentityVerification.jsx'
 import { clearPhoneVerification, confirmPhoneCode, isFirebasePhoneEnabled, sendPhoneCode } from '../../Auth/firebasePhone.js'
 import {
   getMyFacilityReviews,
@@ -1413,6 +1414,9 @@ export default function Profile() {
                   </span>
                 </div>
               </div>
+
+              {/* Xác minh danh tính (eKYC): cần để tổ chức giải */}
+              <IdentityVerificationRow defaultName={profile.name} />
 
               {/* 2. Cài đặt thông báo (GET/PUT /api/v1/notifications/settings) */}
               <div

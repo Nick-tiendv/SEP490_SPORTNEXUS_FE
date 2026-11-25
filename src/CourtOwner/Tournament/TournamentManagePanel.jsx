@@ -551,18 +551,16 @@ function ComplaintsSection({ tournamentId, onChanged }) {
   )
 }
 
-// Thiếu người khi hết hạn đăng ký: BTC chọn hủy / gia hạn / vẫn thi đấu trong 24 giờ
+// Thiếu người khi hết hạn đăng ký: BTC chọn hủy / vẫn thi đấu trong 24 giờ (không cho gia hạn đăng ký)
 function RegistrationDecision({ tournamentId, onDone }) {
-  const [decision, setDecision] = useState('EXTEND')
-  const [newDeadline, setNewDeadline] = useState('')
+  const [decision, setDecision] = useState('CONTINUE')
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const submit = async () => {
-    if (decision === 'EXTEND' && !newDeadline) { toast.error('Chọn hạn đăng ký mới.'); return }
-    if (decision === 'CANCEL' && !(await confirmDialog('Hủy bảng đấu và hoàn 100% lệ phí cho người đã đăng ký?'))) return
+    if (decision === 'CANCEL' && !(await confirmDialog('Hủy giải và hoàn 100% lệ phí cho người đã đăng ký?'))) return
     setBusy(true)
     try {
-      await decideRegistration(tournamentId, { decision, newDeadline: decision === 'EXTEND' ? new Date(newDeadline).toISOString() : null, reason: reason.trim() || null })
+      await decideRegistration(tournamentId, { decision, newDeadline: null, reason: reason.trim() || null })
       toast.success('Đã ghi nhận quyết định.')
       onDone()
     } catch (error) {
@@ -573,15 +571,13 @@ function RegistrationDecision({ tournamentId, onDone }) {
   }
   return (
     <div className="snx-alert snx-alert--info" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 16 }}>
-      <strong>Hết hạn đăng ký nhưng chưa đủ người?</strong>
-      <span>Chọn trong 24 giờ sau khi nhận thông báo: hủy (hoàn 100% lệ phí), gia hạn đăng ký hoặc vẫn thi đấu với số người hiện có (cần ≥ 2).</span>
+      <strong>Hết hạn đăng ký nhưng chưa đủ người</strong>
+      <span>Chọn trong 24 giờ sau khi nhận thông báo: hủy giải (hoàn 100% lệ phí) hoặc vẫn thi đấu với số người hiện có (cần ≥ 2).</span>
       <div className="snx-row">
         <select className="snx-select" style={{ width: 'auto' }} value={decision} onChange={(e) => setDecision(e.target.value)}>
-          <option value="EXTEND">Gia hạn đăng ký</option>
           <option value="CONTINUE">Vẫn thi đấu</option>
-          <option value="CANCEL">Hủy bảng đấu</option>
+          <option value="CANCEL">Hủy giải</option>
         </select>
-        {decision === 'EXTEND' && <input className="snx-input" style={{ width: 'auto' }} type="datetime-local" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} aria-label="Hạn đăng ký mới" />}
         <input className="snx-input" style={{ flex: '1 1 160px' }} placeholder="Lý do (không bắt buộc)" value={reason} onChange={(e) => setReason(e.target.value)} />
         <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busy} onClick={submit}>Xác nhận</button>
       </div>
@@ -602,6 +598,9 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
   const referees = (staff.data || []).filter((m) => String(m.role).toUpperCase() === 'REFEREE')
   const [scheduling, setScheduling] = useState(false)
   const childStatus = String(child?.status || '').toUpperCase()
+  // Chỉ hỏi quyết định khi đã quá hạn đăng ký mà chưa đủ số người tối thiểu
+  const registered = Number(child?.currentParticipants ?? child?.totalParticipants ?? 0)
+  const shortOfPlayers = !!tournament.registrationDeadline && new Date(tournament.registrationDeadline) < new Date() && registered < Number(child?.minParticipants ?? 4)
   const autoSchedule = async () => {
     setScheduling(true)
     try {
@@ -649,7 +648,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
         <div><div className="snx-muted">Hạn đăng ký</div><strong>{tournament.registrationDeadline ? formatDateTime(tournament.registrationDeadline) : '—'}</strong></div>
       </div>
 
-      {!courtOnly && child && childStatus === 'OPEN' && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
+      {!courtOnly && child && childStatus === 'OPEN' && shortOfPlayers && <RegistrationDecision tournamentId={child.id} onDone={onChanged} />}
 
       {!closed && canBlockCourts && (
         <>
@@ -666,7 +665,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       {!courtOnly && child && matches.length > 0 && (
         <>
           <div className="snx-row" style={{ margin: '18px 0 8px' }}>
-            <h3 className="snx-card-title" style={{ fontSize: 15 }}>Xếp sân & trọng tài ({child.name})</h3>
+            <h3 className="snx-card-title" style={{ fontSize: 15 }}>Xếp sân & trọng tài</h3>
             <span className="snx-spacer" />
             {!closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={scheduling} onClick={autoSchedule}>{scheduling ? 'Đang xếp…' : 'Tự xếp ca + trọng tài'}</button>}
           </div>

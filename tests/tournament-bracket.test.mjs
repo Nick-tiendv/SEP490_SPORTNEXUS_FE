@@ -32,3 +32,22 @@ test('bracket: danh sách phẳng p1/p2 gom đúng vòng và đọc tên đấu 
     await server.close()
   }
 })
+
+test('giải 1 tầng (BE 24/11): đọc thể thức ở cấp giải, vẫn hiểu kiểu cũ có children', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', optimizeDeps: { noDiscovery: true, include: [] }, logLevel: 'silent' })
+  try {
+    const { toTournament } = await server.ssrLoadModule('/src/api/admin/tournamentApi.js')
+    const flat = toTournament({ id: 't1', name: 'Giải A - Đơn nam', categoryType: 'SINGLES', maxParticipants: 16, currentParticipants: 5, entryFee: 100000, prizes: [{ position: '1', rewardAmount: 1000000 }], status: 'OPEN' })
+    assert.equal(flat.entryFee, 100000)
+    assert.equal(flat.capacity, 16)
+    assert.equal(flat.registered, 5)
+    assert.equal(flat.prize, 1000000)
+    assert.deepEqual(flat.children, [])
+    const old = toTournament({ id: 'p1', name: 'Giải A', children: [{ id: 'c1', name: 'Giải A', maxParticipants: 8, currentParticipants: 2, entryFee: 50000, prizes: [] }] })
+    assert.equal(old.entryFee, 50000)
+    assert.equal(old.capacity, 8)
+    assert.equal(old.children[0].id, 'c1')
+  } finally {
+    await server.close()
+  }
+})

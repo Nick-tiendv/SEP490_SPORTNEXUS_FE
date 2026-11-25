@@ -13,6 +13,7 @@ const clean = params => Object.fromEntries(Object.entries(params || {}).filter((
 const path = id => encodeURIComponent(id)
 
 // Swagger chưa mô tả schema response nên các hàm toXxx thử nhiều tên field.
+// Giải 1 tầng (BE 24/11): thể thức, lệ phí, số người, giải thưởng nằm ngay ở giải. children chỉ còn ở BE cũ (chưa deploy bản 1 tầng).
 function toPrize(raw) {
   return { position: String(pick(raw, 'position', 'rank', 'name') ?? ''), amount: num(pick(raw, 'rewardAmount', 'amount', 'value')) ?? 0 }
 }
@@ -29,6 +30,14 @@ function toChild(raw) {
     status: String(pick(raw, 'status') ?? ''),
   }
 }
+// Tài liệu của giải (chi tiết giải): rulesFileUrls (nhiều file; giải cũ chỉ có rulesFileUrl) + contractFileUrl
+export const tournamentDocuments = (detail) => {
+  const rules = Array.isArray(detail?.rulesFileUrls) && detail.rulesFileUrls.length ? detail.rulesFileUrls : detail?.rulesFileUrl ? [detail.rulesFileUrl] : []
+  return [
+    ...rules.map((url, index) => ({ url, label: rules.length > 1 ? `Tài liệu giải ${index + 1}` : 'Tài liệu giải' })),
+    ...(detail?.contractFileUrl ? [{ url: detail.contractFileUrl, label: 'Hợp đồng với chủ sân' }] : []),
+  ]
+}
 export function toTournament(raw) {
   const children = asArray(pick(raw, 'children', 'childTournaments', 'categories', 'subTournaments')).map(toChild)
   const sum = key => (children.length && children.every(child => child[key] != null) ? children.reduce((total, child) => total + child[key], 0) : null)
@@ -41,6 +50,14 @@ export function toTournament(raw) {
     imageUrl: pick(raw, 'imageUrl', 'coverImageUrl', 'bannerUrl') || '',
     sport: pick(raw, 'categoryName', 'sportName', 'category.name', 'sport.name') || '',
     facility: pick(raw, 'facilityName', 'facility.name') || '',
+    address: pick(raw, 'facilityAddress', 'facility.address') || '',
+    // "Giới thiệu giải" trong form tạo giải (trường rules)
+    description: pick(raw, 'rules', 'description') || '',
+    categoryTypeName: pick(raw, 'categoryTypeName') || '',
+    registrationGuide: pick(raw, 'registrationGuide') || '',
+    minTeamSize: num(pick(raw, 'minTeamSize')),
+    maxTeamSize: num(pick(raw, 'maxTeamSize')),
+    deadlineAt: pick(raw, 'registrationDeadline', 'registrationEndDate', 'deadline') || '',
     facilityId: String(pick(raw, 'facilityId', 'facility.id') ?? ''),
     organizer: pick(raw, 'organizerName', 'ownerName', 'createdByName', 'owner.fullName', 'hostName') || '',
     organizerId: String(pick(raw, 'organizerId', 'ownerId', 'owner.id') ?? ''),
@@ -56,7 +73,6 @@ export function toTournament(raw) {
     maxRating: num(pick(raw, 'maxRating')),
     minRatedMatches: num(pick(raw, 'minRatedMatches')),
     categoryType: pick(raw, 'categoryType') ?? '',
-    subTournamentCount: num(pick(raw, 'subTournamentCount')) ?? (children.length || null),
     // null khi response không có isLocked (API giải đấu công khai) để không ghi đè giá trị từ API admin.
     locked: typeof pick(raw, 'isLocked') === 'boolean' ? pick(raw, 'isLocked') : null,
     lockReason: pick(raw, 'lockReason', 'lockedReason') || '',
@@ -72,6 +88,8 @@ export function toTournament(raw) {
     entryFee: num(pick(raw, 'entryFee', 'fee')) ?? (children.length === 1 ? children[0].entryFee : null),
     prize: prizeTotal || num(pick(raw, 'prizeFundAmount', 'totalPrize', 'prizePool')),
     format: pick(raw, 'format', 'bracketType', 'tournamentFormat') || '',
+    documents: tournamentDocuments(raw),
+    prizes,
     cancellationReason: pick(raw, 'cancellationReason', 'cancelReason') || '',
     children,
   }
@@ -173,7 +191,7 @@ export async function listAdminTournaments(params) {
 }
 export async function getTournamentStatistics() {
   const data = unwrap((await apiClient.get('/api/v1/admin/tournaments/statistics')).data) || {}
-  const keys = ['totalTournaments', 'open', 'inProgress', 'finished', 'cancelled', 'locked', 'subTournaments', 'totalParticipants', 'entryFeesToOwners', 'entryFeesRefunded', 'prizeFundsHeld', 'prizesPaid']
+  const keys = ['totalTournaments', 'open', 'inProgress', 'finished', 'cancelled', 'locked', 'totalParticipants', 'entryFeesToOwners', 'entryFeesRefunded', 'prizeFundsHeld', 'prizesPaid']
   return {
     ...Object.fromEntries(keys.map(key => [key, num(data[key])])),
     topFacilities: asArray(data.topFacilities).map(item => ({ id: String(item.facilityId ?? ''), name: item.facilityName || '—', count: num(item.tournamentCount) ?? 0 })),

@@ -11,7 +11,7 @@ const ROLE_LABEL = { REFEREE: 'Trọng tài', SCORER: 'Người nhập điểm',
 // Hết giải thì danh sách rỗng, tài khoản trở lại như người chơi thường.
 export default function RefereeMatches({ matches }) {
   const [scoring, setScoring] = useState(null)
-  const [openId, setOpenId] = useState(null) // giải đang mở (id giải mẹ)
+  const [openId, setOpenId] = useState(null) // giải đang mở
   // Trận miễn đấu tự có kết quả, không có gì để nhập
   const list = (matches.data || []).filter((m) => !/miễn đấu/i.test(m.roundName || ''))
 
@@ -34,7 +34,7 @@ export default function RefereeMatches({ matches }) {
     )
   }
 
-  // Gom theo giải (giải mẹ); mỗi giải một thẻ, bấm vào mới hiện lịch nhập tỉ số
+  // Gom theo giải; mỗi giải một thẻ, bấm vào mới hiện lịch nhập tỉ số (rootTournament… chỉ còn ở BE cũ)
   const finished = (m) => String(m.status).toUpperCase() === 'FINISHED'
   const ready = (m) => !finished(m) && m.participant1Name && m.participant2Name && m.participant1Name !== 'TBD' && m.participant2Name !== 'TBD'
   const groups = []

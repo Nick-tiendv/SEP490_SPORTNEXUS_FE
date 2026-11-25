@@ -252,7 +252,7 @@ function TeamDetailModal({ teamId, meId, onClose, onChanged }) {
                     <div key={h.participantId || h.tournamentId} className="snx-list-item">
                       <span className="material-symbols-outlined" style={{ color: '#ca8a04' }}>emoji_events</span>
                       <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: 14 }}>{h.parentTournamentName ? `${h.parentTournamentName} — ${h.tournamentName}` : h.tournamentName}</strong>
+                        <strong style={{ fontSize: 14 }}>{h.tournamentName}</strong>
                         <div className="snx-muted">{h.facilityName}</div>
                       </div>
                       <span className="snx-badge snx-badge--gray">{h.tournamentStatus}</span>
