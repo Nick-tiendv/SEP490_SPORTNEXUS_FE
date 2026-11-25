@@ -47,7 +47,7 @@ export async function searchTournaments({ keyword, registrationOpen, page = 1, p
   const { items, total } = await getList(`${TOURNAMENTS_ENDPOINT}/search`, { Keyword: keyword, RegistrationOpen: registrationOpen, Page: page, PageSize: pageSize })
   return { items: items.map(toTournament), total }
 }
-// GET /api/v1/tournaments/{id} trả về MẢNG TournamentDetailResponse (giải mẹ kèm children)
+// GET /api/v1/tournaments/{id}: chi tiết giải (giải 1 tầng). BE cũ trả MẢNG gồm giải mẹ kèm children.
 export const getTournament = async id => {
   const data = await get(`${TOURNAMENTS_ENDPOINT}/${encodeURIComponent(id)}`)
   const list = Array.isArray(data) ? data : [data]
@@ -56,7 +56,8 @@ export const getTournament = async id => {
 // GET /api/v1/tournaments/my-registrations: các giải tôi đã đăng ký
 export async function getMyRegistrations() {
   const { items } = await getList(`${TOURNAMENTS_ENDPOINT}/my-registrations`)
-  // MyTournamentRegistrationResponse: tournamentId (bảng đã đăng ký), parentTournamentId/Name, paymentStatus, tournamentStatus, qrCode
+  // MyTournamentRegistrationResponse: tournamentId, tournamentName, paymentStatus, tournamentStatus, qrCode.
+  // parentTournamentId / Name chỉ còn ở BE cũ (giải 2 tầng): mở chi tiết bằng id giải mẹ.
   return items.map(raw => ({
     ...toTournament(raw),
     id: String(raw.tournamentId),
@@ -86,7 +87,7 @@ export const getFacilityTournaments = async facilityId =>
   (await getList(`/api/v1/facilities/${encodeURIComponent(facilityId)}/tournaments`)).items.map(toTournament)
 
 // GET /api/v1/tournaments/my-matches?from&to: lịch thi đấu của tôi
-// MyMatchResponse: matchId, tournamentName, parentTournamentName, roundName, status, startTime, endTime, courtName, facilityName, mySideName, opponentName, winnerName
+// MyMatchResponse: matchId, tournamentName, roundName, status, startTime, endTime, courtName, facilityName, mySideName, opponentName, winnerName
 export const getMyMatches = async ({ from, to } = {}) => (await getList(`${TOURNAMENTS_ENDPOINT}/my-matches`, { from, to })).items
 
 // GET /api/v1/tournaments/{id}/court-schedule: các khung giờ sân đã giữ và các trận đã xếp sân
@@ -131,7 +132,7 @@ export const respondTournamentInvitation = (invitationId, accept) =>
 
 // ---------- Nhân sự giải (trọng tài / người nhập điểm có tài khoản) ----------
 // GET /tournaments/my-staff-matches: trận chưa xong của các giải tôi là nhân sự. StaffMatchResponse: matchId, tournamentId,
-// tournamentName, rootTournamentId, rootTournamentName, staffRole, isAssignedOfficial, roundName, status,
+// tournamentName, staffRole, isAssignedOfficial, roundName, status,
 // participant1Name, participant2Name, startTime, endTime, courtName, facilityName. Gồm trận chưa đá và trận đã xong
 // trong 72 giờ (BE xác nhận 23/11). Hết giải thì danh sách rỗng.
 export const getMyStaffMatches = async () => (await getList(`${TOURNAMENTS_ENDPOINT}/my-staff-matches`)).items

@@ -161,7 +161,7 @@ export const removeTeamMember = (teamId, accountId) => del(`${ENDPOINT}/${id(tea
 export const transferCaptain = async (teamId, newCaptainId) => toTeam(await put(`${ENDPOINT}/${id(teamId)}/captain`, { newCaptainId }))
 export const leaveTeam = teamId => post(`${ENDPOINT}/${id(teamId)}/leave`)
 export const getTeamMembers = async teamId => (await getList(`${ENDPOINT}/${id(teamId)}/members`)).items.map(toMember)
-// TeamTournamentHistoryResponse (1 dòng / bảng đấu): tournamentName, parentTournamentName, facilityName, tournamentStatus, paymentStatus, entryFee
+// TeamTournamentHistoryResponse (1 dòng / giải): tournamentName, facilityName, tournamentStatus, paymentStatus, entryFee
 export const getTeamTournaments = async teamId => (await getList(`${ENDPOINT}/${id(teamId)}/tournaments`)).items
 
 // ---------- Lời mời vào đội ----------
