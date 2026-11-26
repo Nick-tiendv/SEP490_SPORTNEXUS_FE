@@ -45,7 +45,7 @@ function fakeClock() {
   }
 }
 
-function setup({ prefs, reduced = false, vw = 1280, vh = 800 } = {}) {
+function setup({ prefs, reduced = false, vw = 1280, vh = 800, left = 0, rand = () => 0.5 } = {}) {
   const clock = fakeClock()
   const views = []
   const saves = []
@@ -53,13 +53,13 @@ function setup({ prefs, reduced = false, vw = 1280, vh = 800 } = {}) {
   const d = createMascotDirector({
     emit: (v) => views.push(v),
     getRect: () => null,
-    viewport: () => ({ w: vw, h: vh }),
+    viewport: () => ({ w: vw, h: vh, left }),
     line: (kind) => kind,
     prefs,
     reduced,
     save: (p) => saves.push(p),
     onOpenNotifications: (item) => opened.push(item),
-    rand: () => 0.5,
+    rand,
     setTimeout: clock.setTimeout,
     clearTimeout: clock.clearTimeout,
   })
@@ -211,4 +211,14 @@ test('mascot: localStorage lỗi thì dùng mặc định; câu thoại theo vai
   assert.equal(roleKey('Player'), 'player')
   assert.match(mascotLine('greet', 'CourtOwner', { rand: () => 0, hour: 8 }), /^Chào buổi sáng! Kiểm tra lịch sân/)
   assert.equal(mascotLine('unread', 'Player', { n: 3 }), 'Bạn có 3 thông báo chưa đọc nè!')
+})
+
+test('mascot: không chạy / không bị thả ra sau sidebar cố định bên trái', () => {
+  const { d, clock, views } = setup({ left: 260, rand: () => 0 }) // rand 0: luôn chọn điểm sát mép trái nhất
+  d.start()
+  for (let i = 0; i < 6; i++) clock.next()
+  assert.ok(views.length > 1)
+  assert.ok(views.every((v) => v.x >= 260), 'mọi vị trí đều bên phải sidebar')
+  drag(d, { x: 1200, y: 650 }, { x: 10, y: 300 }) // kéo thả lên sidebar
+  assert.ok(views.at(-1).x >= 260)
 })
