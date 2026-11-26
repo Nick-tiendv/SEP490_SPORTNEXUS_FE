@@ -933,15 +933,7 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
             </p>
             {scoreGateMode !== 'OK' && (
               <div style={{ marginBottom: '12px', padding: '10px 12px', borderRadius: '10px', background: scoreGateMode === 'BLOCKED' ? '#FEF2F2' : '#FFFBEB', color: scoreGateMode === 'BLOCKED' ? '#B91C1C' : '#B45309', fontSize: '12.5px', fontWeight: 600 }}>
-                {scoreGate.message}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                  {scoreGate.absent.map((side) => {
-                    const participant = participants.find((p) => String(p.participantId) === String(side.id))
-                    return participant && (
-                      <button key={side.id} type="button" onClick={() => handleCheckIn(participant)} disabled={busy} style={smallButton('#F0FDF4', '#15803D', '1px solid #BBF7D0')}>Điểm danh {side.name}</button>
-                    )
-                  })}
-                </div>
+                {scoreGate.message} Điểm danh ở danh sách vận động viên tham gia.
               </div>
             )}
             <select value={scoreResultType} onChange={(event) => setScoreResultType(event.target.value)} disabled={scoreGateMode !== 'OK'} aria-label="Kiểu kết quả" style={{ ...inputStyle, marginBottom: '12px' }}>
