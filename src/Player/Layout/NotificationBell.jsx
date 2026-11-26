@@ -39,7 +39,8 @@ const linkFor = (n, style) => {
   if (/mã giảm/i.test(`${n.title} ${n.message}`)) return '/wallet/vouchers'
   if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
   if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
-  if (n.referenceType === 'TOURNAMENT') return '/tournament'
+  // referenceId = id giải (giải 1 tầng): mở thẳng chi tiết giải
+  if (n.referenceType === 'TOURNAMENT') return n.referenceId ? `/tournament?tournamentId=${encodeURIComponent(n.referenceId)}` : '/tournament'
   return style.link
 }
 const DEFAULT_STYLE = { icon: 'notifications', color: '#475569', bg: '#F1F5F9', link: '', linkText: 'Xem chi tiết' }

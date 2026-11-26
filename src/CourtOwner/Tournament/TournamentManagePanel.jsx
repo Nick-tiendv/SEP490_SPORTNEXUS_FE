@@ -3,13 +3,13 @@ import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
 import {
   addTournamentStaff, assignMatchCourt, assignMatchOfficials, autoScheduleTournament, blockCourts, decideMatchComplaint, decideRegistration,
-  getCourtSchedule, getCourts, getFacilitySlots, getMatchComplaints, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff,
+  getCourtSchedule, getCourts, getTournament, getFacilitySlots, getMatchComplaints, getStandings, getTournamentStaff, releaseCourts, removeTournamentStaff,
   resolveMatchComplaint, updateTournamentInfo, updateTournamentStaff,
 } from '../../api/owner'
 import { getReportReasons } from '../../api/player/reportApi.js'
 import MatchScoreModal from '../../components/common/MatchScoreModal.jsx'
 import { confirmDialog } from '../../components/common/confirm.js'
-import { uploadImage } from '../../api/player/uploadApi.js'
+import { uploadDocument, uploadImage } from '../../api/player/uploadApi.js'
 import { lookupAccountByPhone } from '../../api/player/bookingApi.js'
 import { addDays, formatDate, formatDateTime, formatTime, toDateKey, toTimeSpan } from '../shared.js'
 import { dateLimits, validateTournamentDates } from './tournamentRules.js'
@@ -17,7 +17,34 @@ import { dateLimits, validateTournamentDates } from './tournamentRules.js'
 // Ngày ISO -> giá trị cho <input type="date">.
 const dateInput = (value) => (value ? toDateKey(value) : '')
 
-function EditInfoModal({ tournament, onClose, onSaved }) {
+// Tên file từ link (Cloudinary .../ten-file_abc123.pdf) để hiện trong danh sách tài liệu
+const fileNameOf = (url) => decodeURIComponent(String(url).split('/').pop() || 'tai-lieu.pdf')
+
+function EditInfoModal({ tournament, isPlayer, onClose, onSaved }) {
+  // Tài liệu gửi Admin (rulesFileUrls) + hợp đồng (contractFileUrl) nằm ở chi tiết giải, danh sách giải không có
+  const detail = useApi(() => getTournament(tournament.id), [tournament.id])
+  const savedRules = Array.isArray(detail.data?.rulesFileUrls) && detail.data.rulesFileUrls.length ? detail.data.rulesFileUrls : detail.data?.rulesFileUrl ? [detail.data.rulesFileUrl] : []
+  const [docsEdit, setDocsEdit] = useState(null) // null = chưa đổi tài liệu (không gửi lên BE)
+  const docs = docsEdit || { rules: savedRules, contract: detail.data?.contractFileUrl || '' }
+  const [uploadingDoc, setUploadingDoc] = useState('')
+  const uploadDocs = async (fileList, kind) => {
+    const files = [...(fileList || [])]
+    if (!files.length) return
+    if (files.some((file) => file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name))) { toast.error('Chỉ nhận file PDF.'); return }
+    setUploadingDoc(kind)
+    let next = docs
+    try {
+      for (const file of kind === 'contract' ? files.slice(0, 1) : files) {
+        const url = await uploadDocument(file)
+        next = kind === 'contract' ? { ...next, contract: url } : { ...next, rules: [...next.rules, url] }
+        setDocsEdit(next)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setUploadingDoc('')
+    }
+  }
   const [original] = useState(() => ({
     startDate: dateInput(tournament.startDate),
     endDate: dateInput(tournament.endDate),
@@ -65,6 +92,8 @@ function EditInfoModal({ tournament, onClose, onSaved }) {
         registrationDeadline: form.registrationDeadline || null,
         imageUrl: form.imageUrl || null,
         rules: form.rules.trim() || null,
+        // Chỉ gửi tài liệu khi có thay đổi (null = BE giữ nguyên)
+        ...(docsEdit ? { rulesFileUrls: docsEdit.rules, rulesFileUrl: docsEdit.rules[0] || null, contractFileUrl: docsEdit.contract || null } : {}),
       })
       toast.success('Đã lưu thông tin giải.')
       onSaved()
@@ -101,10 +130,31 @@ function EditInfoModal({ tournament, onClose, onSaved }) {
             </div>
           </div>
           <label className="snx-field">Điều lệ giải<textarea className="snx-textarea" rows={4} maxLength={4000} value={form.rules} onChange={set('rules')} /></label>
+          {[
+            { kind: 'rules', title: 'Tài liệu gửi Admin (PDF)', urls: docs.rules, multiple: true },
+            ...(isPlayer || docs.contract ? [{ kind: 'contract', title: 'Hợp đồng với chủ sân (PDF)', urls: docs.contract ? [docs.contract] : [], multiple: false }] : []),
+          ].map((group) => (
+            <div key={group.kind} className="snx-field">
+              <div className="snx-row">
+                <span>{group.title}</span>
+                <span className="snx-spacer" />
+                <label className="snx-btn snx-btn--secondary snx-btn--sm" style={{ cursor: uploadingDoc ? 'wait' : 'pointer' }}>
+                  {uploadingDoc === group.kind ? 'Đang tải…' : group.urls.length ? (group.multiple ? 'Thêm file' : 'Đổi file') : 'Tải file PDF'}
+                  <input type="file" accept="application/pdf,.pdf" multiple={group.multiple} hidden disabled={!!uploadingDoc || detail.loading} onChange={(e) => { uploadDocs(e.target.files, group.kind); e.target.value = '' }} />
+                </label>
+              </div>
+              {detail.loading && !detail.data ? <span className="snx-muted">Đang tải tài liệu…</span> : group.urls.length === 0 ? <span className="snx-muted">Chưa có file.</span> : group.urls.map((url, index) => (
+                <div key={url} className="snx-row" style={{ fontSize: 13 }}>
+                  <a href={url} target="_blank" rel="noreferrer">📄 {fileNameOf(url)}</a>
+                  <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setDocsEdit(group.kind === 'contract' ? { ...docs, contract: '' } : { ...docs, rules: docs.rules.filter((_, i) => i !== index) })}>Bỏ file</button>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
         <div className="snx-modal-foot">
           <button type="button" className="snx-btn snx-btn--ghost" onClick={onClose}>Hủy</button>
-          <button type="submit" className="snx-btn snx-btn--primary" disabled={busy || uploading}>Lưu</button>
+          <button type="submit" className="snx-btn snx-btn--primary" disabled={busy || uploading || !!uploadingDoc}>Lưu</button>
         </div>
       </form>
     </div>
@@ -614,13 +664,39 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       setScheduling(false)
     }
   }
+  // BE chưa trả trọng tài đã phân của trận: nhớ những gì vừa phân trong phiên này để ô chọn hiện đúng
+  const [assigned, setAssigned] = useState({})
   const setOfficial = async (match, staffId) => {
     try {
       await assignMatchOfficials(match.id, staffId ? [staffId] : [])
+      setAssigned((prev) => ({ ...prev, [match.id]: staffId }))
       toast.success(staffId ? 'Đã phân trọng tài.' : 'Đã bỏ trọng tài.')
       onChanged()
     } catch (error) {
       toast.error(error.message)
+    }
+  }
+  // Phân ngẫu nhiên: xáo danh sách trọng tài rồi chia đều lần lượt cho các trận chưa có kết quả (ghi đè phân công cũ)
+  const [randomizing, setRandomizing] = useState(false)
+  const assignRandom = async (targets) => {
+    if (!(await confirmDialog(`Phân ngẫu nhiên ${referees.length} trọng tài cho ${targets.length} trận chưa có kết quả? Phân công cũ của các trận này bị thay.`))) return
+    const pool = [...referees].sort(() => Math.random() - 0.5)
+    setRandomizing(true)
+    let ok = 0
+    try {
+      for (const [index, match] of targets.entries()) {
+        const ref = pool.at(index % pool.length)
+        const staffId = String(ref.id || ref.staffId)
+        await assignMatchOfficials(match.id, [staffId])
+        setAssigned((prev) => ({ ...prev, [match.id]: staffId }))
+        ok += 1
+      }
+      toast.success(`Đã phân trọng tài cho ${ok} trận.`)
+    } catch (error) {
+      toast.error(`${error.message} (đã phân ${ok}/${targets.length} trận)`)
+    } finally {
+      setRandomizing(false)
+      onChanged()
     }
   }
   const status = String(tournament.status || '').toUpperCase()
@@ -667,6 +743,10 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
           <div className="snx-row" style={{ margin: '18px 0 8px' }}>
             <h3 className="snx-card-title" style={{ fontSize: 15 }}>Xếp sân & trọng tài</h3>
             <span className="snx-spacer" />
+            {!closed && referees.length > 0 && (() => {
+              const targets = matches.filter((m) => !['FINISHED', 'COMPLETED'].includes(String(m.status).toUpperCase()))
+              return targets.length > 0 && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={randomizing} onClick={() => assignRandom(targets)}>{randomizing ? 'Đang phân…' : 'Phân ngẫu nhiên trọng tài'}</button>
+            })()}
             {!closed && <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled={scheduling} onClick={autoSchedule}>{scheduling ? 'Đang xếp…' : 'Tự xếp ca + trọng tài'}</button>}
           </div>
           <div className="snx-table-wrap">
@@ -683,7 +763,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
                       <td>{slot ? `${slot.court} • ${formatDateTime(slot.time)}` : <span className="snx-muted">Chưa xếp</span>}</td>
                       <td>
                         {!done && !closed && referees.length > 0 ? (
-                          <select className="snx-select" style={{ minWidth: 140 }} defaultValue="" onChange={(e) => setOfficial(m, e.target.value)} aria-label="Phân trọng tài">
+                          <select className="snx-select" style={{ minWidth: 140 }} value={assigned[m.id] || ''} onChange={(e) => setOfficial(m, e.target.value)} aria-label="Phân trọng tài">
                             <option value="">— Chọn —</option>
                             {referees.map((r) => <option key={r.id || r.staffId} value={r.id || r.staffId}>{r.fullName}</option>)}
                           </select>
@@ -705,7 +785,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
 
       {!courtOnly && <StaffSection tournamentId={tournament.id} staff={staff.data || []} onChanged={staff.refresh} closed={closed} />}
 
-      {editing && <EditInfoModal tournament={tournament} onClose={() => setEditing(false)} onSaved={onChanged} />}
+      {editing && <EditInfoModal tournament={tournament} isPlayer={mode === 'player'} onClose={() => setEditing(false)} onSaved={onChanged} />}
       {assigning && (
         <AssignCourtModal
           match={assigning}

@@ -98,6 +98,11 @@ export default function RefereeMatches({ matches }) {
     if (!group) groups.push(group = { id, name: m.rootTournamentName || m.tournamentName, facilityName: m.facilityName, matches: [] })
     group.matches.push(m)
   }
+  // BTC đã phân trọng tài cho giải thì chỉ hiện trận được phân cho mình; giải chưa phân trận nào thì hiện tất cả
+  for (const group of groups) {
+    group.assignedOnly = group.matches.some((m) => m.isAssignedOfficial)
+    if (group.assignedOnly) group.matches = group.matches.filter((m) => m.isAssignedOfficial)
+  }
   const open = groups.find((g) => g.id === openId)
 
   if (!open) {
@@ -149,7 +154,7 @@ export default function RefereeMatches({ matches }) {
         ))}
       </div>
       {view === 'checkin' ? <CheckInList key={open.id} tournamentId={open.id} /> : (<>
-      <p className="snx-muted" style={{ marginTop: 0 }}>Bạn nhập được tỉ số các trận của giải tới khi giải kết thúc. Hai bên phải điểm danh trước khi thi đấu: bên vắng mặt bị xử thua. Sửa tỉ số trận đã xong sẽ tính lại Elo và mở lại thời gian khiếu nại.</p>
+      <p className="snx-muted" style={{ marginTop: 0 }}>Bạn nhập được tỉ số các trận của giải tới khi giải kết thúc. Hai bên phải điểm danh trước khi thi đấu: bên vắng mặt bị xử thua. Sửa tỉ số trận đã xong sẽ tính lại Elo và mở lại thời gian khiếu nại.{open.assignedOnly ? ' Chỉ hiện các trận Ban tổ chức phân công cho bạn.' : ''}</p>
       <div className="snx-list">
         {sorted.map((m) => (
           <div key={m.matchId} className="snx-list-item" style={{ alignItems: 'flex-start' }}>

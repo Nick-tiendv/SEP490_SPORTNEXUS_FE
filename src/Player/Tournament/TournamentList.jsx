@@ -373,8 +373,15 @@ function TournamentList() {
   const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  // ?tournamentId= (từ gợi ý trang chủ / trợ lý AI) mở sẵn chi tiết giải
-  const [detailId, setDetailId] = useState(() => params.get('tournamentId'))
+  // ?tournamentId= (từ gợi ý trang chủ / trợ lý AI / thông báo) mở sẵn chi tiết giải.
+  // Đang ở trang này mà bấm thông báo giải khác thì URL đổi → mở giải mới.
+  const urlTournamentId = params.get('tournamentId')
+  const [detailId, setDetailId] = useState(urlTournamentId)
+  const [seenUrlId, setSeenUrlId] = useState(urlTournamentId)
+  if (urlTournamentId !== seenUrlId) {
+    setSeenUrlId(urlTournamentId)
+    if (urlTournamentId) setDetailId(urlTournamentId)
+  }
   const [registerTarget, setRegisterTarget] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
