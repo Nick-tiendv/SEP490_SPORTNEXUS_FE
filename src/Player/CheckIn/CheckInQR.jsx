@@ -8,6 +8,7 @@ import { getLfgQrTicket } from '../../api/player/lfgApi.js'
 import { getPendingFairPlayRatings } from '../../api/player/reviewApi.js'
 import { getMyCheckInHistory } from '../../api/player/checkInApi.js'
 import { getTournamentQrTicket } from '../../api/player/tournamentApi.js'
+import { LIVE_REFRESH_EVENT } from '../../hooks/useLiveRefresh.js'
 import { getFacilityById } from '../../api/player/facilityApi.js'
 import { enrichPlayerBookings, resolveBookingPlayWindow } from '../../api/player/bookingApi.js'
 import { vnDateKey } from '../../utils/vnTime.js'
@@ -599,11 +600,12 @@ function CheckInQR() {
     ? ticketData.groupedBookingIds.join(',')
     : ''
 
-  // Tự hỏi lại BE mỗi 20 giây khi vé còn hiệu lực check-in (chủ sân quét trên máy của họ), giữ cố định mã QR
+  // Tự hỏi lại BE mỗi 20 giây khi vé còn hiệu lực check-in (chủ sân quét trên máy của họ), giữ cố định mã QR.
+  // Có thông báo mới (vd "Đã điểm danh giải đấu") thì hỏi lại ngay để làm mờ mã.
   useEffect(() => {
     if (!activeTicketId || isQrDisabled) return undefined
     const groupedIds = activeGroupedIdsKey ? activeGroupedIdsKey.split(',') : []
-    const timer = setInterval(() => {
+    const refresh = () => {
       pollTicketStatus({
         ticketId: activeTicketId,
         queryId: activeTicketQueryId,
@@ -623,12 +625,17 @@ function CheckInQR() {
             }
           })
           if (String(nextState.status).toUpperCase() === 'CHECKED_IN' || nextState.isBookingCheckedIn) {
-            setToastMessage('🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
+            setToastMessage(ticketType === 'tournament' ? '🎉 Bạn đã được điểm danh vào giải đấu!' : '🎉 Chủ sân đã quét vé, bạn đã check-in thành công!')
           }
         })
         .catch(() => { /* lỗi mạng tạm thời: thử lại ở lượt sau */ })
-    }, 20000)
-    return () => clearInterval(timer)
+    }
+    const timer = setInterval(refresh, 20000)
+    window.addEventListener(LIVE_REFRESH_EVENT, refresh)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener(LIVE_REFRESH_EVENT, refresh)
+    }
   }, [activeTicketId, activeTicketQueryId, activeGroupedIdsKey, ticketType, isQrDisabled, pollTicketStatus])
 
   // Modal Check-out và Đánh giá sau trận

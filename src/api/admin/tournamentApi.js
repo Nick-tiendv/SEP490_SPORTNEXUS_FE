@@ -84,7 +84,11 @@ export function toTournament(raw) {
     deadline: toIsoDate(pick(raw, 'registrationDeadline', 'registrationEndDate', 'deadline')),
     status: String(pick(raw, 'status', 'tournamentStatus') ?? ''),
     capacity: num(pick(raw, 'maxParticipants', 'capacity')) ?? sum('capacity'),
-    registered: num(pick(raw, 'currentParticipants', 'participantCount', 'registeredCount', 'totalParticipants')) ?? sum('registered'),
+    // registeredCount: số suất (giải đội = số đội) cùng đơn vị với maxParticipants; currentParticipants của giải đội đếm từng người
+    registered: num(pick(raw, 'registeredCount', 'currentParticipants', 'participantCount', 'totalParticipants')) ?? sum('registered'),
+    // Đủ người (isFull) hoặc hết nhận đăng ký (isRegistrationOpen = false, kể cả khi đủ người). null = BE không trả
+    isFull: pick(raw, 'isFull') === true,
+    registrationOpen: typeof pick(raw, 'isRegistrationOpen') === 'boolean' ? pick(raw, 'isRegistrationOpen') : null,
     entryFee: num(pick(raw, 'entryFee', 'fee')) ?? (children.length === 1 ? children[0].entryFee : null),
     prize: prizeTotal || num(pick(raw, 'prizeFundAmount', 'totalPrize', 'prizePool')),
     format: pick(raw, 'format', 'bracketType', 'tournamentFormat') || '',
