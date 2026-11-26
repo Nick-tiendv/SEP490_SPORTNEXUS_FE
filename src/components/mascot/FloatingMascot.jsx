@@ -23,12 +23,20 @@ const shorten = (text, max) => {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t
 }
 
-// Bong bóng nằm phía trên (gần mép trên thì phía dưới) mascot, ép trong màn hình; đuôi chỉ vào giữa mascot
-function bubbleLayout({ x, y, size, vw }) {
-  const width = Math.min(BUBBLE_MAX_W, vw - GUTTER * 2)
-  const towardLeft = x + size.w / 2 > vw / 2
+// Bề rộng sidebar cố định bên trái (= padding-left của vùng nội dung; mobile sidebar thu lại thì 0)
+const sidebarWidth = () => {
+  const workspace = document.querySelector('.snx-workspace')
+  return workspace ? parseFloat(getComputedStyle(workspace).paddingLeft) || 0 : 0
+}
+
+// Bong bóng nằm phía trên (gần mép trên thì phía dưới) mascot, ép trong vùng nội dung (không lọt sau sidebar);
+// đuôi chỉ vào giữa mascot
+function bubbleLayout({ x, y, size, vw, left: sideLeft = 0 }) {
+  const minX = sideLeft + GUTTER
+  const width = Math.min(BUBBLE_MAX_W, vw - minX - GUTTER)
+  const towardLeft = x + size.w / 2 > (minX + vw) / 2
   const desired = towardLeft ? size.w - width : 0
-  const left = Math.min(Math.max(desired, GUTTER - x), vw - GUTTER - width - x)
+  const left = Math.min(Math.max(desired, minX - x), vw - GUTTER - width - x)
   const tail = Math.min(Math.max(size.w / 2 - left, 16), width - 16)
   return { width, left, tail, below: y < 170 }
 }
@@ -82,7 +90,7 @@ export default function FloatingMascot() {
     const director = createMascotDirector({
       emit: setView,
       getRect: () => elRef.current?.getBoundingClientRect() ?? null,
-      viewport: () => ({ w: window.innerWidth, h: window.innerHeight }),
+      viewport: () => ({ w: window.innerWidth, h: window.innerHeight, left: sidebarWidth() }),
       line: (kind) => mascotLine(kind, roleRef.current, { sport: asset.sport }),
       prefs: loadMascotPrefs(),
       reduced: motion?.matches === true,

@@ -1,6 +1,7 @@
 // AIChatModal.jsx — Khung chat thông minh giữa Người chơi và Trợ lý AI SportNexus
 import { useEffect, useRef, useState } from 'react'
 import { uid } from '../../../utils/ids.js'
+import { vnClock } from '../../../utils/vnTime.js'
 import { useNavigate } from 'react-router-dom'
 import {
   buildWelcomeMessage,
@@ -8,14 +9,14 @@ import {
   getUserProfileContext,
 } from './aiBookingData.js'
 import {
-  getAiSessionMessages,
   getStoredAiSessionId,
-  mapAiHistoryToMessages,
   sendChatMessage,
   storeAiSessionId,
 } from '../../../api/player/aiApi.js'
+import { useAiHistory } from './useAiHistory.js'
 import AiSuggestions from './AiSuggestions.jsx'
-import { buildPaymentState } from './aiRealBooking.js'
+import { aiLeadText, buildPaymentState } from './aiRealBooking.js'
+import { AI_MESSAGE_MAX, describeAiError, useCooldown } from './aiChatErrors.js'
 import './AIChatModal.css'
 
 const buildProfileOrigin = (profile) => ({
@@ -23,7 +24,7 @@ const buildProfileOrigin = (profile) => ({
   lng: profile?.lng ?? null,
   name: profile?.rawLocation || 'Chưa xác định vị trí',
   address: profile?.rawLocation || '',
-  updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+  updatedAt: vnClock(new Date()),
 })
 
 function AIChatModal({
@@ -43,10 +44,16 @@ function AIChatModal({
   const [isExpanded, setIsExpanded] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
   const [isListening, setIsListening] = useState(false)
+  const [cooldown, setCooldown] = useCooldown()
+  const [cooldownText, setCooldownText] = useState('')
+  const [aiPaused, setAiPaused] = useState(false)
 
   const bodyRef = useRef(null)
   const inputRef = useRef(null)
   const recognitionRef = useRef(null)
+  // Cuộn xuống khi có tin mới, cuộn lên đầu thì tải tin cũ hơn
+  const history = useAiHistory({ bodyRef, messages, isTyping, active: isOpen, setMessages })
+  const { loadLatest, resetHistory } = history
 
   // Lắng nghe cập nhật hồ sơ người dùng theo thời gian thực
   useEffect(() => {
@@ -81,7 +88,7 @@ function AIChatModal({
         async (pos) => {
           const { latitude, longitude } = pos.coords
           const closest = await describeArea(latitude, longitude)
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           const newLoc = {
             lat: latitude,
             lng: longitude,
@@ -109,27 +116,18 @@ function AIChatModal({
     const storedId = getStoredAiSessionId()
     if (!storedId) return
     let cancelled = false
-    getAiSessionMessages(storedId)
-      .then((items) => {
-        if (cancelled) return
-        const mapped = mapAiHistoryToMessages(items)
-        if (mapped.length > 0) setMessages(mapped)
+    loadLatest(storedId)
+      .then((mapped) => {
+        if (!cancelled && mapped?.length > 0) setMessages(mapped)
       })
-      .catch(() => {
-        // Phiên không còn tồn tại → bắt đầu phiên mới ở lần gửi tiếp theo
-        if (!cancelled) storeAiSessionId(null)
+      .catch((err) => {
+        // Chỉ bỏ phiên khi BE báo phiên không còn; lỗi mạng thì giữ phiên để lần sau tải lại
+        if (!cancelled && describeAiError(err).sessionGone) storeAiSessionId(null)
       })
     return () => {
       cancelled = true
     }
-  }, [isOpen])
-
-  // Tự động cuộn xuống cuối khi có tin nhắn mới
-  useEffect(() => {
-    if (isOpen && bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
-    }
-  }, [messages, isTyping, isOpen])
+  }, [isOpen, loadLatest])
 
   // Focus input khi mở modal
   useEffect(() => {
@@ -151,10 +149,8 @@ function AIChatModal({
 
   // Dọn dẹp micro khi modal đóng
   useEffect(() => {
-    if (!isOpen && isListening) {
-      recognitionRef.current?.stop()
-      setIsListening(false)
-    }
+    // stop() kích hoạt recognition.onend → tự đặt isListening = false
+    if (!isOpen && isListening) recognitionRef.current?.stop()
   }, [isOpen, isListening])
 
   const showToast = (text) => {
@@ -165,7 +161,7 @@ function AIChatModal({
   // Xử lý gửi tin nhắn: Trợ lý AI trả lời đúng và đầy đủ theo câu hỏi, không dư thừa
   const handleSendMessage = async (textToSend) => {
     const text = (textToSend || inputValue).trim()
-    if (!text || isTyping) return
+    if (!text || isTyping || cooldown > 0 || aiPaused || text.length > AI_MESSAGE_MAX) return
 
     // Dừng nhận diện giọng nói nếu đang nghe
     if (isListening) {
@@ -173,7 +169,7 @@ function AIChatModal({
       setIsListening(false)
     }
 
-    const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    const nowStr = vnClock(new Date())
     const userMsg = {
       id: uid('user'),
       sender: 'user',
@@ -197,13 +193,14 @@ function AIChatModal({
 
       if (aiResult?.sessionId && !currentSessionId) {
         storeAiSessionId(aiResult.sessionId)
+        resetHistory(aiResult.sessionId)
       }
 
       const botReply = aiResult?.reply?.message || aiResult?.message || 'Mình chưa hiểu ý bạn, bạn nói rõ hơn giúp mình nhé.'
       const botMsg = {
         id: uid('bot'),
         sender: 'bot',
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        time: vnClock(new Date()),
         text: botReply,
         facilities: aiResult?.reply?.facilities || [],
         lfgCards: aiResult?.reply?.lfgCards || [],
@@ -214,15 +211,30 @@ function AIChatModal({
       setMessages((prev) => [...prev, botMsg])
     } catch (err) {
       console.warn('[AIChatModal] Trợ lý AI không phản hồi:', err)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid('bot'),
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          text: `⚠️ ${err?.message || 'Trợ lý AI tạm thời không phản hồi, vui lòng thử lại sau.'}`,
-        },
-      ])
+      const info = describeAiError(err)
+      if (info.sessionGone) {
+        storeAiSessionId(null)
+        resetHistory()
+      }
+      if (info.paused) setAiPaused(true)
+      if (info.retryAfter > 0) {
+        setCooldown(info.retryAfter)
+        setCooldownText(info.code === 'AI_OVERLOADED' ? 'Trợ lý đang quá tải.' : '')
+      }
+      if (info.unsaved || info.sessionGone) {
+        // BE không lưu câu hỏi: giữ bong bóng kèm nút "Gửi lại" (phiên mất thì gửi lại sẽ mở phiên mới)
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? { ...m, failed: info.message } : m)))
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid('bot'),
+            sender: 'bot',
+            time: vnClock(new Date()),
+            text: `⚠️ ${info.message}`,
+          },
+        ])
+      }
     } finally {
       setIsTyping(false)
       setTimeout(() => inputRef.current?.focus(), 30)
@@ -230,15 +242,22 @@ function AIChatModal({
   }
 
 
+  // Gửi lại câu hỏi BE chưa lưu: bỏ bong bóng lỗi rồi gửi như câu mới
+  const handleRetry = (msg) => {
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id))
+    handleSendMessage(msg.text)
+  }
+
   // Đặt 1 ca thật do AI gợi ý: sang trang thanh toán với đúng courtSlotId và ngày (giờ Việt Nam)
   const handleBookSlot = (facility, slot) => {
     onClose()
     navigate('/split-payment', { state: buildPaymentState(facility, slot) })
   }
 
-  const handleOpenLfg = () => {
+  // Mở đúng kèo AI gợi ý (màn nhận suất theo lfgCardId)
+  const handleOpenLfg = (c) => {
     onClose()
-    navigate('/community')
+    navigate(c?.lfgCardId ? `/flash-claim?cardId=${encodeURIComponent(c.lfgCardId)}` : '/community')
   }
 
   const handleOpenTournament = (t) => {
@@ -249,7 +268,8 @@ function AIChatModal({
   // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi
   const handleAiDone = (kind) => {
     onClose()
-    navigate(kind === 'booking' ? '/qr-pass' : '/community')
+    // Đơn chia tiền đang chờ góp hiện ở trang chủ (khối "Đơn chia tiền")
+    navigate(kind === 'booking' ? '/qr-pass' : kind === 'split' ? '/dashboard' : '/community')
   }
 
   // Làm mới đoạn chat & Cập nhật vị trí mới của người chơi ở thời điểm hiện tại
@@ -263,6 +283,7 @@ function AIChatModal({
       setInputValue('')
       // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
       storeAiSessionId(null)
+      resetHistory()
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }
 
@@ -271,7 +292,7 @@ function AIChatModal({
         async (pos) => {
           const { latitude, longitude } = pos.coords
           const closest = await describeArea(latitude, longitude)
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           applyNewLoc({
             lat: latitude,
             lng: longitude,
@@ -282,7 +303,7 @@ function AIChatModal({
         },
         () => {
           // Nếu người dùng không cấp quyền hoặc trên thiết bị không có GPS: dùng vị trí hồ sơ (nếu có), không gán cứng quận
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           const p = getUserProfileContext()
           applyNewLoc({
             lat: p.lat ?? null,
@@ -297,7 +318,7 @@ function AIChatModal({
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     } else {
-      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      const nowStr = vnClock(new Date())
       const p = getUserProfileContext()
       applyNewLoc({
         lat: p.lat ?? null,
@@ -342,7 +363,7 @@ function AIChatModal({
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript
         }
-        setInputValue(transcript)
+        setInputValue(transcript.slice(0, AI_MESSAGE_MAX))
       }
 
       recognition.onerror = (event) => {
@@ -494,7 +515,13 @@ function AIChatModal({
         </div>
 
         {/* ================= CHAT BODY ================= */}
-        <div className="snx-ai-body" ref={bodyRef}>
+        <div className="snx-ai-body" ref={bodyRef} onScroll={history.onScroll}>
+          {history.hasOlder && (
+            <button type="button" className="snx-ai-older-btn" onClick={history.loadOlder} disabled={history.loadingOlder}>
+              {history.loadingOlder ? 'Đang tải tin nhắn cũ…' : 'Xem tin nhắn cũ hơn'}
+            </button>
+          )}
+
           {/* Welcome Info Card */}
           <div className="snx-ai-welcome-box">
             <h3 className="snx-ai-welcome-title">
@@ -518,10 +545,20 @@ function AIChatModal({
               )}
 
               <div className="snx-ai-msg-content">
-                <div className="snx-ai-bubble">{renderFormattedText(msg.text)}</div>
+                <div className="snx-ai-bubble">{renderFormattedText(aiLeadText(msg))}</div>
+
+                {msg.failed && (
+                  <div className="snx-ai-failed">
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>error</span>
+                    <span>{msg.failed}</span>
+                    <button type="button" onClick={() => handleRetry(msg)} disabled={isTyping || cooldown > 0 || aiPaused}>
+                      {cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi lại'}
+                    </button>
+                  </div>
+                )}
 
                 {/* THẺ ĐỀ XUẤT ĐẶT SÂN NHANH (Actionable Court Card) */}
-                <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} />
+                <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} onRefresh={history.refreshLatest} />
 
                 {msg.quickReplies && msg.quickReplies.length > 0 && (
                   <div className="snx-ai-chips-wrap" style={{ marginTop: '8px' }}>
@@ -577,6 +614,19 @@ function AIChatModal({
             </div>
           )}
 
+          {cooldown > 0 && !aiPaused && (
+            <div className="snx-ai-cooldown">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>hourglass_top</span>
+              <span>{cooldownText} Vui lòng đợi {cooldown} giây rồi gửi tiếp.</span>
+            </div>
+          )}
+
+          {aiPaused ? (
+            <div className="snx-ai-cooldown">
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>pause_circle</span>
+              <span>Trợ lý AI tạm ngưng, bạn vui lòng quay lại sau.</span>
+            </div>
+          ) : (
           <form
             className="snx-ai-input-row"
             onSubmit={(e) => {
@@ -590,9 +640,13 @@ function AIChatModal({
               type="text"
               className="snx-ai-input"
               value={inputValue}
+              maxLength={AI_MESSAGE_MAX}
               onChange={(e) => setInputValue(e.target.value)}
               disabled={isTyping}
             />
+            {inputValue.length > AI_MESSAGE_MAX - 100 && (
+              <span className="snx-ai-counter">{inputValue.length}/{AI_MESSAGE_MAX}</span>
+            )}
 
             {/* Microchat: Bấm để đặt câu hỏi hoặc đưa ra vấn đề bằng giọng nói */}
             <button
@@ -609,14 +663,15 @@ function AIChatModal({
             <button
               type="submit"
               className="snx-ai-send-btn"
-              disabled={!inputValue.trim() || isTyping}
-              title="Gửi câu hỏi"
+              disabled={!inputValue.trim() || isTyping || cooldown > 0}
+              title={cooldown > 0 ? `Vui lòng đợi ${cooldown} giây` : 'Gửi câu hỏi'}
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
                 send
               </span>
             </button>
           </form>
+          )}
         </div>
       </div>
     </div>

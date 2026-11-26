@@ -28,6 +28,8 @@ import { FORMAT_LABEL, normalizeFormat } from '../../CourtOwner/Tournament/tourn
 // Trận hòa (chỉ vòng bảng / vòng tròn bóng đá): resultType = DRAW, winnerId / winnerName = null
 const isDraw = (match) => String(match?.resultType || '').toUpperCase() === 'DRAW'
 const TIER_LABEL = { AMATEUR: 'Phong trào', SEMI_PRO: 'Bán chuyên', PRO: 'Chuyên nghiệp' }
+// Giải đủ người / hết nhận đăng ký (BE 25/11: isFull, isRegistrationOpen) thì không cho bấm đăng ký
+const registerBlocked = (t) => (t?.isFull ? 'Đã đủ người' : t?.registrationOpen === false ? 'Đã đóng đăng ký' : '')
 const PURPOSE_LABEL = { EXCHANGE: 'Giao lưu', COMMERCIAL: 'Thương mại', DEVELOPMENT: 'Phát triển chuyên môn', INTERNAL: 'Nội bộ' }
 const money = (value) => (value ? `${new Intl.NumberFormat('vi-VN').format(value)} Điểm` : 'Miễn phí')
 const date = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
@@ -208,7 +210,9 @@ function TournamentDetailModal({ id, onClose, onRegister }) {
         )}
         <div className="snx-modal-foot">
           <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Đóng</button>
-          {onRegister && t && <button type="button" className="snx-btn snx-btn--primary" onClick={() => onRegister(t)}>Đăng ký tham gia</button>}
+          {onRegister && t && (registerBlocked(t)
+            ? <button type="button" className="snx-btn snx-btn--secondary" disabled>{registerBlocked(t)}</button>
+            : <button type="button" className="snx-btn snx-btn--primary" onClick={() => onRegister(t)}>Đăng ký tham gia</button>)}
         </div>
       </div>
     </div>
@@ -369,8 +373,15 @@ function TournamentList() {
   const setTab = (key) => setParams(key === 'open' ? {} : { tab: key })
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  // ?tournamentId= (từ gợi ý trang chủ / trợ lý AI) mở sẵn chi tiết giải
-  const [detailId, setDetailId] = useState(() => params.get('tournamentId'))
+  // ?tournamentId= (từ gợi ý trang chủ / trợ lý AI / thông báo) mở sẵn chi tiết giải.
+  // Đang ở trang này mà bấm thông báo giải khác thì URL đổi → mở giải mới.
+  const urlTournamentId = params.get('tournamentId')
+  const [detailId, setDetailId] = useState(urlTournamentId)
+  const [seenUrlId, setSeenUrlId] = useState(urlTournamentId)
+  if (urlTournamentId !== seenUrlId) {
+    setSeenUrlId(urlTournamentId)
+    if (urlTournamentId) setDetailId(urlTournamentId)
+  }
   const [registerTarget, setRegisterTarget] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
@@ -480,9 +491,12 @@ function TournamentList() {
                   tab === 'open' ? (
                     registeredIds.has(tournament.id)
                       ? <span className="snx-badge snx-badge--green">Đã đăng ký</span>
-                      : <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => openRegister(tournament)}>Đăng ký tham gia</button>
+                      : registerBlocked(tournament)
+                        ? <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" disabled>{registerBlocked(tournament)}</button>
+                        : <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => openRegister(tournament)}>Đăng ký tham gia</button>
                   ) : (
                     <>
+                      {tournament.isCheckedIn && <span className="snx-badge snx-badge--green">Đã điểm danh</span>}
                       {canCancel(tournament)
                         ? <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={busyId === tournament.id} onClick={() => cancelRegister(tournament)}>Hủy đăng ký</button>
                         : <span className="snx-muted" style={{ fontSize: 13 }}>Chỉ đội trưởng được hủy đăng ký</span>}

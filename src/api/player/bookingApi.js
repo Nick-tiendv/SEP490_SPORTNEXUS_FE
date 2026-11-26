@@ -2,6 +2,13 @@ import apiClient, { normalizeApiError } from '../apiClient.js'
 
 export const BOOKINGS_ENDPOINT = '/api/v1/bookings'
 
+// Kèm message của BE (vd "Góp tiền thành công. Còn 1 người chưa góp") để hiện toast đúng câu BE trả.
+// data không phải object (chuỗi id, mảng) thì trả nguyên như cũ.
+const withMessage = (body) => {
+  const data = body?.data ?? body?.result ?? body
+  return data && typeof data === 'object' && !Array.isArray(data) ? { ...data, message: data.message || body?.message || '' } : data
+}
+
 /**
  * Lấy lưới ca của sân con trong 1 ngày (không cần đăng nhập)
  * GET /api/v1/courts/{courtId}/slots?date=YYYY-MM-DD
@@ -71,8 +78,7 @@ export async function getFacilityAvailability(facilityId, dateStr) {
 export async function createBooking(payload) {
   try {
     const response = await apiClient.post(BOOKINGS_ENDPOINT, payload)
-    const body = response.data
-    return body?.data || body?.result || body
+    return withMessage(response.data)
   } catch (error) {
     console.warn('[bookingApi] Lỗi khi tạo đơn đặt sân:', error)
     throw normalizeApiError(error)
@@ -192,8 +198,7 @@ export async function joinBooking(bookingId) {
   if (!bookingId) throw new Error('bookingId không được để trống')
   try {
     const response = await apiClient.post(`${BOOKINGS_ENDPOINT}/${bookingId}/join`)
-    const body = response.data
-    return body?.data || body?.result || body
+    return withMessage(response.data)
   } catch (error) {
     console.warn(`[bookingApi] Lỗi khi tham gia góp tiền cho đơn ${bookingId}:`, error)
     throw normalizeApiError(error)
@@ -211,8 +216,7 @@ export async function payRemainingBooking(bookingId) {
   if (!bookingId) throw new Error('bookingId không được để trống')
   try {
     const response = await apiClient.post(`${BOOKINGS_ENDPOINT}/${bookingId}/pay-remaining`)
-    const body = response.data
-    return body?.data || body?.result || body
+    return withMessage(response.data)
   } catch (error) {
     console.warn(`[bookingApi] Lỗi khi trả nốt phần còn lại cho đơn ${bookingId}:`, error)
     throw normalizeApiError(error)

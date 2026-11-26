@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
-import { checkInTournament, getMatch, getTournamentParticipants } from '../../api/player/tournamentApi.js'
+import { getMatch, getTournamentParticipants } from '../../api/player/tournamentApi.js'
 import { buildScorePayload, checkInGate } from '../../CourtOwner/Tournament/tournamentRules.js'
 
 const RESULT_TYPES = [
@@ -59,15 +59,6 @@ export default function MatchScoreModal({ matchId, title = 'Nhập tỉ số', s
   }
 
   const sides = [[m?.participant1Id, m?.participant1Name], [m?.participant2Id, m?.participant2Name]].filter(([id]) => id)
-  const checkIn = async (side) => {
-    try {
-      await checkInTournament(m.tournamentId, { participantId: side.id })
-      toast.success(`Đã điểm danh ${side.name}.`)
-      roster.refresh()
-    } catch (err) {
-      toast.error(err?.message || 'Không điểm danh được.')
-    }
-  }
 
   return (
     <div className="snx-modal-backdrop" role="presentation">
@@ -86,12 +77,7 @@ export default function MatchScoreModal({ matchId, title = 'Nhập tỉ số', s
             <p style={{ margin: 0, fontSize: 15 }}><strong>{m.participant1Name || 'Bên 1'}</strong> <span className="snx-muted">vs</span> <strong>{m.participant2Name || 'Bên 2'}</strong></p>
             {gateMode !== 'OK' && (
               <div className={`snx-alert ${gateMode === 'BLOCKED' ? 'snx-alert--error' : 'snx-alert--info'}`}>
-                {gate.message}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                  {gate.absent.map((side) => (
-                    <button key={side.id} type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => checkIn(side)}>Điểm danh {side.name}</button>
-                  ))}
-                </div>
+                {gate.message} Điểm danh ở tab “Điểm danh” của giải.
               </div>
             )}
             <label className="snx-field">Kết quả

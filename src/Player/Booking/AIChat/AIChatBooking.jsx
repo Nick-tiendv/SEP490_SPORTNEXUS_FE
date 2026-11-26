@@ -1,6 +1,7 @@
 // AIChatBooking.jsx — Giao diện Toàn trang Trợ lý AI SportNexus Concierge
 import { useEffect, useRef, useState } from 'react'
 import { uid } from '../../../utils/ids.js'
+import { vnClock } from '../../../utils/vnTime.js'
 import { useNavigate } from 'react-router-dom'
 import {
   buildWelcomeMessage,
@@ -11,15 +12,18 @@ import {
   sendChatMessage,
   createAiSession,
   getAiSessions,
-  getAiSessionMessages,
   sendSessionChatMessage,
   deleteAiSession,
   getStoredAiSessionId,
-  mapAiHistoryToMessages,
   storeAiSessionId,
 } from '../../../api/player/aiApi.js'
+import { useAiHistory } from './useAiHistory.js'
+
+const SESSION_PAGE_SIZE = 20
 import AiSuggestions from './AiSuggestions.jsx'
-import { buildPaymentState } from './aiRealBooking.js'
+import { aiLeadText, buildPaymentState, relativeTimeVi, truncateText } from './aiRealBooking.js'
+import { confirmDialog } from '../../../components/common/confirm.js'
+import { AI_MESSAGE_MAX, describeAiError, useCooldown } from './aiChatErrors.js'
 import './AIChatModal.css'
 
 const buildProfileOrigin = (profile) => ({
@@ -27,7 +31,7 @@ const buildProfileOrigin = (profile) => ({
   lng: profile?.lng ?? null,
   name: profile?.rawLocation || 'Chưa xác định vị trí',
   address: profile?.rawLocation || '',
-  updatedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+  updatedAt: vnClock(new Date()),
 })
 
 function AIChatBooking() {
@@ -43,17 +47,15 @@ function AIChatBooking() {
   const [isTyping, setIsTyping] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
   const [isListening, setIsListening] = useState(false)
+  const [cooldown, setCooldown] = useCooldown()
+  const [cooldownText, setCooldownText] = useState('')
+  const [aiPaused, setAiPaused] = useState(false)
 
   const bodyRef = useRef(null)
   const inputRef = useRef(null)
   const recognitionRef = useRef(null)
-
-  // Tự động cuộn xuống cuối khi có tin nhắn mới
-  useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
-    }
-  }, [messages, isTyping])
+  // Cuộn xuống khi có tin mới, cuộn lên đầu thì tải tin cũ hơn
+  const history = useAiHistory({ bodyRef, messages, isTyping, setMessages })
 
   // Lắng nghe cập nhật hồ sơ người dùng
   useEffect(() => {
@@ -86,7 +88,7 @@ function AIChatBooking() {
         async (pos) => {
           const { latitude, longitude } = pos.coords
           const closest = await describeArea(latitude, longitude)
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           const newLoc = {
             lat: latitude,
             lng: longitude,
@@ -114,6 +116,9 @@ function AIChatBooking() {
   const [sessionsList, setSessionsList] = useState([])
   const [currentSessionId, setCurrentSessionIdState] = useState(null)
   const [isLoadingSession, setIsLoadingSession] = useState(false)
+  // Danh sách phiên theo trang (mới nhất trước); trả ít hơn pageSize = đã hết
+  const [sessionsPaging, setSessionsPaging] = useState({ page: 1, hasMore: false, loading: false })
+  const [sessionsOpen, setSessionsOpen] = useState(false)
 
   // Luôn lưu phiên hiện tại để modal chat dùng chung cùng cuộc trò chuyện
   const setCurrentSessionId = (id) => {
@@ -121,21 +126,36 @@ function AIChatBooking() {
     storeAiSessionId(id)
   }
 
-  // Tải danh sách phiên hội thoại từ GET /api/v1/ai/sessions và khôi phục phiên đang dùng
+  // Cuộn gần cuối danh sách phiên thì tải trang tiếp theo
+  const handleSessionsScroll = (e) => {
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 40 && sessionsPaging.hasMore && !sessionsPaging.loading) {
+      fetchSessions(sessionsPaging.page + 1).catch(() => showToast('⚠️ Không tải thêm được cuộc trò chuyện'))
+    }
+  }
+
+  const fetchSessions = async (page) => {
+    setSessionsPaging((p) => ({ ...p, loading: true }))
+    try {
+      const list = await getAiSessions({ page, pageSize: SESSION_PAGE_SIZE })
+      setSessionsList((prev) => (page === 1 ? list : [...prev, ...list.filter((s) => !prev.some((p) => p.id === s.id))]))
+      setSessionsPaging({ page, hasMore: list.length >= SESSION_PAGE_SIZE, loading: false })
+      return list
+    } catch (e) {
+      setSessionsPaging((p) => ({ ...p, loading: false }))
+      throw e
+    }
+  }
+
+  // Tải trang đầu danh sách phiên và khôi phục phiên đang dùng
   useEffect(() => {
     let isMounted = true
     async function loadSessions() {
       try {
-        const list = await getAiSessions()
-        if (isMounted && Array.isArray(list)) {
-          setSessionsList(list)
-          const storedId = getStoredAiSessionId()
-          if (storedId && list.some((s) => s.id === storedId)) {
-            handleSelectSession(storedId)
-          } else if (storedId) {
-            storeAiSessionId(null)
-          }
-        }
+        await fetchSessions(1)
+        // Phiên đang dùng có thể nằm ở trang sau: vẫn mở, BE báo AI_SESSION_NOT_FOUND thì tự bỏ
+        const storedId = getStoredAiSessionId()
+        if (isMounted && storedId) handleSelectSession(storedId)
       } catch (e) {
         console.warn('AIChatBooking: Lỗi lấy danh sách sessions:', e)
       }
@@ -151,8 +171,8 @@ function AIChatBooking() {
     setCurrentSessionId(sessionId)
     setIsLoadingSession(true)
     try {
-      const msgs = await getAiSessionMessages(sessionId)
-      const mapped = mapAiHistoryToMessages(Array.isArray(msgs) ? msgs : [])
+      const mapped = await history.loadLatest(sessionId)
+      if (!mapped) return // người dùng đã chuyển sang phiên khác
       if (mapped.length > 0) {
         setMessages(mapped)
       } else {
@@ -160,7 +180,16 @@ function AIChatBooking() {
       }
     } catch (e) {
       console.warn('Lỗi lấy tin nhắn session:', e)
-      showToast('⚠️ Không thể tải lịch sử phiên này')
+      if (describeAiError(e).sessionGone) {
+        // Phiên đã bị xóa / không còn: bỏ khỏi danh sách, mở phiên mới
+        setSessionsList((prev) => prev.filter((s) => s.id !== sessionId))
+        setCurrentSessionId(null)
+        history.resetHistory()
+        setMessages([buildWelcomeMessage(userLocation)])
+        showToast('⚠️ Cuộc trò chuyện này không còn, đã mở cuộc trò chuyện mới')
+      } else {
+        showToast('⚠️ Không thể tải lịch sử phiên này')
+      }
     } finally {
       setIsLoadingSession(false)
     }
@@ -169,16 +198,19 @@ function AIChatBooking() {
   // Tạo phiên hội thoại mới: POST /api/v1/ai/sessions
   const handleCreateNewSession = async () => {
     try {
-      const newSession = await createAiSession()
+      const { session: newSession, reused } = await createAiSession()
       if (newSession?.id) {
-        setSessionsList((prev) => [newSession, ...prev])
+        // BE trả lại phiên trống đang có (200) thì chỉ chuyển sang, không thêm dòng mới
+        if (!reused) setSessionsList((prev) => [newSession, ...prev.filter((s) => s.id !== newSession.id)])
         setCurrentSessionId(newSession.id)
       }
+      history.resetHistory(newSession?.id || null)
       setMessages([buildWelcomeMessage(userLocation)])
-      showToast('✨ Đã tạo phiên hội thoại mới với AI Concierge')
+      showToast(reused ? '✨ Đã chuyển sang cuộc trò chuyện trống đang có' : '✨ Đã tạo phiên hội thoại mới với AI Concierge')
     } catch (e) {
       console.warn('Lỗi tạo session:', e)
       setCurrentSessionId(null)
+      history.resetHistory()
       setMessages([buildWelcomeMessage(userLocation)])
     }
   }
@@ -187,11 +219,13 @@ function AIChatBooking() {
   const handleDeleteSession = async (sessionId) => {
     const idToDelete = sessionId || currentSessionId
     if (!idToDelete) return
+    if (!(await confirmDialog('Xóa cuộc trò chuyện này? Toàn bộ tin nhắn trong cuộc trò chuyện sẽ mất.', { confirmLabel: 'Xóa' }))) return
     try {
       await deleteAiSession(idToDelete)
       setSessionsList((prev) => prev.filter((s) => s.id !== idToDelete))
       if (currentSessionId === idToDelete) {
         setCurrentSessionId(null)
+        history.resetHistory()
         setMessages([buildWelcomeMessage(userLocation)])
       }
       showToast('🗑️ Đã xóa cuộc trò chuyện')
@@ -204,14 +238,14 @@ function AIChatBooking() {
   // Gửi tin nhắn và nhận phản hồi từ Backend AI hoặc local AI
   const handleSendMessage = async (textToSend) => {
     const text = (textToSend || inputValue).trim()
-    if (!text || isTyping) return
+    if (!text || isTyping || cooldown > 0 || aiPaused || text.length > AI_MESSAGE_MAX) return
 
     if (isListening) {
       recognitionRef.current?.stop()
       setIsListening(false)
     }
 
-    const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    const nowStr = vnClock(new Date())
     const userMsg = {
       id: uid('user'),
       sender: 'user',
@@ -241,7 +275,8 @@ function AIChatBooking() {
         })
         if (aiResult?.sessionId && !currentSessionId) {
           setCurrentSessionId(aiResult.sessionId)
-          getAiSessions().then((list) => Array.isArray(list) && setSessionsList(list))
+          history.resetHistory(aiResult.sessionId)
+          fetchSessions(1).catch(() => {})
         }
       }
 
@@ -249,7 +284,7 @@ function AIChatBooking() {
       const botMsg = {
         id: uid('bot'),
         sender: 'bot',
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        time: vnClock(new Date()),
         text: botReply,
         facilities: aiResult?.reply?.facilities || [],
         lfgCards: aiResult?.reply?.lfgCards || [],
@@ -260,15 +295,32 @@ function AIChatBooking() {
       setMessages((prev) => [...prev, botMsg])
     } catch (err) {
       console.warn('[AIChatBooking] Trợ lý AI không phản hồi:', err)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid('bot'),
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          text: `⚠️ ${err?.message || 'Trợ lý AI tạm thời không phản hồi, vui lòng thử lại sau.'}`,
-        },
-      ])
+      const info = describeAiError(err)
+      if (info.sessionGone) {
+        const goneId = currentSessionId
+        setSessionsList((prev) => prev.filter((s) => s.id !== goneId))
+        setCurrentSessionId(null)
+        history.resetHistory()
+      }
+      if (info.paused) setAiPaused(true)
+      if (info.retryAfter > 0) {
+        setCooldown(info.retryAfter)
+        setCooldownText(info.code === 'AI_OVERLOADED' ? 'Trợ lý đang quá tải.' : '')
+      }
+      if (info.unsaved || info.sessionGone) {
+        // BE không lưu câu hỏi: giữ bong bóng kèm nút "Gửi lại" (phiên mất thì gửi lại sẽ mở phiên mới)
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? { ...m, failed: info.message } : m)))
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid('bot'),
+            sender: 'bot',
+            time: vnClock(new Date()),
+            text: `⚠️ ${info.message}`,
+          },
+        ])
+      }
     } finally {
       setIsTyping(false)
       setTimeout(() => inputRef.current?.focus(), 30)
@@ -286,6 +338,7 @@ function AIChatBooking() {
       setMessages([welcome])
       // Làm mới = bắt đầu phiên mới, tránh tin nhắn sau rơi vào phiên cũ
       setCurrentSessionId(null)
+      history.resetHistory()
       setInputValue('')
       showToast(`📍 Đã cập nhật vị trí: ${newLoc.name} (${newLoc.updatedAt})`)
     }
@@ -295,7 +348,7 @@ function AIChatBooking() {
         async (pos) => {
           const { latitude, longitude } = pos.coords
           const closest = await describeArea(latitude, longitude)
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           applyNewLoc({
             lat: latitude,
             lng: longitude,
@@ -305,7 +358,7 @@ function AIChatBooking() {
           })
         },
         () => {
-          const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          const nowStr = vnClock(new Date())
           const p = getUserProfileContext()
           applyNewLoc({
             lat: p.lat ?? null,
@@ -320,7 +373,7 @@ function AIChatBooking() {
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
       )
     } else {
-      const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      const nowStr = vnClock(new Date())
       const p = getUserProfileContext()
       applyNewLoc({
         lat: p.lat ?? null,
@@ -365,7 +418,7 @@ function AIChatBooking() {
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript
         }
-        setInputValue(transcript)
+        setInputValue(transcript.slice(0, AI_MESSAGE_MAX))
       }
 
       recognition.onerror = (event) => {
@@ -392,13 +445,20 @@ function AIChatBooking() {
     }
   }
 
+  // Gửi lại câu hỏi BE chưa lưu: bỏ bong bóng lỗi rồi gửi như câu mới
+  const handleRetry = (msg) => {
+    setMessages((prev) => prev.filter((m) => m.id !== msg.id))
+    handleSendMessage(msg.text)
+  }
+
   // Đặt 1 ca thật do AI gợi ý: sang trang thanh toán với đúng courtSlotId và ngày (giờ Việt Nam)
   const handleBookSlot = (facility, slot) => {
     navigate('/split-payment', { state: buildPaymentState(facility, slot) })
   }
 
-  const handleOpenLfg = () => {
-    navigate('/community')
+  // Mở đúng kèo AI gợi ý (màn nhận suất theo lfgCardId)
+  const handleOpenLfg = (c) => {
+    navigate(c?.lfgCardId ? `/flash-claim?cardId=${encodeURIComponent(c.lfgCardId)}` : '/community')
   }
 
   const handleOpenTournament = (t) => {
@@ -407,7 +467,8 @@ function AIChatBooking() {
 
   // Đặt ca / mở kèo xong từ gợi ý AI → sang vé QR hoặc kèo của tôi
   const handleAiDone = (kind) => {
-    navigate(kind === 'booking' ? '/qr-pass' : '/community')
+    // Đơn chia tiền đang chờ góp hiện ở trang chủ (khối "Đơn chia tiền")
+    navigate(kind === 'booking' ? '/qr-pass' : kind === 'split' ? '/dashboard' : '/community')
   }
 
   const renderFormattedText = (rawText) => {
@@ -492,20 +553,53 @@ function AIChatBooking() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {sessionsList.length > 0 && (
-            <select
-              value={currentSessionId || ''}
-              disabled={isLoadingSession}
-              onChange={(e) => handleSelectSession(e.target.value)}
-              className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 border border-gray-300 text-gray-800 outline-none"
-              title="Chọn phiên hội thoại"
-            >
-              <option value="">-- Phiên trò chuyện mới --</option>
-              {sessionsList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title || `Phiên #${s.id.slice(0, 8)}`}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setSessionsOpen((v) => !v)}
+                disabled={isLoadingSession}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-gray-800 bg-gray-100 border border-gray-300 hover:bg-gray-200 flex items-center gap-1 transition-all"
+                title="Các cuộc trò chuyện trước"
+                aria-expanded={sessionsOpen}
+              >
+                <span className="material-symbols-outlined text-[16px]">history</span>
+                Lịch sử
+              </button>
+              {sessionsOpen && (
+                <>
+                  {/* Bấm ra ngoài để đóng */}
+                  <div className="fixed inset-0 z-30" onClick={() => setSessionsOpen(false)} />
+                  <div className="snx-ai-sessions" onScroll={handleSessionsScroll}>
+                    {sessionsList.map((s) => (
+                      <div key={s.id} className={`snx-ai-session-row ${s.id === currentSessionId ? 'is-active' : ''}`}>
+                        <button
+                          type="button"
+                          className="snx-ai-session-main"
+                          onClick={() => {
+                            setSessionsOpen(false)
+                            if (s.id !== currentSessionId) handleSelectSession(s.id)
+                          }}
+                        >
+                          <span className="snx-ai-session-title">{s.title || 'Cuộc trò chuyện'}</span>
+                          {s.lastMessage && <span className="snx-ai-session-last">{truncateText(s.lastMessage, 80)}</span>}
+                          <span className="snx-ai-session-time">{relativeTimeVi(s.lastMessageAt || s.createdAt)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="snx-ai-session-delete"
+                          onClick={() => handleDeleteSession(s.id)}
+                          title="Xóa cuộc trò chuyện này"
+                          aria-label={`Xóa cuộc trò chuyện ${s.title || ''}`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                    {sessionsPaging.loading && <div className="snx-ai-session-more">Đang tải…</div>}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           <button
@@ -553,8 +647,14 @@ function AIChatBooking() {
       {/* Chat Body */}
       <div
         ref={bodyRef}
+        onScroll={history.onScroll}
         className="flex-1 overflow-y-auto bg-gray-50/70 p-4 border-x border-emerald-900/10 flex flex-col gap-4"
       >
+        {history.hasOlder && (
+          <button type="button" className="snx-ai-older-btn" onClick={history.loadOlder} disabled={history.loadingOlder}>
+            {history.loadingOlder ? 'Đang tải tin nhắn cũ…' : 'Xem tin nhắn cũ hơn'}
+          </button>
+        )}
         {messages.map((msg) => (
           <div key={msg.id} className={`snx-ai-msg ${msg.sender === 'user' ? 'is-user' : 'is-bot'}`}>
             {msg.sender === 'bot' && (
@@ -562,9 +662,19 @@ function AIChatBooking() {
             )}
 
             <div className="snx-ai-msg-content max-w-2xl">
-              <div className="snx-ai-bubble">{renderFormattedText(msg.text)}</div>
+              <div className="snx-ai-bubble">{renderFormattedText(aiLeadText(msg))}</div>
 
-              <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} />
+              {msg.failed && (
+                <div className="snx-ai-failed">
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>error</span>
+                  <span>{msg.failed}</span>
+                  <button type="button" onClick={() => handleRetry(msg)} disabled={isTyping || cooldown > 0 || aiPaused}>
+                    {cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi lại'}
+                  </button>
+                </div>
+              )}
+
+              <AiSuggestions facilities={msg.facilities} lfgCards={msg.lfgCards} tournaments={msg.tournaments} messageId={msg.messageId} intent={msg.intent} onBookSlot={handleBookSlot} onOpenLfg={handleOpenLfg} onOpenTournament={handleOpenTournament} onDone={handleAiDone} onRefresh={history.refreshLatest} />
 
               {msg.quickReplies && msg.quickReplies.length > 0 && (
                 <div className="snx-ai-chips-wrap mt-2">
@@ -618,6 +728,19 @@ function AIChatBooking() {
           </div>
         )}
 
+        {cooldown > 0 && !aiPaused && (
+          <div className="snx-ai-cooldown">
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>hourglass_top</span>
+            <span>{cooldownText} Vui lòng đợi {cooldown} giây rồi gửi tiếp.</span>
+          </div>
+        )}
+
+        {aiPaused ? (
+          <div className="snx-ai-cooldown">
+            <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>pause_circle</span>
+            <span>Trợ lý AI tạm ngưng, bạn vui lòng quay lại sau.</span>
+          </div>
+        ) : (
         <form
           className="snx-ai-input-row"
           onSubmit={(e) => {
@@ -631,9 +754,13 @@ function AIChatBooking() {
             type="text"
             className="snx-ai-input"
             value={inputValue}
+            maxLength={AI_MESSAGE_MAX}
             onChange={(e) => setInputValue(e.target.value)}
             disabled={isTyping}
           />
+          {inputValue.length > AI_MESSAGE_MAX - 100 && (
+            <span className="snx-ai-counter">{inputValue.length}/{AI_MESSAGE_MAX}</span>
+          )}
 
           <button
             type="button"
@@ -649,13 +776,15 @@ function AIChatBooking() {
           <button
             type="submit"
             className="snx-ai-send-btn"
-            disabled={!inputValue.trim() || isTyping}
+            disabled={!inputValue.trim() || isTyping || cooldown > 0}
+            title={cooldown > 0 ? `Vui lòng đợi ${cooldown} giây` : 'Gửi câu hỏi'}
           >
             <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
               send
             </span>
           </button>
         </form>
+        )}
       </div>
     </div>
   )

@@ -27,18 +27,19 @@ const between = ([a, b], rand) => a + rand() * (b - a)
 
 export const sizeFor = (vw, cfg = MASCOT_CONFIG) => (vw < cfg.mobileBreakpoint ? cfg.size.mobile : cfg.size.desktop)
 
-export const clampPos = (pos, size, vw, vh, m = MASCOT_CONFIG.margin) => ({
-  x: clamp(pos.x, m.side, vw - size.w - m.side),
+// left: phần bên trái bị sidebar cố định chiếm (0 trên mobile) — mascot không chạy / bị thả ra sau sidebar
+export const clampPos = (pos, size, vw, vh, m = MASCOT_CONFIG.margin, left = 0) => ({
+  x: clamp(pos.x, left + m.side, vw - size.w - m.side),
   y: clamp(pos.y, m.top, vh - size.h - m.bottom),
 })
 
-export const homePos = (size, vw, vh, cfg = MASCOT_CONFIG) =>
-  clampPos({ x: vw - size.w - cfg.home.right, y: vh - size.h - cfg.home.bottom }, size, vw, vh, EDGE)
+export const homePos = (size, vw, vh, cfg = MASCOT_CONFIG, left = 0) =>
+  clampPos({ x: vw - size.w - cfg.home.right, y: vh - size.h - cfg.home.bottom }, size, vw, vh, EDGE, left)
 
-export const randomTarget = (size, vw, vh, cfg = MASCOT_CONFIG, rand = Math.random) => {
+export const randomTarget = (size, vw, vh, cfg = MASCOT_CONFIG, rand = Math.random, left = 0) => {
   const m = cfg.margin
   return {
-    x: m.side + rand() * Math.max(0, vw - size.w - 2 * m.side),
+    x: left + m.side + rand() * Math.max(0, vw - left - size.w - 2 * m.side),
     y: m.top + rand() * Math.max(0, vh - size.h - m.top - m.bottom),
   }
 }
@@ -64,7 +65,7 @@ export function createMascotDirector(opts) {
   const saved = opts.prefs || {}
 
   const s = {
-    started: false, vw: 0, vh: 0, size: cfg.size.desktop,
+    started: false, vw: 0, vh: 0, left: 0, size: cfg.size.desktop,
     pos: { x: 0, y: 0 }, ms: 0, action: 'idle', facingLeft: false, bubble: null,
     hidden: saved.hidden === true, sulk: saved.sulk === true, reduced: opts.reduced === true,
     queue: [], current: null, alerting: false, dragCount: 0, drag: null, timer: null, bubbleTimer: null,
@@ -72,10 +73,11 @@ export function createMascotDirector(opts) {
 
   const render = () => emit({
     x: s.pos.x, y: s.pos.y, ms: s.ms, action: s.action, facingLeft: s.facingLeft, bubble: s.bubble,
-    hidden: s.hidden, sulk: s.sulk, size: s.size, vw: s.vw,
+    hidden: s.hidden, sulk: s.sulk, size: s.size, vw: s.vw, left: s.left,
   })
   const restAction = () => (s.sulk ? 'sulk' : 'idle')
-  const home = () => homePos(s.size, s.vw, s.vh, cfg)
+  const home = () => homePos(s.size, s.vw, s.vh, cfg, s.left)
+  const inBounds = (pos) => clampPos(pos, s.size, s.vw, s.vh, EDGE, s.left)
   const persist = () => save({ hidden: s.hidden, sulk: s.sulk, x: s.sulk ? Math.round(s.pos.x) : null, y: s.sulk ? Math.round(s.pos.y) : null })
   const stopTimer = () => { cancel(s.timer); s.timer = null }
   // ms > 0: chạy có transition, quay mặt theo hướng di chuyển
@@ -108,7 +110,7 @@ export function createMascotDirector(opts) {
     if (!canRoam()) return
     const ms = Math.round(between(cfg.legMs, rand))
     s.action = 'run'
-    place(randomTarget(s.size, s.vw, s.vh, cfg, rand), ms)
+    place(randomTarget(s.size, s.vw, s.vh, cfg, rand, s.left), ms)
     render()
     s.timer = later(rest, ms)
   }
@@ -177,7 +179,7 @@ export function createMascotDirector(opts) {
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < cfg.dragThreshold) return
     d.moved = true
     s.action = 'drag'
-    place(clampPos({ x: e.clientX - d.ox, y: e.clientY - d.oy }, s.size, s.vw, s.vh, EDGE))
+    place(inBounds({ x: e.clientX - d.ox, y: e.clientY - d.oy }))
     render()
   }
   // Kéo lần 1: nhắc nhở rồi chạy tiếp. Kéo lần 2: đứng yên tại chỗ thả và dỗi (lưu lại).
@@ -247,18 +249,16 @@ export function createMascotDirector(opts) {
   }
   // Mobile bắn resize khi thanh địa chỉ co giãn: chỉ xử lý khi đổi bề ngang hoặc mascot bị lọt ra ngoài
   function resize() {
-    const { w, h } = viewport()
-    const widthChanged = w !== s.vw
-    s.vw = w
-    s.vh = h
-    s.size = sizeFor(w, cfg)
+    const { w, h, left = 0 } = viewport()
+    const widthChanged = w !== s.vw || left !== s.left
+    Object.assign(s, { vw: w, vh: h, left, size: sizeFor(w, cfg) })
     if (!s.started || s.drag) return
-    const inside = clampPos(s.pos, s.size, w, h, EDGE)
+    const inside = inBounds(s.pos)
     if (!widthChanged && inside.x === s.pos.x && inside.y === s.pos.y) return
     stopTimer()
     abortAlert()
     freeze()
-    place(s.reduced && !s.sulk && !s.bubble ? home() : clampPos(s.pos, s.size, w, h, EDGE))
+    place(s.reduced && !s.sulk && !s.bubble ? home() : inBounds(s.pos))
     if (s.action === 'run') s.action = restAction()
     if (s.sulk) persist()
     render()
@@ -266,10 +266,10 @@ export function createMascotDirector(opts) {
   }
 
   function start() {
-    const { w, h } = viewport()
-    Object.assign(s, { started: true, vw: w, vh: h, size: sizeFor(w, cfg) })
+    const { w, h, left = 0 } = viewport()
+    Object.assign(s, { started: true, vw: w, vh: h, left, size: sizeFor(w, cfg) })
     const hasSpot = s.sulk && Number.isFinite(saved.x) && Number.isFinite(saved.y)
-    place(hasSpot ? clampPos({ x: saved.x, y: saved.y }, s.size, w, h, EDGE) : home())
+    place(hasSpot ? inBounds({ x: saved.x, y: saved.y }) : home())
     s.action = restAction()
     render()
     if (!next()) roam(1500)

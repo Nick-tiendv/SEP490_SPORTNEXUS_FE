@@ -37,9 +37,12 @@ const TYPE_STYLES = {
 const linkFor = (n, style) => {
   // Thông báo đền bù voucher khi chủ sân hủy ca: BE chưa có type riêng nên nhận theo nội dung.
   if (/mã giảm/i.test(`${n.title} ${n.message}`)) return '/wallet/vouchers'
+  // Được mời góp tiền đặt sân: mở khối "Đơn chia tiền đang chờ góp" ở trang chủ (chưa góp thì chưa có vé QR)
+  if (n.referenceType === 'BOOKING' && n.referenceId && /góp tiền/i.test(`${n.title} ${n.message}`)) return `/dashboard?splitBooking=${n.referenceId}`
   if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
   if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
-  if (n.referenceType === 'TOURNAMENT') return '/tournament'
+  // referenceId = id giải (giải 1 tầng): mở thẳng chi tiết giải
+  if (n.referenceType === 'TOURNAMENT') return n.referenceId ? `/tournament?tournamentId=${encodeURIComponent(n.referenceId)}` : '/tournament'
   return style.link
 }
 const DEFAULT_STYLE = { icon: 'notifications', color: '#475569', bg: '#F1F5F9', link: '', linkText: 'Xem chi tiết' }

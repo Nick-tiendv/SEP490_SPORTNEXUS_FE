@@ -1,10 +1,63 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { updateMatchScore } from '../../api/player/tournamentApi.js'
+import { checkInTournament, getTournamentParticipants, updateMatchScore } from '../../api/player/tournamentApi.js'
+import { useApi } from '../../hooks/useApi.js'
 import MatchScoreModal from '../../components/common/MatchScoreModal.jsx'
 
 const dateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Chưa xếp giờ')
 const ROLE_LABEL = { REFEREE: 'Trọng tài', SCORER: 'Người nhập điểm', OTHER: 'Nhân sự' }
+
+// Điểm danh thủ công của trọng tài (BE 25/11 mở quyền POST /tournaments/{id}/check-in cho trọng tài có tài khoản của giải)
+function CheckInList({ tournamentId }) {
+  const participants = useApi(() => getTournamentParticipants(tournamentId), [tournamentId], { initialData: [] })
+  const [busyId, setBusyId] = useState('')
+  const [query, setQuery] = useState('')
+  const list = participants.data || []
+  const fold = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd')
+  const shown = list
+    .filter((p) => !query.trim() || fold(`${p.teamName || ''} ${p.fullName || ''} ${p.username || ''}`).includes(fold(query.trim())))
+    .sort((a, b) => Number(!!a.isCheckedIn) - Number(!!b.isCheckedIn))
+  const done = list.filter((p) => p.isCheckedIn).length
+
+  const checkIn = async (p) => {
+    setBusyId(p.participantId)
+    try {
+      await checkInTournament(tournamentId, { participantId: p.participantId })
+      toast.success(`Đã điểm danh ${p.teamName || p.fullName}.`)
+      participants.refresh()
+    } catch (error) {
+      toast.error(error?.message || 'Không điểm danh được.')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  if (participants.loading && !list.length) return <p className="snx-muted">Đang tải người tham gia…</p>
+  if (participants.error) return <div className="snx-alert snx-alert--error">{participants.error}</div>
+  if (!list.length) return <p className="snx-muted">Giải chưa có người tham gia.</p>
+  return (
+    <div className="snx-stack" style={{ gap: 10 }}>
+      <div className="snx-row">
+        <span className="snx-muted">Đã điểm danh {done}/{list.length}. Người chưa đóng lệ phí không điểm danh được.</span>
+        <span className="snx-spacer" />
+        <input className="snx-input" style={{ width: 220 }} placeholder="Tìm tên / tên đội" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Tìm người tham gia" />
+      </div>
+      <div className="snx-list">
+        {shown.map((p) => (
+          <div key={p.participantId} className="snx-list-item">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong style={{ fontSize: 14 }}>{p.teamName || p.fullName}</strong>
+              <div className="snx-muted">{p.teamName ? (p.teamMembers || []).map((m) => m.fullName).join(', ') : p.username ? `@${p.username}` : ''}</div>
+            </div>
+            {p.isCheckedIn
+              ? <span className="snx-badge snx-badge--green">Đã điểm danh</span>
+              : <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busyId === p.participantId} onClick={() => checkIn(p)}>{busyId === p.participantId ? 'Đang điểm danh…' : 'Điểm danh'}</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // Trận tôi được nhập tỉ số (GET /tournaments/my-staff-matches): trận chưa đá + trận đã xong trong 72 giờ của giải tôi là
 // nhân sự có tài khoản. Trọng tài chỉ nhập tỉ số (nhóm + BE chốt 23/11, không chấm Fair Play).
@@ -12,6 +65,7 @@ const ROLE_LABEL = { REFEREE: 'Trọng tài', SCORER: 'Người nhập điểm',
 export default function RefereeMatches({ matches }) {
   const [scoring, setScoring] = useState(null)
   const [openId, setOpenId] = useState(null) // giải đang mở
+  const [view, setView] = useState('score') // 'score' | 'checkin'
   // Trận miễn đấu tự có kết quả, không có gì để nhập
   const list = (matches.data || []).filter((m) => !/miễn đấu/i.test(m.roundName || ''))
 
@@ -43,6 +97,11 @@ export default function RefereeMatches({ matches }) {
     let group = groups.find((g) => g.id === id)
     if (!group) groups.push(group = { id, name: m.rootTournamentName || m.tournamentName, facilityName: m.facilityName, matches: [] })
     group.matches.push(m)
+  }
+  // BTC đã phân trọng tài cho giải thì chỉ hiện trận được phân cho mình; giải chưa phân trận nào thì hiện tất cả
+  for (const group of groups) {
+    group.assignedOnly = group.matches.some((m) => m.isAssignedOfficial)
+    if (group.assignedOnly) group.matches = group.matches.filter((m) => m.isAssignedOfficial)
   }
   const open = groups.find((g) => g.id === openId)
 
@@ -89,7 +148,13 @@ export default function RefereeMatches({ matches }) {
           <div className="snx-muted" style={{ fontSize: 12.5 }}>{open.facilityName}</div>
         </div>
       </div>
-      <p className="snx-muted" style={{ marginTop: 0 }}>Bạn nhập được tỉ số các trận của giải tới khi giải kết thúc. Hai bên phải điểm danh trước khi thi đấu: bên vắng mặt bị xử thua. Sửa tỉ số trận đã xong sẽ tính lại Elo và mở lại thời gian khiếu nại.</p>
+      <div className="snx-row" style={{ gap: 6, marginBottom: 10 }}>
+        {[['score', 'Nhập tỉ số'], ['checkin', 'Điểm danh']].map(([key, label]) => (
+          <button key={key} type="button" className={`snx-btn snx-btn--sm ${view === key ? 'snx-btn--primary' : 'snx-btn--secondary'}`} onClick={() => setView(key)}>{label}</button>
+        ))}
+      </div>
+      {view === 'checkin' ? <CheckInList key={open.id} tournamentId={open.id} /> : (<>
+      <p className="snx-muted" style={{ marginTop: 0 }}>Bạn nhập được tỉ số các trận của giải tới khi giải kết thúc. Hai bên phải điểm danh trước khi thi đấu: bên vắng mặt bị xử thua. Sửa tỉ số trận đã xong sẽ tính lại Elo và mở lại thời gian khiếu nại.{open.assignedOnly ? ' Chỉ hiện các trận Ban tổ chức phân công cho bạn.' : ''}</p>
       <div className="snx-list">
         {sorted.map((m) => (
           <div key={m.matchId} className="snx-list-item" style={{ alignItems: 'flex-start' }}>
@@ -115,6 +180,7 @@ export default function RefereeMatches({ matches }) {
           </div>
         ))}
       </div>
+      </>)}
       {scoring && (
         <MatchScoreModal
           matchId={scoring.matchId}

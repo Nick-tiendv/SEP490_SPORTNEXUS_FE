@@ -69,6 +69,7 @@ export async function getMyRegistrations() {
     teamId: raw.teamId ? String(raw.teamId) : '',
     teamName: raw.teamName || '',
     qrCode: raw.qrCode || '',
+    isCheckedIn: raw.isCheckedIn === true,
   }))
 }
 // POST /api/v1/tournaments/{id}/join?teamId= (teamId chỉ cần với nội dung thi đấu theo đội).
