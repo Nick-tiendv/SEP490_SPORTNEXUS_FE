@@ -1,6 +1,7 @@
 // aiBookingData.js — Dữ liệu vị trí, hồ sơ người chơi và lời chào cho Trợ lý AI SportNexus
 // Gợi ý sân/ca/kèo đều lấy từ BE (POST /api/v1/ai/chat), FE không tự sinh câu trả lời.
 import { reverseGeocode } from '../../../utils/geolocation.js'
+import { vnClock } from '../../../utils/vnTime.js'
 
 const toCoord = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -82,7 +83,7 @@ export function buildWelcomeMessage(userLocation, userProfile = null) {
     (userLocation?.name && userLocation.name !== 'Chưa xác định vị trí' ? userLocation.name : '') ||
     profile.rawLocation ||
     'Chưa xác định (bật GPS hoặc nhập khu vực trong câu hỏi)'
-  const nowTime = userLocation?.updatedAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+  const nowTime = userLocation?.updatedAt || vnClock(new Date())
 
   const greeting = profile.name ? `Xin chào **${profile.name}**!` : 'Xin chào bạn!'
   const sportsNote = profile.favoriteSportsLabel ? `• **Môn thể thao trong hồ sơ**: **${profile.favoriteSportsLabel}**.\n` : ''
@@ -97,11 +98,12 @@ export function buildWelcomeMessage(userLocation, userProfile = null) {
       sportsNote +
       `\n💡 *Gõ hoặc bấm Micro để nói (VD: "sân cầu lông tối nay gần tôi", "sân dưới 150k chiều mai", "tìm kèo pickleball cuối tuần").* ` +
       `Mình chỉ gợi ý sân và ca còn trống thật trên hệ thống; bấm vào ca để chuyển sang thanh toán.`,
+    // Câu gợi ý bấm nhanh ở màn chat trống (FE_AI_CHATBOT_CAP_NHAT_26-11, mục 5.8)
     quickReplies: [
-      'Sân trống tối nay gần tôi',
-      'Sân cầu lông giá rẻ nhất chiều mai',
-      'Tìm kèo pickleball cuối tuần',
-      'Chính sách hủy sân và hoàn tiền',
+      'Tìm sân cầu lông tối nay gần tôi',
+      'Có kèo bóng đá cuối tuần không?',
+      'Tạo kèo pickleball thứ 7, cần thêm 3 người',
+      'Hủy đặt sân được hoàn bao nhiêu?',
     ],
   }
 }
