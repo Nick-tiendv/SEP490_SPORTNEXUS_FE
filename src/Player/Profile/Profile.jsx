@@ -23,6 +23,7 @@ import { getMyFairPlay } from '../../api/player/lfgApi.js'
 import { getMyRatings, getMyAssessments } from '../../api/player/ratingApi.js'
 import { initialsOf } from '../../hooks/useCurrentUser.js'
 import { getMyBookings } from '../../api/player/bookingApi.js'
+import SplitBookings from '../Booking/SplitBookings.jsx'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
 import { uploadImage } from '../../api/player/uploadApi.js'
 import { canEscalateComplaint } from '../../CourtOwner/Tournament/tournamentRules.js'
@@ -3027,6 +3028,9 @@ export default function Profile() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
+
+            {/* Đơn chia tiền đang chờ góp: góp tiền / trả nốt / xem ai đã góp */}
+            <SplitBookings />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {loadingBookings ? (

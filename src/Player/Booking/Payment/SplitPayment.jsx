@@ -37,6 +37,7 @@ import {
 import { eloText, fairPlayScoreOf, usePlayerStanding } from '../../../hooks/usePlayerStanding.js'
 import { RECURRING_CANCEL_LOCKED_TEXT, bulkDiscount, isRecurringCancelLocked } from '../Recurring/recurringBooking.js'
 import { BulkDiscountNote } from '../Recurring/BulkDiscount.jsx'
+import { parseVnTime, secondsUntil, splitShares } from '../splitBooking.js'
 import './SplitPayment.css'
 
 function findSubCourtId(state) {
@@ -492,9 +493,16 @@ function SplitPayment() {
   // Đảm bảo chia hợp lý (ca thể thao tối thiểu 2 người)
   const totalParticipantCount = paymentMode === 'split' ? Math.max(1, invitedFriends.length + 1) : 1
   const displaySplitCount = invitedFriends.length > 0 ? (invitedFriends.length + 1) : 2
-  const splitAmount = Math.round(orderAmount / (totalParticipantCount || 1))
-  const displaySplitAmount = Math.round(orderAmount / displaySplitCount)
-  const payableAmount = paymentMode === 'full' ? orderAmount : splitAmount
+  // Chia như BE: tiền mỗi ca chia đều cho (người tạo + bạn), làm tròn xuống; phần lẻ người tạo trả.
+  // Không đọc được giá từng ca (hoặc đã có giảm giá gói) thì chia trên tổng đơn.
+  const pickedPrices = (Array.isArray(state.selectedSlots) ? state.selectedSlots : []).map((s) => Number(s?.price))
+  const slotPrices = pickedPrices.length > 0 && pickedPrices.every((p) => Number.isFinite(p) && p > 0) && pickedPrices.reduce((a, b) => a + b, 0) === orderAmount
+    ? pickedPrices
+    : [orderAmount]
+  const splitAmount = splitShares(slotPrices, totalParticipantCount).share // phần mỗi người bạn
+  const hostSplitAmount = splitShares(slotPrices, totalParticipantCount).hostShare // phần người tạo (gồm phần lẻ)
+  const displaySplitAmount = splitShares(slotPrices, displaySplitCount).share
+  const payableAmount = paymentMode === 'full' ? orderAmount : hostSplitAmount
 
   // Chọn chế độ thanh toán
   const SPLIT_LOCKED_TEXT = 'Tính năng chia tiền không áp dụng cho Gói đặt lịch định kỳ.'
@@ -502,6 +510,11 @@ function SplitPayment() {
     if (mode === 'split' && isPackage) {
       toast.info(SPLIT_LOCKED_TEXT)
       return
+    }
+    // BE không cho dùng voucher với đơn chia tiền (400)
+    if (mode === 'split' && selectedVoucherId) {
+      setSelectedVoucherId('')
+      toast.info('Voucher không áp dụng cho đơn chia tiền, đã bỏ chọn voucher.')
     }
     setPaymentMode(mode)
   }
@@ -698,8 +711,9 @@ function SplitPayment() {
         toast.error('Chưa có mã đơn đặt sân để thanh toán.')
         return
       }
+      let payResult = null
       try {
-        await payRemainingBooking(bookingId)
+        payResult = await payRemainingBooking(bookingId)
       } catch (apiErr) {
         toast.error(apiErr?.message || 'Không thanh toán được phần còn lại.')
         return
@@ -729,7 +743,7 @@ function SplitPayment() {
           },
         })
       )
-      toast.success(`Đã thanh toán nốt ${formatVnd(remainingDue)} thành công!\n\nĐơn hàng đã chuyển sang trạng thái PAID. Vé QR check-in đã sẵn sàng.`)
+      toast.success(payResult?.message || `Đã thanh toán nốt ${formatVnd(remainingDue)}, đơn đặt sân đã được xác nhận.`)
     } finally {
       setIsPayingRemaining(false)
     }
@@ -931,7 +945,7 @@ function SplitPayment() {
         totalAmount: 0, // Server tự tính giá
         isSplitPayment: paymentMode === 'split',
         participantIds: activeParticipantIds,
-        voucherId: selectedVoucher?.id || null,
+        voucherId: paymentMode === 'split' ? null : selectedVoucher?.id || null,
         isRecurring: isPackage,
       }
     }
@@ -946,7 +960,7 @@ function SplitPayment() {
       totalAmount: 0,
       isSplitPayment: paymentMode === 'split',
       participantIds: activeParticipantIds,
-      voucherId: selectedVoucher?.id || null,
+      voucherId: paymentMode === 'split' ? null : selectedVoucher?.id || null,
       isRecurring: isPackage,
     }
   }
@@ -1085,12 +1099,24 @@ function SplitPayment() {
         }
         setQrToken(ticketTokenValue)
 
-        // Cập nhật trạng thái đơn theo Bước 2 (isSplitPayment -> PENDING, người tạo trả phần của mình ngay, hạn 30 phút)
-        if (paymentMode === 'split') {
+        // Đơn chia tiền hay đơn thường do BE quyết định (data.isSplitPayment). Hạn góp theo paymentDeadline của BE:
+        // 30 phút từ lúc tạo, hoặc giờ bắt đầu ca nếu sớm hơn.
+        const isSplitBooking = paymentMode === 'split' && createdBooking?.isSplitPayment === true
+        const deadlineAt = parseVnTime(createdBooking?.paymentDeadline)
+        const deadlineText = Number.isFinite(deadlineAt)
+          ? new Date(deadlineAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+          : ''
+        if (isSplitBooking) {
           setBookingStatus('PENDING')
-          setDeadlineSeconds(30 * 60)
+          setDeadlineSeconds(secondsUntil(createdBooking?.paymentDeadline) ?? 30 * 60)
         } else {
           setBookingStatus('PAID')
+          if (paymentMode === 'split') {
+            // Màn vé hiển thị như đơn trả toàn bộ cho khớp số tiền BE đã trừ
+            setPaymentMode('full')
+            setInvitedFriends([])
+            toast.warning('Hệ thống đã tạo đơn thường (không chia tiền) và trừ đủ tiền sân của bạn. Muốn chia tiền, hãy tạo đơn mới và chọn bạn ngay lúc đặt.', { duration: 8000 })
+          }
         }
 
         // Phát thông báo Đặt sân thành công (PAID hoặc PENDING)
@@ -1100,14 +1126,14 @@ function SplitPayment() {
               id: uid('book'),
               type: 'booking',
               icon: 'sports_tennis',
-              color: paymentMode === 'split' ? '#D97706' : '#15803D',
-              bg: paymentMode === 'split' ? '#FEF3C7' : '#EAF7EE',
-              title: paymentMode === 'split'
+              color: isSplitBooking ? '#D97706' : '#15803D',
+              bg: isSplitBooking ? '#FEF3C7' : '#EAF7EE',
+              title: isSplitBooking
                 ? 'Đã tạo đơn cùng thanh toán (Trạng thái: PENDING)!'
                 : 'Đặt sân thành công',
               message: `Bạn đã giữ chỗ tại ${courtName} (${subCourt}).`,
-              details: paymentMode === 'split'
-                ? `Hạn góp Điểm: 30 phút • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
+              details: isSplitBooking
+                ? `Hạn góp: ${deadlineText || '30 phút'} • Người tạo đã đóng ${formatVnd(payableAmount)} • Đang chờ bạn bè góp`
                 : `Khung giờ: ${slotTime} • Mã vé: #${ticketTokenValue}`,
               time: 'Vừa xong',
               unread: true,
@@ -1119,12 +1145,12 @@ function SplitPayment() {
         )
 
         setModalData({
-          title: paymentMode === 'split'
+          title: isSplitBooking
             ? 'Đã Tạo Đơn Cùng Thanh Toán Thành Công (PENDING)!'
             : 'Thanh Toán & Đặt Sân Thành Công (PAID)!',
-          desc: paymentMode === 'split'
-            ? `Đã trừ ${formatVnd(payableAmount)} (phần của bạn) từ Ví Escrow. Đơn ở trạng thái PENDING với hạn nộp 30 phút. Chờ người được mời góp để chuyển PAID.`
-            : `Đã tự động trừ ${formatVnd(payableAmount)} từ Ví Escrow và chuyển vào số dư đóng băng (frozenBalance) bảo chứng 100% tới khi chơi xong. Đang xuất vé QR check-in...`,
+          desc: isSplitBooking
+            ? createdBooking?.message || `Đã trừ ${formatVnd(payableAmount)} (phần của bạn) từ Ví Escrow. Đơn được xác nhận khi mọi người góp đủ${deadlineText ? ` trước ${deadlineText}` : ''}.`
+            : `Đã tự động trừ ${formatVnd(Number(createdBooking?.totalAmountPaid) || orderAmount)} từ Ví Escrow và chuyển vào số dư đóng băng (frozenBalance) bảo chứng 100% tới khi chơi xong. Đang xuất vé QR check-in...`,
           onClose: () => {
             setModalData(null)
             setStep('ticket_pass')
@@ -1989,13 +2015,15 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <p className="sp-voucher-hint sp-voucher-error">{voucherList.error}</p>
                 ) : voucherList.items.length === 0 ? (
                   <p className="sp-voucher-hint">Bạn chưa có voucher nào dùng được.</p>
+                ) : paymentMode === 'split' ? (
+                  <p className="sp-voucher-hint">Voucher không áp dụng cho đơn chia tiền.</p>
                 ) : (
                   <>
                     <select
                       id="sp-voucher-select"
                       value={selectedVoucher?.id || ''}
                       onChange={(e) => setSelectedVoucherId(e.target.value)}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || paymentMode === 'split'}
                     >
                       <option value="">Không dùng voucher</option>
                       {voucherList.items.map((v) => (

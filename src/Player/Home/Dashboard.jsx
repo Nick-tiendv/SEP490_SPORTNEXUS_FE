@@ -11,7 +11,7 @@ import { categoryToSportKey, getFacilities, searchFacilities } from '../../api/p
 import { sportMetaOf } from '../LFG/lfgSuggestionEngine.js'
 import { getUpcomingBookings } from '../../api/player/bookingApi.js'
 import { enrichPlayerBookings } from '../../api/player/bookingApi.js'
-import SplitInvites from '../Booking/SplitInvites.jsx'
+import SplitBookings from '../Booking/SplitBookings.jsx'
 import { getLfgs, lfgSkillLabel } from '../../api/player/lfgApi.js'
 import HomeRecommendations from './HomeRecommendations.jsx'
 import { BulkDiscountBadge } from '../Booking/Recurring/BulkDiscount.jsx'
@@ -979,8 +979,8 @@ function Dashboard() {
 
   return (
     <div className="snx-page" style={{ overflowX: 'hidden' }}>
-      {/* Lời mời góp tiền sân (đơn chia tiền) — chỉ hiện khi có */}
-      <SplitInvites />
+      {/* Đơn chia tiền đang chờ góp (mình tạo hoặc được mời) — chỉ hiện khi có */}
+      <SplitBookings />
 
       {/* Gợi ý theo khảo sát người chơi: kèo phù hợp, sân trống trong giờ rảnh, giải hợp Elo */}
       <HomeRecommendations />
