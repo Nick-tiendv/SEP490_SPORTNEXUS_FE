@@ -19,7 +19,7 @@ function OrderModal({ product, onClose }) {
     setBusy(true)
     try {
       await createShopOrder({ productId: product.id, quantity: qty, note: note.trim() })
-      toast.success(`Đã đặt ${qty} × ${product.name}. Nhận hàng và thanh toán tại quầy.`)
+      toast.success(`Đã đặt ${qty} × ${product.name}. Nhận hàng và thanh toán tại quầy trong 24 giờ.`)
       onClose(true)
     } catch (error) {
       toast.error(error?.message || 'Không đặt được sản phẩm.')
@@ -41,6 +41,7 @@ function OrderModal({ product, onClose }) {
           <label className="snx-field">Số lượng<input className="snx-input" type="number" min="1" max={max} value={quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
           <label className="snx-field">Ghi chú (không bắt buộc)<input className="snx-input" maxLength={300} placeholder="VD: lấy lúc 19h, sân 2" value={note} onChange={(e) => setNote(e.target.value)} /></label>
           <p style={{ margin: 0 }}>Tạm tính: <strong>{money((Number(quantity) || 0) * Number(product.price || 0))}</strong></p>
+          <p className="snx-muted" style={{ margin: 0 }}>Nhận hàng và trả tiền tại quầy trong 24 giờ, quá hạn đơn tự hủy.</p>
         </div>
         <div className="snx-modal-foot">
           <button type="button" className="snx-btn snx-btn--secondary" onClick={() => onClose(false)}>Hủy</button>
@@ -64,7 +65,7 @@ export default function FacilityShop({ facilityId }) {
         <span className="snx-spacer" />
         <Link className="snx-btn snx-btn--ghost snx-btn--sm" to="/shop-orders">Đơn mua của tôi</Link>
       </div>
-      <p className="snx-muted" style={{ margin: 0 }}>Đặt trước nước, phụ kiện… nhận và trả tiền tại quầy, không trừ ví.</p>
+      <p className="snx-muted" style={{ margin: 0 }}>Đặt trước nước, phụ kiện… nhận và trả tiền tại quầy trong 24 giờ (quá hạn đơn tự hủy), không trừ ví.</p>
       <div className="snx-list">
         {items.map((p) => (
           <div key={p.id} className="snx-list-item">
