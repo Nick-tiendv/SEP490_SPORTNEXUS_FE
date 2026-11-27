@@ -45,6 +45,7 @@
 .owners-verification{display:inline-flex;align-items:center;gap:3px;border-radius:10px;padding:3px 6px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--mint-100);color:var(--sn-green-600)}
 .owners-verification.pending{background:var(--sn-warning-bg);color:var(--sn-warning-solid)}
 .owners-verification.rejected{background:var(--sn-danger-bg);color:#cd6975}
+.owners-verification.revoked{background:var(--sn-danger-bg);color:#cd6975}
 .owners-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px}
 .owners-pagination>span{max-width:145px}
 .owners-pagination label{display:flex;align-items:center;gap:7px}

@@ -57,6 +57,8 @@ export function toAdminFacility(input) {
       name: pick(raw, 'ownerName', 'owner.fullName', 'owner.name') || '',
       email: pick(raw, 'ownerEmail', 'owner.email') || '',
       phone: pick(raw, 'ownerPhone', 'owner.phone') || '',
+      // false: chủ sân đang bị khóa (cơ sở ngừng nhận đặt sân mới)
+      isActive: pick(raw, 'ownerIsActive') !== false,
     },
     approval,
     locked,
