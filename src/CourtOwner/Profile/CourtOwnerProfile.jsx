@@ -25,6 +25,8 @@ const KYC_STATUS = {
   PENDING: { label: 'Đang chờ duyệt', bg: '#FEF3C7', color: '#B45309', icon: 'hourglass_top' },
   APPROVED: { label: 'Đã xác minh', bg: '#DCFCE7', color: '#15803D', icon: 'verified_user' },
   REJECTED: { label: 'Bị từ chối', bg: '#FEE2E2', color: '#B91C1C', icon: 'gpp_bad' },
+  // Admin thu hồi xác minh đã duyệt: như chưa xác minh, gửi lại hồ sơ được
+  REVOKED: { label: 'Đã bị thu hồi', bg: '#FEE2E2', color: '#B91C1C', icon: 'gpp_bad' },
 }
 const KYC_IMAGES = [
   { key: 'idFrontImageUrl', label: 'Ảnh CCCD mặt trước', required: true },
@@ -151,7 +153,7 @@ export default function Profile() {
   // ---------- eKYC ----------
   const kycStatus = profile?.ownerVerificationStatus || verification.data?.status || 'NOT_SUBMITTED'
   const kycInfo = KYC_STATUS[String(kycStatus).toUpperCase()] || KYC_STATUS.NOT_SUBMITTED
-  const canSubmitKyc = ['NOT_SUBMITTED', 'REJECTED'].includes(String(kycStatus).toUpperCase())
+  const canSubmitKyc = ['NOT_SUBMITTED', 'REJECTED', 'REVOKED'].includes(String(kycStatus).toUpperCase())
 
   // ---------- Fair Play (thang 100) ----------
   const fairPlayRaw = fairPlay?.fairPlayScore ?? fairPlay?.score ?? profile?.fairPlayScore
@@ -401,16 +403,18 @@ export default function Profile() {
           </div>
           {canSubmitKyc && !showKycForm && (
             <button onClick={openKycForm} style={primaryButton(false)}>
-              {String(kycStatus).toUpperCase() === 'REJECTED' ? 'Gửi lại hồ sơ' : 'Gửi hồ sơ xác minh'}
+              {['REJECTED', 'REVOKED'].includes(String(kycStatus).toUpperCase()) ? 'Gửi lại hồ sơ' : 'Gửi hồ sơ xác minh'}
             </button>
           )}
         </div>
 
         {verification.error && <div style={{ color: '#B91C1C', fontWeight: 700, marginBottom: '10px' }}>{verification.error}</div>}
 
-        {String(kycStatus).toUpperCase() === 'REJECTED' && verification.data?.rejectReason && !showKycForm && (
+        {['REJECTED', 'REVOKED'].includes(String(kycStatus).toUpperCase()) && (verification.data?.rejectReason || String(kycStatus).toUpperCase() === 'REVOKED') && !showKycForm && (
           <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', fontSize: '13.5px', fontWeight: 700, marginBottom: '14px' }}>
-            Lý do từ chối: {verification.data.rejectReason}
+            {String(kycStatus).toUpperCase() === 'REVOKED'
+              ? `Xác minh đã bị thu hồi.${verification.data?.rejectReason ? ` Lý do: ${verification.data.rejectReason}` : ''}`
+              : `Lý do từ chối: ${verification.data.rejectReason}`}
           </div>
         )}
 

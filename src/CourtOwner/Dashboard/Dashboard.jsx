@@ -337,10 +337,30 @@ export default function Dashboard() {
           })()}
         </OwnerKpiCard>
 
-        <OwnerKpiCard tone="teal" label={`Doanh thu (${periodDays} ngày)`} icon="trending_up" value={statValue(data?.totalRevenue, formatVND)}>
-          {data ? `Online ${formatVND(data.onlineRevenue)} • Tại quầy ${formatVND(data.walkInRevenue)}` : 'Đơn đã thanh toán + phí hủy'}
+        {/* totalRevenue: giá trị đơn gộp (khách trả + bù voucher − hoàn khiếu nại), chưa trừ phí nền tảng, gồm cả đơn tại quầy */}
+        <OwnerKpiCard tone="teal" label={`Giá trị đơn (gộp, ${periodDays} ngày)`} icon="trending_up" value={statValue(data?.totalRevenue, formatVND)}>
+          <span title="Chưa trừ phí nền tảng, gồm cả đơn trả tại quầy">{data ? `Online ${formatVND(data.onlineRevenue)} • Tại quầy ${formatVND(data.walkInRevenue)}` : 'Chưa trừ phí nền tảng, gồm cả đơn trả tại quầy'}</span>
         </OwnerKpiCard>
       </div>
+
+      {/* Tiền thực về ví (đã trừ phí) + tiền thuê sân giải + Shop tại quầy */}
+      {data && (
+        <div className="owner-kpi-grid" style={{ marginTop: 18 }}>
+          <OwnerKpiCard tone="emerald" label={`Thực nhận về ví (${periodDays} ngày)`} icon="savings" value={statValue(data.walletRevenue, formatVND)}>
+            Chờ quyết toán: {formatVND(data.pendingSettlement)} • Phí nền tảng: {formatVND(data.platformFee)}
+          </OwnerKpiCard>
+          {Number(data.tournamentRentRevenue) > 0 && (
+            <OwnerKpiCard tone="amber" label="Thuê sân giải" icon="emoji_events" value={formatVND(data.tournamentRentRevenue)}>
+              Tiền thuê ca sân giải đã về ví (đã trừ phí)
+            </OwnerKpiCard>
+          )}
+          {data.shopRevenue != null && (
+            <OwnerKpiCard tone="blue" label="Shop tại quầy" icon="storefront" value={formatVND(data.shopRevenue)} unit={`(${data.shopOrders || 0} đơn)`}>
+              Tiền mặt tại quầy, không qua ví
+            </OwnerKpiCard>
+          )}
+        </div>
+      )}
 
       {/* SECTION 1: BIỂU ĐỒ DOANH THU THEO NGÀY & VIỆC CẦN XỬ LÝ */}
       <div className="owner-section-grid">
