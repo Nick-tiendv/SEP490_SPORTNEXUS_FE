@@ -9,6 +9,11 @@ import { formatDate, formatVND, statusBadge } from '../shared.js'
 // Số ngày quảng bá còn lại (làm tròn lên); 0 khi đã hết hạn
 const daysLeft = (endAt) => (endAt ? Math.max(0, Math.ceil((new Date(endAt).getTime() - Date.now()) / 86400000)) : 0)
 
+// Cảnh báo theo targetStatus của mục được quảng bá (cơ sở: ACTIVE / LOCKED / DELETED; giải: ACTIVE / LOCKED / CANCELLED / FINISHED)
+const TARGET_STATUS_NOTE = {
+  LOCKED: 'đang bị khóa', DELETED: 'đã đóng', CANCELLED: 'đã bị hủy', FINISHED: 'đã kết thúc',
+}
+
 const TARGETS = [
   { value: 'FACILITY', label: 'Cơ sở', icon: 'domain' },
   { value: 'TOURNAMENT', label: 'Giải đấu', icon: 'emoji_events' },
@@ -47,7 +52,7 @@ function PurchaseModal({ pkg, targets, balance, onClose, onDone }) {
         </div>
         <div className="snx-stack" style={{ gap: 12 }}>
           {targets.length === 0 ? (
-            <div className="snx-alert snx-alert--info">Bạn chưa có {pkg.targetType === 'TOURNAMENT' ? 'giải đấu' : 'cơ sở'} nào để quảng bá.</div>
+            <div className="snx-alert snx-alert--info">Bạn chưa có {pkg.targetType === 'TOURNAMENT' ? 'giải đấu nào đã được duyệt' : 'cơ sở nào'} để quảng bá.</div>
           ) : (
             <label className="snx-field">{pkg.targetType === 'TOURNAMENT' ? 'Giải đấu' : 'Cơ sở'} được quảng bá
               <select className="snx-select" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
@@ -78,9 +83,12 @@ export default function OwnerPromotions() {
   const tournaments = useApi(() => getMyTournaments(), [], { initialData: [] })
   const mine = useApi(() => getMyPromotions({ activeOnly, page: 1, pageSize: 50 }), [activeOnly], { initialData: { items: [] } })
 
+  // Giải chỉ đẩy tin được khi đã được Admin duyệt, chưa bị khóa, chưa kết thúc / hủy (BE trả 400 nếu không).
   const targets = targetType === 'TOURNAMENT'
-    ? (tournaments.data || []).filter((t) => !['CANCELLED', 'FINISHED'].includes(String(t.status).toUpperCase())).map((t) => ({ id: String(t.id), name: t.name }))
-    : facilities.filter((f) => f.approvalStatus === 'APPROVED' || !f.approvalStatus).map((f) => ({ id: f.id, name: f.name }))
+    ? (tournaments.data || [])
+      .filter((t) => !['CANCELLED', 'FINISHED'].includes(String(t.status).toUpperCase()) && String(t.approvalStatus || '').toUpperCase() === 'APPROVED' && !t.isLocked)
+      .map((t) => ({ id: String(t.id), name: t.name }))
+    : facilities.filter((f) => (f.approvalStatus === 'APPROVED' || !f.approvalStatus) && !f.isLocked).map((f) => ({ id: f.id, name: f.name }))
   const balance = wallet?.availableBalance ?? wallet?.balance
 
   return (
@@ -137,13 +145,15 @@ export default function OwnerPromotions() {
               <tbody>
                 {mine.data.items.map((p) => {
                   const b = statusBadge(p.status)
+                  const cancelled = String(p.status).toUpperCase() === 'CANCELLED'
+                  const targetNote = TARGET_STATUS_NOTE[String(p.targetStatus || '').toUpperCase()]
                   return (
                     <tr key={p.id}>
                       <td><strong>{p.packageName}</strong></td>
-                      <td>{p.targetName}<div className="snx-muted">{p.targetType === 'TOURNAMENT' ? 'Giải đấu' : 'Cơ sở'}</div></td>
-                      <td>{formatDate(p.startAt)} – {formatDate(p.endAt)}{daysLeft(p.endAt) > 0 && <div className="snx-muted">Còn {daysLeft(p.endAt)} ngày</div>}</td>
+                      <td>{p.targetName}<div className="snx-muted">{p.targetType === 'TOURNAMENT' ? 'Giải đấu' : 'Cơ sở'}</div>{targetNote && <div style={{ color: '#b45309', fontSize: 12.5 }}>{p.targetType === 'TOURNAMENT' ? 'Giải' : 'Cơ sở'} {targetNote}</div>}</td>
+                      <td>{formatDate(p.startAt)} – {formatDate(p.endAt)}{!cancelled && daysLeft(p.endAt) > 0 && <div className="snx-muted">Còn {daysLeft(p.endAt)} ngày</div>}</td>
                       <td>{formatVND(p.price)}</td>
-                      <td><span className={b.className}>{b.label}</span></td>
+                      <td><span className={b.className}>{cancelled ? 'Kết thúc sớm' : b.label}</span>{Number(p.refundedAmount) > 0 && <div className="snx-muted">Đã hoàn {formatVND(p.refundedAmount)}</div>}</td>
                     </tr>
                   )
                 })}

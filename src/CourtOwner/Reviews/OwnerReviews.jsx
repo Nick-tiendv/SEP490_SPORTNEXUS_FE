@@ -3,7 +3,8 @@ import { confirmDialog } from '../../components/common/confirm.js'
 import { toast } from 'sonner'
 import { PageHeader } from '../../components/layout/AppShell.jsx'
 import { useApi } from '../../hooks/useApi.js'
-import { deleteReviewReply, getOwnerReviewStats, getOwnerReviews, replyReview, updateReviewReply } from '../../api/owner'
+import { deleteReviewReply, getOwnerReviewStats, getOwnerReviews, getReviewReportReasons, replyReview, reportReview, updateReviewReply } from '../../api/owner'
+import { uploadImage } from '../../api/player/uploadApi.js'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { formatDateTime } from '../shared.js'
 
@@ -14,7 +15,94 @@ const Stars = ({ value }) => (
   </span>
 )
 
+// Báo cáo đánh giá lên Admin (POST /reports, targetType FACILITY_REVIEW). Admin xác nhận thì đánh giá bị ẩn.
+function ReportReviewModal({ review, onClose }) {
+  const reasons = useApi(getReviewReportReasons, [], { initialData: [] })
+  const [reason, setReason] = useState('')
+  const [description, setDescription] = useState('')
+  const [evidence, setEvidence] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const reasonCode = reason || reasons.data[0]?.code || ''
+
+  const addImages = async (files) => {
+    const list = [...files].slice(0, 5 - evidence.length)
+    if (!list.length) return
+    setUploading(true)
+    try {
+      const urls = await Promise.all(list.map((file) => uploadImage(file, 'report')))
+      setEvidence((prev) => [...prev, ...urls.filter(Boolean)])
+    } catch (error) {
+      toast.error(error.message || 'Không tải được ảnh.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!reasonCode) { toast.error('Vui lòng chọn lý do báo cáo.'); return }
+    if (!description.trim()) { toast.error('Vui lòng mô tả vấn đề của đánh giá.'); return }
+    setBusy(true)
+    try {
+      await reportReview(review.id, { reason: reasonCode, description: description.trim(), evidenceImageUrls: evidence })
+      toast.success('Đã gửi báo cáo, Admin sẽ xem xét. Theo dõi ở mục Khiếu nại.')
+      onClose()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="snx-modal-backdrop" role="presentation">
+      <form className="snx-modal" role="dialog" aria-modal="true" aria-labelledby="report-review-title" onSubmit={submit}>
+        <div className="snx-modal-head">
+          <div>
+            <h2 id="report-review-title" className="snx-card-title">Báo cáo đánh giá</h2>
+            <p className="snx-card-subtitle">Đánh giá của {review.userFullName || 'khách'} • {review.facilityName}</p>
+          </div>
+          <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" onClick={onClose} aria-label="Đóng"><span className="material-symbols-outlined">close</span></button>
+        </div>
+        <div className="snx-stack" style={{ gap: 10 }}>
+          {reasons.error && <div className="snx-alert snx-alert--error">{reasons.error}</div>}
+          <label className="snx-field">Lý do
+            <select className="snx-select" value={reasonCode} onChange={(e) => setReason(e.target.value)} disabled={!reasons.data.length}>
+              {reasons.data.map((r) => <option key={r.code} value={r.code}>{r.title || r.label || r.code}</option>)}
+            </select>
+          </label>
+          <label className="snx-field">Mô tả
+            <textarea className="snx-textarea" rows={3} maxLength={2000} placeholder="VD: Khách chưa từng đến sân" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <div className="snx-row">
+            <label className="snx-btn snx-btn--secondary snx-btn--sm" style={{ cursor: 'pointer' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add_photo_alternate</span>{uploading ? 'Đang tải…' : 'Thêm ảnh bằng chứng'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden disabled={uploading || evidence.length >= 5} onChange={(e) => { addImages(e.target.files); e.target.value = '' }} />
+            </label>
+            <span className="snx-muted">{evidence.length}/5 ảnh</span>
+          </div>
+          {evidence.length > 0 && (
+            <div className="snx-thumb-grid">
+              {evidence.map((url) => (
+                <div key={url} className="snx-thumb"><img src={url} alt="Bằng chứng" />
+                  <div className="snx-thumb-actions"><button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={() => setEvidence((prev) => prev.filter((u) => u !== url))}>Bỏ</button></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="snx-modal-foot">
+          <button type="button" className="snx-btn snx-btn--ghost" onClick={onClose}>Hủy</button>
+          <button type="submit" className="snx-btn snx-btn--danger" disabled={busy || uploading || !reasonCode}>{busy ? 'Đang gửi…' : 'Gửi báo cáo'}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function ReviewItem({ review, onChanged }) {
+  const [reporting, setReporting] = useState(false)
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(review.ownerReply || '')
   const [busy, setBusy] = useState(false)
@@ -60,7 +148,13 @@ function ReviewItem({ review, onChanged }) {
             {review.isHidden && <span className="snx-badge snx-badge--gray" title={review.hiddenReason || ''}>Đã bị ẩn</span>}
             <span className="snx-spacer" />
             <span className="snx-muted">{formatDateTime(review.createdAt)}</span>
+            {!review.isHidden && (
+              <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => setReporting(true)} title="Báo cáo đánh giá sai sự thật / xúc phạm">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>flag</span>Báo cáo
+              </button>
+            )}
           </div>
+          {reporting && <ReportReviewModal review={review} onClose={() => setReporting(false)} />}
           <div className="snx-muted">{review.facilityName}</div>
           <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>{review.comment || <em className="snx-muted">Khách không để lại bình luận.</em>}</p>
 
