@@ -1167,14 +1167,20 @@ function CourtDetails() {
               </div>
             </div>
 
+            {/* Chủ sân bị Admin khóa: cơ sở vẫn xem được nhưng tạm ngừng nhận đặt sân */}
+            {facility?.isOwnerLocked && (
+              <p className="text-sm font-bold text-red-600 text-center mb-space-sm">Cơ sở tạm ngừng nhận đặt sân.</p>
+            )}
             <button
               type="button"
-              disabled={selectedSlots.length === 0 || checkingOut || !repeat.ready}
+              disabled={facility?.isOwnerLocked || selectedSlots.length === 0 || checkingOut || !repeat.ready}
               className="w-full py-space-md rounded-xl bg-primary-container hover:bg-primary-fixed text-on-primary font-headline-sm text-headline-sm font-extrabold flex items-center justify-center gap-space-sm transition-all shadow-[0_0_28px_rgba(0,229,255,0.45)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               onClick={handleCheckout}
             >
               <span>
-                {checkingOut
+                {facility?.isOwnerLocked
+                  ? 'Cơ sở tạm ngừng nhận đặt sân'
+                  : checkingOut
                   ? 'Đang kiểm tra ca còn trống…'
                   : selectedSlots.length > 0
                   ? `Xác Nhận & Tiếp Tục Thanh Toán (${orderSlotCount} Ca)`
