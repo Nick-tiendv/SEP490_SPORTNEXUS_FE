@@ -30,6 +30,7 @@ export function normalizeApiError(error) {
     409: 'Tên đăng nhập hoặc email đã tồn tại.',
     413: 'Tệp tải lên vượt quá dung lượng cho phép (tối đa 5MB).',
     415: 'Định dạng dữ liệu hoặc tệp tải lên không được hỗ trợ.',
+    429: 'Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.',
   }
 
   let message = null
