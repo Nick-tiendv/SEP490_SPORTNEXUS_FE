@@ -204,7 +204,9 @@ export async function getTournamentStatistics() {
 // PATCH /api/v1/admin/tournaments/{id}/lock | unlock | cancel — ReasonRequest { reason }.
 export const lockTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/lock`, { reason: reason || null })).data)
 export const unlockTournament = async id => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/unlock`)).data)
-export const cancelTournament = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/cancel`, { reason: reason || null })).data)
+// rentRefundPercent (0–100, bỏ trống = 100): % tiền thuê các ca chưa đá hoàn cho Ban tổ chức (giải người ngoài thuê sân).
+export const cancelTournament = async (id, reason, rentRefundPercent = null) =>
+  unwrap((await apiClient.patch(`/api/v1/admin/tournaments/${path(id)}/cancel`, { reason: reason || null, rentRefundPercent })).data)
 export async function getTournament(id) {
   return toTournament(unwrap((await apiClient.get(`/api/v1/tournaments/${path(id)}`)).data))
 }

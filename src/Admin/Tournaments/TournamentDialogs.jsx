@@ -9,7 +9,11 @@ function useSubmit(onDone) {
   const [error, setError] = useState('')
   const run = async (task, message) => {
     setSubmitting(true); setError('')
-    try { await task(); onDone(message) } catch (err) { setError(err.message); setSubmitting(false) }
+    try { await task(); onDone(message) } catch (err) {
+      // 409: trạng thái giải vừa thay đổi (vd Ban tổ chức rút form / quá hạn duyệt) → đóng hộp, báo message BE và tải lại.
+      if (err.status === 409) return onDone(err.message)
+      setError(err.message); setSubmitting(false)
+    }
   }
   return { submitting, error, setError, run }
 }
@@ -18,7 +22,7 @@ function useSubmit(onDone) {
 // Admin chỉ theo dõi giải (QĐ-G): bốc thăm, tạo nhánh, nhập tỉ số, thêm người do Ban tổ chức làm; Admin chỉ duyệt / khóa / hủy.
 
 const actions = {
-  cancel: { title: 'Xác nhận hủy giải', button: 'Xác nhận hủy giải', danger: true, reason: true, task: (context, reason) => cancelTournament(context.tournament.id, reason), message: context => `Đã hủy giải ${context.tournament.name}.` },
+  cancel: { title: 'Xác nhận hủy giải', button: 'Xác nhận hủy giải', danger: true, reason: true, task: (context, reason, extra) => cancelTournament(context.tournament.id, reason, extra.rentRefundPercent), message: context => `Đã hủy giải ${context.tournament.name}.` },
   lock: { title: 'Khóa giải đấu', button: 'Khóa giải', danger: true, reason: true, task: (context, reason) => lockTournament(context.tournament.id, reason), message: context => `Đã khóa giải ${context.tournament.name}.` },
   approve: { title: 'Duyệt giải đấu', button: 'Duyệt giải', task: context => approveTournament(context.tournament.id), message: context => `Đã duyệt giải ${context.tournament.name}.` },
   reject: { title: 'Từ chối giải đấu', button: 'Từ chối', danger: true, reason: true, task: (context, reason) => rejectTournament(context.tournament.id, reason), message: context => `Đã từ chối giải ${context.tournament.name}.` },
@@ -36,16 +40,21 @@ const explanation = (type, context) => ({
 export function TournamentActionDialog({ type, context, onClose, onDone }) {
   const action = actions[type]
   const [reason, setReason] = useState('')
+  const [rentRefund, setRentRefund] = useState('100')
   const { submitting, error, setError, run } = useSubmit(onDone)
   const name = context.tournament.name
   const confirm = () => {
     if (action.reason && !reason.trim()) return setError('Vui lòng nhập lý do.')
-    run(() => action.task(context, reason.trim()), action.message(context))
+    const rentRefundPercent = rentRefund === '' ? null : Number(rentRefund)
+    if (type === 'cancel' && rentRefundPercent != null && (!Number.isFinite(rentRefundPercent) || rentRefundPercent < 0 || rentRefundPercent > 100)) return setError('Phần trăm hoàn tiền thuê sân phải từ 0 đến 100.')
+    run(() => action.task(context, reason.trim(), { rentRefundPercent }), action.message(context))
   }
   return <DemoDialog title={action.title} onClose={submitting ? noop : onClose}>
     <p><strong>{name}</strong></p>
     <p className="tournaments-dialog-explanation">{explanation(type, context)}</p>
-    {action.reason && <div className="users-form"><label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder={type === 'lock' || type === 'reject' ? 'Ví dụ: Nội dung giới thiệu giải chưa rõ ràng…' : 'Ví dụ: Không đủ người đăng ký…'} /></label></div>}
+    {action.reason && <div className="users-form"><label>Lý do<textarea rows={3} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder={type === 'lock' || type === 'reject' ? 'Ví dụ: Nội dung giới thiệu giải chưa rõ ràng…' : 'Ví dụ: Không đủ người đăng ký…'} /></label>
+      {type === 'cancel' && <label>% hoàn tiền thuê sân cho Ban tổ chức<input type="number" min={0} max={100} step={1} value={rentRefund} onChange={event => setRentRefund(event.target.value)} /><small>Chỉ áp dụng cho giải do người ngoài thuê sân tổ chức: hoàn cho các ca chưa đá, ca đã qua giờ vẫn về chủ sân.</small></label>}
+    </div>}
     {error && <p className="users-form-error" role="alert">{error}</p>}
     <footer><button className="users-button" onClick={onClose} disabled={submitting}>Giữ nguyên</button><button className={`users-button ${action.danger ? 'users-danger' : 'primary'}`} onClick={confirm} disabled={submitting}>{submitting ? 'Đang xử lý…' : action.button}</button></footer>
   </DemoDialog>
