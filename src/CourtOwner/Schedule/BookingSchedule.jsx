@@ -44,6 +44,8 @@ function cellState(slot) {
     if (booking === 'PENDING') return 'pending'
     return 'paid'
   }
+  // Locking: đơn chia tiền đang chờ góp (giữ tối đa 30 phút), không còn trống
+  if (status === 'LOCKING') return 'pending'
   if (status === 'MAINTENANCE') return 'maintenance'
   if (status === 'RESERVED') return 'reserved'
   return slot.isPast ? 'past' : 'available'
@@ -91,7 +93,7 @@ const BOOKING_STATUS_LABEL = {
 }
 
 export default function ViewCourtBookingSchedule() {
-  const { facilityId, facility, loading: layoutLoading, error: layoutError, refreshWallet } = useOwnerContext()
+  const { facilityId, facility, loading: layoutLoading, error: layoutError, refreshWallet, ownerLocked } = useOwnerContext()
   const [selectedDate, setSelectedDate] = useState(todayVN)
   const [filterSport, setFilterSport] = useState('all')
   const [reloadKey, setReloadKey] = useState(0)
@@ -123,7 +125,8 @@ export default function ViewCourtBookingSchedule() {
     let cancelled = false
     const key = `${facilityId}|${selectedDate}|${reloadKey}`
     getFacilitySlots(facilityId, selectedDate)
-      .then((data) => !cancelled && setCalendar({ key, data }))
+      // loadedAt: mốc "bây giờ" lúc tải lịch (lịch tự tải lại khi có đơn mới / quay lại tab)
+      .then((data) => !cancelled && setCalendar({ key, data, loadedAt: Date.now() }))
       .catch((error) => !cancelled && setCalendarError({ key, message: error.message }))
     return () => { cancelled = true }
   }, [facilityId, selectedDate, reloadKey])
@@ -248,35 +251,46 @@ export default function ViewCourtBookingSchedule() {
     setSelectedSlot({ court, slot })
   }
 
+  // successMessage: chuỗi, hoặc hàm (kết quả API) → chuỗi để hiện message của BE.
   const runAction = async (action, successMessage, after) => {
     setBusy(true)
     try {
-      await action()
-      showToast(successMessage)
+      const result = await action()
+      showToast(typeof successMessage === 'function' ? successMessage(result) : successMessage)
       after?.()
       reload()
     } catch (error) {
       showToast(error.message, 'error')
+      // Lỗi thường do ca vừa có khách đặt ("Ca sân này đang có khách đặt..."): tải lại để thấy trạng thái mới.
+      reload()
     } finally {
       setBusy(false)
     }
   }
 
+  // "Check-in ngay" chỉ có tác dụng với ca đang trong khung check-in (từ 30 phút trước giờ chơi):
+  // mọi ca đã chọn bắt đầu sau hơn 30 phút nữa thì tắt ô này.
+  const walkinStartTimes = walkinSlot ? (walkinSlot.items ? walkinSlot.items.map((item) => item.slot) : [walkinSlot.slot]).map((s) => new Date(s.startTime).getTime()) : []
+  const walkinCanAutoCheckIn = !calendar?.loadedAt || walkinStartTimes.some((start) => start - calendar.loadedAt <= 30 * 60000)
+
   // Đặt sân cho khách vãng lai: POST /bookings/owner/walk-in
   const handleCreateWalkinBooking = (e) => {
     e.preventDefault()
     if (!walkinName.trim() || !walkinSlot || busy) return
+    // Chủ sân bị khóa: cơ sở ngừng nhận đặt sân mới, kể cả khách vãng lai
+    if (ownerLocked) { showToast('Tài khoản đang bị Quản trị viên khóa: cơ sở tạm ngừng nhận đặt sân mới.', 'error'); return }
     const customer = {
       customerName: walkinName.trim(),
       customerPhone: walkinPhone.trim() || null,
       note: walkinNote.trim() || null,
-      autoCheckIn: walkinAutoCheckIn,
+      autoCheckIn: walkinAutoCheckIn && walkinCanAutoCheckIn,
     }
+    // message của BE nói rõ đã check-in bao nhiêu ca (ca chưa tới giờ vẫn ở trạng thái Đã thanh toán).
     if (walkinSlot.items) {
       const { items } = walkinSlot
       runAction(
         () => createWalkInBooking({ courtSlotIds: items.map((item) => item.slot.id), ...customer }),
-        `Đã nhận đặt ${items.length} ca cho "${customer.customerName}"!`,
+        (res) => res?.message || `Đã nhận đặt ${items.length} ca cho "${customer.customerName}"!`,
         () => { setWalkinSlot(null); clearPicks(); setMultiMode(false) },
       )
       return
@@ -289,12 +303,12 @@ export default function ViewCourtBookingSchedule() {
           numberOfSlots: Number(walkinSlots) || 1,
           ...customer,
         }),
-      `Đã nhận đặt sân cho "${customer.customerName}" tại ${court.name} lúc ${toClockVN(slot.startTime)}!`,
+      (res) => res?.message || `Đã nhận đặt sân cho "${customer.customerName}" tại ${court.name} lúc ${toClockVN(slot.startTime)}!`,
       () => setWalkinSlot(null),
     )
   }
 
-  // Đổi giá 1 ca trống: PUT /slots/{id}/status { status: Available, price }
+  // Đổi giá 1 ca trống: PUT /slots/{id}/status { price } (không gửi status → BE giữ trạng thái hiện tại)
   // priceDraft gắn với id ca đang sửa để tự bỏ khi mở ca khác.
   const [priceDraft, setPriceDraft] = useState(null) // { slotId, value }
   const handleChangeSlotPrice = (slot) => {
@@ -304,7 +318,7 @@ export default function ViewCourtBookingSchedule() {
       return
     }
     runAction(
-      () => updateSlotStatus(slot.id, { status: SLOT_STATUS_CODE.AVAILABLE, price }),
+      () => updateSlotStatus(slot.id, { price }),
       `Đã đổi giá ca ${toClockVN(slot.startTime)} thành ${formatVND(price)}.`,
       () => { setPriceDraft(null); setWalkinSlot(null) },
     )
@@ -324,7 +338,7 @@ export default function ViewCourtBookingSchedule() {
     const { slot } = selectedSlot
     runAction(
       () => checkInBooking(slot.bookingId, { checkInAllParticipants: true }),
-      '✅ Đã check-in cho đơn đặt sân!',
+      (res) => res?.message || '✅ Đã check-in cho đơn đặt sân!',
       () => { setSelectedSlot(null); refreshWallet().catch(() => {}) },
     )
   }
@@ -383,7 +397,7 @@ export default function ViewCourtBookingSchedule() {
                 Tổng quy mô lưới
               </div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>
-                {data ? `${data.totalSlots} ca • ${data.availableSlots} trống • ${data.lockedSlots} khóa` : '—'}
+                {data ? `${data.totalSlots} ca • ${data.availableSlots} trống • ${data.pendingSlots ?? 0} chờ góp • ${data.lockedSlots} khóa` : '—'}
               </div>
             </div>
           </div>
@@ -691,7 +705,7 @@ export default function ViewCourtBookingSchedule() {
                               {state === 'reserved' ? slot.matchName || slot.tournamentName || 'Trận đấu giải' : slot.customerName || 'Khách hàng'}
                             </div>
                             <div style={{ fontSize: '10px', opacity: 0.9, marginTop: '2px' }}>
-                              {style.label}{slot.isWalkIn ? ' • Vãng lai' : ''}
+                              {style.label}{slot.isWalkIn ? ' • Vãng lai' : ''}{slot.lfgCardId ? ' • Kèo' : ''}
                             </div>
                           </div>
                         ) : (
@@ -1014,9 +1028,12 @@ export default function ViewCourtBookingSchedule() {
                 <input type="text" placeholder="VD: Đã thu tiền mặt 100%" value={walkinNote} onChange={(e) => setWalkinNote(e.target.value)} style={inputStyle} />
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#1E293B', marginBottom: '20px' }}>
-                <input type="checkbox" checked={walkinAutoCheckIn} onChange={(e) => setWalkinAutoCheckIn(e.target.checked)} />
-                Khách đã có mặt — check-in luôn
+              <label
+                title={walkinCanAutoCheckIn ? undefined : 'Các ca đã chọn chưa tới giờ check-in (mở từ 30 phút trước giờ chơi)'}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: walkinCanAutoCheckIn ? '#1E293B' : '#94A3B8', marginBottom: '20px' }}
+              >
+                <input type="checkbox" disabled={!walkinCanAutoCheckIn} checked={walkinAutoCheckIn && walkinCanAutoCheckIn} onChange={(e) => setWalkinAutoCheckIn(e.target.checked)} />
+                Check-in ngay (chỉ ca đang diễn ra / sắp bắt đầu)
               </label>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
@@ -1041,8 +1058,9 @@ export default function ViewCourtBookingSchedule() {
                   </button>
                   <button
                     type="submit"
-                    disabled={busy}
-                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}
+                    disabled={busy || ownerLocked}
+                    title={ownerLocked ? 'Tài khoản đang bị khóa: cơ sở tạm ngừng nhận đặt sân mới' : undefined}
+                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy || ownerLocked ? 0.6 : 1 }}
                   >
                     {busy ? 'Đang tạo đơn...' : 'Xác nhận giữ sân'}
                   </button>
