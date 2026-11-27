@@ -123,6 +123,13 @@ const toUiSport = (sport) => {
 
 
 // Nhãn nguồn biến động điểm Fair Play (FairPlayAdjustment.Source)
+// Đơn đã hủy chỉ khiếu nại được tới 24 giờ sau mốc muộn hơn giữa lúc hủy và giờ kết thúc ca (quá hạn BE trả 400).
+const isCancelledComplaintExpired = (b) => {
+  if (String(b?.bookingStatus || b?.status || '').toUpperCase() !== 'CANCELLED') return false
+  const marks = [b.cancelledAt, b.endTime].map((value) => new Date(value).getTime()).filter(Number.isFinite)
+  return marks.length > 0 && Date.now() > Math.max(...marks) + 24 * 3600 * 1000
+}
+
 const FAIR_PLAY_SOURCES = {
   RATING: { label: 'Đánh giá từ bạn chơi', icon: 'star' },
   LATE: { label: 'Check-in muộn', icon: 'schedule' },
@@ -3085,6 +3092,12 @@ export default function Profile() {
                       <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#15803D' }}>
                         {(Number(b.totalAmount ?? b.totalPrice) || 0).toLocaleString('vi-VN')} Điểm
                       </div>
+                      {/* Đơn đã chơi được hoàn do khiếu nại vẫn giữ trạng thái CHECKED_IN / PAID */}
+                      {String(b.bookingStatus || b.status || '').toUpperCase() !== 'CANCELLED' && Number(b.refundedAmount) > 0 && (
+                        <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#B45309' }}>
+                          Đã hoàn {Number(b.refundedAmount).toLocaleString('vi-VN')} Điểm do khiếu nại
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -3552,7 +3565,7 @@ export default function Profile() {
                       }}
                     >
                       <option value="">-- Chọn đơn đặt sân --</option>
-                      {myBookings.map((b) => (
+                      {myBookings.filter((b) => !isCancelledComplaintExpired(b)).map((b) => (
                         <option key={b.bookingId || b.id} value={b.bookingId || b.id}>
                           {b.facilityName || 'Đặt sân'}{b.courtName ? ` · ${b.courtName}` : ''} ({b.startTime ? new Date(b.startTime).toLocaleString('vi-VN') : ''})
                         </option>
