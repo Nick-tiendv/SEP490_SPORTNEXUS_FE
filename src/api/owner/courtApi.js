@@ -1,4 +1,4 @@
-import { del, get, getList, path, post, put } from './request.js'
+import { del, get, getList, path, post, putWithMessage } from './request.js'
 
 const courtsUrl = facilityId => `/api/v1/facilities/${path(facilityId)}/courts`
 
@@ -7,5 +7,6 @@ export const getCourt = (facilityId, courtId) => get(`${courtsUrl(facilityId)}/$
 // CreateCourtRequest: categoryId, name, defaultPrice, courtType, isIndoor, surfaceType, maxPlayers.
 export const createCourt = (facilityId, payload) => post(courtsUrl(facilityId), payload)
 // UpdateCourtRequest: như trên + status (bật / bảo trì).
-export const updateCourt = (facilityId, courtId, payload) => put(`${courtsUrl(facilityId)}/${path(courtId)}`, payload)
+// Trả { data: { ...court, slotConfigChanged }, message }.
+export const updateCourt = (facilityId, courtId, payload) => putWithMessage(`${courtsUrl(facilityId)}/${path(courtId)}`, payload)
 export const deleteCourt = (facilityId, courtId) => del(`${courtsUrl(facilityId)}/${path(courtId)}`)

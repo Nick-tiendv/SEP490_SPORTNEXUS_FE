@@ -18,6 +18,7 @@ import {
 } from '../../api/owner'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { statusBadge, toTimeSpan } from '../shared.js'
+import { offerRegenerateSlots } from '../slotFollowUps.js'
 import TimeInput24 from '../../components/common/TimeInput24.jsx'
 import FacilityAddressFields from '../../components/common/FacilityAddressFields.jsx'
 import LocationPickerMap from '../../components/common/LocationPickerMap.jsx'
@@ -385,12 +386,18 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
       return
     }
     // amenityIds / imageUrls null: BE giữ nguyên (tiện ích và ảnh sửa riêng bên dưới).
+    let res = null
     if (
-      await run('info', async () => updateFacility(facilityId, { ...(await toPayload(form)), status: null, amenityIds: null, imageUrls: null }), 'Đã lưu thông tin cơ sở.')
+      await run('info', async () => {
+        res = await updateFacility(facilityId, { ...(await toPayload(form)), status: null, amenityIds: null, imageUrls: null })
+      })
     ) {
+      toast.success(res.message || 'Đã lưu thông tin cơ sở.')
       setSubmitted(false)
       setForm(null)
       onChanged()
+      // Đổi giờ mở / đóng cửa: ca đã sinh giữ giờ cũ → gợi ý áp dụng lại cho từng sân con
+      if (res.data?.slotConfigChanged) await offerRegenerateSlots((res.data.courts || []).map(c => ({ id: c.id, name: c.name })))
     }
   }
   const saveAmenities = () =>
@@ -648,7 +655,9 @@ function FacilityDetail({ facilityId, amenities, onChanged, onDeleted }) {
 }
 
 export default function OwnerFacilities() {
-  const { facilities, facilityId, selectFacility, refreshFacilities, loading } = useOwnerContext()
+  const { facilities, facilityId, selectFacility, refreshFacilities, loading, ownerLocked } = useOwnerContext()
+  // Chủ sân bị khóa không tạo được cơ sở mới (BE 403)
+  const lockedHint = ownerLocked ? 'Tài khoản đang bị Quản trị viên khóa, chưa tạo được cơ sở mới' : undefined
   const amenities = useApi(() => getAmenities(), [], { initialData: [] })
   const [searchParams, setSearchParams] = useSearchParams()
   const [creating, setCreatingState] = useState(() => searchParams.get('create') === '1')
@@ -665,7 +674,7 @@ export default function OwnerFacilities() {
         title="Cơ sở của tôi"
         subtitle="Thông tin, ảnh, tiện ích và trạng thái duyệt của từng cơ sở."
         actions={
-          <button type="button" className="snx-btn snx-btn--primary" onClick={() => setCreating(true)}>
+          <button type="button" className="snx-btn snx-btn--primary" disabled={ownerLocked} title={lockedHint} onClick={() => setCreating(true)}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
               add
             </span>
@@ -691,7 +700,7 @@ export default function OwnerFacilities() {
           <span className="material-symbols-outlined">domain_add</span>
           Bạn chưa có cơ sở nào. Hãy hoàn tất <Link to="/owner/profile">xác minh chủ sân</Link> rồi tạo cơ sở đầu tiên.
           <div style={{ marginTop: 12 }}>
-            <button type="button" className="snx-btn snx-btn--primary" onClick={() => setCreating(true)}>
+            <button type="button" className="snx-btn snx-btn--primary" disabled={ownerLocked} title={lockedHint} onClick={() => setCreating(true)}>
               Tạo cơ sở
             </button>
           </div>

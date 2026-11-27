@@ -1,4 +1,4 @@
-import { del, get, getList, patch, path, post, put, upload } from './request.js'
+import { del, get, getList, patch, path, post, put, putWithMessage, upload } from './request.js'
 import { withLegacyAddress } from '../../utils/vnAddress.js'
 
 // ---------- Cơ sở của chủ sân ----------
@@ -14,7 +14,8 @@ export async function resolveAreaCodes(provinceName, wardName) {
   return { provinceCode: province.code, wardCode: ward.code }
 }
 // UpdateFacilityRequest: như trên + status. Field null thì BE giữ nguyên.
-export const updateFacility = (id, payload) => put(`/api/v1/facilities/${path(id)}`, payload)
+// Trả { data: { ...facility, courts, slotConfigChanged }, message }.
+export const updateFacility = (id, payload) => putWithMessage(`/api/v1/facilities/${path(id)}`, payload)
 export const deleteFacility = id => del(`/api/v1/facilities/${path(id)}`)
 
 // ---------- Ảnh & tiện ích ----------
