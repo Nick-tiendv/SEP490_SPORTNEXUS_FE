@@ -31,7 +31,7 @@ export default function PaymentOverviewChart({ byDay, range, onRange, loading, e
     <div className="payments-chart">{loading ? <p className="payments-empty">Đang tải biểu đồ…</p> : error ? <p className="payments-empty">{error}</p> : empty ? <p className="payments-empty">Chưa có dòng tiền trong {range} gần nhất.</p>
       : <svg viewBox="0 0 570 255" role="img" aria-label={`Biểu đồ dòng tiền ${range} gần nhất`}>
         {[0, 0.5, 1].map(level => <g key={level}><line x1="48" y1={y(max * level)} x2="560" y2={y(max * level)} stroke="#e6eee8" strokeDasharray="3 3" /><text x="42" y={y(max * level) + 3} textAnchor="end" fill="#9baaa3" fontSize="10">{max * level >= 1e6 ? `${((max * level) / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr` : `${Math.round((max * level) / 1000).toLocaleString('vi-VN')}k`}</text></g>)}
-        {points.map((point, index) => <g key={point.label} className="payments-chart-point" tabIndex={0} role="button" aria-label={`${point.label}: nạp ${money(point.deposits)}, đặt sân ${money(point.bookingGrossValue)}, chủ sân ${money(point.ownerEarnings)}, hoàn tiền ${money(point.refunds)}`} onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}>
+        {points.map((point, index) => <g key={point.label} className="payments-chart-point" tabIndex={0} role="button" aria-label={`${point.label}: nạp ${money(point.deposits)}, đặt sân ${money(point.bookingGrossValue)}, chủ sân ${money(point.ownerEarnings)}, hoàn tiền đặt sân ${money(point.refunds)}`} onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}>
           <rect x={x(index) - slot / 2} y="25" width={slot} height="210" fill="transparent" />
           <rect x={x(index) - bar - 1} y={y(point.deposits)} width={bar} height={210 - y(point.deposits)} fill="#58a776" rx="1" />
           <rect x={x(index) + 1} y={y(point.bookingGrossValue)} width={bar} height={210 - y(point.bookingGrossValue)} fill="#efb63e" rx="1" />
@@ -39,6 +39,6 @@ export default function PaymentOverviewChart({ byDay, range, onRange, loading, e
         </g>)}
         <path d={trendPath} fill="none" stroke="#287b4c" strokeWidth="2" pointerEvents="none" />
       </svg>}
-      {hovered !== null && points[hovered] && <div className="payments-chart-tooltip" role="tooltip"><strong>{points[hovered].label}</strong><span>Nạp tiền: {money(points[hovered].deposits)}</span><span>Giá trị đặt sân: {money(points[hovered].bookingGrossValue)}</span><span>Doanh thu chủ sân: {money(points[hovered].ownerEarnings)}</span><span>Hoàn tiền: {money(points[hovered].refunds)}</span></div>}
+      {hovered !== null && points[hovered] && <div className="payments-chart-tooltip" role="tooltip"><strong>{points[hovered].label}</strong><span>Nạp tiền: {money(points[hovered].deposits)}</span><span>Giá trị đặt sân: {money(points[hovered].bookingGrossValue)}</span><span>Doanh thu chủ sân: {money(points[hovered].ownerEarnings)}</span><span>Hoàn tiền đặt sân: {money(points[hovered].refunds)}</span></div>}
     </div></section>
 }

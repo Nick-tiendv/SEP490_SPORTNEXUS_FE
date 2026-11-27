@@ -43,13 +43,15 @@ export default function PaymentManagement() {
     { icon: 'volume', label: 'Tổng số dư ví', value: show(money(s.totalBalance)), note: `${number(s.walletCount)} ví · đóng băng ${money(s.totalFrozenBalance)}` },
     { icon: 'successful', label: `Nạp tiền (${range})`, value: show(money(s.totalDeposits)), note: `Đang chờ: ${money(s.pendingDeposits)}` },
     { icon: 'pending', label: 'Rút tiền chờ duyệt', value: show(money(s.withdrawalsPending)), note: `Đã chuyển: ${money(s.withdrawalsCompleted)}` },
-    { icon: 'refunded', label: `Doanh thu nền tảng (${range})`, value: show(money(s.platformRevenue)), note: `Phí đặt sân ${number(s.currentBookingFeePercent)}% · hoàn tiền ${money(s.bookingRefunds)}` },
+    { icon: 'refunded', label: `Doanh thu nền tảng (${range})`, value: show(money(s.platformRevenue)), note: `Phí đặt sân ${number(s.currentBookingFeePercent)}% · hoàn tiền đặt sân ${money(s.bookingRefunds)}` },
   ]
   const refresh = () => setReload(value => value + 1)
   const openTab = value => { setTab(value); setNotice('') }
   const openWallet = (userId, negative = false) => { setWalletFocus(previous => ({ userId, negative, key: previous.key + 1 })); openTab('wallets') }
   const openTransactions = user => { setTransactionUser(user); openTab('transactions') }
   const tabProps = { reload, onNotice: setNotice, onChanged: refresh }
+  // allowAdminCredit = false: hộp điều chỉnh số dư chỉ cho trừ tiền
+  const allowAdminCredit = s.allowAdminCredit !== false
 
   return <div className="payments-page">
     <header className="payments-page-heading admin-page-header"><div><h1>Quản lý thanh toán</h1><p>Theo dõi ví, giao dịch và duyệt yêu cầu rút tiền trên SportNexus.</p></div><div><button className="users-button" onClick={refresh}><RefreshCw size={13} />Làm mới</button></div></header>
@@ -60,7 +62,7 @@ export default function PaymentManagement() {
     {notice && <div className="users-notice" role="status"><span>{notice}</span><button aria-label="Đóng thông báo" onClick={() => setNotice('')}>×</button></div>}
     <div className="admin-segmented" role="tablist" aria-label="Chế độ xem thanh toán" style={{ marginBottom: 16 }}>{Object.entries(tabs).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={tab === value} className={tab === value ? 'selected' : ''} onClick={() => openTab(value)}>{label}</button>)}</div>
     {tab === 'transactions' && <TransactionsTab key={transactionUser?.id || 'all'} user={transactionUser} onClearUser={() => setTransactionUser(null)} onOpenWallet={openWallet} {...tabProps} />}
-    {tab === 'wallets' && <WalletsTab key={walletFocus.key} initialUserId={walletFocus.userId} initialNegative={walletFocus.negative} onTransactions={openTransactions} {...tabProps} />}
+    {tab === 'wallets' && <WalletsTab key={walletFocus.key} initialUserId={walletFocus.userId} initialNegative={walletFocus.negative} onTransactions={openTransactions} allowAdminCredit={allowAdminCredit} {...tabProps} />}
     {tab === 'withdrawals' && <WithdrawalsTab {...tabProps} />}
     {tab === 'reconciliation' && <ReconciliationTab onTransactions={openTransactions} {...tabProps} />}
   </div>

@@ -40,6 +40,8 @@ export function toWallet(raw) {
     phone: raw?.phone || '',
     role: raw?.roleName || '',
     isActive: raw?.isActive !== false,
+    // Ví Nền Tảng (trả tiền bù voucher): âm là đúng thiết kế, không điều chỉnh số dư
+    isSystem: raw?.isSystem === true,
     balance: toNumber(raw?.balance) ?? 0,
     frozenBalance: toNumber(raw?.frozenBalance) ?? 0,
     transactionCount: toNumber(raw?.transactionCount) ?? 0,
@@ -64,11 +66,15 @@ export async function getWallet(userId) {
 export const adjustWallet = async (userId, { amount, reason }) => unwrap((await apiClient.post(`/api/v1/admin/wallets/${path(userId)}/adjust`, { amount, reason })).data)
 
 // ---------- Thống kê: GET /api/v1/admin/wallets/statistics?from&to ----------
-const STAT_KEYS = ['walletCount', 'totalBalance', 'totalFrozenBalance', 'negativeWallets', 'negativeAmount', 'bookingEscrowHeld', 'prizeFundsHeld', 'totalDeposits', 'bookingGrossValue', 'bookingRefunds', 'ownerBookingEarnings', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerCancelPenaltyRevenue', 'currentBookingFeePercent', 'withdrawalsCompleted', 'withdrawalsPending', 'pendingDeposits', 'tournamentFeesToOwners', 'prizesPaid', 'adminAdjustments']
+// bookingRefunds / byDay.refunds: chỉ hoàn tiền đặt sân. Tách riêng: withdrawalReturns (trả lại rút tiền bị từ chối / hủy),
+// promotionRefunds (hoàn gói đẩy tin), tournamentRentalRefunds (hoàn tiền thuê sân giải). Ví hệ thống không tính vào số ví / ví âm.
+const STAT_KEYS = ['walletCount', 'totalBalance', 'totalFrozenBalance', 'negativeWallets', 'negativeAmount', 'bookingEscrowHeld', 'prizeFundsHeld', 'totalDeposits', 'bookingGrossValue', 'bookingRefunds', 'withdrawalReturns', 'promotionRefunds', 'tournamentRentalRefunds', 'ownerBookingEarnings', 'platformRevenue', 'bookingCommissionRevenue', 'promotionRevenue', 'ownerCancelPenaltyRevenue', 'currentBookingFeePercent', 'withdrawalsCompleted', 'withdrawalsPending', 'pendingDeposits', 'tournamentFeesToOwners', 'prizesPaid', 'adminAdjustments']
 export async function getWalletStatistics({ from, to } = {}) {
   const data = unwrap((await apiClient.get('/api/v1/admin/wallets/statistics', { params: clean({ from, to }) })).data) || {}
   return {
     ...Object.fromEntries(STAT_KEYS.map(key => [key, toNumber(data[key])])),
+    // false: Admin chỉ được trừ tiền ví (cộng tay bị tắt trên server thật)
+    allowAdminCredit: data.allowAdminCredit !== false,
     byDay: asArray(data.byDay).map(day => ({
       date: day.date,
       deposits: toNumber(day.deposits) ?? 0,
@@ -96,7 +102,17 @@ export function toWithdrawal(raw) {
     fullName: pick(raw, 'fullName', 'userName', 'accountName', 'user.fullName') || '—',
     email: pick(raw, 'email', 'userEmail', 'accountEmail', 'user.email') || '',
     role: pick(raw, 'roleName', 'role') || '',
+    phone: pick(raw, 'phone') || '',
     amount: toNumber(pick(raw, 'amount')) ?? 0,
+    // Người chơi rút có phí: Admin chuyển netAmount (= amount - fee)
+    fee: toNumber(pick(raw, 'fee')) ?? 0,
+    netAmount: toNumber(pick(raw, 'netAmount')) ?? toNumber(pick(raw, 'amount')) ?? 0,
+    // Cảnh báo trước khi chuyển: tài khoản bị khóa / có cơ sở tạm ngưng thì BE chặn "Đã chuyển";
+    // holderMatchesKyc = false: tên chủ TK khác tên eKYC (vẫn cho chuyển), null = chưa eKYC
+    userIsActive: pick(raw, 'userIsActive') !== false,
+    facilitySuspended: pick(raw, 'facilitySuspended') === true,
+    holderMatchesKyc: pick(raw, 'holderMatchesKyc') ?? null,
+    processedByName: pick(raw, 'processedByName') || '',
     status: String(pick(raw, 'status') ?? 'PENDING').toUpperCase(),
     bankName: pick(raw, 'bankName', 'bank.name', 'bankCode') || '',
     bankAccountNumber: pick(raw, 'bankAccountNumber', 'accountNumber', 'bankAccountNo', 'bank.accountNumber') || '',
@@ -107,12 +123,13 @@ export function toWithdrawal(raw) {
     processedAt: pick(raw, 'processedAt', 'completedAt', 'reviewedAt', 'updatedAt') || '',
   }
 }
-// Query: Status, Keyword, UserId, Page, PageSize.
+// Query: Status, Keyword, UserId, FromDate, ToDate (ngày gửi yêu cầu, giờ VN), Page, PageSize.
 export async function listWithdrawals(params) {
   const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/admin/withdrawals', { params: clean(params) })).data))
   return { items: items.map(toWithdrawal), total, totalPages }
 }
-export const completeWithdrawal = async (id, bankTransactionRef) => unwrap((await apiClient.patch(`/api/v1/admin/withdrawals/${path(id)}/complete`, { bankTransactionRef: bankTransactionRef || null })).data)
+// bankTransactionRef bắt buộc (≤ 100 ký tự), không được trùng mã của yêu cầu đã chuyển khác.
+export const completeWithdrawal = async (id, bankTransactionRef) => unwrap((await apiClient.patch(`/api/v1/admin/withdrawals/${path(id)}/complete`, { bankTransactionRef })).data)
 export const rejectWithdrawal = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/withdrawals/${path(id)}/reject`, { reason: reason || null })).data)
 
 // ---------- Đối soát ví (chỉ đọc): GET /api/v1/admin/wallets/reconciliation?userId&includeAll ----------

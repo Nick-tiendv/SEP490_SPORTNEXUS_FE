@@ -15,6 +15,7 @@ const ISSUE_LABELS = {
   NEGATIVE_BALANCE_ALLOWED: 'Ví âm (được phép, vd hoàn tiền)',
   NEGATIVE_FROZEN: 'Tiền đóng băng âm',
   STUCK_HOLD: 'Khoản giữ bị treo',
+  SYSTEM_WALLET_SUBSIDY: 'Ví hệ thống âm do bù voucher (bình thường)',
 }
 const HOLDINGS = [
   ['bookingHeld', 'Đơn đặt sân'],
@@ -70,7 +71,7 @@ export default function ReconciliationTab({ reload, onTransactions, onNotice }) 
         return [
           <tr key={w.walletId} className={open ? 'is-selected' : ''} onClick={() => setOpenId(open ? null : w.walletId)}>
             <td><div className="payments-table-user"><UserAvatar user={{ name: w.fullName }} /><span><strong>{w.fullName || '—'}</strong><small>{w.email}</small></span></div></td>
-            <td>{roleLabels[w.roleName] || w.roleName || '—'}</td>
+            <td>{w.isSystem ? 'Ví hệ thống' : roleLabels[w.roleName] || w.roleName || '—'}</td>
             <td><strong>{money(n(w.balance))}</strong><small>Sổ: {money(n(w.ledgerBalance))}{n(w.balanceDifference) ? ` · lệch ${signedMoney(n(w.balanceDifference))}` : ''}</small></td>
             <td><strong>{money(n(w.frozenBalance))}</strong><small>Đang giữ: {money(n(w.expectedFrozenBalance))}{n(w.frozenDifference) ? ` · lệch ${signedMoney(n(w.frozenDifference))}` : ''}</small></td>
             <td>{w.issues?.length

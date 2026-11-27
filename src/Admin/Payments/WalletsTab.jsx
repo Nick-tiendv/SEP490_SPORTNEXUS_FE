@@ -11,7 +11,7 @@ import { roleLabels, typeLabels, transactionStatusLabels, money, signedMoney, nu
 const noop = () => {}
 
 // GET /api/v1/admin/wallets — tìm kiếm, lọc vai trò / ví âm, phân trang phía server.
-export default function WalletsTab({ initialUserId, initialNegative, reload, onChanged, onTransactions, onNotice }) {
+export default function WalletsTab({ initialUserId, initialNegative, allowAdminCredit = true, reload, onChanged, onTransactions, onNotice }) {
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
   const [negative, setNegative] = useState(!!initialNegative)
@@ -38,14 +38,14 @@ export default function WalletsTab({ initialUserId, initialNegative, reload, onC
     {list.error && <div className="users-notice" role="alert"><span>Không tải được danh sách ví: {list.error}</span></div>}
     <div className={`payments-content-grid ${detailUserId ? 'with-details' : ''}`}>
       <section className="payments-table-panel" aria-label="Danh sách ví" aria-busy={list.loading}><div className="payments-table-scroll"><table><thead><tr>{['Người dùng', 'Vai trò', 'Số dư', 'Đóng băng', 'Số giao dịch', 'Giao dịch gần nhất', 'Tài khoản'].map(label => <th key={label}>{label}</th>)}</tr></thead>
-        <tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.walletId || item.userId} className={detailUserId === item.userId ? 'is-selected' : ''} onClick={() => setDetailUserId(item.userId)}><td><div className="payments-table-user"><UserAvatar user={{ name: item.fullName }} /><span><strong>{item.fullName}</strong><small>{item.email || item.phone}</small></span></div></td><td>{roleLabels[item.role] || item.role || '—'}</td><td><strong style={item.balance < 0 ? { color: 'var(--sn-danger-text)' } : undefined}>{money(item.balance)}</strong></td><td>{money(item.frozenBalance)}</td><td>{number(item.transactionCount)}</td><td>{dateTime(item.lastTransactionAt)}</td><td><AccountStatus status={item.isActive ? 'Active' : 'Suspended'} /></td></tr>)}</tbody></table>
+        <tbody style={list.loading ? { opacity: 0.5 } : undefined}>{list.items.map(item => <tr key={item.walletId || item.userId} className={detailUserId === item.userId ? 'is-selected' : ''} onClick={() => setDetailUserId(item.userId)}><td><div className="payments-table-user"><UserAvatar user={{ name: item.fullName }} /><span><strong>{item.fullName}</strong><small>{item.isSystem ? 'Ví hệ thống (bù voucher, âm là bình thường)' : item.email || item.phone}</small></span></div></td><td>{item.isSystem ? 'Ví hệ thống' : roleLabels[item.role] || item.role || '—'}</td><td><strong style={item.balance < 0 ? { color: 'var(--sn-danger-text)' } : undefined}>{money(item.balance)}</strong></td><td>{money(item.frozenBalance)}</td><td>{number(item.transactionCount)}</td><td>{dateTime(item.lastTransactionAt)}</td><td><AccountStatus status={item.isActive ? 'Active' : 'Suspended'} /></td></tr>)}</tbody></table>
         {list.loading && !list.items.length && <p className="payments-empty">Đang tải danh sách ví…</p>}
         {!list.loading && !list.items.length && <p className="payments-empty">Không có ví phù hợp với bộ lọc.</p>}</div>
         <Pager label="ví" page={page} pageSize={pageSize} total={list.total} totalPages={list.totalPages} loading={list.loading} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(1) }} />
       </section>
       {detailUserId && <WalletDetails key={`${detailUserId}#${reload}`} userId={detailUserId} base={list.items.find(item => item.userId === detailUserId)} onClose={() => setDetailUserId(null)} onAdjust={setAdjusting} onTransactions={onTransactions} />}
     </div>
-    {adjusting && <AdjustDialog wallet={adjusting} onClose={() => setAdjusting(null)} onDone={message => { setAdjusting(null); onNotice(message); onChanged() }} />}
+    {adjusting && <AdjustDialog wallet={adjusting} allowCredit={allowAdminCredit} onClose={() => setAdjusting(null)} onDone={message => { setAdjusting(null); onNotice(message); onChanged() }} />}
   </>
 }
 
@@ -70,16 +70,18 @@ function WalletDetails({ userId, base, onClose, onAdjust, onTransactions }) {
       <section className="payments-detail-section"><div className="payments-user"><UserAvatar user={{ name: wallet.fullName }} /><div><strong>{wallet.fullName}</strong><small>{roleLabels[wallet.role] || wallet.role}</small>{wallet.email && <p><Mail size={11} /> {wallet.email}</p>}{wallet.phone && <p><Phone size={11} /> {wallet.phone}</p>}</div></div></section>
       <section className="payments-detail-section"><h3>Số dư</h3><dl className="payments-metadata">{[['Số dư khả dụng', money(wallet.balance)], ['Đang đóng băng', money(wallet.frozenBalance)], ['Số giao dịch', number(wallet.transactionCount)], ['Giao dịch gần nhất', dateTime(wallet.lastTransactionAt)], ['Mã ví', shortId(wallet.walletId)], ['Tài khoản', wallet.isActive ? 'Đang hoạt động' : 'Đã khóa']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
       {transactions.length > 0 && <section className="payments-detail-section"><h3>Giao dịch gần đây</h3><ol className="payments-history">{transactions.slice(0, 8).map(item => <li key={item.id}><strong>{signedMoney(item.balanceChange || item.amount)}</strong> · {typeLabels[item.type] || item.type} · <PaymentStatus status={item.status} labels={transactionStatusLabels} /><br /><small>{dateTime(item.createdAt)}{item.description ? ` · ${item.description}` : ''}</small></li>)}</ol></section>}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="users-button primary" onClick={() => onAdjust(wallet)}><SlidersHorizontal size={13} />Điều chỉnh số dư</button><button className="users-button" onClick={() => onTransactions({ id: wallet.userId, name: wallet.fullName })}><ReceiptText size={13} />Xem tất cả giao dịch</button></div>
+      {wallet.isSystem && <p className="payments-muted">Ví hệ thống trả tiền bù voucher cho chủ sân nên số dư âm là bình thường, không điều chỉnh tay.</p>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{!wallet.isSystem && <button className="users-button primary" onClick={() => onAdjust(wallet)}><SlidersHorizontal size={13} />Điều chỉnh số dư</button>}<button className="users-button" onClick={() => onTransactions({ id: wallet.userId, name: wallet.fullName })}><ReceiptText size={13} />Xem tất cả giao dịch</button></div>
     </div>
   </aside>
 }
 
 // POST /api/v1/admin/wallets/{userId}/adjust { amount, reason } — amount dương cộng tiền, âm trừ tiền.
-// Hệ thống thật (production) không cho cộng tiền tay (BE trả 403, chỉ bật trên môi trường test): gặp 403 thì chỉ còn trừ tiền.
-function AdjustDialog({ wallet, onClose, onDone }) {
-  const [creditBlocked, setCreditBlocked] = useState(false)
-  const [direction, setDirection] = useState('add')
+// allowCredit (statistics.allowAdminCredit) = false: hệ thống thật không cho cộng tiền tay → chỉ còn trừ tiền.
+// Vẫn xử lý 403 nếu cấu hình đổi giữa chừng.
+function AdjustDialog({ wallet, allowCredit = true, onClose, onDone }) {
+  const [creditBlocked, setCreditBlocked] = useState(!allowCredit)
+  const [direction, setDirection] = useState(allowCredit ? 'add' : 'subtract')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
