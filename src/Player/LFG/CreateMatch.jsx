@@ -743,6 +743,8 @@ function CreateMatch() {
   const closePaymentConfirm = () => { if (!submitting) setPaymentConfirm({ open: false, wallet: null, walletError: '' }) }
 
   const confirmCreateLfg = async () => {
+    // Chống bấm 2 lần (mỗi lần tạo kèo là 1 đơn sân bị trừ tiền)
+    if (submitting) return
     setSubmitting(true)
     setCreateError(null)
     const skillTag = toCreateMatchSkillTag(skillLevel)
@@ -755,13 +757,16 @@ function CreateMatch() {
         // Không gửi pricePerPerson: chủ kèo không tự đặt giá, BE chia đều tiền sân
         skillLevelTag: skillTag,
         description: description.trim() || undefined,
-        requireApproval: Boolean(requireApproval),
         sideSize: validSideSize || undefined,
         hostTeamId: hostTeam?.id || null,
       })
     } catch (apiErr) {
       console.warn('[CreateMatch] API createLfg lỗi:', apiErr)
+      // Hiện nguyên message của BE: 409 trùng lịch (chủ kèo / bạn đi cùng), 400 bạn chưa làm khảo sát,
+      // 500 lưu kèo lỗi (BE đã hủy đơn sân và hoàn 100% tiền).
       setCreateError(apiErr?.message || 'Không thể tạo kèo ghép trên hệ thống.')
+      // Lỗi sau khi đã trừ tiền thì BE hoàn lại: tải lại ví để thấy số dư đúng.
+      if (apiErr?.status >= 500) getWallet().catch(() => {})
       setSubmitting(false)
       setPaymentConfirm({ open: false, wallet: null, walletError: '' })
       return
@@ -1767,8 +1772,8 @@ function CreateMatch() {
                   </div>
                 </div>}
 
-                {/* Require Approval Switch */}
-                <div className="p-3.5 rounded-xl bg-white border border-gray-200">
+                {/* Require Approval Switch: BE bỏ qua requireApproval khi tạo kèo nên chỉ hiện khi sửa kèo */}
+                {isEditMode && <div className="p-3.5 rounded-xl bg-white border border-gray-200">
                   <label className="flex items-start justify-between gap-3 cursor-pointer">
                     <div className="flex flex-col">
                       <span className="font-extrabold text-xs text-[#111827] flex items-center gap-1.5">
@@ -1788,7 +1793,7 @@ function CreateMatch() {
                       className="w-5 h-5 mt-0.5 rounded accent-[#2D5F3F] cursor-pointer shrink-0"
                     />
                   </label>
-                </div>
+                </div>}
 
                 {/* Description */}
                 <div>
