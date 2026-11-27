@@ -33,6 +33,13 @@ export function toAccount(raw) {
     avatarUrl: pick(raw, 'avatarUrl', 'avatar') || '',
     fairplay: toNumberOrNull(pick(raw, 'fairPlayScore', 'fairplayScore')),
     wallet: toNumberOrNull(pick(raw, 'walletBalance', 'wallet.balance', 'balance')),
+    // Đã xóa mềm (gặp ở /{id}, /admin/by-phone): không khóa / sửa / xóa được nữa
+    isDeleted: pick(raw, 'isDeleted') === true,
+    lockReason: pick(raw, 'lockReason') || '',
+    lockedAt: pick(raw, 'lockedAt') || '',
+    // eKYC mới nhất: null (chưa gửi) | PENDING | APPROVED | REJECTED | REVOKED
+    verificationStatus: String(pick(raw, 'verificationStatus') ?? '').toUpperCase(),
+    facilityCount: toNumberOrNull(pick(raw, 'facilityCount')),
   }
 }
 
@@ -53,8 +60,11 @@ export async function createAccount({ username, password, fullName, phone, email
 export async function updateAccount(id, { username, fullName, phone, email, roleId, password }) {
   return unwrap((await apiClient.put(`/api/accounts/${encodeURIComponent(id)}`, { username, fullName, phone: phone || null, email, roleId: roleId || null, password: password || null })).data)
 }
-export async function toggleAccountStatus(id) {
-  return unwrap((await apiClient.patch(`/api/accounts/${encodeURIComponent(id)}/toggle-status`)).data)
+// Khóa / mở khóa. reason (≤ 500, tùy chọn) chỉ dùng khi khóa; người dùng nhận thông báo kèm lý do.
+// Trả { data, message }: message mô tả hệ quả (vd khóa chủ sân: cơ sở ngừng nhận đặt sân mới, chủ sân vẫn đăng nhập).
+export async function toggleAccountStatus(id, reason) {
+  const body = (await apiClient.patch(`/api/accounts/${encodeURIComponent(id)}/toggle-status`, reason ? { reason } : undefined)).data
+  return { data: unwrap(body), message: body?.message || '' }
 }
 export async function deleteAccount(id) {
   return unwrap((await apiClient.delete(`/api/accounts/${encodeURIComponent(id)}`)).data)

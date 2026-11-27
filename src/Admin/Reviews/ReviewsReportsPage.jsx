@@ -8,6 +8,7 @@ import '../Users/users.css'
 import './reviews.css'
 import ReviewsTab from './ReviewsTab.jsx'
 import { countAdminReports, getAdminReport, getReportStatistics, listAdminReports, resolveAdminReport, resolveMatchComplaint } from '../../api/admin/reportApi.js'
+import { getFacilityReview } from '../../api/admin/facilityReviewApi.js'
 import { awaitingAdmin, decisionOptions, emptyFilters, formatPendingFairPlayDelta, hasPendingFairPlayPenalty, isActiveReport, isMatchComplaint, label, matchDecisionOptions, reportStatusLabels, targetTypeLabels, toCsv, toEnumKey } from './reviewsData.js'
 import MatchScoreModal from '../../components/common/MatchScoreModal.jsx'
 
@@ -22,14 +23,18 @@ function GuidelinesDialog({ onClose }) {
 }
 
 // POST /api/v1/reports/admin/{reportId}/resolve
-function ResolveDialog({ report, onClose, onDone }) {
-  const [values, setValues] = useState({ decision: decisionOptions[0].value, adminNote: '', refund: report.requestedRefund ? String(report.requestedRefund) : '100', lockSlot: false, deduct: '', deletePost: false })
+function ResolveDialog({ report, onClose, onDone, onConflict }) {
+  // Lựa chọn theo loại báo cáo: REFUND / FORCE_MAJEURE chỉ cho đơn đặt sân; đơn vãng lai (trả tại quầy) không REFUND được.
+  const isBooking = report.targetType === 'BOOKING'
+  const options = decisionOptions.filter(option => (!option.bookingOnly || isBooking) && !(option.value === 'REFUND' && report.isWalkInBooking))
+  const [values, setValues] = useState({ decision: options[0].value, adminNote: '', refund: report.requestedRefund ? String(report.requestedRefund) : '100', lockSlot: false, deduct: '', deletePost: false })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }))
-  // REFUND cần % hoàn (1-100); trừ điểm fair-play / xóa bài chỉ áp dụng khi không bác bỏ.
+  // REFUND cần % hoàn (1-100), và chỉ REFUND mới khóa ca bảo trì (BE chặn khóa ca khi đơn còn hiệu lực).
+  // Trừ điểm fair-play / ẩn bài chỉ áp dụng khi chấp nhận vi phạm (không bác bỏ, không bất khả kháng).
   const refunding = values.decision === 'REFUND'
-  const approving = values.decision !== 'REJECT'
+  const approving = values.decision !== 'REJECT' && values.decision !== 'FORCE_MAJEURE'
   const submit = async event => {
     event.preventDefault()
     const refund = values.refund === '' ? null : Number(values.refund)
@@ -50,13 +55,18 @@ function ResolveDialog({ report, onClose, onDone }) {
       })
       onDone(`Đã xử lý báo cáo ${report.id}.`)
     } catch (err) {
+      if (err.status === 409) return onConflict(err.message)
       setError(err.message); setSubmitting(false)
     }
   }
   const check = { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }
   return <DemoDialog title={`Xử lý báo cáo ${report.id}`} onClose={submitting ? () => {} : onClose}><form className="rr-action-form" onSubmit={submit}>
     <p>{report.reporter} báo cáo <strong>{report.entity}</strong> · {report.reason}</p>
-    <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{decisionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+    <label>Quyết định<select value={values.decision} onChange={event => set('decision', event.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+    {report.isWalkInBooking && <p className="rr-demo-note">Đơn vãng lai trả tại quầy: không hoàn tiền qua ví được, chủ sân hoàn trực tiếp cho khách.</p>}
+    {report.targetType === 'FACILITY_REVIEW' && <p className="rr-demo-note">Chấp nhận (không hoàn tiền) sẽ ẩn đánh giá và báo người viết. Bác bỏ thì giữ nguyên đánh giá.</p>}
+    {values.decision === 'FORCE_MAJEURE' && <p className="rr-demo-note">Không hoàn tiền, không trừ Fair Play; người khiếu nại nhận mã giảm 5% (30 ngày).</p>}
+    {refunding && report.refundedAmount > 0 && <p className="rr-demo-note">Đơn đã được hoàn trước đó: mức % mới phải cao hơn phần đã hoàn mới hoàn thêm được.</p>}
     <label>Ghi chú quản trị (bắt buộc)<textarea rows={3} maxLength={1000} value={values.adminNote} onChange={event => set('adminNote', event.target.value)} placeholder="Nhập nội dung xác minh hoặc lý do quyết định..." required /></label>
     {refunding && <>
       <label>Tỷ lệ hoàn tiền cho người báo cáo (%){report.requestedRefund != null && ` — người báo cáo yêu cầu ${report.requestedRefund}%`}<input type="number" min={1} max={100} step={1} value={values.refund} onChange={event => set('refund', event.target.value)} placeholder="1 – 100" /></label>
@@ -73,7 +83,7 @@ function ResolveDialog({ report, onClose, onDone }) {
 
 // Khiếu nại kết quả trận đã chuyển Admin: kết luận cuối (POST /reports/admin/{id}/resolve), không hoàn tiền / trừ điểm.
 // Elo của trận được tính ở lần chạy job sau khi đóng.
-function MatchResolveDialog({ report, decision, onClose, onDone }) {
+function MatchResolveDialog({ report, decision, onClose, onDone, onConflict }) {
   const option = matchDecisionOptions.find(item => item.value === decision)
   const [adminNote, setAdminNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -86,6 +96,7 @@ function MatchResolveDialog({ report, decision, onClose, onDone }) {
       await resolveAdminReport(report.uuid, { decision, adminNote: adminNote.trim(), refundPercentage: null, lockSlotForMaintenance: false, deductTargetUserFairPlayPoints: null, deleteCommunityPost: false })
       onDone(`Đã phân xử khiếu nại ${report.id}: ${option.label.toLowerCase()}.`)
     } catch (err) {
+      if (err.status === 409) return onConflict(err.message)
       setError(err.message); setSubmitting(false)
     }
   }
@@ -108,7 +119,7 @@ function MatchComplaintTimeline({ report }) {
   return <>{steps.map(([title, text, time, empty]) => <section key={title} className="rr-linked"><small>{title}{text && time ? ` · ${time}` : ''}</small><p>{text || empty}</p></section>)}</>
 }
 
-function WarningResolveDialog({ report, decision, onClose, onDone }) {
+function WarningResolveDialog({ report, decision, onClose, onDone, onConflict }) {
   const isKeepPenalty = decision === 'RESOLVE_NO_REFUND'
   const defaultNote = isKeepPenalty
     ? 'Duyệt cảnh báo bạo lực mạng — giữ nguyên mức phạt Fair Play đang treo.'
@@ -137,6 +148,7 @@ function WarningResolveDialog({ report, decision, onClose, onDone }) {
           : `Đã bác bỏ báo cáo ${report.id} và xóa mức phạt Fair Play đang treo.`,
       )
     } catch (err) {
+      if (err.status === 409) return onConflict(err.message)
       setError(err.message)
       setSubmitting(false)
     }
@@ -185,6 +197,24 @@ function WarningResolveDialog({ report, decision, onClose, onDone }) {
   )
 }
 
+// Báo cáo đánh giá (FACILITY_REVIEW): targetObjectId = id đánh giá → hiện nội dung đánh giá bị báo cáo.
+function ReportedReview({ reviewId }) {
+  const [state, setState] = useState({ id: '', review: null, error: '' })
+  useEffect(() => {
+    if (!reviewId) return
+    let cancelled = false
+    getFacilityReview(reviewId)
+      .then(review => !cancelled && setState({ id: reviewId, review, error: '' }))
+      .catch(error => !cancelled && setState({ id: reviewId, review: null, error: error.message }))
+    return () => { cancelled = true }
+  }, [reviewId])
+  if (!reviewId) return null
+  const { review, error } = state.id === reviewId ? state : { review: null, error: '' }
+  return <section className="rr-linked"><small>ĐÁNH GIÁ BỊ BÁO CÁO</small>
+    {error ? <p className="rr-error">{error}</p> : !review ? <p>Đang tải đánh giá…</p> : <p><strong>{review.user}</strong> · {review.rating != null ? `${review.rating}★` : ''} · {review.facility}{review.hidden && ' · Đã bị ẩn'}<br />{review.comment || 'Không có bình luận.'}</p>}
+  </section>
+}
+
 function Inspector({ report, loading, error, onResolve, onQuickWarningResolve, onMatchDecision, onMatchScore }) {
   if (!report) return <aside className="rr-inspector rr-empty"><MessageSquare size={30} /><h2>Chưa chọn báo cáo</h2><p>Chọn một dòng để xem thông tin chi tiết.</p></aside>
   const isWarning = hasPendingFairPlayPenalty(report)
@@ -206,6 +236,9 @@ function Inspector({ report, loading, error, onResolve, onQuickWarningResolve, o
     <section className="rr-report-card"><dl><dt>Người báo cáo</dt><dd>{report.reporter}{report.reporterUsername && ` (@${report.reporterUsername})`}</dd><dt>Đối tượng</dt><dd>{report.entity}</dd><dt>Loại</dt><dd>{label(report.targetType)}</dd>{report.facility && <><dt>Cơ sở</dt><dd>{report.facility}</dd></>}{(report.bookingCode || report.bookingId) && <><dt>Đơn đặt sân</dt><dd>#{report.bookingCode || String(report.bookingId).slice(0, 8).toUpperCase()}</dd></>}<dt>Lý do</dt><dd>{report.reason}</dd>{report.requestedRefund != null && <><dt>Yêu cầu hoàn</dt><dd>{report.requestedRefund}%</dd></>}{isWarning && <><dt>Điểm đang treo</dt><dd style={{ color: '#dc2626', fontWeight: 700 }}>{formatPendingFairPlayDelta(report.pendingFairPlayDelta)} Fair Play</dd></>}<dt>Ngày gửi</dt><dd>{date(report.date)}</dd></dl>{report.description && <p>{report.description}</p>}
       {report.evidence.length > 0 && <div className="rr-note"><small>Bằng chứng ({report.evidence.length})</small><p>{report.evidence.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>Ảnh {index + 1}</a>)}</p></div>}
     </section>
+    {report.isWalkInBooking && <p className="rr-demo-note">Đơn vãng lai trả tại quầy (không hoàn tiền qua ví).</p>}
+    {report.isOwnerResponseOverdue && <p className="rr-error">Chủ sân đã quá hạn phản hồi{report.ownerResponseDeadline && ` (hạn ${report.ownerResponseDeadline})`}.</p>}
+    {report.targetType === 'FACILITY_REVIEW' && <ReportedReview reviewId={report.targetObjectId} />}
     {isMatch
       ? <MatchComplaintTimeline report={report} />
       : <section className="rr-linked"><small>PHẢN HỒI CỦA CHỦ SÂN</small><p>{report.ownerResponse || (report.hasOwnerResponded ? 'Chủ sân đã phản hồi.' : 'Chủ sân chưa phản hồi.')}</p></section>}
@@ -313,6 +346,8 @@ export default function ReviewsReportsPage() {
   const warningTickets = list.items.filter(hasPendingFairPlayPenalty)
   const visibleItems = warningOnly ? warningTickets : list.items
   const done = message => { setDialog(null); toast.success(message); setReload(value => value + 1) }
+  // 409: khiếu nại vừa được chủ sân / Admin khác xử lý → báo và tải lại để thấy kết quả.
+  const conflict = message => { setDialog(null); toast.error(message); setReload(value => value + 1) }
   const exportCsv = () => {
     const url = URL.createObjectURL(new Blob([toCsv(list.items)], { type: 'text/csv;charset=utf-8;' }))
     const a = document.createElement('a'); a.href = url; a.download = 'sportnexus-reports.csv'; a.click()
@@ -349,7 +384,7 @@ export default function ReviewsReportsPage() {
       </div>
     )}
 
-    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab /></div>
+    {tab === 'reviews' ? <div id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reviews"><ReviewsTab onReportsChanged={() => setReload(value => value + 1)} /></div>
       : <div className="rr-content" id="rr-content" role="tabpanel" aria-labelledby="rr-tab-reports"><section className="rr-list"><div className="rr-toolbar"><label className="rr-search"><Search size={16} /><input aria-label="Tìm kiếm" placeholder="Tìm người báo cáo, đối tượng, lý do..." value={filters.search} onChange={e => change('search', e.target.value)} /></label><details className="rr-filter-details" open><summary>Bộ lọc tìm kiếm</summary><div className="rr-filters">{selectFilter('status', 'Trạng thái', reportStatusLabels)}{selectFilter('targetType', 'Loại đối tượng', targetTypeLabels)}{selectFilter('responded', 'Chủ sân phản hồi', { true: 'Đã phản hồi', false: 'Chưa phản hồi' })}{[['from', 'Từ ngày'], ['to', 'Đến ngày']].map(([key, text]) => <label key={key}>{text}<input type="date" value={filters[key]} onChange={e => change(key, e.target.value)} /></label>)}<button className="rr-reset" onClick={resetFilters}>Đặt lại bộ lọc</button></div></details>{invalidRange && <p role="alert" className="rr-error">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</p>}</div>
         <div className="rr-table-scroll"><table><thead><tr>{['Mã báo cáo', 'Người báo cáo', 'Đối tượng bị báo cáo', 'Loại', 'Lý do & Điểm treo', 'Chủ sân', 'Trạng thái', 'Ngày tạo', 'Xử lý nhanh'].map(text => <th key={text}>{text}</th>)}</tr></thead><tbody style={loading ? { opacity: 0.5 } : undefined}>{visibleItems.map(item => {
           const isWarning = hasPendingFairPlayPenalty(item)
@@ -363,9 +398,9 @@ export default function ReviewsReportsPage() {
         <footer className="rr-pagination"><span>Hiển thị {visibleItems.length ? (page - 1) * PAGE_SIZE + 1 : 0}–{(page - 1) * PAGE_SIZE + visibleItems.length} trên {number(list.total)} kết quả</span><div><button className="rr-button" aria-label="Trang trước" disabled={loading || page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={15} /></button><span>{page} / {pages}</span><button className="rr-button" aria-label="Trang sau" disabled={loading || page >= pages} onClick={() => setPage(page + 1)}><ChevronRight size={15} /></button></div></footer>
       </section><Inspector report={report} loading={Boolean(selected) && detailState.key !== detailKey} error={detailState.key === detailKey ? detailState.error : ''} onResolve={() => setDialog({ type: 'resolve', report })} onQuickWarningResolve={(target, decision) => setDialog({ type: 'warningResolve', report: target, decision })} onMatchDecision={(target, decision) => setDialog({ type: 'matchResolve', report: target, decision })} onMatchScore={target => setDialog({ type: 'matchScore', report: target })} /></div>}
     {dialog?.type === 'rules' && <GuidelinesDialog onClose={() => setDialog(null)} />}
-    {dialog?.type === 'resolve' && <ResolveDialog report={dialog.report} onClose={() => setDialog(null)} onDone={done} />}
-    {dialog?.type === 'warningResolve' && <WarningResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} />}
-    {dialog?.type === 'matchResolve' && <MatchResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} />}
+    {dialog?.type === 'resolve' && <ResolveDialog report={dialog.report} onClose={() => setDialog(null)} onDone={done} onConflict={conflict} />}
+    {dialog?.type === 'warningResolve' && <WarningResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} onConflict={conflict} />}
+    {dialog?.type === 'matchResolve' && <MatchResolveDialog report={dialog.report} decision={dialog.decision} onClose={() => setDialog(null)} onDone={done} onConflict={conflict} />}
     {dialog?.type === 'matchScore' && <MatchScoreModal matchId={dialog.report.targetObjectId} title={`Sửa tỉ số & đóng khiếu nại ${dialog.report.id}`} submitLabel="Sửa tỉ số & đóng" withNote onClose={() => setDialog(null)} onSubmit={async (score, note) => { await resolveMatchComplaint(dialog.report.uuid, { action: 'UPDATE_SCORE', score, note }); done(`Đã sửa tỉ số và đóng khiếu nại ${dialog.report.id}. Elo được tính lại sau.`) }} />}
   </div>
 }

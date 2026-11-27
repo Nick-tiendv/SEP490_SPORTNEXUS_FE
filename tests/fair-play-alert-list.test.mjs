@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createServer } from 'vite'
 
-// listFairPlayAlertReports: lấy báo cáo PENDING (mọi trang) rồi chỉ giữ phiếu có pendingFairPlayDelta.
-test('listFairPlayAlertReports lọc ticket cảnh báo bạo lực mạng từ báo cáo PENDING', async (t) => {
+// listFairPlayAlertReports: 1 lệnh gọi GET /reports/admin với FairPlayHold=true (BE chỉ trả ticket đang treo điểm Fair Play).
+test('listFairPlayAlertReports lấy ticket cảnh báo bạo lực mạng bằng bộ lọc FairPlayHold', async (t) => {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
@@ -20,20 +20,20 @@ test('listFairPlayAlertReports lọc ticket cảnh báo bạo lực mạng từ 
   t.after(() => { clientMod.default.defaults.adapter = prevAdapter })
 
   const calls = []
-  const pages = {
-    1: [{ id: 'r1', reporterName: 'Hệ thống SportNexus', targetUserName: 'Nam', targetUserId: 'u1', pendingFairPlayDelta: -12, status: 'PENDING' }, { id: 'r2', reporterName: 'An', status: 'PENDING' }],
-    2: [{ id: 'r3', reporterName: 'Hệ thống SportNexus', targetUserName: 'Bình', pendingFairPlayDelta: -15, status: 'PENDING' }],
-  }
+  const items = [
+    { id: 'r1', reporterName: 'Hệ thống SportNexus', targetUserName: 'Nam', targetUserId: 'u1', pendingFairPlayDelta: -12, status: 'PENDING' },
+    { id: 'r3', reporterName: 'Hệ thống SportNexus', targetUserName: 'Bình', pendingFairPlayDelta: -15, status: 'PENDING' },
+  ]
   clientMod.default.defaults.adapter = async (config) => {
     calls.push(config.params)
-    const items = pages[config.params.PageIndex] || []
-    return { status: 200, data: { statusCode: 200, data: { items, totalCount: 3, totalPages: 2 } }, headers: {}, config }
+    return { status: 200, data: { statusCode: 200, data: { items, totalCount: 2, totalPages: 1 } }, headers: {}, config }
   }
 
   const alerts = await reportApi.listFairPlayAlertReports()
   assert.deepEqual(alerts.map(item => item.uuid), ['r1', 'r3'])
   assert.equal(alerts[0].pendingFairPlayDelta, -12)
   assert.equal(alerts[0].targetUserId, 'u1')
-  assert.ok(calls.every(params => params.Status === 'PENDING'))
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].FairPlayHold, true)
+  assert.equal(calls[0].Status, 'PENDING')
 })

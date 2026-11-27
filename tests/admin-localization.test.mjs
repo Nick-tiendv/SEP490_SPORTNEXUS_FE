@@ -41,7 +41,7 @@ test('enum trạng thái khớp backend (đặt sân, khiếu nại)', () => {
   assert.equal(canCancel({ status: 'CHECKED_IN' }), false)
   // ReportStatus + Decision của AdminResolveReportRequest
   assert.deepEqual(Object.keys(reportStatusLabels), ['PENDING', 'OWNER_RESPONDED', 'RESOLVED_REFUNDED', 'RESOLVED_NO_REFUND', 'REJECTED', 'WITHDRAWN'])
-  assert.deepEqual(decisionOptions.map(option => option.value), ['REFUND', 'RESOLVE_NO_REFUND', 'REJECT'])
+  assert.deepEqual(decisionOptions.map(option => option.value), ['REFUND', 'RESOLVE_NO_REFUND', 'FORCE_MAJEURE', 'REJECT'])
   assert.equal(toEnumKey('OwnerResponded'), 'OWNER_RESPONDED')
 })
 

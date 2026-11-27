@@ -75,18 +75,24 @@ export function UserFormDialog({ user, users, roles, onClose, onDone, noun = 'ng
 export function SuspensionDialog({ users, restore, onClose, onDone, noun = 'người dùng' }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const targets = users.filter(user => (restore ? user.status === 'Suspended' : user.status === 'Active'))
+  const [reason, setReason] = useState('')
+  // Tài khoản đã xóa không khóa / mở được (BE 400)
+  const targets = users.filter(user => !user.isDeleted && (restore ? user.status === 'Suspended' : user.status === 'Active'))
+  const hasOwner = targets.some(user => /owner/i.test(String(user.role || '')))
   const confirm = async () => {
     setSubmitting(true); setError('')
-    const results = await Promise.allSettled(targets.map(user => toggleAccountStatus(user.id)))
+    const results = await Promise.allSettled(targets.map(user => toggleAccountStatus(user.id, restore ? undefined : reason.trim() || undefined)))
     const failed = results.map((result, index) => result.status === 'rejected' && `${targets[index].name}: ${result.reason?.message}`).filter(Boolean)
     const ok = targets.length - failed.length
     if (failed.length) { setError(`Thành công ${ok}/${targets.length}. Lỗi — ${failed.join(' · ')}`); setSubmitting(false); if (ok) onDone(null, true); return }
-    onDone(`Đã ${restore ? 'khôi phục' : 'tạm khóa'} ${ok} tài khoản.`)
+    // 1 tài khoản: hiện message của BE (vd khóa chủ sân nêu rõ hệ quả)
+    onDone((targets.length === 1 && results[0].value?.message) || `Đã ${restore ? 'khôi phục' : 'tạm khóa'} ${ok} tài khoản.`)
   }
   return <DemoDialog title={`${restore ? "Khôi phục" : "Tạm khóa"} ${users.length === 1 ? noun : `${users.length} ${noun}`}`} onClose={submitting ? noop : onClose}>
     {targets.length ? <p>{restore ? "Khôi phục quyền truy cập cho" : "Tạm khóa"} {targets.map(user => user.name).join(', ')}?</p> : <p>Không có tài khoản nào cần {restore ? 'khôi phục' : 'tạm khóa'} trong danh sách đã chọn.</p>}
-    {targets.length < users.length && targets.length > 0 && <p className="users-demo-note">Bỏ qua {users.length - targets.length} tài khoản đã ở trạng thái {restore ? 'hoạt động' : 'tạm khóa'}.</p>}
+    {!restore && hasOwner && <p className="users-demo-note">Các cơ sở của chủ sân sẽ ẩn khỏi tìm kiếm và ngừng nhận đặt sân mới. Đơn đã có vẫn diễn ra bình thường (chủ sân vẫn đăng nhập để quét QR, điểm danh).</p>}
+    {targets.length < users.length && targets.length > 0 && <p className="users-demo-note">Bỏ qua {users.length - targets.length} tài khoản đã ở trạng thái {restore ? 'hoạt động' : 'tạm khóa'} hoặc đã xóa.</p>}
+    {!restore && targets.length > 0 && <div className="users-form"><label>Lý do (không bắt buộc, gửi kèm thông báo cho người dùng)<textarea rows={2} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} placeholder="Ví dụ: Spam đặt sân rồi hủy" /></label></div>}
     {error && <p className="users-form-error" role="alert">{error}</p>}
     <footer><button className="users-button" onClick={onClose} disabled={submitting}>Hủy</button><button className={`users-button ${restore ? 'primary' : 'users-danger'}`} onClick={confirm} disabled={submitting || !targets.length}>{submitting ? 'Đang xử lý…' : `Xác nhận ${restore ? 'khôi phục' : 'tạm khóa'}`}</button></footer>
   </DemoDialog>
@@ -132,8 +138,9 @@ export function PhoneLookupDialog({ onClose, onOpen }) {
       <label>Số điện thoại<input type="tel" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="0901234567" /></label>
       {state.error && <p role="alert" className="users-form-error">{state.error}</p>}
       {state.items && (state.items.length ? <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>{state.items.map(account => <li key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--sn-gray-200, #e5e7eb)', borderRadius: 10 }}>
-        <span style={{ flex: 1, minWidth: 0 }}><strong>{account.name}</strong><small style={{ display: 'block', color: 'var(--sn-gray-500, #6b7280)' }}>{[account.username && `@${account.username}`, roleLabel(account.role), account.email, account.wallet != null && `Ví ${account.wallet.toLocaleString('vi-VN')} Điểm`].filter(Boolean).join(' · ')}</small></span>
-        <button type="button" className="users-button" onClick={() => onOpen(account.id)}>Xem chi tiết</button>
+        <span style={{ flex: 1, minWidth: 0 }}><strong>{account.name}</strong>{account.isDeleted && <span className="users-status suspended" style={{ marginLeft: 6 }}><i />Đã xóa</span>}<small style={{ display: 'block', color: 'var(--sn-gray-500, #6b7280)' }}>{[account.username && `@${account.username}`, roleLabel(account.role), account.email, account.wallet != null && `Ví ${account.wallet.toLocaleString('vi-VN')} Điểm`].filter(Boolean).join(' · ')}</small></span>
+        {/* Tài khoản đã xóa: không mở chi tiết để khóa / sửa / xóa */}
+        {!account.isDeleted && <button type="button" className="users-button" onClick={() => onOpen(account.id)}>Xem chi tiết</button>}
       </li>)}</ul> : <p>Không tìm thấy tài khoản nào với số điện thoại này.</p>)}
       <footer><button type="button" className="users-button" onClick={onClose}>Đóng</button><button className="users-button primary" disabled={state.loading}>{state.loading ? 'Đang tra cứu…' : 'Tra cứu'}</button></footer>
     </form>

@@ -119,10 +119,11 @@ function useAction(onDone) {
 }
 
 // POST /api/v1/admin/fair-play/users/{userId}/adjust { delta, reason }.
-function AdjustDialog({ user, onClose, onDone }) {
-  const [direction, setDirection] = useState('subtract')
+// initialDirection / initialReason: mở sẵn từ chỗ khác (vd gỡ đánh giá Fair Play ác ý của trận đã chốt điểm).
+export function AdjustDialog({ user, onClose, onDone, initialDirection = 'subtract', initialReason = '' }) {
+  const [direction, setDirection] = useState(initialDirection)
   const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
+  const [reason, setReason] = useState(initialReason)
   const { submitting, error, setError, run } = useAction(onDone)
   const value = Number(amount)
   const delta = direction === 'add' ? value : -value
