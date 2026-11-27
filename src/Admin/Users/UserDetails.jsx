@@ -35,7 +35,8 @@ export function AccountStatus({ status }) {
 export default function UserDetails({ user, loading, error, isSelf, onClose, onSuspend, onDelete }) {
   const isAdminAccount = /admin/i.test(String(user.role || ''))
   const isPlayer = /player/i.test(String(user.role || ''))
-  const locked = isSelf || isAdminAccount
+  const isOwner = /owner/i.test(String(user.role || ''))
+  const locked = isSelf || isAdminAccount || user.isDeleted
   return (
     <aside className="users-details" aria-label={`Chi tiết người dùng ${user.name}`} aria-busy={loading}>
       <header className="users-details-heading"><h2>Chi tiết người dùng <small title={user.id}>{user.id.slice(0, 8).toUpperCase()}</small></h2><button onClick={onClose} aria-label="Đóng chi tiết người dùng"><X size={18} /></button></header>
@@ -53,7 +54,9 @@ export default function UserDetails({ user, loading, error, isSelf, onClose, onS
           <div><small>Vai trò</small><strong className="users-sport-name">{roleLabel(user.role)}</strong><p>Quyền truy cập trên nền tảng</p></div>
         </div></section>
         <section className="users-wallet"><h3 className="users-section-title"><Wallet size={15} />Ví SportNexus</h3><div><span><small>Số dư ví</small><strong>{money(user.wallet)}</strong></span></div></section>
-        <section className="users-governance"><h3><TriangleAlert size={15} />Quản lý tài khoản</h3><p>{isSelf ? 'Đây là tài khoản bạn đang đăng nhập, không thể tạm khóa hoặc xóa.' : isAdminAccount ? 'Tài khoản Quản trị viên không thể bị tạm khóa hoặc xóa.' : user.status === 'Suspended' ? 'Tài khoản đang bị tạm khóa. Người dùng không thể đăng nhập cho tới khi được khôi phục.' : 'Tạm khóa sẽ chặn người dùng đăng nhập. Xóa tài khoản không thể hoàn tác.'}</p></section>
+        <section className="users-governance"><h3><TriangleAlert size={15} />Quản lý tài khoản</h3><p>{user.isDeleted ? 'Tài khoản đã bị xóa, không thể thay đổi.' : isSelf ? 'Đây là tài khoản bạn đang đăng nhập, không thể tạm khóa hoặc xóa.' : isAdminAccount ? 'Tài khoản Quản trị viên không thể bị tạm khóa hoặc xóa.' : user.status === 'Suspended' ? (isOwner ? 'Chủ sân đang bị khóa: các cơ sở ngừng nhận đặt sân mới, chủ sân vẫn đăng nhập để vận hành đơn đã có.' : 'Tài khoản đang bị tạm khóa. Người dùng không thể đăng nhập cho tới khi được khôi phục.') : isOwner ? 'Khóa chủ sân sẽ ẩn các cơ sở khỏi tìm kiếm và ngừng nhận đặt sân mới; đơn đã có vẫn diễn ra. Xóa tài khoản không thể hoàn tác.' : 'Tạm khóa sẽ chặn người dùng đăng nhập. Xóa tài khoản không thể hoàn tác.'}</p>
+          {user.status === 'Suspended' && (user.lockedAt || user.lockReason) && <p className="users-demo-note">Bị khóa{user.lockedAt ? ` lúc ${dateTime(user.lockedAt)}` : ''}{user.lockReason ? `: ${user.lockReason}` : ''}</p>}
+        </section>
       </div>
       <footer className="users-details-actions">
         <button className={user.status === 'Suspended' ? 'users-button' : 'users-button users-danger'} onClick={onSuspend} disabled={locked || loading}>{user.status === 'Suspended' ? <Check size={15} /> : <Ban size={15} />}{user.status === 'Suspended' ? "Khôi phục" : "Tạm khóa"}</button>

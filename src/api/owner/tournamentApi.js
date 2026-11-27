@@ -1,5 +1,5 @@
 import { toBracket } from '../admin/tournamentApi.js'
-import { del, get, getList, patch, path, post, put } from './request.js'
+import { del, get, getList, patch, path, post, postWithMessage, put } from './request.js'
 
 const url = id => `/api/v1/tournaments/${path(id)}`
 
@@ -59,7 +59,8 @@ export const assignMatchCourt = (matchId, courtSlotId) => put(`/api/v1/matches/$
 // ---------- Giữ sân cho giải ----------
 // TournamentCourtBlockRequest: courtIds, dateFrom, dateTo, startTime, endTime.
 export const blockCourts = (id, payload) => post(`${url(id)}/court-blocks`, payload)
-export const releaseCourts = (id, payload) => post(`${url(id)}/court-blocks/release`, payload)
+// Trả { data: { matchedSlots, ... }, message }: message báo số ca Ban tổ chức đã thuê vẫn giữ (chỉ Admin trả được).
+export const releaseCourts = (id, payload) => postWithMessage(`${url(id)}/court-blocks/release`, payload)
 export const getCourtSchedule = id => get(`${url(id)}/court-schedule`)
 
 // PUT /api/v1/matches/{matchId}/officials: phân trọng tài cho trận

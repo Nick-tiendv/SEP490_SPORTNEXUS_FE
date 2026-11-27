@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react'
 // Tải danh sách có phân trang phía server; `params` thay đổi thì tải lại.
 export function usePagedList(fetcher, params, reload) {
   const key = JSON.stringify([params, reload])
-  const [state, setState] = useState({ key: '', items: [], total: 0, totalPages: 1, error: '' })
+  const [state, setState] = useState({ key: '', items: [], total: 0, totalPages: 1, summary: null, error: '' })
   useEffect(() => {
     let cancelled = false
     const query = JSON.parse(key)[0]
     fetcher(query)
-      .then(({ items, total, totalPages }) => !cancelled && setState({ key, items, total, totalPages: totalPages || Math.max(1, Math.ceil(total / (query.PageSize || 20))), error: '' }))
+      // summary: số đếm toàn bộ (không theo trang) khi API trả kèm
+      .then(({ items, total, totalPages, summary = null }) => !cancelled && setState({ key, items, total, totalPages: totalPages || Math.max(1, Math.ceil(total / (query.PageSize || query.pageSize || 20))), summary, error: '' }))
       .catch(error => !cancelled && setState(previous => ({ ...previous, key, error: error.message })))
     return () => { cancelled = true }
   }, [fetcher, key])

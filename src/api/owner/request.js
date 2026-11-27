@@ -13,6 +13,13 @@ export const put = async (url, body) => unwrap((await apiClient.put(url, body)).
 export const patch = async (url, body) => unwrap((await apiClient.patch(url, body)).data)
 export const del = async url => unwrap((await apiClient.delete(url)).data)
 
+// Trả { data, message }: dùng khi message của BE có câu nhắc cần hiện nguyên văn
+// (vd "Lưu ý: ngày ... đã hết ca nên hệ thống sẽ tự sinh lại ca").
+const withMessage = body => ({ data: unwrap(body), message: body?.message || '' })
+export const postWithMessage = async (url, body) => withMessage((await apiClient.post(url, body)).data)
+export const putWithMessage = async (url, body) => withMessage((await apiClient.put(url, body)).data)
+export const delWithMessage = async url => withMessage((await apiClient.delete(url)).data)
+
 // Danh sách có phân trang: trả về { items, total, totalPages } dù BE trả mảng hay object phân trang.
 export const getList = async (url, params) => toList(await get(url, params))
 

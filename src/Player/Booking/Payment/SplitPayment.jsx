@@ -288,7 +288,8 @@ function SplitPayment() {
       .catch((err) => { if (!cancelled) setVoucherList({ loaded: true, items: [], error: err?.message || 'Không tải được voucher.' }) })
     return () => { cancelled = true }
   }, [])
-  const selectedVoucher = voucherList.items.find((v) => v.id === selectedVoucherId) || null
+  // Gói định kỳ (≥ 4 đơn) không dùng được voucher: không tính giảm dự kiến
+  const selectedVoucher = isPackage ? null : voucherList.items.find((v) => v.id === selectedVoucherId) || null
   const voucherDiscount = selectedVoucher ? Math.round((packageAmount * Number(selectedVoucher.discountPercent)) / 100) : 0
   const orderAmount = Math.max(0, packageAmount - voucherDiscount)
   const recurring = state.recurring || null
@@ -2017,6 +2018,8 @@ Xem vé QR: ${window.location.origin}/qr-pass`
                   <p className="sp-voucher-hint">Bạn chưa có voucher nào dùng được.</p>
                 ) : paymentMode === 'split' ? (
                   <p className="sp-voucher-hint">Voucher không áp dụng cho đơn chia tiền.</p>
+                ) : isPackage ? (
+                  <p className="sp-voucher-hint">Voucher không áp dụng cho gói định kỳ (chỉ dùng cho 1 đơn sân).</p>
                 ) : (
                   <>
                     <select

@@ -42,8 +42,11 @@ function checkInWindowOf(ticket, nowMs) {
 const dateVN = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—')
 
 // Dữ liệu vé từ BE (booking detail / LFG qr-ticket / tournament qr-ticket) -> dạng giao diện đang dùng
-const toTicket = ({ id, queryId, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn, isRecurring }) => ({
+const toTicket = ({ id, queryId, qrCode, facilityId, facilityName, facilityAddress, facilityImageUrl, courtName, sportName, startTime, endTime, status, amount, sportType, timeRangeLabel, groupedBookingIds, isNoShow, anyCheckedIn, isRecurring, voucherDiscountAmount, voucherReturned }) => ({
   id,
+  // Voucher của đơn: số tiền đã giảm, và đã được trả lại ví chưa (đơn hủy có hoàn)
+  voucherDiscountAmount: Number(voucherDiscountAmount) || 0,
+  voucherReturned: Boolean(voucherReturned),
   isRecurring: Boolean(isRecurring),
   queryId: queryId || id,
   qrCode: qrCode || '',
@@ -234,6 +237,8 @@ function CheckInQR() {
               groupedBookingIds: playWindow.groupedBookingIds,
               // Đơn thuộc gói định kỳ (BE: isRecurring, gửi khi tạo đơn)
               isRecurring: detail?.isRecurring,
+              voucherDiscountAmount: detail?.voucherDiscountAmount,
+              voucherReturned: detail?.voucherReturned,
             })
           }
         } else if (ticketType === 'lfg') {
@@ -510,7 +515,7 @@ function CheckInQR() {
             color: '#DC2626',
             bg: '#FEE2E2',
             title: `Đã hủy đơn đặt sân (CANCELLED) • ${isEligibleRefund ? 'Hoàn 100%' : 'Không hoàn Điểm'}`,
-            message: `Đơn tại ${facilityLabel} đã được hủy thành công. Lý do: ${finalReason}.`,
+            message: `Đơn tại ${facilityLabel} đã được hủy thành công. Lý do: ${finalReason}.${result?.voucherReturned ? ' Voucher đã được trả lại ví.' : ''}`,
             details: isEligibleRefund
               ? `Hủy trước ca >= 48h: Đã hoàn ${refundText} vào Ví Escrow.`
               : 'Hủy dưới 48h trước giờ chơi: Không được hoàn Điểm theo quy định.',
@@ -1693,6 +1698,15 @@ function CheckInQR() {
                     {(ticketType === 'booking' && ticketData?.timeRangeLabel) || `${ticketData?.startTime || '—'} - ${ticketData?.endTime || '—'}`}
                   </span>
                 </div>
+
+                {ticketType === 'booking' && ticketData?.voucherDiscountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', padding: '0 2px' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>🎟️ Voucher giảm:</span>
+                    <span style={{ color: '#B45309', fontWeight: 700 }}>
+                      −{ticketData.voucherDiscountAmount.toLocaleString('vi-VN')} Điểm{ticketData.voucherReturned ? ' (voucher đã được trả lại ví)' : ''}
+                    </span>
+                  </div>
+                )}
 
                 <div
                   style={{

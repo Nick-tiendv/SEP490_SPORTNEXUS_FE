@@ -139,45 +139,6 @@ export const enrichComment = (comment) => {
   }
 }
 
-const compressImageToDataUrl = (file, maxSize = 720, quality = 0.82) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Không thể đọc tệp ảnh'))
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '')
-      if (typeof document === 'undefined' || typeof Image === 'undefined') {
-        resolve(dataUrl)
-        return
-      }
-      const img = new Image()
-      img.onerror = () => resolve(dataUrl)
-      img.onload = () => {
-        try {
-          let { width, height } = img
-          if (width > maxSize || height > maxSize) {
-            if (width >= height) {
-              height = Math.round((height * maxSize) / width)
-              width = maxSize
-            } else {
-              width = Math.round((width * maxSize) / height)
-              height = maxSize
-            }
-          }
-          const canvas = document.createElement('canvas')
-          canvas.width = Math.max(1, width)
-          canvas.height = Math.max(1, height)
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-          resolve(canvas.toDataURL('image/jpeg', quality))
-        } catch {
-          resolve(dataUrl)
-        }
-      }
-      img.src = dataUrl
-    }
-    reader.readAsDataURL(file)
-  })
-
 /**
  * Lấy danh sách bài viết trên Bảng tin cộng đồng
  * GET /api/v1/community/posts
@@ -354,12 +315,7 @@ export async function uploadPostImage(file) {
         return typeof fbData === 'string' ? { url: fbData } : fbData
       }
     } catch {
-      // bỏ qua để chuyển sang nén ảnh lưu cục bộ khi dịch vụ lưu trữ đám mây của BE gặp lỗi 500
-    }
-    const status = error?.status || error?.response?.status || 0
-    if (!status || status >= 500) {
-      const dataUrl = await compressImageToDataUrl(file)
-      return { url: dataUrl }
+      // API upload chung cũng lỗi: báo lỗi gốc. Không dùng ảnh data: vì mediaUrls chỉ nhận link kho ảnh của hệ thống.
     }
     console.warn('[communityApi] Lỗi khi tải ảnh bài viết:', error)
     throw normalizeApiError(error)

@@ -35,18 +35,23 @@ function ProductModal({ facilityId, product, onClose, onSaved }) {
   const submit = async (event) => {
     event.preventDefault()
     const price = Number(form.price), stock = Number(form.stock)
+    // Khớp kiểm tra của BE: tên ≤ 100, giá > 0 và ≤ 100.000.000, tồn kho 0–100.000
     if (!form.name.trim()) { toast.error('Nhập tên sản phẩm.'); return }
-    if (!Number.isFinite(price) || price < 0) { toast.error('Giá không hợp lệ.'); return }
-    if (!Number.isInteger(stock) || stock < 0) { toast.error('Tồn kho phải là số nguyên ≥ 0.'); return }
+    if (form.name.trim().length > 100) { toast.error('Tên sản phẩm tối đa 100 ký tự.'); return }
+    if (!Number.isFinite(price) || price <= 0 || price > 100000000) { toast.error('Giá phải lớn hơn 0 và không quá 100.000.000 Điểm.'); return }
+    if (!Number.isInteger(stock) || stock < 0 || stock > 100000) { toast.error('Tồn kho phải là số nguyên từ 0 đến 100.000.'); return }
     setBusy(true)
     try {
       const payload = { name: form.name.trim(), description: form.description.trim() || null, price, stock, imageUrl: form.imageUrl || null, isActive: form.isActive }
-      if (product) await updateShopProduct(product.id, payload)
+      // expectedStock: tồn kho lúc mở form, để BE không ghi đè khi khách vừa đặt / hủy
+      if (product) await updateShopProduct(product.id, { ...payload, expectedStock: product.stock })
       else await createShopProduct(facilityId, payload)
       toast.success(product ? 'Đã cập nhật sản phẩm.' : 'Đã thêm sản phẩm.')
       onSaved()
     } catch (error) {
       toast.error(error.message)
+      // 409: tồn kho vừa đổi → đóng form, tải lại sản phẩm để sửa trên số mới
+      if (error.status === 409) onSaved()
     } finally {
       setBusy(false)
     }
@@ -59,11 +64,11 @@ function ProductModal({ facilityId, product, onClose, onSaved }) {
           <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
         </div>
         <div className="snx-stack">
-          <label className="snx-field">Tên sản phẩm<input className="snx-input" maxLength={200} value={form.name} onChange={set('name')} placeholder="VD: Nước suối 500ml" /></label>
+          <label className="snx-field">Tên sản phẩm<input className="snx-input" maxLength={100} value={form.name} onChange={set('name')} placeholder="VD: Nước suối 500ml" /></label>
           <label className="snx-field">Mô tả<textarea className="snx-textarea" maxLength={1000} value={form.description} onChange={set('description')} /></label>
           <div className="snx-form-grid">
-            <label className="snx-field">Giá (đ)<input className="snx-input" type="number" min="0" step="1000" value={form.price} onChange={set('price')} /></label>
-            <label className="snx-field">Tồn kho<input className="snx-input" type="number" min="0" value={form.stock} onChange={set('stock')} /></label>
+            <label className="snx-field">Giá (Điểm)<input className="snx-input" type="number" min="1" max="100000000" step="1000" value={form.price} onChange={set('price')} /></label>
+            <label className="snx-field">Tồn kho<input className="snx-input" type="number" min="0" max="100000" value={form.stock} onChange={set('stock')} /></label>
           </div>
           <div className="snx-field">Ảnh
             <div className="snx-row">
@@ -85,6 +90,28 @@ function ProductModal({ facilityId, product, onClose, onSaved }) {
   )
 }
 
+// Hủy đơn kèm lý do (tùy chọn, ≤ 500 ký tự): lý do đi kèm thông báo gửi khách.
+function CancelOrderModal({ order, busy, onClose, onConfirm }) {
+  const [reason, setReason] = useState('')
+  return (
+    <div className="snx-modal-backdrop" role="presentation">
+      <form className="snx-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title" onSubmit={(e) => { e.preventDefault(); onConfirm(reason.trim()) }}>
+        <div className="snx-modal-head">
+          <h2 id="cancel-order-title" className="snx-card-title">Hủy đơn {order.quantity} × {order.productName}</h2>
+          <button type="button" className="snx-btn snx-btn--ghost snx-btn--icon" aria-label="Đóng" onClick={onClose}><span className="material-symbols-outlined">close</span></button>
+        </div>
+        <label className="snx-field">Lý do (gửi kèm thông báo cho {order.customerName || 'khách'}, không bắt buộc)
+          <textarea className="snx-textarea" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: Hết hàng" />
+        </label>
+        <div className="snx-modal-foot">
+          <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Giữ đơn</button>
+          <button type="submit" className="snx-btn snx-btn--danger" disabled={busy}>{busy ? 'Đang hủy…' : 'Hủy đơn'}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function OwnerShop() {
   const { facilityId, facility, loading } = useOwnerContext()
   const [tab, setTab] = useState('orders')
@@ -100,13 +127,23 @@ export default function OwnerShop() {
     return () => clearInterval(timer)
   }, [refreshOrders])
 
-  const act = async (action, success, after) => {
+  // busyId: đơn / sản phẩm đang gọi API (khóa nút, tránh bấm 2 lần).
+  // Luôn tải lại sau khi gọi, kể cả khi lỗi (409 / 400: đơn vừa bị khách hủy / đổi) để thấy trạng thái mới.
+  const [busyId, setBusyId] = useState(null)
+  const [cancelling, setCancelling] = useState(null)
+  const act = async (id, action, success, after) => {
+    if (busyId) return
+    setBusyId(id)
     try {
       await action()
       toast.success(success)
-      after()
+      return true
     } catch (error) {
       toast.error(error.message)
+      return false
+    } finally {
+      setBusyId(null)
+      after()
     }
   }
 
@@ -162,9 +199,9 @@ export default function OwnerShop() {
                       <td><span className={`snx-badge snx-badge--${tone}`}>{label}</span></td>
                       <td>
                         <div className="snx-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-                          {next && <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" onClick={() => act(() => updateShopOrderStatus(o.id, next[0]), 'Đã cập nhật đơn.', orders.refresh)}>{next[1]}</button>}
+                          {next && <button type="button" className="snx-btn snx-btn--primary snx-btn--sm" disabled={busyId === o.id} onClick={() => act(o.id, () => updateShopOrderStatus(o.id, next[0]), 'Đã cập nhật đơn.', orders.refresh)}>{next[1]}</button>}
                           {(key === 'PENDING' || key === 'READY') && (
-                            <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={async () => (await confirmDialog(`Hủy đơn ${o.quantity} × ${o.productName} của ${o.customerName}?`)) && act(() => updateShopOrderStatus(o.id, 'CANCELLED'), 'Đã hủy đơn.', orders.refresh)}>Hủy</button>
+                            <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" disabled={busyId === o.id} onClick={() => setCancelling(o)}>Hủy</button>
                           )}
                         </div>
                       </td>
@@ -192,7 +229,7 @@ export default function OwnerShop() {
                 <div className="snx-row"><strong>{formatVND(p.price)}</strong><span className="snx-spacer" /><span className={`snx-badge snx-badge--${p.stock > 0 ? 'green' : 'red'}`}>Còn {p.stock}</span></div>
                 <div className="snx-row" style={{ justifyContent: 'flex-end' }}>
                   <button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setEditing(p)}>Sửa</button>
-                  <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" onClick={async () => (await confirmDialog(`Xóa sản phẩm "${p.name}"?`)) && act(() => deleteShopProduct(p.id), 'Đã xóa sản phẩm.', products.refresh)}>Xóa</button>
+                  <button type="button" className="snx-btn snx-btn--danger snx-btn--sm" disabled={busyId === p.id} onClick={async () => (await confirmDialog(`Xóa sản phẩm "${p.name}"?`)) && act(p.id, () => deleteShopProduct(p.id), 'Đã xóa sản phẩm.', products.refresh)}>Xóa</button>
                 </div>
               </article>
             ))}
@@ -200,6 +237,14 @@ export default function OwnerShop() {
         </>
       )}
 
+      {cancelling && (
+        <CancelOrderModal
+          order={cancelling}
+          busy={busyId === cancelling.id}
+          onClose={() => setCancelling(null)}
+          onConfirm={(reason) => act(cancelling.id, () => updateShopOrderStatus(cancelling.id, 'CANCELLED', reason), 'Đã hủy đơn.', () => { setCancelling(null); orders.refresh() })}
+        />
+      )}
       {editing && <ProductModal facilityId={facilityId} product={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); products.refresh() }} />}
     </div>
   )

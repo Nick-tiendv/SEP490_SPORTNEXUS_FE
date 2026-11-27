@@ -135,14 +135,15 @@ function useLoad(load, key, enabled = true) {
 
 // Trang của chủ sân (/owner/tournament): giải của cơ sở đang chọn
 export default function CreateAutomatedTournament() {
-  const { facilityId, facility, refreshWallet, loading } = useOwnerContext()
-  return <TournamentWorkspace mode="owner" facilityId={facilityId} facility={facility} refreshWallet={refreshWallet} layoutLoading={loading} />
+  const { facilityId, facility, refreshWallet, loading, ownerLocked } = useOwnerContext()
+  return <TournamentWorkspace mode="owner" facilityId={facilityId} facility={facility} refreshWallet={refreshWallet} layoutLoading={loading} ownerLocked={ownerLocked} />
 }
 
 // Màn tổ chức giải dùng chung cho chủ sân và người chơi.
 // mode = "player": người chơi làm Ban tổ chức — xem mọi giải mình tạo, chọn cơ sở khi tạo, giải chờ Admin duyệt,
 // không giữ sân (court-blocks chỉ dành cho chủ sân / Admin).
-export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityId, facility: ownerFacility, refreshWallet: refreshOwnerWallet, layoutLoading = false, embedded = false }) {
+// ownerLocked: chủ sân bị Admin khóa → cơ sở tạm ngừng nhận giải đấu mới.
+export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityId, facility: ownerFacility, refreshWallet: refreshOwnerWallet, layoutLoading = false, embedded = false, ownerLocked = false }) {
   const isPlayer = mode === 'player'
   // Người chơi cần Fair Play ≥ 90 mới được tạo giải (GET /api/auth/me → fairPlayScore)
   const currentUser = useCurrentUser()
@@ -548,8 +549,8 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
         )}
         <button
           onClick={openCreateModal}
-          disabled={isPlayer ? !!organizerBlock : !facilityId || facility?.approvalStatus !== 'APPROVED'}
-          title={isPlayer ? organizerBlock || undefined : facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
+          disabled={isPlayer ? !!organizerBlock : ownerLocked || !facilityId || facility?.approvalStatus !== 'APPROVED'}
+          title={isPlayer ? organizerBlock || undefined : ownerLocked ? 'Tài khoản đang bị Quản trị viên khóa, cơ sở tạm ngừng nhận giải đấu mới' : facility && facility.approvalStatus !== 'APPROVED' ? 'Cơ sở chưa được duyệt, chưa thể tạo giải' : undefined}
           className="snx-btn snx-btn--primary"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>add_circle</span>
@@ -640,6 +641,12 @@ export function TournamentWorkspace({ mode = 'owner', facilityId: ownerFacilityI
                           <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600, marginTop: '4px' }}>
                             {[item.startDate && `${shortDate(item.startDate)}${item.endDate ? ` – ${shortDate(item.endDate)}` : ''}`, `${item.totalParticipants ?? 0}${item.maxParticipants ? `/${item.maxParticipants}` : ''} người / đội`].filter(Boolean).join(' • ')}
                           </div>
+                          {/* Giải người ngoài tại cơ sở của tôi: tiền thuê sân đã nhận (đã trừ phí) / đang tạm giữ */}
+                          {facilityScope && (item.courtRentEarned != null || item.courtRentHeld != null) && (
+                            <div style={{ fontSize: '12px', color: '#15803D', fontWeight: 600, marginTop: '4px' }}>
+                              Tiền thuê sân: đã nhận {Number(item.courtRentEarned || 0).toLocaleString('vi-VN')} • đang giữ {Number(item.courtRentHeld || 0).toLocaleString('vi-VN')} Điểm
+                            </div>
+                          )}
                         </button>
                       )
                     })}

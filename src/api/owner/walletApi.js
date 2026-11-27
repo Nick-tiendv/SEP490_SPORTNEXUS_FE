@@ -1,4 +1,4 @@
-import { get, getList, path, post, put } from './request.js'
+import { get, getList, path, post, putWithMessage } from './request.js'
 
 // ---------- Ví & doanh thu ----------
 export const getMyWallet = () => get('/api/v1/wallet')
@@ -7,11 +7,16 @@ export const getOwnerEarnings = ({ from, to } = {}) => get('/api/v1/wallet/owner
 export const getMyTransactions = params => getList('/api/v1/wallet/transactions', params)
 
 // ---------- Tài khoản ngân hàng (BE chỉ lưu 1 tài khoản) ----------
+// Response có holderMatchesKyc (bool | null = chưa eKYC): false → tên chủ tài khoản khác tên đã xác minh.
 export const getBankAccount = () => get('/api/v1/wallet/bank-account')
+// Trả { data, message }: message có thêm cảnh báo khi tên chủ tài khoản khác tên eKYC.
 export const updateBankAccount = ({ bankName, bankAccountNumber, bankAccountHolder }) =>
-  put('/api/v1/wallet/bank-account', { bankName, bankAccountNumber, bankAccountHolder })
+  putWithMessage('/api/v1/wallet/bank-account', { bankName, bankAccountNumber, bankAccountHolder })
 
 // ---------- Rút tiền ----------
+// { minAmount, fee, balance, canWithdraw, blockedCode, blockedReason }.
+// blockedCode: KYC_REQUIRED | NO_BANK_ACCOUNT | FACILITY_SUSPENDED | PENDING_REQUEST | NEGATIVE_BALANCE | INSUFFICIENT_BALANCE | null.
+export const getWithdrawalConfig = () => get('/api/v1/wallet/withdrawals/config')
 export const createWithdrawal = amount => post('/api/v1/wallet/withdrawals', { amount })
 export const getMyWithdrawals = ({ page, pageSize } = {}) => getList('/api/v1/wallet/withdrawals', { page, pageSize })
 export const cancelWithdrawal = id => post(`/api/v1/wallet/withdrawals/${path(id)}/cancel`)

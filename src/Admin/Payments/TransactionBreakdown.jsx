@@ -4,6 +4,8 @@ const groups = [
   ['Đang giữ', [['bookingEscrowHeld', 'Tiền đặt sân đang giữ (escrow)', '#287b4c'], ['prizeFundsHeld', 'Quỹ giải thưởng đang giữ', '#60b582'], ['totalFrozenBalance', 'Số dư bị đóng băng', '#a1d9b8']]],
   ['Doanh thu', [['bookingCommissionRevenue', 'Hoa hồng đặt sân', '#287b4c'], ['promotionRevenue', 'Gói quảng bá', '#60b582'], ['ownerCancelPenaltyRevenue', 'Phạt chủ sân hủy đơn', '#3f9a68'],['ownerBookingEarnings', 'Chủ sân nhận từ đặt sân', '#a1d9b8'], ['tournamentFeesToOwners', 'Phí giải đấu trả chủ sân', '#d2eadb']]],
   ['Chi ra', [['bookingRefunds', 'Hoàn tiền đặt sân', '#f5a6b0'], ['withdrawalsCompleted', 'Rút tiền đã chuyển', '#efb63e'], ['prizesPaid', 'Tiền thưởng đã trả', '#efb63e'], ['adminAdjustments', 'Điều chỉnh của quản trị viên', '#9baaa3']]],
+  // Tiền trả lại ví, tách khỏi "Hoàn tiền đặt sân"
+  ['Trả lại ví', [['withdrawalReturns', 'Trả lại rút tiền (từ chối / tự hủy)', '#f8c9cf'], ['promotionRefunds', 'Hoàn gói đẩy tin', '#f5a6b0'], ['tournamentRentalRefunds', 'Hoàn tiền thuê sân giải', '#e8879a']]],
 ]
 
 // Phân bổ dòng tiền từ GET /api/v1/admin/wallets/statistics.

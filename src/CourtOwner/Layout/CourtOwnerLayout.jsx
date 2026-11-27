@@ -102,7 +102,10 @@ export default function CourtOwnerLayout() {
   }, [applyFacilities])
 
   const facility = facilities.find((item) => item.id === facilityId) || null
-  const outletContext = { profile, wallet, facilities, facilityId, facility, selectFacility, refreshProfile, refreshWallet, refreshFacilities, loading, error }
+  // Chủ sân bị Admin khóa (GET /api/auth/me: isActive = false): vẫn đăng nhập, vận hành đơn đã có (quét QR, điểm danh,
+  // kết thúc ca); không tạo cơ sở / giải mới, không rút tiền, không nhận đơn mới (cả khách vãng lai).
+  const ownerLocked = profile?.isActive === false
+  const outletContext = { profile, wallet, facilities, facilityId, facility, selectFacility, refreshProfile, refreshWallet, refreshFacilities, loading, error, ownerLocked }
 
   const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl.NumberFormat('vi-VN').format(num) + ' Điểm')
   const displayName = profile?.fullName || profile?.username || 'Chủ sân'
@@ -181,6 +184,12 @@ export default function CourtOwnerLayout() {
           )}
         />
         <main className="snx-main">
+          {ownerLocked && (
+            <div className="snx-alert snx-alert--error" role="alert" style={{ marginBottom: 12, fontWeight: 600, position: 'sticky', top: 0, zIndex: 5 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>lock</span>
+              <span>Tài khoản chủ sân đang bị Quản trị viên khóa: các cơ sở tạm ngừng nhận đặt sân mới, không tạo được cơ sở / giải đấu mới và không rút tiền được. Bạn vẫn vận hành được các đơn đã có (quét QR, điểm danh, kết thúc ca).</span>
+            </div>
+          )}
           {facilities.filter((item) => item.isSuspended).map((item) => (
             <div key={item.id} className="snx-alert snx-alert--error" role="alert" style={{ marginBottom: 12, fontWeight: 600 }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>gpp_maybe</span>

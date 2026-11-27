@@ -5,6 +5,7 @@ import { DemoDialog } from '../Users/UserDialogs.jsx'
 import { useDebounced, usePagedList } from '../components/listHooks.js'
 import { getFacilityReview, getFacilityReviewStatistics, hideFacilityReview, listFacilityReviews, unhideFacilityReview } from '../../api/admin/facilityReviewApi.js'
 import { getFairPlayReasons, getFairPlayStatistics, hideFairPlayRating, listFairPlayRatings, unhideFairPlayRating } from '../../api/admin/fairPlayApi.js'
+import { AdjustDialog } from '../Users/FairPlayTab.jsx'
 
 const PAGE_SIZE = 20
 const number = value => (Number.isFinite(value) ? value.toLocaleString('vi-VN') : '—')
@@ -16,11 +17,12 @@ const noop = () => {}
 
 // Tab "Đánh giá & Phản hồi": đánh giá cơ sở (/admin/facility-reviews) và đánh giá fair-play giữa người chơi (/admin/fair-play/ratings).
 // focus = { userId, name }: mở sẵn Đánh giá Fair Play của một người (từ phiếu nghi đánh hội đồng).
-export default function ReviewsTab({ focus = null }) {
+// onReportsChanged: ẩn đánh giá cơ sở có thể tự đóng báo cáo FACILITY_REVIEW → trang cha tải lại số đếm báo cáo.
+export default function ReviewsTab({ focus = null, onReportsChanged }) {
   const [kind, setKind] = useState(focus ? 'fairplay' : 'facility')
   return <>
     <div className="admin-segmented" role="tablist" aria-label="Loại đánh giá" style={{ marginBottom: 18 }}>{[['facility', 'Đánh giá cơ sở'], ['fairplay', 'Đánh giá Fair Play']].map(([value, text]) => <button key={value} type="button" role="tab" aria-selected={kind === value} className={kind === value ? 'selected' : ''} onClick={() => setKind(value)}>{text}</button>)}</div>
-    {kind === 'facility' ? <FacilityReviews /> : <FairPlayRatings focus={focus} />}
+    {kind === 'facility' ? <FacilityReviews onReportsChanged={onReportsChanged} /> : <FairPlayRatings focus={focus} />}
   </>
 }
 
@@ -66,7 +68,7 @@ function VisibilityBadge({ hidden }) {
   return <span className={`rr-badge ${hidden ? 'rr-hidden' : 'rr-published'}`}>{hidden ? 'Đã ẩn' : 'Đang hiển thị'}</span>
 }
 
-function FacilityReviews() {
+function FacilityReviews({ onReportsChanged }) {
   const [filters, setFilters] = useState({ search: '', rating: '', replied: '', from: '', to: '' })
   const [page, setPage] = useState(1)
   const [reload, setReload] = useState(0)
@@ -115,7 +117,7 @@ function FacilityReviews() {
         {review.hidden && (review.hiddenReason || review.hiddenBy) && <div className="rr-warning">Lý do ẩn: {review.hiddenReason || '—'}{review.hiddenBy ? ` · bởi ${review.hiddenBy}` : ''}{review.hiddenAt ? ` · ${date(review.hiddenAt)}` : ''}</div>}
         <div className="rr-actions" style={{ marginTop: 16 }}><button className="rr-button" onClick={() => setDialog({ item: review, hide: !review.hidden })}>{review.hidden ? <><Eye size={14} />Hiện lại</> : <><EyeOff size={14} />Ẩn đánh giá</>}</button></div>
       </DetailModal>}</div>
-    {dialog && <VisibilityDialog {...dialog} noun="đánh giá cơ sở" requireReason onHide={hideFacilityReview} onUnhide={unhideFacilityReview} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1) }} />}
+    {dialog && <VisibilityDialog {...dialog} noun="đánh giá cơ sở" requireReason onHide={hideFacilityReview} onUnhide={unhideFacilityReview} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1); onReportsChanged?.() }} />}
   </>
 }
 
@@ -126,6 +128,7 @@ function FairPlayRatings({ focus }) {
   const [reload, setReload] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
   const [dialog, setDialog] = useState(null)
+  const [adjusting, setAdjusting] = useState(null) // { user, hide, comment }: điều chỉnh điểm sau khi ẩn / hiện đánh giá trận đã chốt
   const params = useMemo(() => ({ userId: user?.userId, maxStars: filters.maxStars, hidden: filters.hidden, page, pageSize: PAGE_SIZE }), [user, filters.maxStars, filters.hidden, page])
   const list = usePagedList(listFairPlayRatings, params, reload)
   const stats = useStats(getFairPlayStatistics, reload)
@@ -162,11 +165,23 @@ function FairPlayRatings({ focus }) {
         <div className="rr-rating"><span>{stars(rating.stars)}</span><strong>{rating.stars ?? '—'}<small> / 5</small></strong></div>
         {reasonText(rating) && <p className="rr-demo-note">Lý do: <strong>{reasonText(rating)}</strong></p>}
         <blockquote>{rating.comment || 'Không có nhận xét.'}</blockquote>
-        {rating.hidden && rating.hiddenReason && <div className="rr-warning">Lý do ẩn: {rating.hiddenReason}</div>}
+        {rating.hidden && (rating.hiddenReason || rating.hiddenByName) && <div className="rr-warning">Lý do ẩn: {rating.hiddenReason || '—'}{rating.hiddenByName ? ` · ẩn bởi ${rating.hiddenByName}` : ''}{rating.hiddenAt ? ` lúc ${date(rating.hiddenAt)}` : ''}</div>}
         <p className="rr-demo-note">Đánh giá bị ẩn sẽ không được tính vào điểm Fair Play của người được đánh giá.</p>
         <div className="rr-actions"><button className="rr-button" onClick={() => setDialog({ item: rating, hide: !rating.hidden })}>{rating.hidden ? <><Eye size={14} />Hiện lại</> : <><EyeOff size={14} />Ẩn đánh giá</>}</button></div>
       </DetailModal>}</div>
-    {dialog && <VisibilityDialog {...dialog} noun="đánh giá Fair Play" onHide={hideFairPlayRating} onUnhide={unhideFairPlayRating} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setReload(value => value + 1) }} />}
+    {dialog && <VisibilityDialog {...dialog} noun="đánh giá Fair Play" onHide={hideFairPlayRating} onUnhide={unhideFairPlayRating} onClose={() => setDialog(null)} onDone={result => {
+      const item = dialog.item
+      setDialog(null); setReload(value => value + 1)
+      // Trận đã chốt điểm: ẩn / hiện không tự đổi điểm → mở sẵn hộp điều chỉnh điểm cho người bị đánh giá
+      if (result?.contextSettled && item.targetId) setAdjusting({ user: { userId: item.targetId, name: item.target }, hide: dialog.hide, comment: item.comment })
+    }} />}
+    {adjusting && <AdjustDialog
+      user={adjusting.user}
+      initialDirection={adjusting.hide ? 'add' : 'subtract'}
+      initialReason={adjusting.hide ? `Gỡ đánh giá ác ý: ${adjusting.comment || 'đánh giá đã bị ẩn'}`.slice(0, 500) : 'Hiện lại đánh giá Fair Play đã ẩn'}
+      onClose={() => setAdjusting(null)}
+      onDone={() => setAdjusting(null)}
+    />}
   </>
 }
 
@@ -178,9 +193,7 @@ function VisibilityDialog({ item, hide, noun, requireReason, onHide, onUnhide, o
     if (hide && requireReason && !reason.trim()) return setError('Vui lòng nhập lý do ẩn.')
     setSubmitting(true); setError('')
     try {
-      if (hide) await onHide(item.id, reason.trim())
-      else await onUnhide(item.id)
-      onDone()
+      onDone(hide ? await onHide(item.id, reason.trim()) : await onUnhide(item.id))
     } catch (err) {
       setError(err.message); setSubmitting(false)
     }

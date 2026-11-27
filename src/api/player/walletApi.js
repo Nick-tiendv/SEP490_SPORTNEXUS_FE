@@ -303,6 +303,9 @@ export function normalizeVoucherStatus(raw) {
   return VOUCHER_STATUS.AVAILABLE
 }
 
+// Nhãn nguồn cấp voucher (VoucherResponse.source)
+export const VOUCHER_SOURCE_LABELS = { OWNER_CANCEL: 'Đền bù chủ sân hủy đơn', FORCE_MAJEURE: 'Bù đắp do thời tiết', ADMIN: 'Quà tặng từ SportNexus' }
+
 export function toWalletVoucher(raw = {}) {
   const id = String(raw.id ?? raw.voucherId ?? raw.userVoucherId ?? '')
   const code = String(raw.code ?? raw.voucherCode ?? raw.promoCode ?? (id ? id.slice(0, 8).toUpperCase() : '')).trim()
@@ -318,12 +321,16 @@ export function toWalletVoucher(raw = {}) {
   const maxDiscountAmount = rawMax !== undefined && rawMax !== null && rawMax !== '' && Number.isFinite(Number(rawMax))
     ? Number(rawMax)
     : null
+  const source = String(raw.source || '').toUpperCase()
   return {
     ...raw,
     id: id || code,
     code,
     title: raw.title || raw.name || raw.label || (discountPercent != null ? `Voucher giảm ${discountPercent}%` : 'Mã giảm giá'),
-    description: raw.description || raw.reason || raw.sourceDescription || raw.note || '',
+    // Nguồn cấp (source): hiện làm mô tả khi BE không gửi mô tả riêng
+    source,
+    sourceLabel: VOUCHER_SOURCE_LABELS[source] || '',
+    description: raw.description || raw.reason || raw.sourceDescription || raw.note || VOUCHER_SOURCE_LABELS[source] || '',
     discountPercent,
     discountAmount,
     maxDiscountAmount,

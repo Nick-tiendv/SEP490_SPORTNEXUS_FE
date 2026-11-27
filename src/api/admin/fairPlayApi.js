@@ -75,6 +75,8 @@ export function toRating(raw) {
     comment: pick(raw, 'comment', 'content', 'note') || '',
     hidden: pick(raw, 'isHidden', 'hidden') === true,
     hiddenReason: pick(raw, 'hiddenReason', 'hideReason') || '',
+    hiddenAt: pick(raw, 'hiddenAt') || '',
+    hiddenByName: pick(raw, 'hiddenByName') || '',
     context: pick(raw, 'lfgTitle', 'matchName', 'tournamentName', 'context') || '',
     createdAt: pick(raw, 'createdAt') || '',
   }
@@ -87,6 +89,7 @@ export async function listFairPlayRatings(params) {
   const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/admin/fair-play/ratings', { params: clean(params) })).data))
   return { items: items.map(toRating), total, totalPages }
 }
+// data.contextSettled = true: trận đã chốt điểm Fair Play nên ẩn / hiện không tự đổi điểm (Admin điều chỉnh tay).
 export const hideFairPlayRating = async (id, reason) => unwrap((await apiClient.patch(`/api/v1/admin/fair-play/ratings/${path(id)}/hide`, { reason: reason || null })).data)
 export const unhideFairPlayRating = async id => unwrap((await apiClient.patch(`/api/v1/admin/fair-play/ratings/${path(id)}/unhide`)).data)
 

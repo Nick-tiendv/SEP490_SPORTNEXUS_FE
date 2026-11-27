@@ -161,7 +161,8 @@ function EditInfoModal({ tournament, isPlayer, onClose, onSaved }) {
   )
 }
 
-function CourtBlockForm({ tournamentId, courts, startDate, endDate, blockedCourtIds, onDone }) {
+// rentedLocked: giải người ngoài tổ chức đã được duyệt → ca Ban tổ chức đã thuê chủ sân không tự trả được (chỉ Admin).
+function CourtBlockForm({ tournamentId, courts, startDate, endDate, blockedCourtIds, rentedLocked, onDone }) {
   const today = toDateKey()
   // Mặc định các ngày thi đấu của giải (không lùi về trước hôm nay)
   const from = startDate && dateInput(startDate) > today ? dateInput(startDate) : today
@@ -183,14 +184,20 @@ function CourtBlockForm({ tournamentId, courts, startDate, endDate, blockedCourt
     }
     setBusy(mode)
     try {
-      const r = mode === 'block' ? await blockCourts(tournamentId, body) : await releaseCourts(tournamentId, body)
-      setConflicts(r?.conflicts || [])
-      toast.success(mode === 'block'
-        ? `Đã giữ ${r?.blockedSlots ?? 0} ca (đã giữ trước đó ${r?.alreadyBlockedSlots ?? 0}).`
-        : `Đã trả ${r?.blockedSlots ?? r?.matchedSlots ?? 0} ca cho khách đặt.`)
+      if (mode === 'block') {
+        const r = await blockCourts(tournamentId, body)
+        setConflicts(r?.conflicts || [])
+        toast.success(`Đã giữ ${r?.blockedSlots ?? 0} ca (đã giữ trước đó ${r?.alreadyBlockedSlots ?? 0}).`)
+      } else {
+        // message của BE nói rõ số ca đã trả và số ca Ban tổ chức đã thuê vẫn giữ.
+        const { data: r, message } = await releaseCourts(tournamentId, body)
+        setConflicts(r?.conflicts || [])
+        toast.success(message || `Đã trả ${r?.blockedSlots ?? r?.matchedSlots ?? 0} ca cho khách đặt.`)
+      }
       onDone()
     } catch (error) {
       toast.error(error.message)
+      if (mode === 'release') onDone()
     } finally {
       setBusy('')
     }
@@ -215,6 +222,11 @@ function CourtBlockForm({ tournamentId, courts, startDate, endDate, blockedCourt
         <label className="snx-field">Từ giờ<input className="snx-input" type="time" value={form.startTime} onChange={set('startTime')} /></label>
         <label className="snx-field">Đến giờ<input className="snx-input" type="time" value={form.endTime} onChange={set('endTime')} /></label>
       </div>
+      {rentedLocked && (
+        <div className="snx-alert snx-alert--warning">
+          Giải đã được duyệt: các ca Ban tổ chức đã thuê không tự trả được. Liên hệ Quản trị viên nếu cần đổi ca. Bấm "Trả ca" chỉ trả các ca không thuộc phần đã thuê.
+        </div>
+      )}
       <div className="snx-row">
         <span className="snx-muted">Trả ca: bỏ trống sân và giờ = trả mọi ca chưa tới giờ đang giữ.</span>
         <span className="snx-spacer" />
@@ -729,7 +741,7 @@ export default function TournamentManagePanel({ tournament, child, rounds, facil
       {!closed && canBlockCourts && (
         <>
           <h3 className="snx-card-title" style={{ fontSize: 15, marginBottom: 8 }}>Giữ khung giờ sân cho giải</h3>
-          <CourtBlockForm key={tournament.id} tournamentId={tournament.id} courts={courts.data || []} startDate={tournament.startDate} endDate={tournament.endDate} blockedCourtIds={blockedCourtIds} onDone={schedule.refresh} />
+          <CourtBlockForm key={tournament.id} tournamentId={tournament.id} courts={courts.data || []} startDate={tournament.startDate} endDate={tournament.endDate} blockedCourtIds={blockedCourtIds} rentedLocked={tournament.isOrganizer === false && String(tournament.approvalStatus || '').toUpperCase() === 'APPROVED'} onDone={schedule.refresh} />
         </>
       )}
 

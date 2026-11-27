@@ -20,6 +20,7 @@ import PricePeriodsCard from './PricePeriodsCard.jsx'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import NoFacilityState from '../NoFacilityState.jsx'
 import { WEEK_DAYS, addDays, formatDate, formatTime, formatVND, statusBadge, toDateKey, toTimeSpan } from '../shared.js'
+import { warnSlotsWillRegenerate } from '../slotFollowUps.js'
 
 const BULK_ACTIONS = [
   { value: 'LOCK', label: 'Khóa ca trống', icon: 'lock', tone: 'amber' },
@@ -338,7 +339,7 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
     event.preventDefault()
     if (form.dateTo < form.dateFrom) { toast.error('Ngày kết thúc phải sau ngày bắt đầu.'); return }
     if (form.action === 'SET_PRICE' && !(Number(form.price) > 0)) { toast.error('Vui lòng nhập giá mới.'); return }
-    if (form.action === 'DELETE' && !(await confirmDialog('Xóa mọi ca trống khớp bộ lọc? Không hoàn tác được.'))) return
+    if (form.action === 'DELETE' && !(await confirmDialog('Xóa mọi ca trống khớp bộ lọc? Không hoàn tác được.\n\nNgày bị xóa hết ca sẽ được hệ thống tự sinh lại ca. Muốn nghỉ lễ / đóng cửa cả ngày, hãy dùng "Khóa ca trống" thay vì xóa.'))) return
     const ids = targetCourtIds(form.courtIds, courts, scoped)
     const filter = {
       courtIds: ids.length ? ids : null,
@@ -365,10 +366,13 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
     }
     setBusy(true)
     try {
-      const r = form.action === 'DELETE'
+      const res = form.action === 'DELETE'
         ? await bulkDeleteSlots(facilityId, filter)
         : await bulkUpdateSlots(facilityId, { ...filter, action: form.action, price: form.action === 'SET_PRICE' ? Number(form.price) : null })
-      toast.success(`Khớp ${r?.matchedSlots ?? 0} ca • đã áp dụng ${r?.affectedSlots ?? 0} • bỏ qua ${r?.skippedSlots ?? 0}.`)
+      const r = res.data
+      if (r?.willRegenerate) warnSlotsWillRegenerate(facilityId, res, filter.courtIds, onDone)
+      else toast.success(`Khớp ${r?.matchedSlots ?? 0} ca • đã áp dụng ${r?.affectedSlots ?? 0} • bỏ qua ${r?.skippedSlots ?? 0}.`)
+      // Luôn tải lại lịch: ca bị bỏ qua (skippedSlots) có thể vừa có khách đặt.
       onDone()
     } catch (error) {
       toast.error(error.message)
@@ -414,17 +418,20 @@ function BulkCard({ facilityId, courts, scoped, allLabel, onDone }) {
   )
 }
 
-function DaySlotsModal({ day, court, onClose, onDeleted }) {
+function DaySlotsModal({ facilityId, day, court, onClose, onDeleted }) {
   const [busyId, setBusyId] = useState(null)
   const remove = async (slot) => {
     if (!(await confirmDialog(`Xóa ca ${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}?`))) return
     setBusyId(slot.id)
     try {
-      await deleteSlot(slot.id)
-      toast.success('Đã xóa ca.')
+      const res = await deleteSlot(slot.id)
+      if (res.data?.willRegenerate) warnSlotsWillRegenerate(facilityId, res, [String(court.courtId)], onDeleted)
+      else toast.success(res.message || 'Đã xóa ca.')
       onDeleted()
     } catch (error) {
       toast.error(error.message)
+      // Ca có thể vừa có khách đặt: tải lại lịch để thấy trạng thái mới.
+      onDeleted()
     } finally {
       setBusyId(null)
     }
@@ -585,7 +592,7 @@ export default function OwnerSlots() {
         <BulkCard facilityId={facilityId} courts={scopedCourts} scoped={Boolean(activeSport)} allLabel={allCourtsLabel} onDone={refreshAll} />
       </div>
 
-      {openDay && openCourt && <DaySlotsModal day={openDay} court={openCourt} onClose={() => setOpen(null)} onDeleted={refreshAll} />}
+      {openDay && openCourt && <DaySlotsModal facilityId={facilityId} day={openDay} court={openCourt} onClose={() => setOpen(null)} onDeleted={refreshAll} />}
     </div>
   )
 }

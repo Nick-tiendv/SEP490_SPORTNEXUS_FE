@@ -41,6 +41,16 @@ const linkFor = (n, style) => {
   if (n.referenceType === 'BOOKING' && n.referenceId && /góp tiền/i.test(`${n.title} ${n.message}`)) return `/dashboard?splitBooking=${n.referenceId}`
   if (n.referenceType === 'BOOKING' && n.referenceId) return `/qr-pass?type=booking&bookingId=${n.referenceId}`
   if (n.referenceType === 'LFG' && n.referenceId) return `/community?tab=joined`
+  // "Đã check-in" của người chơi kèo (referenceType LFG_CARD, referenceId = id kèo): mở vé kèo (QR đã bị làm mờ)
+  if (n.referenceType === 'LFG_CARD' && n.referenceId) return `/qr-pass?type=lfg&cardId=${encodeURIComponent(n.referenceId)}`
+  // Được Admin tặng voucher (referenceType VOUCHER): mở ví voucher
+  if (n.referenceType === 'VOUCHER') return '/wallet/vouchers'
+  // Lời mời vào đội (referenceId = id lời mời): mở tab Đội của tôi, làm nổi lời mời đó
+  if (n.referenceType === 'TEAM_INVITATION' && n.referenceId) return `/tournament?tab=teams&invitation=${encodeURIComponent(n.referenceId)}`
+  // Thông báo đội (bị xóa khỏi đội, đội trưởng mới, lời mời được chấp nhận...): mở chi tiết đội
+  if (n.referenceType === 'TEAM' && n.referenceId) return `/tournament?tab=teams&teamId=${encodeURIComponent(n.referenceId)}`
+  // Chủ sân phản hồi / sửa phản hồi đánh giá cơ sở: đánh giá của tôi nằm ở trang hồ sơ
+  if (n.referenceType === 'FACILITY_REVIEW') return '/profile'
   // referenceId = id giải (giải 1 tầng): mở thẳng chi tiết giải
   if (n.referenceType === 'TOURNAMENT') return n.referenceId ? `/tournament?tournamentId=${encodeURIComponent(n.referenceId)}` : '/tournament'
   return style.link

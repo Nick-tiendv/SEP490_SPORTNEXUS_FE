@@ -11,6 +11,8 @@ const STATUS = {
   PENDING: ['Đang chờ duyệt', 'amber'],
   APPROVED: ['Đã xác minh', 'green'],
   REJECTED: ['Bị từ chối', 'red'],
+  // Admin thu hồi xác minh đã duyệt: như chưa xác minh, gửi lại hồ sơ được
+  REVOKED: ['Đã bị thu hồi', 'red'],
 }
 const IMAGES = [
   ['idFrontImageUrl', 'Ảnh CCCD mặt trước'],
@@ -25,7 +27,7 @@ const formatDate = (value) => (value ? new Date(value).toLocaleDateString('vi-VN
 function VerificationModal({ verification, defaultName, onClose, onSubmitted }) {
   const data = verification.data
   const status = verificationStatusOf(data)
-  const canSubmit = ['NOT_SUBMITTED', 'REJECTED'].includes(status)
+  const canSubmit = ['NOT_SUBMITTED', 'REJECTED', 'REVOKED'].includes(status)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [busy, setBusy] = useState('')
@@ -110,6 +112,7 @@ function VerificationModal({ verification, defaultName, onClose, onSubmitted }) 
           <div className="snx-stack">
             <div className="snx-row"><span className={`snx-badge snx-badge--${STATUS[status]?.[1] || 'gray'}`}>{STATUS[status]?.[0] || status}</span></div>
             {status === 'REJECTED' && data?.rejectReason && <div className="snx-alert snx-alert--error">Lý do từ chối: {data.rejectReason}</div>}
+            {status === 'REVOKED' && <div className="snx-alert snx-alert--error">Xác minh đã bị thu hồi.{data?.rejectReason ? ` Lý do: ${data.rejectReason}` : ''}</div>}
             {verification.loading && !data ? <p className="snx-muted">Đang tải hồ sơ xác minh…</p> : data ? (
               <dl className="snx-form-grid" style={{ margin: 0 }}>
                 {[['Họ tên trên CCCD', data.fullName], ['Số CCCD', data.idNumber], ['Ngày sinh', formatDate(data.dateOfBirth)], ['Địa chỉ', data.address || '—'], ['Ngày gửi', formatDate(data.createdAt)], ['Ngày duyệt', formatDate(data.reviewedAt)]].map(([label, value]) => (
@@ -121,7 +124,7 @@ function VerificationModal({ verification, defaultName, onClose, onSubmitted }) 
             )}
             <div className="snx-modal-foot">
               <button type="button" className="snx-btn snx-btn--secondary" onClick={onClose}>Đóng</button>
-              {canSubmit && <button type="button" className="snx-btn snx-btn--primary" onClick={openForm}>{status === 'REJECTED' ? 'Gửi lại hồ sơ' : 'Gửi hồ sơ xác minh'}</button>}
+              {canSubmit && <button type="button" className="snx-btn snx-btn--primary" onClick={openForm}>{status === 'REJECTED' || status === 'REVOKED' ? 'Gửi lại hồ sơ' : 'Gửi hồ sơ xác minh'}</button>}
             </div>
           </div>
         )}

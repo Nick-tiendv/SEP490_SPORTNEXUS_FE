@@ -69,6 +69,11 @@ export function toAdminBooking(raw) {
     charges,
     members,
     isWalkIn: pick(raw, 'isWalkIn') === true,
+    // Đơn đã chơi được hoàn do khiếu nại giữ nguyên trạng thái, chỉ tăng refundedAmount.
+    refundedAmount: Number(pick(raw, 'refundedAmount')) || 0,
+    // Voucher: số tiền đã giảm và đã trả lại ví chưa
+    voucherDiscountAmount: Number(pick(raw, 'voucherDiscountAmount')) || 0,
+    voucherReturned: pick(raw, 'voucherReturned') === true,
     cancellationReason: pick(raw, 'cancellationReason', 'cancelReason', 'cancelledReason', 'reason') || '',
   }
 }

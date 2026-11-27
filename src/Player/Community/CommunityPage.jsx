@@ -91,6 +91,8 @@ const formatEditedAgo = (value, nowMs) => {
 }
 
 const money = (value) => `${new Intl.NumberFormat('vi-VN').format(Number(value) || 0)} Điểm`
+// Nhãn kèo được chia sẻ khi không còn nhận người (sharedLfg.isJoinable = false)
+const SHARED_LFG_STATUS = { FILLED: 'Đã đủ người', CANCELLED: 'Đã hủy', COMPLETED: 'Đã diễn ra', EXPIRED: 'Đã diễn ra' }
 
 // Đồng bộ ảnh đại diện cá nhân của người chơi hiện tại lên bài viết & bình luận
 function resolveUserAvatar(item, me) {
@@ -235,6 +237,13 @@ function Composer({ sports, onPosted }) {
   const addImages = async (files) => {
     const list = Array.from(files || []).slice(0, MAX_IMAGES - images.length)
     if (!list.length) return
+    // Kiểm tra trước theo BE: JPG / PNG / WEBP, mỗi ảnh ≤ 5MB
+    const invalid = list.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)
+    if (invalid) {
+      toast.error(`Ảnh "${invalid.name}" phải là JPG, PNG hoặc WEBP và không quá 5MB.`)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     setUploading(true)
     try {
       for (const file of list) {
@@ -353,6 +362,7 @@ function Composer({ sports, onPosted }) {
 function Comment({
   comment,
   postId,
+  postIsMine,
   me,
   nowMs,
   mentionCandidates,
@@ -369,7 +379,9 @@ function Comment({
 
   const createdMs = parseCommunityTimeMs(comment.createdAt)
   const elapsedMs = createdMs ? Math.max(0, nowMs - createdMs) : Infinity
-  const isWithinEditWindow = elapsedMs <= COMMENT_EDIT_WINDOW_MS && comment.canEdit !== false
+  // Bình luận của chính mình bị Admin ẩn (BE chỉ trả cho người viết): hiện mờ, không sửa / trả lời
+  const hidden = String(comment.status || '').toUpperCase() === 'HIDDEN'
+  const isWithinEditWindow = elapsedMs <= COMMENT_EDIT_WINDOW_MS && comment.canEdit !== false && !hidden
 
   const editedStamp =
     comment.editedAt ||
@@ -436,11 +448,12 @@ function Comment({
   }, [comment.replies])
 
   return (
-    <div className="snx-comment" style={{ marginLeft: depth ? 44 : 0 }}>
+    <div className="snx-comment" style={{ marginLeft: depth ? 44 : 0, opacity: hidden ? 0.6 : 1 }}>
       <Avatar name={comment.userName} url={avatarUrl} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="snx-comment-bubble" style={{ width: editing !== null ? '100%' : undefined }}>
           <strong>{comment.userName}</strong>
+          {hidden && <span className="snx-badge snx-badge--red" style={{ marginLeft: 6 }}>Đã bị ẩn{comment.hiddenReason ? `: ${comment.hiddenReason}` : ''}</span>}
           {editing !== null ? (
             <div className="snx-row" style={{ gap: 6, marginTop: 6 }}>
               <MentionInput
@@ -490,7 +503,7 @@ function Comment({
             </span>
             Thích{likeCount > 0 ? ` (${likeCount})` : ''}
           </button>
-          {depth === 0 && (
+          {depth === 0 && !hidden && (
             <button type="button" onClick={() => setShowReply((v) => !v)}>
               Trả lời
             </button>
@@ -503,7 +516,8 @@ function Comment({
               Sửa
             </button>
           )}
-          {comment.isMine && (
+          {/* Người viết hoặc chủ bài được xóa bình luận */}
+          {(comment.isMine || postIsMine) && (
             <button type="button" onClick={remove}>
               Xóa
             </button>
@@ -552,6 +566,7 @@ function Comment({
             key={r.id}
             comment={r}
             postId={postId}
+            postIsMine={postIsMine}
             me={me}
             nowMs={nowMs}
             mentionCandidates={mentionCandidates}
@@ -583,7 +598,7 @@ function EditHistory({ load }) {
   )
 }
 
-function Comments({ postId, me, nowMs, baseMentionCandidates, onCountChange, onReport }) {
+function Comments({ postId, postIsMine, me, nowMs, baseMentionCandidates, onCountChange, onReport }) {
   const comments = useApi(() => getPostComments(postId, { page: 1, pageSize: 100 }), [postId], {
     initialData: { items: [] },
   })
@@ -706,6 +721,7 @@ function Comments({ postId, me, nowMs, baseMentionCandidates, onCountChange, onR
           key={c.id}
           comment={c}
           postId={postId}
+          postIsMine={postIsMine}
           me={me}
           nowMs={nowMs}
           mentionCandidates={mentionCandidates}
@@ -750,17 +766,24 @@ function PostCard({
 
   const authorAvatarUrl = resolveUserAvatar(post, me)
 
+  const [liking, setLiking] = useState(false)
   const toggleLike = async () => {
+    if (liking) return // chống bấm 2 lần khi request đang chạy
     const next = !liked
+    setLiking(true)
     setLiked(next)
     setLikeCount((c) => c + (next ? 1 : -1))
     try {
       const res = next ? await likeCommunityPost(post.id) : await unlikeCommunityPost(post.id)
       if (res && Number.isFinite(Number(res.likeCount))) setLikeCount(Number(res.likeCount))
     } catch (e) {
+      // 409 khi thích = đã thích rồi (vd bấm ở tab khác): giữ trạng thái đã thích, không báo lỗi
+      if (next && e?.status === 409) return
       setLiked(!next)
       setLikeCount((c) => c + (next ? -1 : 1))
       toast.error(e?.message || 'Không thực hiện được.')
+    } finally {
+      setLiking(false)
     }
   }
   const save = async () => {
@@ -908,6 +931,8 @@ function PostCard({
                 {lfg.remainingSlots}/{lfg.totalSlots} suất · {money(lfg.pricePerPerson)}/người
               </div>
             </div>
+            {/* Chỉ mời vào kèo khi kèo còn nhận người; ngược lại hiện trạng thái */}
+            {lfg.isJoinable === false && <span className="snx-badge snx-badge--gray">{SHARED_LFG_STATUS[String(lfg.status || '').toUpperCase()] || 'Không còn nhận người'}</span>}
           </Link>
         )
       })()}
@@ -917,9 +942,10 @@ function PostCard({
           <div>
             <strong>Giải đấu · {tour.name}</strong>
             <div className="snx-muted">
-              {tour.facilityName} · Lệ phí {money(tour.entryFee)}
+              {tour.facilityName}{tour.startDate ? ` · Bắt đầu ${new Date(tour.startDate).toLocaleDateString('vi-VN')}` : ''} · Lệ phí {money(tour.entryFee)}
             </div>
           </div>
+          {tour.isJoinable === false && <span className="snx-badge snx-badge--gray">Đã hết hạn đăng ký</span>}
         </Link>
       )}
 
@@ -968,6 +994,7 @@ function PostCard({
       {open && !removed && (
         <Comments
           postId={post.id}
+          postIsMine={Boolean(post.isMine)}
           me={me}
           nowMs={nowMs}
           baseMentionCandidates={baseMentionCandidates}

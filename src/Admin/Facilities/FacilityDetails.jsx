@@ -64,6 +64,7 @@ export default function FacilityDetails({ facility: base, onClose, onEdit, onAct
       {loading && <p className="facilities-detail-muted">Đang tải chi tiết…</p>}
       {state.error && <p className="users-form-error" role="alert">Không tải được đầy đủ chi tiết: {state.error}</p>}
       {reason && <p className="users-form-error"><CircleAlert size={12} /> {facility.locked ? 'Lý do khóa' : 'Lý do từ chối'}: {reason}</p>}
+      {facility.owner?.isActive === false && <p className="users-form-error"><CircleAlert size={12} /> Chủ sân đang bị khóa: cơ sở ẩn khỏi tìm kiếm và ngừng nhận đặt sân mới.</p>}
       <div className="facilities-detail-title"><h3>{facility.name}</h3><span><Star size={14} fill="currentColor" /> {facility.rating ? facility.rating.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : 'Chưa đánh giá'}</span></div>
       <p className="facilities-detail-muted">{facility.reviews ? `${formatNumber(facility.reviews)} lượt đánh giá · ` : ''}{facility.reports ? `${formatNumber(facility.reports)} báo cáo · ` : ''}{facility.sports.map(sport => sportLabels[sport] || sport).join(' & ') || 'Chưa có môn thể thao'}</p>
       <p className="facilities-address"><MapPin size={13} />{facility.address || 'Chưa có địa chỉ'}{facility.latitude != null && facility.longitude != null && <> · <a href={`https://www.google.com/maps?q=${facility.latitude},${facility.longitude}`} target="_blank" rel="noreferrer">Xem bản đồ</a></>}</p>

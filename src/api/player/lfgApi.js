@@ -185,10 +185,9 @@ export async function createLfg(payload) {
       // Số ca liên tiếp từ courtSlotId (cùng sân) cho buổi chơi; BE gộp thành 1 ca dài
       numberOfSlots: Number(payload.numberOfSlots) > 1 ? Number(payload.numberOfSlots) : 1,
       slotsNeeded: typeof payload.slotsNeeded === 'number' ? payload.slotsNeeded : 2,
-      pricePerPerson: payload.pricePerPerson != null && payload.pricePerPerson !== '' ? Number(payload.pricePerPerson) : null,
+      // Không gửi pricePerPerson / requireApproval: BE bỏ qua (giá = tiền sân chia đều, lấy từ response)
       skillLevelTag: toSkillTag(payload.skillLevelTag),
       description: payload.description ? String(payload.description).trim() : null,
-      requireApproval: Boolean(payload.requireApproval),
       sideSize: payload.sideSize ? Number(payload.sideSize) : null,
       friendIds: Array.isArray(payload.friendIds) ? payload.friendIds : null,
       friendPayMode: payload.friendPayMode || null,

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useApi } from '../../hooks/useApi.js'
@@ -18,14 +18,19 @@ export default function MyShopOrders() {
     const timer = setInterval(() => { if (document.visibilityState === 'visible') refreshOrders() }, 30000)
     return () => clearInterval(timer)
   }, [refreshOrders])
+  const [busyId, setBusyId] = useState(null)
   const cancel = async (order) => {
-    if (!(await confirmDialog(`Hủy đơn ${order.quantity} × ${order.productName}?`))) return
+    if (busyId || !(await confirmDialog(`Hủy đơn ${order.quantity} × ${order.productName}?`))) return
+    setBusyId(order.id)
     try {
       await cancelMyShopOrder(order.id)
       toast.success('Đã hủy đơn.')
-      orders.refresh()
     } catch (error) {
       toast.error(error?.message || 'Không hủy được đơn.')
+    } finally {
+      // Lỗi 409 / 400 (chủ sân vừa đổi trạng thái): tải lại để thấy trạng thái mới
+      setBusyId(null)
+      orders.refresh()
     }
   }
   return (
@@ -47,10 +52,12 @@ export default function MyShopOrders() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ fontSize: 14 }}>{o.quantity} × {o.productName}</strong>
                     <div className="snx-muted">{o.facilityName} · {dateTime(o.createdAt)}{o.note ? ` · ${o.note}` : ''}</div>
+                    {/* Đơn chưa nhận quá 24 giờ kể từ lúc đặt sẽ tự hủy */}
+                    {(key === 'PENDING' || key === 'READY') && o.createdAt && <div className="snx-muted">Hạn nhận: {dateTime(new Date(new Date(o.createdAt).getTime() + 24 * 3600 * 1000))}</div>}
                   </div>
                   <strong style={{ fontSize: 14 }}>{money(o.totalAmount)}</strong>
                   <span className={`snx-badge snx-badge--${tone}`}>{label}</span>
-                  {key === 'PENDING' && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" onClick={() => cancel(o)}>Hủy</button>}
+                  {key === 'PENDING' && <button type="button" className="snx-btn snx-btn--ghost snx-btn--sm" disabled={busyId === o.id} onClick={() => cancel(o)}>{busyId === o.id ? 'Đang hủy…' : 'Hủy'}</button>}
                 </div>
               )
             })}

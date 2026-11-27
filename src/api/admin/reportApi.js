@@ -1,5 +1,5 @@
 import apiClient from '../apiClient.js'
-import { fetchAllPages, pick, toList, unwrap } from './dashboardApi.js'
+import { pick, toList, unwrap } from './dashboardApi.js'
 
 const toIsoDate = value => {
   if (!value) return ''
@@ -38,6 +38,12 @@ export function toReport(raw) {
     description: pick(raw, 'description', 'content', 'detail') || '',
     evidence: asArray(pick(raw, 'evidenceImageUrls', 'evidenceUrls', 'images')).filter(url => typeof url === 'string'),
     requestedRefund: pick(raw, 'requestedRefundPercentage'),
+    // Đơn vãng lai trả tại quầy: BE không cho REFUND qua ví (400).
+    isWalkInBooking: Boolean(pick(raw, 'isWalkInBooking')),
+    // Hạn chủ sân phản hồi (createdAt + 48h), chỉ có với BOOKING / FACILITY.
+    ownerResponseDeadline: toTime(pick(raw, 'ownerResponseDeadline')),
+    isOwnerResponseOverdue: Boolean(pick(raw, 'isOwnerResponseOverdue')),
+    refundedAmount: Number(pick(raw, 'refundedAmount')) || 0,
     pendingFairPlayDelta,
     hasOwnerResponded: Boolean(pick(raw, 'hasOwnerResponded') ?? ownerResponse),
     ownerResponse: ownerResponse || '',
@@ -68,11 +74,9 @@ export async function listAdminReports(params) {
   const { items, total, totalPages } = toList(unwrap((await apiClient.get('/api/v1/reports/admin', { params: clean(params) })).data))
   return { items: items.map(toReport), total, totalPages }
 }
-// Ticket cảnh báo bạo lực mạng (review bombing) đang chờ: BE chưa có bộ lọc riêng nên lấy mọi báo cáo PENDING
-// rồi giữ những phiếu có pendingFairPlayDelta (điểm Fair Play đang treo). Tối đa 5 trang × 100.
+// Ticket cảnh báo bạo lực mạng (review bombing) đang chờ: bộ lọc FairPlayHold=true (phiếu có điểm Fair Play đang treo).
 export async function listFairPlayAlertReports() {
-  const items = await fetchAllPages((page, size) => listAdminReports({ Status: 'PENDING', PageIndex: page, PageSize: size }), 5)
-  return items.filter(report => report.pendingFairPlayDelta != null)
+  return (await listAdminReports({ FairPlayHold: true, Status: 'PENDING', PageSize: 100 })).items
 }
 export async function countAdminReports(params) {
   return (await listAdminReports({ ...params, PageIndex: 1, PageSize: 1 })).total
@@ -86,7 +90,8 @@ export async function getReportStatistics(params) {
   const num = (...keys) => { const value = Number(pick(data, ...keys)); return Number.isFinite(value) ? value : undefined }
   return {
     total: num('totalReports', 'total', 'totalCount'),
-    pending: num('pendingReports', 'pending', 'pendingCount', 'openReports'),
+    // openReports = PENDING + OWNER_RESPONDED: cùng số với badge menu
+    pending: num('openReports', 'pendingReports', 'pending', 'pendingCount'),
     // BE tách đã giải quyết thành có hoàn tiền / không hoàn tiền.
     resolved: sumDefined(num('resolvedRefundedReports'), num('resolvedNoRefundReports')) ?? num('resolvedReports', 'resolved', 'resolvedCount'),
     rejected: num('rejectedReports', 'rejected', 'rejectedCount', 'dismissed'),

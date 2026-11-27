@@ -8,8 +8,10 @@ import {
   getMyTransactions,
   getMyWithdrawals,
   getOwnerEarnings,
+  getWithdrawalConfig,
   updateBankAccount,
 } from '../../api/owner'
+import { Link } from 'react-router-dom'
 import { useOwnerContext } from '../Layout/ownerContext.js'
 import { csvDateTime } from '../../utils/vnTime.js'
 
@@ -21,7 +23,6 @@ const formatVND = (num) => (num === null || num === undefined ? '—' : new Intl
 const parseAmount = (text) => Number(String(text).replace(/\D/g, '')) || 0
 
 const PERIOD_OPTIONS = [7, 30, 90]
-const MIN_WITHDRAWAL = 50000
 const PAGE_SIZE = 10
 const COMMON_BANKS = ['Vietcombank', 'VietinBank', 'BIDV', 'Agribank', 'Techcombank', 'MB Bank', 'ACB', 'VPBank', 'TPBank', 'Sacombank', 'VIB', 'HDBank', 'SHB', 'OCB', 'MSB', 'SeABank']
 
@@ -58,7 +59,7 @@ function useLoad(load, key) {
 }
 
 export default function Settlement() {
-  const { wallet, refreshWallet } = useOwnerContext()
+  const { wallet, refreshWallet, ownerLocked } = useOwnerContext()
   const [periodDays, setPeriodDays] = useState(30)
   const [reloadToken, setReloadToken] = useState(0)
   const [txnType, setTxnType] = useState('')
@@ -67,6 +68,8 @@ export default function Settlement() {
 
   const earnings = useLoad(() => getOwnerEarnings({ from: daysAgoVN(periodDays - 1), to: daysAgoVN(0) }), `${periodDays}|${reloadToken}`)
   const bank = useLoad(() => getBankAccount(), `${reloadToken}`)
+  // Số tối thiểu, phí và lý do chưa rút được: GET /wallet/withdrawals/config
+  const withdrawConfig = useLoad(() => getWithdrawalConfig(), `${reloadToken}`)
   const withdrawals = useLoad(() => getMyWithdrawals({ page: withdrawalPage, pageSize: PAGE_SIZE }), `${withdrawalPage}|${reloadToken}`)
   const transactions = useLoad(
     () => getMyTransactions({ type: txnType || undefined, page: txnPage, pageSize: PAGE_SIZE }),
@@ -92,6 +95,10 @@ export default function Settlement() {
   const bankAccount = bank.data?.bankAccountNumber ? bank.data : null
   const withdrawalItems = withdrawals.data?.items || []
   const pendingWithdrawal = withdrawalItems.find((item) => String(item.status).toUpperCase() === 'PENDING')
+  const config = withdrawConfig.data
+  const minWithdrawal = Number(config?.minAmount) || 0
+  const withdrawFee = Number(config?.fee) || 0
+  const blocked = config && config.canWithdraw === false ? config : null
   const txnItems = transactions.data?.items || []
   const txnTotalPages = transactions.data ? Math.max(1, transactions.data.totalPages || Math.ceil((transactions.data.total || 0) / PAGE_SIZE)) : 1
   const withdrawalTotalPages = withdrawals.data ? Math.max(1, withdrawals.data.totalPages || Math.ceil((withdrawals.data.total || 0) / PAGE_SIZE)) : 1
@@ -106,7 +113,7 @@ export default function Settlement() {
   }
 
   const openWithdrawModal = () => {
-    if (!bankAccount) {
+    if (!bankAccount || blocked?.blockedCode === 'NO_BANK_ACCOUNT') {
       showToast('Vui lòng lưu tài khoản ngân hàng trước khi rút tiền.', 'error')
       openBankModal()
       return
@@ -129,8 +136,10 @@ export default function Settlement() {
     }
     setBusy(true)
     try {
-      await updateBankAccount(payload)
-      showToast('Đã lưu tài khoản ngân hàng.')
+      const { data, message } = await updateBankAccount(payload)
+      // Tên chủ tài khoản khác tên eKYC: BE vẫn lưu nhưng message kèm cảnh báo.
+      if (data?.holderMatchesKyc === false) toast.warning(message || 'Tên chủ tài khoản khác tên đã xác minh danh tính, Quản trị viên có thể từ chối chuyển tiền.')
+      else showToast(message || 'Đã lưu tài khoản ngân hàng.')
       setShowBankModal(false)
       setReloadToken((value) => value + 1)
     } catch (error) {
@@ -143,13 +152,14 @@ export default function Settlement() {
   // POST /wallet/withdrawals — tiền bị giữ tạm tới khi Admin duyệt
   const handleWithdraw = async (event) => {
     event.preventDefault()
+    if (busy) return
     const amount = parseAmount(withdrawAmount)
-    if (amount < MIN_WITHDRAWAL) {
-      showToast(`Số tiền rút tối thiểu ${formatVND(MIN_WITHDRAWAL)}.`, 'error')
+    if (minWithdrawal && amount < minWithdrawal) {
+      showToast(`Số tiền rút tối thiểu ${formatVND(minWithdrawal)}.`, 'error')
       return
     }
-    if (amount > availableBalance) {
-      showToast(`Số dư không đủ (hiện có ${formatVND(availableBalance)}).`, 'error')
+    if (amount + withdrawFee > availableBalance) {
+      showToast(`Số dư không đủ (hiện có ${formatVND(availableBalance)}${withdrawFee ? `, phí rút ${formatVND(withdrawFee)}` : ''}).`, 'error')
       return
     }
     setBusy(true)
@@ -266,14 +276,25 @@ export default function Settlement() {
 
         <button
           onClick={openWithdrawModal}
-          disabled={!!pendingWithdrawal}
-          title={pendingWithdrawal ? 'Bạn đang có 1 yêu cầu rút tiền chờ xử lý' : undefined}
+          // Chưa có tài khoản ngân hàng thì vẫn bấm được để mở form ngân hàng.
+          // Chủ sân bị khóa không rút tiền được (BE 403)
+          disabled={ownerLocked || !!pendingWithdrawal || (!!blocked && blocked.blockedCode !== 'NO_BANK_ACCOUNT')}
+          title={ownerLocked ? 'Tài khoản đang bị Quản trị viên khóa, không rút tiền được' : blocked?.blockedReason || (pendingWithdrawal ? 'Bạn đang có 1 yêu cầu rút tiền chờ xử lý' : undefined)}
           className="snx-btn snx-btn--primary"
         >
           <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>payments</span>
-          <span>{pendingWithdrawal ? 'Đang chờ duyệt rút tiền' : 'Tạo yêu cầu rút tiền'}</span>
+          <span>{pendingWithdrawal ? 'Đang chờ duyệt rút tiền' : blocked?.blockedCode === 'NO_BANK_ACCOUNT' ? 'Thêm tài khoản để rút tiền' : 'Tạo yêu cầu rút tiền'}</span>
         </button>
       </div>
+
+      {blocked?.blockedReason && (
+        <div className="snx-alert snx-alert--warning" style={{ marginBottom: 20 }}>
+          <span>
+            {blocked.blockedReason}
+            {blocked.blockedCode === 'FACILITY_SUSPENDED' && <> · <Link to="/owner/reports">Xem khiếu nại cần xử lý</Link></>}
+          </span>
+        </div>
+      )}
 
       {/* 4 KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '28px' }}>
@@ -389,8 +410,13 @@ export default function Settlement() {
               Chưa lưu tài khoản ngân hàng. Cần lưu trước khi rút tiền.
             </div>
           )}
+          {bankAccount?.holderMatchesKyc === false && (
+            <div className="snx-alert snx-alert--warning" style={{ marginTop: 10 }}>
+              Tên chủ tài khoản khác tên đã xác minh danh tính, Quản trị viên có thể từ chối chuyển tiền.
+            </div>
+          )}
           <ul style={{ margin: '14px 0 0 0', paddingLeft: '18px', fontSize: '12px', color: '#475569', fontWeight: 600, lineHeight: 1.7 }}>
-            <li>Rút tối thiểu {formatVND(MIN_WITHDRAWAL)}, mỗi lúc chỉ 1 yêu cầu chờ duyệt.</li>
+            {config && <li>Rút tối thiểu {formatVND(minWithdrawal)}{withdrawFee ? `, phí ${formatVND(withdrawFee)} / lần` : ', không mất phí'}; mỗi lúc chỉ 1 yêu cầu chờ duyệt.</li>}
             <li>Tiền rút bị giữ tạm tới khi Quản trị viên chuyển khoản hoặc từ chối.</li>
             <li>Không rút được khi ví đang âm (do hoàn tiền cho khách hoặc tiền phạt khi bạn hủy đơn của khách).</li>
           </ul>
@@ -590,7 +616,7 @@ export default function Settlement() {
             <input
               required
               inputMode="numeric"
-              placeholder={`Tối thiểu ${formatVND(MIN_WITHDRAWAL)}`}
+              placeholder={minWithdrawal ? `Tối thiểu ${formatVND(minWithdrawal)}` : 'Nhập số tiền'}
               value={withdrawAmount}
               onChange={(event) => {
                 const amount = parseAmount(event.target.value)
@@ -611,6 +637,7 @@ export default function Settlement() {
               ))}
             </div>
 
+            {withdrawFee > 0 && <div style={{ fontSize: '12.5px', color: '#475569', fontWeight: 600, marginBottom: '14px' }}>Phí rút tiền: {formatVND(withdrawFee)}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" onClick={() => setShowWithdrawModal(false)} style={{ padding: '10px 18px', borderRadius: '10px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Hủy</button>
               <button type="submit" disabled={busy} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#15803D', color: '#FFFFFF', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>

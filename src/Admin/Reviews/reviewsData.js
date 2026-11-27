@@ -2,11 +2,13 @@
 // Enum theo BE: ReportStatus, ReportTargetType (ReportEnums.cs) và Decision của AdminResolveReportRequest.
 
 export const reportStatusLabels = { PENDING: 'Chờ xử lý', OWNER_RESPONDED: 'Chủ sân đã giải trình', RESOLVED_REFUNDED: 'Đã hoàn tiền', RESOLVED_NO_REFUND: 'Đã xử lý, không hoàn tiền', REJECTED: 'Đã bác bỏ', WITHDRAWN: 'Người báo cáo đã rút' }
-export const targetTypeLabels = { BOOKING: 'Đặt sân', FACILITY: 'Cơ sở thể thao', USER: 'Người chơi', COMMUNITY_POST: 'Bài viết cộng đồng', POST_COMMENT: 'Bình luận', MATCH: 'Kết quả trận đấu' }
-// Giá trị `decision` gửi lên POST /reports/admin/{id}/resolve: REFUND | RESOLVE_NO_REFUND | REJECT.
+export const targetTypeLabels = { BOOKING: 'Đặt sân', FACILITY: 'Cơ sở thể thao', USER: 'Người chơi', COMMUNITY_POST: 'Bài viết cộng đồng', POST_COMMENT: 'Bình luận', MATCH: 'Kết quả trận đấu', FACILITY_REVIEW: 'Đánh giá cơ sở' }
+// Giá trị `decision` gửi lên POST /reports/admin/{id}/resolve: REFUND | RESOLVE_NO_REFUND | FORCE_MAJEURE | REJECT.
+// bookingOnly: REFUND và FORCE_MAJEURE chỉ áp dụng cho khiếu nại đơn đặt sân (BE trả 400 với loại khác).
 export const decisionOptions = [
-  { value: 'REFUND', label: 'Chấp nhận, hoàn tiền cho người báo cáo' },
+  { value: 'REFUND', label: 'Chấp nhận, hoàn tiền cho người báo cáo', bookingOnly: true },
   { value: 'RESOLVE_NO_REFUND', label: 'Chấp nhận, không hoàn tiền' },
+  { value: 'FORCE_MAJEURE', label: 'Bất khả kháng do thời tiết: không hoàn, tặng mã 5%', bookingOnly: true },
   { value: 'REJECT', label: 'Bác bỏ báo cáo (không vi phạm)' },
 ]
 // 'OwnerResponded' / 'owner_responded' -> 'OWNER_RESPONDED'

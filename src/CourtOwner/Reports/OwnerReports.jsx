@@ -22,6 +22,18 @@ function Badge({ status }) {
   return <span className={b.className}>{b.label}</span>
 }
 
+// Hạn phản hồi 48h (ownerResponseDeadline, chỉ có với khiếu nại BOOKING / FACILITY): chỉ nhắc khi còn chờ giải trình.
+function DeadlineNote({ report }) {
+  // Mốc "bây giờ" lấy 1 lần khi hiện (danh sách / chi tiết được tải lại thường xuyên)
+  const [now] = useState(() => Date.now())
+  if (String(report?.status || '').toUpperCase() !== 'PENDING') return null
+  if (report.isOwnerResponseOverdue) return <span className="snx-badge snx-badge--red">Quá hạn phản hồi</span>
+  if (!report.ownerResponseDeadline) return null
+  const hours = Math.ceil((new Date(report.ownerResponseDeadline).getTime() - now) / 3600000)
+  if (!Number.isFinite(hours) || hours <= 0) return null
+  return <span className="snx-badge snx-badge--amber" title="Quá hạn cơ sở sẽ bị tạm ngưng">Còn {hours} giờ để phản hồi</span>
+}
+
 function ImageList({ urls }) {
   if (!urls?.length) return null
   return (
@@ -41,7 +53,12 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
   const [lockSlot, setLockSlot] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [busy, setBusy] = useState(false)
-  const canAct = ['PENDING', 'OWNER_RESPONDED'].includes(String(r?.status || '').toUpperCase())
+  const targetType = String(r?.targetType || '').toUpperCase()
+  // Báo cáo đánh giá do chính chủ sân gửi (FACILITY_REVIEW): không giải trình / hoàn tiền, chờ Admin xử lý.
+  const canAct = ['PENDING', 'OWNER_RESPONDED'].includes(String(r?.status || '').toUpperCase()) && targetType !== 'FACILITY_REVIEW'
+  // Hoàn tiền qua ví chỉ cho khiếu nại đơn đặt sân, trừ đơn vãng lai trả tại quầy.
+  const canRefund = (!targetType || targetType === 'BOOKING') && !r?.isWalkInBooking
+  const activeMode = canRefund ? mode : 'respond'
 
   const addImages = async (files) => {
     const list = [...files].slice(0, 5 - evidence.length)
@@ -60,10 +77,11 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
   const submit = async (event) => {
     event.preventDefault()
     if (!response.trim()) { toast.error('Vui lòng nhập nội dung giải trình.'); return }
-    if (mode === 'refund' && !(await confirmDialog(`Đồng ý hoàn ${refundPct}% tiền cho khách ngay? Thao tác này không hoàn tác được.`))) return
+    if (busy) return
+    if (activeMode === 'refund' && !(await confirmDialog(`Đồng ý hoàn ${refundPct}% tiền cho khách ngay? Thao tác này không hoàn tác được.`))) return
     setBusy(true)
     try {
-      if (mode === 'refund') {
+      if (activeMode === 'refund') {
         await acceptRefundReport(reportId, { ownerResponse: response.trim(), ownerEvidenceUrls: evidence, refundPercentage: Number(refundPct), lockSlotForMaintenance: lockSlot })
         toast.success('Đã đồng ý hoàn tiền cho khách.')
       } else {
@@ -74,6 +92,8 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
       onClose()
     } catch (error) {
       toast.error(error.message)
+      // 409: khiếu nại vừa được xử lý (vd Admin phân xử cùng lúc) → tải lại để thấy kết quả.
+      if (error.status === 409) { detail.refresh(); onChanged() }
     } finally {
       setBusy(false)
     }
@@ -93,7 +113,13 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
         {detail.error && <div className="snx-alert snx-alert--error">{detail.error}</div>}
         {r && (
           <div className="snx-stack">
-            <div className="snx-row"><Badge status={r.status} />{r.bookingStatus && <span className="snx-muted">Đơn đặt: <Badge status={r.bookingStatus} /></span>}</div>
+            <div className="snx-row"><Badge status={r.status} /><DeadlineNote report={r} />{r.bookingStatus && <span className="snx-muted">Đơn đặt: <Badge status={r.bookingStatus} /></span>}{r.isWalkInBooking && <span className="snx-badge snx-badge--gray">Đơn vãng lai</span>}</div>
+            {String(r.status).toUpperCase() === 'PENDING' && r.ownerResponseDeadline && (
+              <div className={`snx-alert ${r.isOwnerResponseOverdue ? 'snx-alert--error' : 'snx-alert--warning'}`}>
+                Hạn phản hồi: {formatDateTime(r.ownerResponseDeadline)}. Quá hạn cơ sở sẽ bị tạm ngưng nhận đặt sân và rút tiền.
+              </div>
+            )}
+            {r.isWalkInBooking && <div className="snx-alert snx-alert--info">Đơn trả tại quầy, không hoàn tiền qua ví được. Vui lòng hoàn trực tiếp cho khách.</div>}
             <div className="snx-form-grid">
               <div><div className="snx-muted">Lý do</div><strong>{r.reason || '—'}</strong></div>
               <div><div className="snx-muted">Ca đặt</div><strong>{formatDateTime(r.bookingStartTime)}</strong></div>
@@ -120,13 +146,13 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
             {canAct && (
               <form className="snx-stack" style={{ gap: 10, borderTop: '1px solid #eef2f1', paddingTop: 14 }} onSubmit={submit}>
                 <div className="snx-tabs" role="tablist" aria-label="Cách xử lý">
-                  <button type="button" role="tab" aria-selected={mode === 'respond'} className="snx-tab" onClick={() => setMode('respond')}>Gửi giải trình cho Admin</button>
-                  <button type="button" role="tab" aria-selected={mode === 'refund'} className="snx-tab" onClick={() => setMode('refund')}>Đồng ý hoàn tiền ngay</button>
+                  <button type="button" role="tab" aria-selected={activeMode === 'respond'} className="snx-tab" onClick={() => setMode('respond')}>Gửi giải trình cho Admin</button>
+                  {canRefund && <button type="button" role="tab" aria-selected={activeMode === 'refund'} className="snx-tab" onClick={() => setMode('refund')}>Đồng ý hoàn tiền ngay</button>}
                 </div>
-                <label className="snx-field">Nội dung {mode === 'refund' ? 'gửi khách' : 'giải trình'}
+                <label className="snx-field">Nội dung {activeMode === 'refund' ? 'gửi khách' : 'giải trình'}
                   <textarea className="snx-textarea" rows={3} maxLength={2000} value={response} onChange={(e) => setResponse(e.target.value)} />
                 </label>
-                {mode === 'refund' && (
+                {activeMode === 'refund' && (
                   <div className="snx-row">
                     <label className="snx-field" style={{ width: 160 }}>Tỉ lệ hoàn (%)
                       <input className="snx-input" type="number" min={1} max={100} value={refundPct} onChange={(e) => setRefundPct(Math.min(100, Math.max(1, Number(e.target.value) || 1)))} />
@@ -152,7 +178,7 @@ function ReportDetailModal({ reportId, onClose, onChanged }) {
                 )}
                 <div className="snx-modal-foot">
                   <button type="button" className="snx-btn snx-btn--ghost" onClick={onClose}>Đóng</button>
-                  <button type="submit" className={`snx-btn ${mode === 'refund' ? 'snx-btn--danger' : 'snx-btn--primary'}`} disabled={busy || uploading}>{mode === 'refund' ? 'Hoàn tiền cho khách' : 'Gửi giải trình'}</button>
+                  <button type="submit" className={`snx-btn ${activeMode === 'refund' ? 'snx-btn--danger' : 'snx-btn--primary'}`} disabled={busy || uploading}>{busy ? 'Đang gửi…' : activeMode === 'refund' ? 'Hoàn tiền cho khách' : 'Gửi giải trình'}</button>
                 </div>
               </form>
             )}
@@ -219,7 +245,7 @@ export default function OwnerReports() {
                     <td>{r.facilityName}<div className="snx-muted">{r.courtName}</div></td>
                     <td>{r.reason}</td>
                     <td>{formatDateTime(r.bookingStartTime)}<div className="snx-muted">{formatVND(r.bookingTotalAmount)}</div></td>
-                    <td><Badge status={r.status} /></td>
+                    <td><Badge status={r.status} /><div><DeadlineNote report={r} /></div></td>
                     <td><button type="button" className="snx-btn snx-btn--secondary snx-btn--sm" onClick={() => setOpenId(r.id)}>{String(r.status).toUpperCase() === 'PENDING' ? 'Xử lý' : 'Xem'}</button></td>
                   </tr>
                 ))}
